@@ -19,9 +19,8 @@ Website: <https://rcommander.net>
 
 ## Status
 
-Early development: expect rough edges and changes between releases. The plan is in
-[ROADMAP.md](ROADMAP.md), what each release changed in [CHANGELOG.md](CHANGELOG.md). Windows
-comes first; Linux and macOS follow.
+Early development: expect rough edges and changes between releases. What each release changed
+is in [CHANGELOG.md](CHANGELOG.md). Windows comes first; Linux and macOS follow.
 
 ## Download
 

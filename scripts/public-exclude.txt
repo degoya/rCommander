@@ -13,6 +13,9 @@
 # (crates/rc-mcp/mcp-coverage.md, crates/rc-engine/keymap/contexts.md), the logo and icon beside
 # the binary that compiles them in (crates/rcommander/resources/brand/).
 docs/
+# The plan beside it: like docs/roadmap.md, internal; the public repository and the wiki
+# point at CHANGELOG.md for what changed (owner 2026-10-29).
+ROADMAP.md
 
 # The working card for coding agents and their configuration.
 AGENTS.md

@@ -101,7 +101,6 @@
     },
     {
       "name": "lister",
-      "capture": "lister",
       "settle_ms": 1500,
       "steps": [
         { "key": "Ctrl+`" },
@@ -114,7 +113,7 @@
       "capture": "settings",
       "settle_ms": 1500,
       "steps": [
-        { "close": "lister" },
+        { "key": "Escape" },
         { "open": "settings" }
       ]
     }

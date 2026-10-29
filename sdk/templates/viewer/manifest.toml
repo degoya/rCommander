@@ -29,7 +29,7 @@ description = "Shows CSV and TSV files as a table."
 author = "Your name"
 license = "MIT"
 # The first rCommander release that accepts this plugin's `api_version`.
-min_app_version = "0.9.0"
+min_app_version = "0.9.1"
 
 [limits]
 # `text` of a large file shown as text copies all of it.

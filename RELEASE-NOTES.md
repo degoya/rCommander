@@ -11,6 +11,10 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.9.1
+
+- The first release you can download: 0.9.0 was announced but its packages never reached the download page. 0.9.1 brings everything 0.9.0 lists.
+
 ## 0.9.0
 
 - rCommander is public: source, downloads and the handbook are on GitHub, and the website is rcommander.net.

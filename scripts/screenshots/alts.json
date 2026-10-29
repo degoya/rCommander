@@ -8,6 +8,6 @@
   "synchronize": "The synchronize-dirs dialog for the website project on the left and its backup on the right: the two folders, the options and the list of files that differ",
   "mcp-question": "An MCP client asking to copy: the question names the tool ops_copy, its class write, the target folder, the panel it acts on and the two marked files, with Allow, Allow for this session and Deny",
   "terminal": "The right panel showing a terminal in place of its files: a shell started in the website backup folder of the demo project, the left panel still listing the website files",
-  "lister": "Lister, the viewer in its own window, showing the website project's README.md: its headings, the build steps and the table of files",
+  "lister": "Lister, the viewer over the main window, showing the website project's README.md: its headings, the build steps and the table of files",
   "settings": "The settings window on its first page, the list of pages on the left and the options of the page on the right"
 }

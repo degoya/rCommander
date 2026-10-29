@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer"]
 
 [workspace.package]
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.99"

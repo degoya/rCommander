@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-29
+
+### Fixed
+
+- The release workflow found no package to publish: the three upload patterns share `artifacts/` as their root, so each package arrived in a subfolder; the publish job now gathers them into one folder first. v0.9.0 was tagged but never published (RC-100-32).
+- The screenshot run's Lister scene waited for a Lister window of its own, which the run never opens; it now captures the Lister over the main window (RC-100-45).
+
+### Changed
+
+- The public repository and the wiki no longer carry the roadmap: `ROADMAP.md` joins `docs/` in `scripts/public-exclude.txt` and the README points at the changelog only (owner 2026-10-29).
+
 ## [0.9.0] - 2026-10-29
 
 ### Added

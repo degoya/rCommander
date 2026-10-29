@@ -60,6 +60,24 @@ fn the_repository_scenes_parse_and_each_has_an_alt_text() {
     }
 }
 
+/// The run turns `appearance.dialog_windows` off (`prepare`), so a Lister lies over the main
+/// window and never has a window of its own to capture or close (Windows run 2026-10-29).
+#[test]
+fn the_repository_scenes_never_wait_for_a_lister_window() {
+    let plan = parse(SCENES, DEMO).expect("scripts/screenshots/scenes.json");
+    for scene in &plan.scenes {
+        assert_ne!(scene.capture, Capture::Lister, "scene {}", scene.name);
+        assert!(
+            !scene
+                .steps
+                .iter()
+                .any(|step| matches!(step, Step::Close(Capture::Lister))),
+            "scene {} closes a Lister window",
+            scene.name
+        );
+    }
+}
+
 #[test]
 fn every_step_kind_parses_with_its_defaults() {
     let text = one(json!([

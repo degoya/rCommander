@@ -15,7 +15,7 @@ homepage = "https://rcommander.net"
 # others will share puts it here and takes it with `<name>.workspace = true`.
 [workspace.dependencies]
 # The terminal emulation of rc-term, rendered by rc-term-widget (the iced_term 0.8 fork).
-alacritty_terminal = "0.25"
+alacritty_terminal = "0.26"
 anyhow = "1"
 # The vault's key derivation (rc-vault, ADR 0002): argon2id only, no password-hash strings.
 argon2 = { version = "0.6", default-features = false, features = ["alloc", "zeroize"] }
@@ -23,7 +23,7 @@ async-trait = "0.1"
 # Only the bits the MCP server needs: HTTP/1 on 127.0.0.1, no TLS.
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 # Hashed known_hosts names (`|1|salt|hash`): base64 salt and hash, HMAC-SHA1 over the host name.
-base64 = "0.22"
+base64 = "0.23"
 # Checksums (rc-checksum), copy verification (rc-ops), the staged restore's digest (rc-db) and the
 # health probe's keyed challenge (rc-mcp, RC-080-12).
 blake3 = "1.8"
@@ -60,7 +60,7 @@ muda = { version = "0.21.0", default-features = false }
 nix = { version = "0.31", default-features = false, features = ["fs", "user"] }
 # The Markdown preview (rcommander, RC-020-09): the parser iced's `markdown` feature brings, at
 # its version, read directly only to find raw HTML and show it as text; no second parser.
-pulldown-cmark = { version = "0.12", default-features = false }
+pulldown-cmark = { version = "0.13", default-features = false }
 # The local pseudo-terminal of rc-term: ConPTY on Windows, openpty elsewhere.
 portable-pty = "0.9"
 # Property tests only (dev-dependency); without the fork and timeout runners.
@@ -80,16 +80,16 @@ reqwest = { version = "0.13", default-features = false, features = ["json"] }
 # The SVG viewer plugin's renderer (RC-100-28), on the tiny-skia 0.11 and fontdb 0.23 already in
 # the tree; it re-exports usvg, tiny-skia and fontdb. Without system fonts and memory-mapped font
 # files: `text` with the font the plugin brings, `raster-images` for `data:` PNG, JPEG, GIF, WebP.
-resvg = { version = "0.45", default-features = false, features = ["raster-images", "text"] }
+resvg = { version = "0.49", default-features = false, features = ["raster-images", "text"] }
 # rmcp 3.2+: the server macros, stdio, Streamable HTTP server and (for the stdio proxy) client.
 rmcp = { version = "3.2", default-features = false, features = ["client", "macros", "server", "transport-io", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 # The import from Remote Desktop Manager (rc-engine, RC-050-11): a read-only XML tree without
 # dependencies of its own that refuses DTDs by default, so no entity is ever expanded or
 # fetched; already in the tree through fontdb.
-roxmltree = "0.20"
+roxmltree = "0.21"
 # SSH (rc-remote): the version rDownloader runs; its `keys` re-export ssh-key (fingerprints,
 # randomart, OpenSSH public key parsing).
-russh = "0.63"
+russh = "0.65"
 # SFTP (rc-remote) over a russh channel; version 3 as in rDownloader.
 russh-sftp = "3"
 # TLS for FTPS (rc-remote) on aws-lc-rs, which russh already links; the platform verifier
@@ -127,7 +127,7 @@ url = "2"
 # The plugin runtime (rc-plugin-host only, RC-100-08; docs/plugins.md "New dependencies"):
 # rDownloader's version and features. `cache` keeps compiled plugins on disk between starts,
 # `parallel-compilation` spreads a cache miss over the cores; no WASI, no `wat`.
-wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "async", "cache", "component-model", "component-model-async", "cranelift", "parallel-compilation", "runtime", "std"] }
+wasmtime = { version = "50.0.0", default-features = false, features = ["anyhow", "async", "cache", "component-model", "component-model-async", "cranelift", "parallel-compilation", "runtime", "std"] }
 # The archive backend (RC-030-01) and packing (RC-030-04), pure Rust, so the Windows cross-build
 # links no further C code: bzip2 0.6 defaults to libbz2-rs-sys, flate2 to miniz_oxide, zstd is
 # ruzstd (its encoder too). sevenz's `aes256` makes an encrypted 7z header say `password_required`
@@ -135,11 +135,11 @@ wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow",
 # `aes-crypto` reads AES-encrypted zips with a password (RC-030-03).
 bzip2 = "0.6"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
-lzma-rust2 = { version = "0.21", default-features = false, features = ["encoder", "std", "xz"] }
+lzma-rust2 = { version = "0.24", default-features = false, features = ["encoder", "std", "xz"] }
 ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
-sevenz-rust2 = { version = "0.23", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd"] }
+sevenz-rust2 = { version = "0.24", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd"] }
 tar = { version = "0.4", default-features = false }
-zip = { version = "8", default-features = false, features = ["aes-crypto", "bzip2", "deflate-flate2", "deflate64"] }
+zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate-flate2", "deflate64"] }
 # The registry reads behind WSL detection (rc-vfs, Windows only); already in the tree via
 # embed-resource, and a safe API, so no `unsafe` of our own.
 winreg = "0.56"
@@ -164,11 +164,11 @@ ed25519-dalek = { version = "3", features = ["pem", "pkcs8"] }
 # The test components of rc-plugin-host's `test-support` feature (RC-100-09): the versions its
 # tests already build them with, which Wasmtime 49 brings.
 wat = "~1.258.3"
-wit-component = "0.258.3"
-wit-parser = "0.258.3"
+wit-component = "0.261.0"
+wit-parser = "0.261.0"
 # The guest side of a plugin (RC-100-12): the bundled plugins' `src/guest.rs` on wasm32 only, never
 # in `rcommander.exe`; the SDK templates ask for the same version (scripts/check-sdk-templates.sh).
-wit-bindgen = "0.62"
+wit-bindgen = "0.63"
 # A fresh plugin's id, a UUIDv7, for `rcommander plugin new` (RC-100-12); the version already in
 # the lock through rmcp.
 uuid = { version = "1", features = ["v7"] }

@@ -1,0 +1,45 @@
+manifest_version = 1
+plugin_type = "viewer"
+# The contract in `wit/` this plugin is built against.
+api_version = "0.3.0"
+# Your plugin's identity: `plugin new` generated it. Keep it across versions; two plugins
+# sharing one would fight over the same installation folder.
+id = "{{PLUGIN_ID}}"
+name = "{{PLUGIN_NAME}}"
+version = "0.1.0"
+# `plugin new` generated this key pair; the private half is `plugin-signing.key`. Keep it out
+# of version control, and name the key as you like.
+key_id = "{{PLUGIN_SLUG}}-release-v1"
+public_key = "REPLACE_WITH_YOUR_BASE64_ED25519_PUBLIC_KEY"
+
+# rCommander offers the plugin only these files, without running it; `probe` answers finer.
+[match]
+extensions = ["csv", "tsv"]
+max_size = 268435456
+
+# Every output a document of this plugin may name; the host refuses any other.
+[viewer]
+outputs = ["markdown", "text"]
+
+# Nothing granted: a viewer reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows CSV and TSV files as a table."
+author = "Your name"
+license = "MIT"
+# The first rCommander release that accepts this plugin's `api_version`.
+min_app_version = "0.8.7"
+
+[limits]
+# `text` of a large file shown as text copies all of it.
+timeout_milliseconds = 30000
+
+# A setting the person chooses on the plugin's page in Settings -> Plugins; `open` reads it
+# through the contract's `settings` (src/guest.rs). Declaring one is what lets the plugin import
+# `settings` at all.
+[[settings]]
+key = "separator"
+type = "choice"
+values = ["auto", "comma", "semicolon", "tab"]
+default = "auto"

@@ -1,0 +1,69 @@
+# What the public repository (github.com/degoya/rCommander) leaves out, read by
+# scripts/export-public.sh (RC-100-30). One path per line, relative to the repository root; a
+# trailing `/` marks a folder, `#` starts a comment. No absolute path and no `..`.
+#
+# A path listed here that the exported tree does not have is reported, not an error: an older
+# tag may predate it. Nothing public may need what is listed - export-public.sh refuses a public
+# file that links into it, and a test or script that stays public reads nothing from here.
+
+# The developer documentation, as a whole: the roadmap and the German job files, the ADRs, the
+# design, the architecture and the security notes. The owner regards it as internal material.
+# What a user, a contributor or a plugin author needs from it is in the wiki
+# (scripts/export-wiki.sh). The tables tests compare with the code sit beside that code
+# (crates/rc-mcp/mcp-coverage.md, crates/rc-engine/keymap/contexts.md), the logo and icon beside
+# the binary that compiles them in (crates/rcommander/resources/brand/).
+docs/
+
+# The working card for coding agents and their configuration.
+AGENTS.md
+CLAUDE.md
+.claude/
+# The Bash guard's test reads .claude/hooks/.
+scripts/tests/guard-bash.sh
+
+# The test that holds the plugin contract against the design in docs/plugins.md.
+crates/rc-plugin-api/tests/design.rs
+
+# The private names the exports refuse: the list names what it guards.
+scripts/public-names.txt
+
+# Build output; ignored by git, listed in case a tag ever carries it.
+artifacts/
+
+# The maintainer's own workflow: the job files and their Windows test list, the session state,
+# the feature worktrees, the local CI (pre-push hook, nightly timer), the measurements written
+# into docs/performance.md and the queue's soak run.
+scripts/archive-jobs.sh
+scripts/lib/archive-jobs.py
+scripts/lib/archive_jobs_counts.py
+scripts/lib/archive_jobs_links.py
+scripts/lib/archive_jobs_rows.py
+scripts/lib/archive_jobs_status.py
+scripts/lib/job_boxes.py
+scripts/tests/archive-jobs.sh
+scripts/testlist.sh
+scripts/lib/testlist.py
+scripts/tests/testlist.sh
+scripts/session-state.sh
+scripts/worktree.sh
+scripts/tests/worktree.sh
+scripts/install-hooks.sh
+scripts/hooks/
+scripts/nightly.sh
+scripts/systemd/
+scripts/tests/install-hooks.sh
+scripts/perf.sh
+scripts/lib/perf.py
+scripts/tests/perf.sh
+scripts/soak.sh
+scripts/lib/soak.py
+scripts/tests/soak.sh
+
+# The live test servers (Docker containers with throw-away logins) and their driver; the Rust
+# suites they serve are `#[ignore]` and stay.
+scripts/live/
+scripts/live-tests.sh
+scripts/tests/live-tests.sh
+
+# A Python cache committed by accident.
+scripts/lib/__pycache__/

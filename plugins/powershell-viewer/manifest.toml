@@ -1,0 +1,43 @@
+# rCommander's bundled PowerShell viewer (RC-100-23). The fields every bundled plugin shares are
+# in plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code starts with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `encoding`.
+api_version = "0.3.0"
+id = "01a159b6-c865-7f56-a6e7-db2cc02c4981"
+name = "PowerShell viewer"
+version = "0.1.1"
+
+[match]
+# Scripts, modules and module manifests.
+extensions = ["ps1", "psm1", "psd1"]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured; a script has no structure worth a tree.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows PowerShell scripts and modules (.ps1, .psm1, .psd1) coloured like an editor."
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs), the 1 MiB windows `open` and `text` read and write through, and one line of at
+# most 1 MiB with its text.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+# How the file's bytes are read: `auto` takes the encoding of a byte-order mark (UTF-8, UTF-16),
+# else UTF-8 when the start of the file is valid UTF-8, else Windows-1252 - the way Windows
+# PowerShell 5.1 saves a script.
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "utf-16le", "windows-1252"]
+default = "auto"

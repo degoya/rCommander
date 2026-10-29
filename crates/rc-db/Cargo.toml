@@ -1,0 +1,27 @@
+[package]
+name = "rc-db"
+description = "rCommander's SQLite database: migrations, settings, one serialized writer, the error log and retention"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# The digest of a staged restore (RC-080-09).
+blake3.workspace = true
+directories.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

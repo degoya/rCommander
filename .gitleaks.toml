@@ -1,0 +1,45 @@
+# gitleaks configuration: the default rules, plus the findings that are known not to be secrets.
+# A whole path is allowed only where the file or directory is test material; elsewhere pair the
+# path with the exact value (condition AND) and name the rule in targetRules, so a real secret
+# added to the same source file is still reported. A global allowlist with paths skips the whole
+# file and ignores the condition; a rule's allowlist does not.
+#
+# gitleaks reads this file from the root of the scanned directory; scripts/check.sh --preflight
+# runs `gitleaks dir .` from there.
+
+title = "rCommander"
+
+[extend]
+useDefault = true
+
+# --- whole paths: test fixtures ----------------------------------------------------------------
+
+[[allowlists]]
+description = "Throw-away SSH host and client keys generated for the SSH/SFTP tests"
+paths = [
+    '''(^|/)crates/[^/]+/tests/fixtures/(host|client)_key_[a-z0-9]+(\.pub)?$''',
+]
+
+[[allowlists]]
+description = "Made-up private keys (armour around a few base64 words, no key) in the tests of the key-format check and the stored secrets (RC-050-03); the real throw-away keys are fixtures above"
+targetRules = ["private-key"]
+paths = [
+    '''^crates/rc-engine/src/(secrets_tests|commands/secrets_tests|commands/secrets_key_tests)\.rs$''',
+    '''^crates/rc-remote/src/private_key_tests\.rs$''',
+]
+
+# --- path and value: known non-secrets ---------------------------------------------------------
+
+[[allowlists]]
+description = "The standard keymap names key chords under \"keys\"; Ctrl+Shift+Tab, Shift+ArrowUp and Ctrl+Shift+F10 to F12 look like keys"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)crates/rc-engine/keymap/default\.json$''']
+regexes = ['''Ctrl\+Shift\+Tab''', '''Shift\+Arrow(Up|Down)''', '''Ctrl\+Shift\+F1[0-2]''']
+
+[[allowlists]]
+description = "The made-up entry IDs (GUIDs) of the Remote Desktop Manager fixture, named in the import's tests as report keys (RC-050-11)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^crates/(rc-engine/src/commands|rcommander/src/app/connections)/rdm_import_tests\.rs$''']
+regexes = ['''0f3c1a52-7d4e-4b8a-9c61-2e5b8d7a4f10''', '''7b9d1f3a-5c6e-4f8b-9d0e-2f4a6b8c0d2e''']

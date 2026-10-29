@@ -1,0 +1,46 @@
+# rCommander's bundled SVG viewer (RC-100-28). The fields every bundled plugin shares are in
+# plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code starts with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `size` and `background` (RC-100-14).
+api_version = "0.3.0"
+id = "01a15a31-bee0-72a5-bbbf-292cb2295623"
+name = "SVG viewer"
+version = "0.1.1"
+
+[match]
+extensions = ["svg", "svgz"]
+magic = []
+# MAX_SVG_BYTES in src/lib.rs: a larger file is not read, an `.svgz` not inflated beyond it.
+max_size = 67108864
+
+[viewer]
+# The picture first, the source coloured as XML beside it.
+outputs = ["image", "highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else; an `href` to a file
+# or a URL is not followed.
+[capabilities]
+
+[metadata]
+description = "Shows SVG and SVGZ pictures, and their source coloured as XML."
+
+# usvg reads a whole document: the file (64 MiB at most), its parsed tree and usvg's, and a
+# canvas of up to 16 MiB (2048 by 2048 RGBA) live in the store at once, beyond the default
+# 64 MiB. Drawing a detailed diagram at 2048 pixels takes more fuel and time than a text viewer.
+[limits]
+memory_bytes = 268435456
+fuel = 10000000000
+timeout_milliseconds = 30000
+
+[[settings]]
+key = "size"
+type = "choice"
+values = ["512", "1024", "2048"]
+default = "1024"
+
+[[settings]]
+key = "background"
+type = "choice"
+values = ["transparent", "white", "black"]
+default = "transparent"

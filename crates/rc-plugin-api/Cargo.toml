@@ -1,0 +1,25 @@
+[package]
+name = "rc-plugin-api"
+description = "rCommander's plugin contract: the WIT package rcommander:plugin and the native side of each world"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# The in-memory host a plugin's native tests run its logic against (`test_support`). Switched on
+# only from dev-dependencies, so neither the host nor a component carries it.
+test-support = []
+
+# Builds for wasm32-unknown-unknown as well: a plugin's guest half implements its world through
+# the native traits here.
+[dependencies]
+rc-plugin-types = { path = "../rc-plugin-types" }
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

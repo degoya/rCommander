@@ -1,0 +1,7 @@
+{
+  "name": "JSON viewer",
+  "description": "Shows JSON coloured like an editor, or as a tree to unfold.",
+  "codes": {
+    "01a1588a-5ec2-7323-9d13-2eaae3eef934.too_many_nodes": "The tree has too many ranges open; close the viewer and open the file again."
+  }
+}

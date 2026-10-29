@@ -1,0 +1,88 @@
+[package]
+name = "rc-engine"
+description = "rCommander's GUI-free core: panels, the command registry, the event stream, host-key questions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+# The About page and `app.about` read both (RC-010-19).
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# The host's failures arrive as `anyhow::Error` (`plugin_admin/error.rs`, RC-100-09).
+anyhow.workspace = true
+# The journal of a rename job (rc_ops::StepJournal), the SSH session's host-key gate and
+# credentials (rc-remote's traits), and the stream-only test backends.
+async-trait.workspace = true
+# The dates of `clipboard.copy_names` details, in local time (RC-020-06).
+chrono.workspace = true
+directories.workspace = true
+encoding_rs.workspace = true
+open.workspace = true
+rc-checksum = { path = "../rc-checksum" }
+rc-db = { path = "../rc-db" }
+rc-ops = { path = "../rc-ops" }
+# Plugin packages, their installation, versions and trust (`plugin_admin/`, RC-100-09), and the
+# viewer plugins in Lister and Quick View (`plugins/`, RC-100-13): the runtime, the contract's
+# records and its failures.
+rc-plugin-api = { path = "../rc-plugin-api" }
+rc-plugin-host = { path = "../rc-plugin-host" }
+rc-plugin-types = { path = "../rc-plugin-types" }
+rc-remote = { path = "../rc-remote" }
+rc-rename = { path = "../rc-rename" }
+rc-term = { path = "../rc-term" }
+# The self-update (RC-100-04 ... RC-100-07): the check, the download, the hand-over to the updater.
+rc-update = { path = "../rc-update" }
+rc-vault = { path = "../rc-vault" }
+rc-vfs = { path = "../rc-vfs" }
+# The unguessable name of a clipboard image pasted as a path (`commands/terminal_image.rs`).
+rand.workspace = true
+regex.workspace = true
+# The export of Remote Desktop Manager (`import/rdm.rs`, RC-050-11), DTDs refused.
+roxmltree.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+similar.workspace = true
+# A viewer plugin's output, a file of the session removed with its document (`plugins/open.rs`).
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+zeroize.workspace = true
+
+# The drive letters and their kinds (`drives/windows.rs`); Total Commander's registry key
+# (`import/total_commander_path/windows.rs`).
+[target.'cfg(windows)'.dependencies]
+winreg.workspace = true
+winsafe.workspace = true
+# Mapping and disconnecting network drives and reading their folders (`drives/wnet.rs`,
+# RC-010-16): the WNet functions, which winsafe does not wrap; the version already in the tree.
+# The session lock and suspend notices (`session_lock/windows.rs`, RC-080-11): a hidden window,
+# its message loop and the WTS registration. The credential manager as a secret source
+# (`secret_sources/wincred/windows.rs`, RC-100-37).
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_NetworkManagement_WNet",
+    "Win32_Security_Credentials",
+    "Win32_System_LibraryLoader",
+    "Win32_System_RemoteDesktop",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+# A working viewer component and signed packages of it (`plugin_admin` tests, RC-100-09); the
+# viewer adapter's tests run the host's test-bed components (`plugins/`, RC-100-13).
+rc-plugin-host = { path = "../rc-plugin-host", features = ["test-support", "testbed"] }
+# The in-process SSH server for the session pool's tests.
+rc-remote = { path = "../rc-remote", features = ["testkit"] }
+# The tests' wrapping backends (`rc_vfs::testing`, RC-080-24).
+rc-vfs = { path = "../rc-vfs", features = ["memory"] }
+# The settings test that a bad stored value is logged.
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

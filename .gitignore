@@ -1,0 +1,14 @@
+/target/
+/.cache/
+/.env
+/.sqlx-tmp/
+/artifacts/
+*.part
+# Local Claude Code state stays out; the project settings, hooks, agents and skills are shared
+# with every checkout.
+/.claude/*
+!/.claude/skills/
+!/.claude/settings.json
+!/.claude/hooks/
+!/.claude/agents/
+.vscode

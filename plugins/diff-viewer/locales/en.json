@@ -1,0 +1,4 @@
+{
+  "name": "Diff viewer",
+  "description": "Shows diffs and patches coloured, with their files and hunks as a tree."
+}

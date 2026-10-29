@@ -1,0 +1,53 @@
+# rCommander's bundled shell script viewer (RC-100-18). The fields every bundled plugin shares are
+# in plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+plugin_type = "viewer"
+# Built against `rcommander:plugin@0.2.0` (RC-100-14). The plugin declares no `[[settings]]` and
+# never calls the `settings` interface, so its component does not import it.
+api_version = "0.3.0"
+id = "01a15989-2e1a-70ff-bfc2-09726a035968"
+name = "Shell script viewer"
+version = "0.1.1"
+
+[match]
+# rCommander takes what follows the last dot of a name as its extension, so `.bashrc` and
+# `/etc/bash.bashrc` match `bashrc`; a name without a dot (`profile` in /etc) has none.
+extensions = ["sh", "bash", "zsh", "ksh", "bashrc", "bash_profile", "profile", "zshrc"]
+# A script without an extension, by its shebang: the 16 most common shell interpreters (the
+# host's limit). `probe` then reads the whole first line and declines anything but a shell.
+magic = [
+    { offset = 0, hex = "23212f62696e2f7368" },                              # #!/bin/sh
+    { offset = 0, hex = "23212f62696e2f62617368" },                          # #!/bin/bash
+    { offset = 0, hex = "23212f62696e2f7a7368" },                            # #!/bin/zsh
+    { offset = 0, hex = "23212f62696e2f6b7368" },                            # #!/bin/ksh
+    { offset = 0, hex = "23212f62696e2f64617368" },                          # #!/bin/dash
+    { offset = 0, hex = "23212f7573722f62696e2f62617368" },                  # #!/usr/bin/bash
+    { offset = 0, hex = "23212f7573722f62696e2f7a7368" },                    # #!/usr/bin/zsh
+    { offset = 0, hex = "23212f7573722f6c6f63616c2f62696e2f62617368" },      # #!/usr/local/bin/bash
+    { offset = 0, hex = "23212f7573722f6c6f63616c2f62696e2f7a7368" },        # #!/usr/local/bin/zsh
+    { offset = 0, hex = "23212f7573722f62696e2f656e76207368" },              # #!/usr/bin/env sh
+    { offset = 0, hex = "23212f7573722f62696e2f656e762062617368" },          # #!/usr/bin/env bash
+    { offset = 0, hex = "23212f7573722f62696e2f656e76207a7368" },            # #!/usr/bin/env zsh
+    { offset = 0, hex = "23212f7573722f62696e2f656e76206b7368" },            # #!/usr/bin/env ksh
+    { offset = 0, hex = "23212f7573722f62696e2f656e76202d532062617368" },    # #!/usr/bin/env -S bash
+    { offset = 0, hex = "2321202f62696e2f7368" },                            # #! /bin/sh
+    { offset = 0, hex = "2321202f62696e2f62617368" },                        # #! /bin/bash
+]
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# A script has no structure worth unfolding: coloured text only.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows shell scripts (sh, bash, zsh, ksh) coloured like an editor."
+
+# The host's 64 MiB of memory hold the line index of at most 8 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000

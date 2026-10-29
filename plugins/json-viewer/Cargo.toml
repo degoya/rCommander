@@ -1,0 +1,28 @@
+[package]
+name = "rc-plugin-json-viewer"
+description = "rCommander's bundled JSON viewer plugin: coloured text and a tree, for files of any size"
+# The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
+version = "0.2.2"
+edition.workspace = true
+rust-version.workspace = true
+# Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").
+license = "MIT"
+publish = false
+
+# The logic is plain Rust; the text it writes is decoded by `rc-plugin-text` (RC-100-22), which
+# builds for wasm32 too. The guest binding (src/guest.rs) needs wit-bindgen on wasm32 only, against
+# `crates/rc-plugin-api/wit`, so the native build of the workspace - clippy, the Windows lint, the
+# tests - neither builds nor links it.
+[dependencies]
+rc-plugin-text.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen.workspace = true
+
+[lib]
+# `rlib`, as rDownloader's bundled plugins: `cargo test` runs the logic natively; the component
+# is linked for wasm32 by `scripts/build-plugins.sh` alone, with `cargo rustc --crate-type cdylib`.
+crate-type = ["rlib"]
+
+[lints]
+workspace = true

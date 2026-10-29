@@ -1,0 +1,56 @@
+[package]
+name = "rc-remote"
+description = "rCommander's remote side: SSH host-key trust, SSH agents, SSH sessions and the FTP/FTPS and SFTP file systems"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+base64.workspace = true
+directories.workspace = true
+# The agent server of the testkit takes its connections as a stream; SFTP resolves the links of
+# a listing a few at a time.
+futures-util.workspace = true
+hmac.workspace = true
+rc-db = { path = "../rc-db" }
+rc-vfs = { path = "../rc-vfs" }
+regex.workspace = true
+russh.workspace = true
+russh-sftp.workspace = true
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+suppaftp.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+x509-parser.workspace = true
+# The FTP test server of the testkit (`ftp::test_server`): its files, certificate and times.
+filetime = { workspace = true, optional = true }
+rcgen = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+
+[features]
+# The in-process SSH server and its fixtures (`testkit`), and the in-process FTP server
+# (`ftp::test_server`), for the engine's tests.
+testkit = ["dep:filetime", "dep:rcgen", "dep:tempfile"]
+
+[dev-dependencies]
+filetime.workspace = true
+rc-vfs = { path = "../rc-vfs", features = ["conformance"] }
+rcgen.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

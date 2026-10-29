@@ -1,0 +1,40 @@
+# rCommander's bundled web code viewer (RC-100-26). The fields every bundled plugin shares are in
+# plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+plugin_type = "viewer"
+# Built against `rcommander:plugin@0.2.0` (RC-100-14). The plugin declares no `[[settings]]` and
+# never calls the `settings` interface, so its component does not import it.
+api_version = "0.3.0"
+id = "01a159b6-9d47-7a8f-aee9-f3b577860484"
+name = "Web code viewer"
+version = "0.1.1"
+
+[match]
+# Not `json` (the JSON viewer), not `svg` or `xml` (the XML viewer). A `.vue` file is HTML with
+# `<script>` and `<style>`; `.scss` and `.less` are read as CSS with nesting and variables.
+extensions = [
+    "html", "htm", "xhtml", "vue",
+    "css", "scss", "less",
+    "js", "mjs", "cjs", "jsx",
+    "ts", "mts", "cts", "tsx",
+    "php", "phtml",
+]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Code has no structure worth unfolding here: coloured text only.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows HTML, CSS, JavaScript, TypeScript and PHP coloured like an editor."
+
+# The host's 64 MiB of memory hold the line index of at most 8 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000

@@ -1,0 +1,7 @@
+{
+  "name": "XML viewer",
+  "description": "Shows XML coloured like an editor, or its elements as a tree to unfold.",
+  "codes": {
+    "01a15939-9062-79b4-85e8-46e1ed70ad4f.too_many_nodes": "The tree has too many ranges open; close the viewer and open the file again."
+  }
+}

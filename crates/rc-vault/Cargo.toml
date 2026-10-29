@@ -1,0 +1,27 @@
+[package]
+name = "rc-vault"
+description = "rCommander's vault: argon2id key derivation, per-field XChaCha20-Poly1305 encryption, the lock"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+argon2.workspace = true
+chacha20poly1305.workspace = true
+rand.workspace = true
+rc-db = { path = "../rc-db" }
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+sqlx.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,249 @@
+[workspace]
+resolver = "2"
+members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer"]
+
+[workspace.package]
+version = "0.8.7"
+authors = ["Alexander Herling / DEGOYA.digital"]
+edition = "2024"
+rust-version = "1.99"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/degoya/rCommander"
+homepage = "https://rcommander.net"
+
+# The dependencies more than one crate uses, at one version each. A crate that adds a dependency
+# others will share puts it here and takes it with `<name>.workspace = true`.
+[workspace.dependencies]
+# The terminal emulation of rc-term, rendered by rc-term-widget (the iced_term 0.8 fork).
+alacritty_terminal = "0.25"
+anyhow = "1"
+# The vault's key derivation (rc-vault, ADR 0002): argon2id only, no password-hash strings.
+argon2 = { version = "0.6", default-features = false, features = ["alloc", "zeroize"] }
+async-trait = "0.1"
+# Only the bits the MCP server needs: HTTP/1 on 127.0.0.1, no TLS.
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+# Hashed known_hosts names (`|1|salt|hash`): base64 salt and hash, HMAC-SHA1 over the host name.
+base64 = "0.22"
+# Checksums (rc-checksum), copy verification (rc-ops), the staged restore's digest (rc-db) and the
+# health probe's keyed challenge (rc-mcp, RC-080-12).
+blake3 = "1.8"
+# The vault's field encryption (XChaCha20-Poly1305); nonces come from `rand`.
+chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc", "zeroize"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+directories = "6"
+# Text decoding: code pages of archive names (rc-vfs, RC-030-01); UTF-16 and Windows-1252 with BOM
+# sniffing in the content search (rc-engine, RC-020-03).
+encoding_rs = "0.8"
+embed-resource = "3.0.11"
+filetime = "0.2"
+futures-util = "0.3"
+hmac = "0.13"
+# rc-term-widget (forked from iced_term 0.8, ADR 0001) is built against iced 0.14 and its core
+# and graphics crates; bump the three together. `image-without-codecs`: the viewer's image widget
+# (RC-020-07), fed decoded pixels, so iced brings no decoder of its own. `markdown`: the viewer's
+# Markdown preview (RC-020-09), iced's own parser and widgets over pulldown-cmark.
+iced = { version = "0.14", features = ["advanced", "canvas", "image-without-codecs", "markdown", "tokio"] }
+# `file.open` (rc-engine): ShellExecuteW on Windows, `open`/`xdg-open` elsewhere.
+open = { version = "5.4", features = ["shellexecute-on-windows"] }
+iced_core = "0.14"
+iced_graphics = { version = "0.14", default-features = false }
+# The viewer's image mode (rcommander, RC-020-07): decoders for the formats Lister shows, no more.
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "webp"] }
+# The native menu bar (rcommander, RC-080-18): Win32 menus on the main window, NSMenu on macOS
+# later; MIT or Apache-2.0, from Tauri. No default features: GTK stays out, so on Linux the crate
+# builds its no-op backend and the menu code is linted there too. Locked at 0.21.0.
+muda = { version = "0.21.0", default-features = false }
+# The owner column of a local listing on Unix (rc-vfs, RC-060-02): user and group names through
+# safe `getpwuid_r`/`getgrgid_r` wrappers; the space of a file system (`statvfs`, RC-080-31).
+# The version russh already brings.
+nix = { version = "0.31", default-features = false, features = ["fs", "user"] }
+# The Markdown preview (rcommander, RC-020-09): the parser iced's `markdown` feature brings, at
+# its version, read directly only to find raw HTML and show it as text; no second parser.
+pulldown-cmark = { version = "0.12", default-features = false }
+# The local pseudo-terminal of rc-term: ConPTY on Windows, openpty elsewhere.
+portable-pty = "0.9"
+# Property tests only (dev-dependency); without the fork and timeout runners.
+proptest = { version = "1", default-features = false, features = ["std"] }
+rand = "0.10"
+# The text encodings the bundled plugins read (RC-100-22): BOM detection and a streaming decoder
+# from UTF-8, UTF-16 and three code pages; no dependency, builds for wasm32.
+rc-plugin-text = { path = "crates/rc-plugin-text" }
+# Test certificates for the FTPS tests (rc-remote, dev-dependency), on the same aws-lc-rs.
+rcgen = { version = "0.14", default-features = false, features = ["aws_lc_rs"] }
+# The multi-rename search and replace (rc-rename) and the file search's name and content patterns
+# (rc-engine, RC-020-03): linear time, so a pattern from MCP cannot stall the engine; look-around
+# is not needed.
+regex = "1"
+# The stdio proxy and the instance probe talk to http://127.0.0.1 only, so no TLS backend.
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
+# The SVG viewer plugin's renderer (RC-100-28), on the tiny-skia 0.11 and fontdb 0.23 already in
+# the tree; it re-exports usvg, tiny-skia and fontdb. Without system fonts and memory-mapped font
+# files: `text` with the font the plugin brings, `raster-images` for `data:` PNG, JPEG, GIF, WebP.
+resvg = { version = "0.45", default-features = false, features = ["raster-images", "text"] }
+# rmcp 3.2+: the server macros, stdio, Streamable HTTP server and (for the stdio proxy) client.
+rmcp = { version = "3.2", default-features = false, features = ["client", "macros", "server", "transport-io", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
+# The import from Remote Desktop Manager (rc-engine, RC-050-11): a read-only XML tree without
+# dependencies of its own that refuses DTDs by default, so no entity is ever expanded or
+# fetched; already in the tree through fontdb.
+roxmltree = "0.20"
+# SSH (rc-remote): the version rDownloader runs; its `keys` re-export ssh-key (fingerprints,
+# randomart, OpenSSH public key parsing).
+russh = "0.63"
+# SFTP (rc-remote) over a russh channel; version 3 as in rDownloader.
+russh-sftp = "3"
+# TLS for FTPS (rc-remote) on aws-lc-rs, which russh already links; the platform verifier
+# checks against the system roots (CryptoAPI on Windows).
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std", "tls12"] }
+rustls-platform-verifier = "0.7"
+secrecy = "0.10"
+# Strict SemVer of a plugin's version and `min_app_version` (rc-plugin-host, RC-100-08); the version
+# already in the lock.
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha1 = "0.11"
+# SHA-256 fingerprints of FTPS certificates (rc-remote).
+sha2 = "0.11"
+# Line diffs for compare by content (rc-engine, RC-020-04): no dependencies of its own.
+similar = { version = "3", default-features = false, features = ["std"] }
+# Runtime queries and `sqlx::migrate!` only, never the `query!` macros (AGENTS.md).
+sqlx = { version = "0.9", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite"] }
+# FTP and FTPS (rc-remote); `deprecated` enables implicit FTPS (port 990).
+suppaftp = { version = "12.1", default-features = false, features = ["deprecated", "tokio", "tokio-rustls-aws-lc-rs"] }
+# The interface language: the system's preferred languages (Windows, macOS), safe bindings.
+sys-locale = "0.3"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "tls12"] }
+tokio-util = "0.7"
+# The plugin manifest (rc-plugin-host, RC-100-08), rDownloader's format; the version already in the
+# lock.
+toml = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+url = "2"
+# The plugin runtime (rc-plugin-host only, RC-100-08; docs/plugins.md "New dependencies"):
+# rDownloader's version and features. `cache` keeps compiled plugins on disk between starts,
+# `parallel-compilation` spreads a cache miss over the cores; no WASI, no `wat`.
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "async", "cache", "component-model", "component-model-async", "cranelift", "parallel-compilation", "runtime", "std"] }
+# The archive backend (RC-030-01) and packing (RC-030-04), pure Rust, so the Windows cross-build
+# links no further C code: bzip2 0.6 defaults to libbz2-rs-sys, flate2 to miniz_oxide, zstd is
+# ruzstd (its encoder too). sevenz's `aes256` makes an encrypted 7z header say `password_required`
+# instead of an unknown method; `compress` (and lzma-rust2's `encoder`) write 7z and tar.xz; zip's
+# `aes-crypto` reads AES-encrypted zips with a password (RC-030-03).
+bzip2 = "0.6"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+lzma-rust2 = { version = "0.21", default-features = false, features = ["encoder", "std", "xz"] }
+ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
+sevenz-rust2 = { version = "0.23", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd"] }
+tar = { version = "0.4", default-features = false }
+zip = { version = "8", default-features = false, features = ["aes-crypto", "bzip2", "deflate-flate2", "deflate64"] }
+# The registry reads behind WSL detection (rc-vfs, Windows only); already in the tree via
+# embed-resource, and a safe API, so no `unsafe` of our own.
+winreg = "0.56"
+# The drive letters, their kinds and volume names (rc-engine, Windows only): safe wrappers with no
+# dependencies of their own, so no `unsafe` of ours for `GetLogicalDrives` and friends.
+winsafe = { version = "0.0.29", default-features = false, features = ["kernel"] }
+# The Explorer's context menu (rcommander, Windows only, RC-080-02): only the shell's COM
+# interfaces (`IContextMenu2/3`, `IShellFolder`), which windows-sys has as raw vtables only;
+# plain Win32 calls stay on windows-sys. The version already in the lock through russh's pageant
+# and trash, no second copy (owner, 2026-10-18).
+windows = "0.62.2"
+# `AttachConsole` for `rcommander backup` (rcommander, Windows only); the version already in the
+# tree through the toolchain crates.
+windows-sys = "0.61"
+# The subject, issuer and validity of an FTPS certificate a person decides about (rc-remote,
+# RC-070-02); the version rcgen already brings into the tree, no features.
+x509-parser = { version = "0.18", default-features = false }
+zeroize = "1.9"
+# Plugin package signatures (rc-plugin-host, RC-100-09): Ed25519 over the package digest, and the
+# PKCS#8 PEM `rcommander plugin keygen` writes; the version already in the lock through russh.
+ed25519-dalek = { version = "3", features = ["pem", "pkcs8"] }
+# The test components of rc-plugin-host's `test-support` feature (RC-100-09): the versions its
+# tests already build them with, which Wasmtime 49 brings.
+wat = "~1.258.3"
+wit-component = "0.258.3"
+wit-parser = "0.258.3"
+# The guest side of a plugin (RC-100-12): the bundled plugins' `src/guest.rs` on wasm32 only, never
+# in `rcommander.exe`; the SDK templates ask for the same version (scripts/check-sdk-templates.sh).
+wit-bindgen = "0.62"
+# A fresh plugin's id, a UUIDv7, for `rcommander plugin new` (RC-100-12); the version already in
+# the lock through rmcp.
+uuid = { version = "1", features = ["v7"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# Every `allow` says why (`reason = "..."`), so a lint switched off is never a mystery.
+allow_attributes_without_reason = "warn"
+dbg_macro = "deny"
+todo = "deny"
+unwrap_used = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+# Test packages: optimised like a release, but in parallel code units and without LTO, which is
+# what makes a release build wait on one core. Line tables stay, unstripped, so a panic in a test
+# package names its files and lines (on Windows from rcommander.pdb, which the test package
+# carries beside the exe). Published releases keep `release`.
+[profile.release-test]
+inherits = "release"
+codegen-units = 16
+lto = false
+debug = "line-tables-only"
+strip = "none"
+
+[profile.dev]
+debug = "line-tables-only"          # backtraces stay, DWARF shrinks a lot
+split-debuginfo = "unpacked"        # deduplicates debug info instead of copying it
+
+# SQLite itself: sqlx's `sqlite` feature builds the bundled amalgamation with `cc`, which takes the
+# package's `OPT_LEVEL` (`-O0` without this line), and every rc-db test opens databases.
+# rc-vault adds the same override for `argon2` and `blake2` (its key derivation takes seconds
+# unoptimised).
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+# The plugin runtime (RC-100-08), as rDownloader keeps it: Wasmtime and Cranelift unoptimised make
+# every test that compiles a component seconds slower. A profile override takes one package name
+# each, no pattern.
+[profile.dev.package.cranelift-assembler-x64]
+opt-level = 3
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+[profile.dev.package.cranelift-bitset]
+opt-level = 3
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.cranelift-codegen-shared]
+opt-level = 3
+[profile.dev.package.cranelift-control]
+opt-level = 3
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+[profile.dev.package.cranelift-native]
+opt-level = 3
+[profile.dev.package.regalloc2]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
+[profile.dev.package.wasmtime]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-core]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3

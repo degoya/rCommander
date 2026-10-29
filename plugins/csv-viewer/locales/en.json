@@ -1,0 +1,10 @@
+{
+  "name": "CSV viewer",
+  "description": "Shows CSV and TSV with every column in its own colour, or the records as a tree.",
+  "codes": {
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.encoding": "Encoding",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.header": "First line is a header",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.separator": "Separator",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.too_many_nodes": "The tree has too many ranges open; close the viewer and open the file again."
+  }
+}

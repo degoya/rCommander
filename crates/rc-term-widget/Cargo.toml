@@ -1,0 +1,21 @@
+[package]
+name = "rc-term-widget"
+description = "rCommander's terminal widget: iced_term 0.8 forked to render an rc-term session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# Distributed under the workspace licence; the code taken from iced_term keeps its MIT notice
+# (LICENSE-iced_term), which the MIT licence asks of every copy.
+license.workspace = true
+publish = false
+
+[dependencies]
+alacritty_terminal.workspace = true
+iced.workspace = true
+iced_core.workspace = true
+iced_graphics.workspace = true
+rc-term = { path = "../rc-term" }
+tokio.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,5 @@
+{
+  "name": "{{PLUGIN_NAME}}",
+  "description": "Shows CSV and TSV files as a table.",
+  "codes": {}
+}

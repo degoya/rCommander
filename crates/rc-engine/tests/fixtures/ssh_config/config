@@ -1,0 +1,44 @@
+# Fixture for the ssh_config import (RC-050-06): ten hosts, pattern hosts, an Include, a ProxyJump.
+Include config.d/*.conf
+
+Host *
+    ServerAliveInterval 30
+    User everyone
+
+Host web1 web2
+    HostName %h.example.com
+    User deploy
+
+Host db
+    HostName 10.0.0.5
+    Port 2222
+    IdentityFile ~/.ssh/id_db
+    IdentityFile "%d/keys/%r@%h"
+
+Host bastion
+    HostName bastion.example.com
+    User=jump
+
+Host internal
+    HostName 10.1.0.7
+    ProxyJump bastion
+    ForwardAgent yes
+
+Host *.corp !secret.corp
+    User corp
+
+Host git
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+
+host Mixed
+    hostname = mixed.example.com
+    PORT=2200
+
+Match host *.lan
+    User lanuser
+
+Host nas
+    HostName nas.local

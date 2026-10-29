@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<!-- A synthetic export with the structure of the owner's Remote Desktop Manager 2026.3 export
+     (RC-050-11): every name, host, user, ID and SafePassword is invented. Only elements that
+     export shows are used; the FTP and RDP entries carry nothing but their type, as stage 1
+     reads nothing else of them. -->
+<RDMExport>
+  <Connections>
+    <Connection>
+      <AppVersion>2026.3</AppVersion>
+      <ConnectionType>SSHShell</ConnectionType>
+      <Group>Lab</Group>
+      <ID>0f3c1a52-7d4e-4b8a-9c61-2e5b8d7a4f10</ID>
+      <Name>build box</Name>
+      <OpenEmbedded>true</OpenEmbedded>
+      <MetaInformation>
+        <PasswordHistory>
+          <PasswordHistory>
+            <LoggedModifiedBy>someone@example.test</LoggedModifiedBy>
+            <ModifiedBy>someone@example.test</ModifiedBy>
+            <ModifiedDateTime>2026-01-02T03:04:05</ModifiedDateTime>
+            <SafePassword>cmRtLWhpc3RvcnktYzRlMQ==</SafePassword>
+          </PasswordHistory>
+        </PasswordHistory>
+      </MetaInformation>
+      <Terminal>
+        <Host>build.example.test</Host>
+        <HostPort>2222</HostPort>
+        <SafePassword>cmRtLWNhbmFyeS03ZjNhOQ==</SafePassword>
+        <Username>builder</Username>
+      </Terminal>
+    </Connection>
+    <Connection>
+      <AppVersion>2026.3</AppVersion>
+      <ConnectionType>SSHShell</ConnectionType>
+      <Group>Lab\Servers</Group>
+      <ID>{A1B2C3D4-E5F6-4711-8899-AABBCCDDEEFF}</ID>
+      <Name>nested box</Name>
+      <OpenEmbedded>true</OpenEmbedded>
+      <Terminal>
+        <Host>nested.example.test</Host>
+        <HostPort>22</HostPort>
+        <Username>ops</Username>
+      </Terminal>
+    </Connection>
+    <Connection>
+      <AppVersion>2026.3</AppVersion>
+      <ConnectionType>SSHShell</ConnectionType>
+      <Group>Office</Group>
+      <ID>7b9d1f3a-5c6e-4f8b-9d0e-2f4a6b8c0d2e</ID>
+      <Name>office box</Name>
+      <OpenEmbedded>true</OpenEmbedded>
+      <Terminal>
+        <Host>office.example.test</Host>
+        <HostPort>22</HostPort>
+        <SafePassword>cmRtLWNhbmFyeS03ZjNhOQ==</SafePassword>
+        <Username>clerk</Username>
+      </Terminal>
+    </Connection>
+    <Connection>
+      <AppVersion>2026.3</AppVersion>
+      <ConnectionType>Ftp</ConnectionType>
+      <Group>Files</Group>
+      <ID>4e6a8c0d-2f3b-4c5e-8a7b-9c1d3e5f7a9b</ID>
+      <Name>file server</Name>
+    </Connection>
+    <Connection>
+      <AppVersion>2026.3</AppVersion>
+      <ConnectionType>RDPConfigured</ConnectionType>
+      <Group>Desktops</Group>
+      <ID>8c0e2a4b-6d7f-4a9c-8e1f-3a5b7c9d1e3f</ID>
+      <Name>windows desktop</Name>
+    </Connection>
+    <Connection>
+      <AppVersion>2026.3</AppVersion>
+      <ConnectionType>SSHShell</ConnectionType>
+      <Group>Lab</Group>
+      <Name>no id</Name>
+      <Terminal>
+        <Host>noid.example.test</Host>
+        <HostPort>22</HostPort>
+        <Username>ops</Username>
+      </Terminal>
+    </Connection>
+  </Connections>
+  <DatabaseID>9d1f3b5c-7e8a-4b0d-9f2a-4b6c8d0e2f4a</DatabaseID>
+  <Version>2</Version>
+</RDMExport>

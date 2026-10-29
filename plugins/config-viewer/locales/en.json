@@ -1,0 +1,8 @@
+{
+  "name": "Config viewer",
+  "description": "Shows INI, .reg, .env, properties and TOML files coloured, or their sections and keys as a tree.",
+  "codes": {
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.setting.encoding": "Encoding",
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.too_many_nodes": "The tree has too many ranges open; close the viewer and open the file again."
+  }
+}

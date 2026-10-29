@@ -1,0 +1,17 @@
+# The fields every bundled plugin shares, after rDownloader's plugins/metadata.toml (commit
+# 26c8592a6). A manifest under plugins/ leaves them out; `rcommander plugin package --defaults
+# plugins/metadata.toml` (scripts/build-plugins.sh) writes each one it leaves out into the
+# manifest it packages and signs, so every package still carries a complete manifest. A plugin
+# that needs another value states it in its own manifest, and its own value wins.
+#
+# `key_id` names the key the bundled plugins are signed with: the development key until the owner
+# names rCommander's release key (docs/plugins.md, decision 7). Its public half comes from the
+# signing key itself. `min_app_version` is the first release with the plugin host.
+manifest_version = 1
+api_version = "0.1.0"
+key_id = "rcommander-plugin-v1"
+
+[metadata]
+author = "DEGOYA.digital"
+license = "MIT"
+min_app_version = "0.1.0"

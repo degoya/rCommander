@@ -1,0 +1,52 @@
+# rCommander's bundled CSV viewer (RC-100-17). The fields every bundled plugin shares are in
+# plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code and a setting's label start with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `separator`, `header` and `encoding`.
+api_version = "0.3.0"
+id = "01a15984-4cfe-79a8-a86c-38186923b56a"
+name = "CSV viewer"
+version = "0.1.1"
+
+[match]
+# Comma, tab and pipe separated values; `separator = "auto"` takes a tab for `tsv` and `tab`, a
+# pipe for `psv`, and counts for anything else.
+extensions = ["csv", "tsv", "tab", "psv"]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read with every column in its own colour, or unfold the records; `highlighted` is shown first.
+outputs = ["highlighted", "tree"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows CSV and TSV with every column in its own colour, or the records as a tree."
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+[[settings]]
+key = "separator"
+type = "choice"
+values = ["auto", "comma", "semicolon", "tab", "pipe"]
+default = "auto"
+
+[[settings]]
+key = "header"
+type = "choice"
+values = ["auto", "yes", "no"]
+default = "auto"
+
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "windows-1252"]
+default = "auto"

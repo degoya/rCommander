@@ -1,0 +1,68 @@
+[package]
+name = "rc-plugin-host"
+description = "rCommander's WebAssembly plugin host: Wasmtime engine, limits, compile cache, manifest, locales, diagnostics and the viewer session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# `test_support`: a working viewer component, one that imports what no viewer is granted, and
+# signed packages of them, for the tests of the crates above (rc-engine, rcommander). Switched on
+# only from dev-dependencies.
+test-support = ["dep:wat", "dep:wit-component", "dep:wit-parser"]
+# `rc_plugin_host::testbed` for the viewer adapter's tests in rc-engine (RC-100-13); only ever a
+# dev-dependency's feature.
+testbed = ["dep:wat", "dep:wit-component", "dep:wit-parser"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+# The manifest's `public_key`: 32 bytes of base64, checked by the verifier (RC-100-09).
+base64.workspace = true
+# Package signatures and `rcommander plugin keygen` (RC-100-09).
+ed25519-dalek.workspace = true
+# zip's `deflate-flate2` names no backend of its own; the workspace's flate2 brings miniz_oxide
+# (`rust_backend`), so this crate builds alone too, not only beside rc-ops and rc-vfs.
+flate2.workspace = true
+rand.workspace = true
+rc-plugin-api = { path = "../rc-plugin-api" }
+rc-plugin-types = { path = "../rc-plugin-types" }
+# The one list of invisible and direction characters a failure's text spells out (RC-080-43).
+rc-rename = { path = "../rc-rename" }
+# `http` of a secret source: plain HTTP to its granted loopback port (RC-100-33), no TLS needed.
+reqwest.workspace = true
+# The value `secrets.get` answers, zeroized when dropped (RC-100-33).
+secrecy.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# The compile cache's integrity record (SHA-256 of every entry) and the in-memory memo by content.
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+url.workspace = true
+wasmtime.workspace = true
+wat = { workspace = true, optional = true }
+wit-component = { workspace = true, optional = true }
+wit-parser = { workspace = true, optional = true }
+# The answer of `http` and a refused secret, wiped when dropped (RC-080-52).
+zeroize.workspace = true
+# The `.rcplug` package: a ZIP of the manifest, the component, the signature and the locales
+# (RC-100-09), written deflated.
+zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+# The test components (crash, hang, hostile output, undeclared import) are written as WebAssembly
+# text and made into components the way `wasm-tools component new` does, at the versions
+# Wasmtime 49 brings, so the tests need no WebAssembly toolchain and no prebuilt binary.
+wat.workspace = true
+wit-component.workspace = true
+wit-parser.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,3 @@
+256 SHA256:5RiEvVR9s2eAmq1pXd0zFRd1zhBaDjgSOeBsI9EpDw0 fixture-ed25519 (ED25519)
+256 SHA256:jsjPNrp3z2b7HDU6UVwfhVfwJRFs6BR0aaplwtGFLFA fixture-ecdsa (ECDSA)
+3072 SHA256:f6K+UAU6cU92N+j6GR1VGJWuy4vi1svq+dZZYqydEg0 fixture-rsa (RSA)

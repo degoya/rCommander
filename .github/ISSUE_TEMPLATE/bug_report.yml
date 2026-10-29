@@ -1,0 +1,93 @@
+name: Bug report
+description: Something in rCommander does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. **A security vulnerability does not belong here** - please report it privately, as [SECURITY.md](https://github.com/degoya/rCommander/blob/main/SECURITY.md) describes.
+
+        This repository is an export of the development repository; [CONTRIBUTING.md](https://github.com/degoya/rCommander/blob/main/CONTRIBUTING.md) explains what that means for issues and pull requests.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings, page About - the version and the commit.
+      placeholder: "0.9.0 (1a2b3c4d)"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install type
+      options:
+        - Release archive from GitHub Releases or rcommander.net
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment details
+      description: Operating system version, and where the files are - a local disk, WSL, an SFTP or FTP server (its software if you know it), an archive.
+      placeholder: "Windows 11 24H2, SFTP to OpenSSH 9.6"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, including any error message shown in the window.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If Total Commander does it differently, how it does it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that shows the problem. Replace real host names, user names and paths with placeholders.
+      placeholder: |
+        1. Open a folder with ... in the left panel
+        2. Press F5 ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: plugins
+    attributes:
+      label: Plugins involved
+      description: The plugin names and versions involved, if any (Settings, page Plugins).
+      placeholder: "csv-viewer 0.3.1"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages
+      description: |
+        The exact text of any error the window showed, or of an MCP answer if an agent was involved.
+        **Check it for private data before you paste it** - secrets are masked, but host names and paths remain, and this issue is public.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues for this problem.
+          required: true
+        - label: I removed passwords, keys, host names and private paths from everything above.
+          required: true

@@ -1,0 +1,46 @@
+# rCommander's bundled diff and patch viewer (RC-100-24). The fields every bundled plugin shares
+# are in plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it
+# packages.
+plugin_type = "viewer"
+# Built against `rcommander:plugin@0.2.0` (RC-100-14). The plugin declares no `[[settings]]` and
+# never calls the `settings` interface, so its component does not import it.
+api_version = "0.3.0"
+id = "01a159b4-eea6-71f6-b02e-d3d5e24e15d2"
+name = "Diff viewer"
+version = "0.1.2"
+
+[match]
+extensions = ["diff", "patch", "rej"]
+# A diff saved without one of those extensions, by how it starts: `diff ` (`git diff`, `diff -u`
+# with its command line, `diff -r`), `--- ` (a plain `diff -u`) and `From ` (`git format-patch`, a
+# mail). `probe` then declines what only shares the prefix: `--- ` must be followed by a `+++ `
+# line, `From ` by a 40-digit commit id.
+#
+# A YAML document starting `--- ` keeps the YAML viewer: rCommander asks the plugins whose
+# extension matches before those whose magic does, and a declining `probe` hands the file to the
+# next (RC-100-27).
+magic = [
+    { offset = 0, hex = "6469666620" },                                      # diff
+    { offset = 0, hex = "2d2d2d20" },                                        # ---
+    { offset = 0, hex = "46726f6d20" },                                      # From
+]
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured first; the tree lists the patch's files and their hunks.
+outputs = ["highlighted", "tree"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows diffs and patches coloured, with their files and hunks as a tree."
+
+# The host's 64 MiB of memory hold the index and the tree of at most 8 MiB together
+# (INDEX_BUDGET_BYTES in src/lib.rs) and the 1 MiB windows `open` and `text` read and write
+# through.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000

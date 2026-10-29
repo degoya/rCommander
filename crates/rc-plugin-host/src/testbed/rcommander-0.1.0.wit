@@ -1,0 +1,72 @@
+// The plugin contract of rCommander (RC-100-08): `rcommander:plugin@0.1.0`.
+//
+// Copied and adapted from rDownloader's `crates/rd-plugin-api/wit/rdownloader.wit` at commit
+// 26c8592a6. The interfaces below and the viewer world are written byte for byte as
+// `docs/plugins.md` ("Shared interfaces", "The worlds") shows them, which
+// `crates/rc-plugin-api/src/contract_tests.rs` holds. The other worlds arrive with their stages.
+//
+// What moves the version is rDownloader's rule: a new world, interface or function is additive
+// and keeps it; a new record field or variant case breaks a component built before it and raises
+// it. No compatibility promise before the plugin contract 1.0.
+
+package rcommander:plugin@0.1.0;
+
+interface types {
+  enum failure-kind { not-found, exists, access-denied, not-supported, bad-data,
+                      wrong-password, cancelled, io, other }
+  record failure { kind: failure-kind, code: option<string>, params: list<tuple<string, string>> }
+  enum entry-kind { file, folder, link }
+  record entry { name: string, kind: entry-kind, size: option<u64>,
+                 modified: option<string>, attributes: u32 }
+  record source-info { name: string, size: u64, modified: option<string> }
+  type source = u32;   // a handle valid for this call or session, never a path
+  type sink = u32;
+}
+
+interface host {     // always; rDownloader's `host` without `wait` and `secret-available`
+  log: func(level: string, message: string);
+  now-unix-seconds: func() -> u64;
+  random-bytes: func(count: u32) -> list<u8>;
+}
+
+interface source {   // by kind; rDownloader's `source`: a handle, never a path
+  use types.{failure, source, source-info};
+  info: func(src: source) -> source-info;
+  read-at: func(src: source, offset: u64, length: u32) -> result<list<u8>, failure>;  // <= 1 MiB
+  progress: func(done: u64, total: option<u64>);
+  should-stop: func() -> bool;
+}
+
+interface sink {     // by kind; rDownloader's `sink`, addressed by handle
+  use types.{failure, sink};
+  write-at: func(out: sink, offset: u64, bytes: list<u8>) -> result<_, failure>;     // <= 1 MiB
+  committed: func(out: sink) -> u64;
+  sync: func(out: sink) -> result<_, failure>;
+  progress: func(done: u64, total: option<u64>);
+  should-stop: func() -> bool;
+}
+
+world viewer-plugin {
+  import host; import source; import sink;
+  export viewer;
+}
+interface viewer {
+  use types.{failure, source, sink};
+  enum purpose { lister, quick-view }
+  enum output { text, highlighted, markdown, image, tree, pages }
+  record theme { dark: bool, background: string, foreground: string, accent: string }
+  record document { outputs: list<output>, title: option<string>, pages: option<u32> }  // first shown
+  record tree-node { id: u64, label: string, value: option<string>, has-children: bool }
+  enum token-class { keyword, key, %string, number, literal, comment, punctuation, operator,
+                     type-name, function, invalid }
+  record token { start: u32, len: u32, class: token-class }        // UTF-8 bytes within its line
+  probe: func(src: source) -> bool;
+  open: func(src: source, purpose: purpose, theme: theme) -> result<document, failure>;
+  text: func(out: sink) -> result<string, failure>;                 // the encoding written
+  tokens: func(first-line: u32, count: u32) -> result<list<list<token>>, failure>;  // highlighted
+  image: func(out: sink) -> result<string, failure>;                // png, jpeg, gif, bmp, webp, rgba:<w>x<h>
+  page: func(index: u32, width: u32, height: u32, out: sink) -> result<_, failure>;
+  children: func(node: option<u64>) -> result<list<tree-node>, failure>;
+  search: func(needle: string, from-page: u32, backwards: bool) -> result<option<u32>, failure>;
+  thumbnail: func(src: source, size: u32, out: sink) -> result<string, failure>;
+}

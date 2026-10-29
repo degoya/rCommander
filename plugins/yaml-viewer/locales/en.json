@@ -1,0 +1,7 @@
+{
+  "name": "YAML viewer",
+  "description": "Shows YAML coloured like an editor, or as a tree to unfold.",
+  "codes": {
+    "01a15939-8404-762d-9569-7e4ec903238e.too_many_nodes": "The tree has too many ranges open; close the viewer and open the file again."
+  }
+}

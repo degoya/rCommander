@@ -1,0 +1,87 @@
+[graph]
+all-features = true
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+  "aarch64-apple-darwin",
+]
+
+[advisories]
+yanked = "warn"
+# Every ignored advisory names its reason and the condition under which it leaves the list
+# (reviewed in RC-080-03, docs/security/). RUSTSEC-2026-0344 (ruzstd decompression bomb) was
+# never ignored: .zst files are untrusted input; ruzstd 0.9.1 fixes it (RC-080-13).
+ignore = [
+  # rsa (Marvin timing attack), through russh and ssh-key: no fixed release exists. rCommander
+  # only signs an SSH login with the person's own RSA key, on their machine, and never decrypts
+  # with RSA. Leaves when rsa ships a constant-time release.
+  { id = "RUSTSEC-2023-0071", reason = "no fixed rsa release; RSA is only used to sign SSH logins locally, never to decrypt" },
+  # zip: ZipArchive::extract and ZipStreamReader::extract keep set-uid bits and follow symlinks
+  # out of the target. rCommander never calls either: rc-vfs reads the entries, rc-ops writes
+  # them with its own name checks. Leaves with the bump to zip 9.
+  { id = "RUSTSEC-2026-0367", reason = "zip extract() APIs are not used; entries are written by rc-ops" },
+  { id = "RUSTSEC-2026-0368", reason = "zip extract() APIs are not used; entries are written by rc-ops" },
+  { id = "RUSTSEC-2026-0369", reason = "zip extract() APIs are not used; entries are written by rc-ops" },
+  # Unmaintained, no known vulnerability: paste (a build-time macro of metal, macOS GPU only)
+  # and ttf-parser (fontdb and owned_ttf_parser in iced's font stack). Leave with the iced
+  # release that drops them.
+  { id = "RUSTSEC-2024-0436", reason = "unmaintained build-time macro of metal (macOS); no vulnerability" },
+  { id = "RUSTSEC-2026-0192", reason = "unmaintained font parser of iced's font stack; no vulnerability" },
+  # Unmaintained, no known vulnerability: zvariant, zbus_names and zvariant_derive, through zbus
+  # 5 <- mundy <- iced_winit (the desktop's light/dark setting on Linux). Leave with the iced
+  # release on zbus 6.
+  { id = "RUSTSEC-2026-0370", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
+  { id = "RUSTSEC-2026-0371", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
+  { id = "RUSTSEC-2026-0372", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
+  # zstd 0.13.3 / zstd-safe 7.3.0, only through wasmtime's `cache` feature (wasmtime-internal-cache
+  # 49 and 50 both require zstd ^0.13; the fixes are in zstd 0.14.3 and zstd-safe 8.2). The
+  # cache compresses and reads back only the compiled plugins rCommander itself wrote into its
+  # data folder - no untrusted stream reaches zstd, the seekable API is not used, and a context
+  # is not reused across streams of different origin. Leaves with the wasmtime release on zstd
+  # 0.14, or with a compile cache of our own (RC-080-36).
+  { id = "RUSTSEC-2026-0391", reason = "zstd only (de)compresses rCommander's own plugin compile cache; wasmtime has no release on zstd 0.14" },
+  { id = "RUSTSEC-2026-0398", reason = "zstd seekable API is not used; only wasmtime's compile cache, written by rCommander" },
+  { id = "RUSTSEC-2026-0403", reason = "zstd only decompresses rCommander's own plugin compile cache; no untrusted frames" },
+  # Unmaintained, no known vulnerability: rustybuzz, through usvg <- resvg in the SVG viewer
+  # plugin (a wasm guest, sandboxed). Leaves with the resvg release that drops it.
+  { id = "RUSTSEC-2026-0206", reason = "unmaintained shaper of resvg in the sandboxed SVG viewer plugin; no vulnerability" },
+]
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "bzip2-1.0.6",
+  "CC0-1.0",
+  # Permissive data licence covering the Mozilla CA bundle shipped by webpki-roots.
+  "GPL-3.0-or-later",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+
+[bans]
+# A second version of a crate is a warning, not an error: the GUI stack (iced, wgpu, winit) and
+# the two TLS back ends (rustls with aws-lc-rs, ring through russh and reqwest) hold their own
+# versions of windows-sys, bitflags, getrandom, rand and others, which this workspace cannot
+# unify. Each is a size question, not a security one; a duplicated crypto crate is reviewed in
+# docs/security/ (RC-080-03).
+multiple-versions = "warn"
+# No `*` version anywhere; the workspace's own crates are path dependencies without a version,
+# which is allowed because none of them is published (`publish = false` in every crate).
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

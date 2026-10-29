@@ -1,0 +1,121 @@
+[package]
+name = "rcommander"
+description = "rCommander, a two-panel file manager"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "rcommander"
+path = "src/main.rs"
+
+[dependencies]
+# The `rcommander plugin ...` subcommands (RC-100-12).
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+directories.workspace = true
+# Raster images for the file icons (RC-010-10) and the viewer (RC-020-07): RGBA handles only,
+# no iced codecs; the viewer decodes through `image` with its own limits.
+iced = { workspace = true, features = ["image-without-codecs"] }
+image.workspace = true
+# The native menu bar (RC-080-18): built everywhere, attached on Windows only.
+muda.workspace = true
+# A link in the Markdown preview goes to the system as `file.open` hands a file (RC-020-09).
+open.workspace = true
+# The Markdown preview (RC-020-09): raw HTML found and turned into text before iced parses it.
+pulldown-cmark.workspace = true
+rc-db = { path = "../rc-db" }
+rc-engine = { path = "../rc-engine" }
+rc-mcp = { path = "../rc-mcp" }
+# `rcommander plugin new|package|verify|keygen|conformance` (RC-100-12): the packager, the verifier
+# and the conformance run.
+rc-plugin-host = { path = "../rc-plugin-host" }
+rc-term = { path = "../rc-term" }
+rc-term-widget = { path = "../rc-term-widget" }
+# The hidden `apply-update` and the recovery before the window opens (RC-100-06).
+rc-update = { path = "../rc-update" }
+rc-vault = { path = "../rc-vault" }
+# The backend of a listing: per-file icons only on the local file system (RC-010-10).
+rc-vfs = { path = "../rc-vfs" }
+serde.workspace = true
+serde_json.workspace = true
+sys-locale.workspace = true
+tokio.workspace = true
+# Warnings of settings that were not stored; rc-db's diagnostics install the subscriber.
+tracing.workspace = true
+# The watch for a lost graphics device, a layer of that subscriber (gpu_loss.rs).
+tracing-subscriber.workspace = true
+# A fresh plugin's id in `rcommander plugin new` (RC-100-12).
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The accent colour from the registry (theme/system/windows.rs).
+winreg.workspace = true
+# Windows' own file dialog behind "Browse..." (platform/windows/file_dialog.rs, RC-010-18):
+# `IFileOpenDialog`/`IFileSaveDialog` wrapped safely; the features rc-vfs already builds. Also
+# the message box after a lost graphics device (platform/windows/gpu_loss.rs).
+winsafe = { workspace = true, features = ["kernel", "shell"] }
+# Plain Win32 calls: the console for `rcommander backup`; the shell's file icons and their bitmaps
+# (app/icons/windows.rs); for the shell context menu the popup menu, the pointer, COM's start and
+# the window subclass (platform/windows/context_menu.rs); for drag and drop the pointer, the mouse
+# buttons and Shift, and files on the clipboard in global memory (platform/windows/drag_out.rs,
+# platform/windows/clipboard.rs); uxtheme's menu mode looked up by ordinal for dark popup menus
+# (platform/windows/popup_menus.rs); buffered painting that makes the dark menu bar opaque
+# (platform/windows/menu_bar.rs).
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_DataExchange",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
+# Only the shell's COM interfaces for the context menu (IContextMenu, IContextMenu2/3,
+# IShellFolder, SHParseDisplayName) and for dragging files out (IShellItemArray's IDataObject,
+# SHDoDragDrop): typed, not hand-written vtables (owner, 2026-10-18).
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+# The error-code lists the i18n test holds against the catalogue.
+rc-ops = { path = "../rc-ops" }
+# A signed viewer package for the Plugins page's tests (RC-100-09).
+rc-plugin-host = { path = "../rc-plugin-host", features = ["test-support"] }
+rc-remote = { path = "../rc-remote" }
+rc-rename = { path = "../rc-rename" }
+# An MCP client for the test that an agent's navigate moves the panel on screen.
+rmcp.workspace = true
+tempfile.workspace = true
+# Reads the bundled icon font in its tests (theme/icon_tests.rs); already in the tree through
+# iced's font stack.
+ttf-parser = "0.25"
+
+[build-dependencies]
+embed-resource.workspace = true
+
+# The repository's own rules as tests, one binary (`cargo nextest run -p rcommander --test
+# repo_lints`).
+[[test]]
+name = "repo_lints"
+path = "tests/repo_lints/main.rs"
+
+[lints]
+workspace = true

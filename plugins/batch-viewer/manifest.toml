@@ -1,0 +1,40 @@
+# rCommander's bundled batch file viewer (RC-100-19). The fields every bundled plugin shares are
+# in plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code starts with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `encoding`.
+api_version = "0.3.0"
+id = "01a15987-72b1-716d-be3c-960b779597e3"
+name = "Batch viewer"
+version = "0.1.1"
+
+[match]
+extensions = ["bat", "cmd"]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured; a batch file has no structure worth a tree.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows Windows batch files (.bat, .cmd) coloured like an editor."
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+# How the file's bytes are read: `auto` takes UTF-8 when the file is valid UTF-8 (with or
+# without a byte-order mark), else cp850, the OEM code page of German Windows.
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "cp850", "cp437", "windows-1252"]
+default = "auto"

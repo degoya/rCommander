@@ -1,0 +1,8 @@
+{
+  "name": "Log viewer",
+  "description": "Shows log files coloured: levels, timestamps, addresses, paths and stack traces.",
+  "codes": {
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.encoding": "Encoding",
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.level_colour": "Level colour"
+  }
+}

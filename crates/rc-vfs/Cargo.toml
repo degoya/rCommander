@@ -1,0 +1,57 @@
+[package]
+name = "rc-vfs"
+description = "The virtual file system every panel and operation works against"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# The backend conformance suite (`rc_vfs::conformance`) for the tests of other backends' crates.
+conformance = []
+# The in-memory backend (`rc_vfs::MemoryFs`) and the test wrappers (`rc_vfs::testing`) for the
+# tests of crates that work against `Vfs`.
+memory = []
+
+[dependencies]
+async-trait.workspace = true
+bzip2.workspace = true
+chrono.workspace = true
+encoding_rs.workspace = true
+filetime.workspace = true
+flate2.workspace = true
+lzma-rust2.workspace = true
+ruzstd.workspace = true
+rc-process = { path = "../rc-process" }
+secrecy.workspace = true
+serde.workspace = true
+sevenz-rust2.workspace = true
+tar.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zip.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# User and group names of the owner column (`local/unix.rs`); the space of a file system
+# (`local/space.rs`).
+nix.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg.workspace = true
+# The attribute flags, file identities and shortcuts (`local/windows.rs`, RC-020-06): safe
+# wrappers, so no `unsafe` of ours for them.
+winsafe = { workspace = true, features = ["kernel", "shell"] }
+# `DeviceIoControl` for a junction (`local/windows/junction.rs`), the one call no safe crate wraps.
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_IO"] }
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+# Paused time for the time limits of `TimeoutFs` (`timeout_tests.rs`).
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

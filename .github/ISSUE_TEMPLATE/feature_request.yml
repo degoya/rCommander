@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest an idea or an improvement for rCommander.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the idea. A viewer for another file format can often be a plugin in its own repository - see [Plugin development](https://github.com/degoya/rCommander/wiki/plugin-development) and the SDK in [`sdk/`](https://github.com/degoya/rCommander/tree/main/sdk).
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you imagine it working - and, if Total Commander has it, how Total Commander does it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use now, or how other tools handle it.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Panels, tabs and the drive bar
+        - File operations and the queue
+        - Tools (multi-rename, find files, compare, checksums)
+        - Viewer and Quick View
+        - Archives
+        - Connections, SSH, SFTP and FTP
+        - Terminal
+        - Plugins
+        - MCP server
+        - Keyboard and menus
+        - Installation and platforms
+        - Other
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, links to documentation, anything else that helps.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues for this idea.
+          required: true

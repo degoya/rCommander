@@ -1,0 +1,42 @@
+name: Set up Rust
+description: >
+  The workspace's Rust toolchain, the `channel` of rust-toolchain.toml, with the components and
+  targets a job asks for, and RUSTUP_TOOLCHAIN for every later step of the job (RC-100-31,
+  adapted from rDownloader's action of the same name). RUSTUP_TOOLCHAIN outranks the toolchain
+  file, so the file's own target list is not installed here: a job names the targets it builds.
+inputs:
+  components:
+    description: Comma-separated rustup components (rustfmt, clippy, ...)
+    required: false
+    default: ""
+  targets:
+    description: Comma-separated additional targets
+    required: false
+    default: ""
+outputs:
+  toolchain:
+    description: The toolchain installed, as rustup names it
+    value: ${{ steps.toolchain.outputs.name }}
+runs:
+  using: composite
+  steps:
+    # The one pin: the `channel` of rust-toolchain.toml.
+    - id: channel
+      shell: bash
+      run: |
+        version="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+        if [[ -z "${version}" ]]; then
+          echo "::error::no channel in rust-toolchain.toml"
+          exit 1
+        fi
+        echo "version=${version}" >> "${GITHUB_OUTPUT}"
+    # dtolnay/rust-toolchain has no release tags: pinned to a commit of its `stable` branch, the
+    # toolchain named explicitly.
+    - id: toolchain
+      uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (branch; the action has no release tags)
+      with:
+        toolchain: ${{ steps.channel.outputs.version }}
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+    - shell: bash
+      run: echo "RUSTUP_TOOLCHAIN=${{ steps.toolchain.outputs.name }}" >> "${GITHUB_ENV}"

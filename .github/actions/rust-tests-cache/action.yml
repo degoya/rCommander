@@ -1,0 +1,58 @@
+name: Rust with the test cache
+description: >
+  The Rust setup of ci.yml's `rust` job (RC-100-31, adapted from rDownloader's action of the same
+  name): the linkers, the workspace toolchain, the cache `rust-tests` and nextest. The cache is
+  keyed per runner image by Swatinem/rust-cache, and saved only with `save: true` and only on
+  main and development: a ci/* branch is deleted once it is green, and its cache would push
+  main's out of the repository's 10 GB.
+inputs:
+  components:
+    description: Comma-separated rustup components (rustfmt, clippy, ...)
+    required: false
+    default: ""
+  targets:
+    description: Comma-separated additional targets
+    required: false
+    default: ""
+  save:
+    description: "true: save the cache on main and development"
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    # Test builds only - release.yml links the shipped executables with the defaults. mold on
+    # Linux x64: the test build links dozens of large binaries. On Linux arm64 the target is the
+    # host, so its `cc` links instead of the cross linker .cargo/config.toml names for a build from
+    # x64. On Windows the LLVM linker the toolchain ships, much faster than link.exe.
+    - name: Linkers
+      shell: bash
+      run: |
+        {
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=cc"
+          echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=rust-lld.exe"
+        } >> "${GITHUB_ENV}"
+    # Bounded: a stalled mirror must not hold a job for its whole timeout.
+    - name: Install mold
+      if: runner.os == 'Linux' && runner.arch == 'X64'
+      shell: bash
+      run: |
+        apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+        for attempt in 1 2 3; do
+          if timeout 180 sudo apt-get "${apt_opts[@]}" update -q; then break; fi
+          [[ "$attempt" -lt 3 ]] || { echo "::error::apt-get update did not finish in three attempts"; exit 1; }
+          echo "::warning::apt-get update attempt $attempt did not finish; retrying"
+        done
+        timeout 300 sudo apt-get "${apt_opts[@]}" install -y -q mold
+    - uses: ./.github/actions/setup-rust
+      with:
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        shared-key: rust-tests
+        save-if: ${{ inputs.save == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development') }}
+    - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+      with:
+        tool: nextest@0.9.146

@@ -1,0 +1,13 @@
+{
+  "panels-dark": "rCommander in its dark look: two file panels side by side, the left one on the demo folder with Documents, Downloads, Music, Photos and Projects under the cursor bar, the right one in the website project with index.html and style.css marked; the drive bar with the drives and the demo servers above, the function-key bar below",
+  "panels-light": "The same two panels in the light look: the demo folder on the left, the website project with two marked files on the right",
+  "archive-in-panel": "A tar archive opened in the left panel like a folder: the files of the website packed inside it, with their sizes and dates, while the right panel shows the website project",
+  "connection-manager": "The connection manager over the panels: the demo connections Web server and Build machine over SSH, Backup storage over FTPS and Public mirror over anonymous FTP, the selected one's host, port and user in the form beside the list",
+  "multi-rename": "The multi-rename dialog for the six marked photos IMG_2041.jpg to IMG_2046.jpg: the name and extension masks, search and replace, case and counter, and the preview of the old and new names",
+  "compare": "Compare by content for config.old.toml and config.toml: the two versions side by side, the added and changed lines of the site description, the deploy path and the kept releases marked",
+  "synchronize": "The synchronize-dirs dialog for the website project on the left and its backup on the right: the two folders, the options and the list of files that differ",
+  "mcp-question": "An MCP client asking to copy: the question names the tool ops_copy, its class write, the target folder, the panel it acts on and the two marked files, with Allow, Allow for this session and Deny",
+  "terminal": "The right panel showing a terminal in place of its files: a shell started in the website backup folder of the demo project, the left panel still listing the website files",
+  "lister": "Lister, the viewer in its own window, showing the website project's README.md: its headings, the build steps and the table of files",
+  "settings": "The settings window on its first page, the list of pages on the left and the options of the page on the right"
+}

@@ -1,0 +1,33 @@
+[package]
+name = "rc-checksum"
+description = "rCommander's checksums against Vfs: hashing, checksum files (sha256sum, md5sum, SFV) and Total Commander's split and combine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# The hash functions, pure Rust; md-5 and sha2 at the digest 0.11 line sha1 already uses.
+blake3.workspace = true
+crc32fast = "1.5"
+md-5 = "0.11"
+# The one name rule every name this crate creates keeps (RC-080-43).
+rc-rename = { path = "../rc-rename" }
+rc-vfs = { path = "../rc-vfs" }
+serde.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+# The tests' wrapping backend (`rc_vfs::testing::Forward`, RC-080-24).
+rc-vfs = { path = "../rc-vfs", features = ["memory"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

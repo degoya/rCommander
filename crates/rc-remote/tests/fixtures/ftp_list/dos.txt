@@ -1,0 +1,5 @@
+01-10-26  12:00PM       <DIR>          extras
+04-08-14  03:09AM                  403 readme.txt
+10-19-20  12:19AM           5368709120 big file.iso
+01-10-2026  01:05PM       <DIR>          new folder
+2026-01-10  14:05                1,234 report.pdf

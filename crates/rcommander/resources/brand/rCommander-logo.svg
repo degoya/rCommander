@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="360" viewBox="0 0 1360 360" role="img" aria-labelledby="title desc">
+  <title id="title">rCommander Logo</title>
+  <desc id="desc">Two file panels with a bidirectional transfer arrow in a rounded dark square, followed by the word rCommander.</desc>
+
+  <g id="file-manager-symbol">
+    <rect x="40" y="40" width="280" height="280" rx="54" fill="#0F172A" stroke="#2DD4BF" stroke-width="10"/>
+
+    <path d="M82 124V108Q82 96 94 96H116L130 110H164V226Q164 238 152 238H94Q82 238 82 226Z"
+          fill="none" stroke="#2DD4BF" stroke-width="12" stroke-linejoin="round"/>
+    <path d="M196 124V108Q196 96 208 96H230L244 110H278V226Q278 238 266 238H208Q196 238 196 226Z"
+          fill="none" stroke="#2DD4BF" stroke-width="12" stroke-linejoin="round"/>
+
+    <path d="M102 150H144M102 180H144M102 210H134" fill="none" stroke="#D8FFFA" stroke-width="10" stroke-linecap="round"/>
+    <path d="M216 150H258M216 180H258M216 210H248" fill="none" stroke="#D8FFFA" stroke-width="10" stroke-linecap="round"/>
+
+    <path d="M98 270H262" fill="none" stroke="#2DD4BF" stroke-width="12" stroke-linecap="round"/>
+    <path d="M114 254L98 270L114 286M246 254L262 270L246 286" fill="none" stroke="#2DD4BF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="382" y="226" fill="#0F172A" font-family="Inter, Avenir Next, Segoe UI, Arial, sans-serif" font-size="138" font-weight="750" letter-spacing="-4">
+    <tspan fill="#14B8A6">r</tspan><tspan>Commander</tspan>
+  </text>
+</svg>

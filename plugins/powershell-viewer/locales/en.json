@@ -1,0 +1,7 @@
+{
+  "name": "PowerShell viewer",
+  "description": "Shows PowerShell scripts and modules (.ps1, .psm1, .psd1) coloured like an editor.",
+  "codes": {
+    "01a159b6-c865-7f56-a6e7-db2cc02c4981.setting.encoding": "Encoding"
+  }
+}

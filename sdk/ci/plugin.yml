@@ -1,0 +1,133 @@
+# Build, check, package, verify and conformance-check an rCommander plugin.
+#
+# Copied and adapted from rDownloader's `sdk/ci/plugin.yml` at commit 26c8592a6. Copy it into
+# `.github/workflows/` of your plugin repository. It expects the layout `rcommander plugin new`
+# produces: `manifest.toml`, `src/`, `locales/` and `wit/` at the root.
+#
+# Adapted: rCommander ships for Windows only so far, so the job runs on a Windows runner (in Git
+# Bash) with the release's `rcommander.exe` for `plugin package`, `verify` and `conformance`.
+name: plugin
+
+on:
+  push:
+  pull_request:
+
+# The job reads the repository and nothing else. The signing key is a secret, handed to the one
+# step that signs, and only on a push to the default branch or a tag.
+permissions:
+  contents: read
+
+env:
+  # Name of the built artefact: your crate name with dashes turned into underscores.
+  COMPONENT: my_viewer
+  # The rCommander release whose `plugin package`, `verify` and `conformance` run here: the
+  # release this SDK was published with, which accepts the `api_version` its templates declare
+  # (`scripts/set-version.sh` writes it). Bump it when you build against a newer contract.
+  RCOMMANDER_VERSION: 0.9.0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plugin:
+    runs-on: windows-2025
+    env:
+      # A pull request runs code nobody has merged yet, so it never sees the signing key: it
+      # builds and checks an unsigned development package instead.
+      SIGN: ${{ github.event_name == 'push' && ((github.ref_type == 'branch' && github.ref_name == github.event.repository.default_branch) || github.ref_type == 'tag') }}
+    steps:
+      # Actions are pinned to a commit, the tag beside it, so a moved tag cannot change what runs
+      # with your signing key in the job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # dtolnay/rust-toolchain has no releases: a commit of its `stable` branch.
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # Makes the component of the core module cargo builds, and reads its import section. The
+      # version rCommander's own plugins are made with.
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: wasm-tools@1.261.0
+
+      - name: Install the rCommander release
+        # The executable reads the signing key, so the archive has to be the one the release lists
+        # in its SHA256SUMS (entries named `./<file>`).
+        run: |
+          archive="rcommander-${RCOMMANDER_VERSION}-windows-x64.zip"
+          release="https://github.com/degoya/rCommander/releases/download/v${RCOMMANDER_VERSION}"
+          curl --fail --silent --show-error --location --remote-name "${release}/${archive}"
+          curl --fail --silent --show-error --location --remote-name "${release}/SHA256SUMS"
+          grep "  \./${archive//./\\.}\$" SHA256SUMS | sha256sum --check --strict -
+          unzip -q "${archive}"
+          echo "${PWD}/rcommander-${RCOMMANDER_VERSION}-windows-x64" >> "${GITHUB_PATH}"
+
+      - name: Test
+        run: cargo test
+
+      - name: Build the component
+        # A core module first; its `wit_bindgen::generate!` embeds the world, and wasm-tools
+        # turns it into the component. No WASI adapter: the plugin imports nothing but the
+        # contract.
+        run: |
+          cargo build --release --target wasm32-unknown-unknown
+          wasm-tools component new "target/wasm32-unknown-unknown/release/${COMPONENT}.wasm" \
+            -o "target/${COMPONENT}.wasm"
+
+      - name: Reject imports outside the contract
+        # A plugin that imports anything outside `rcommander:plugin` - above all a `wasi:`
+        # interface a dependency pulled in - is refused at install time; finding out here is
+        # cheaper. The import section is read with wasm-tools, not by scanning the bytes, which
+        # cannot tell an import from a string literal.
+        run: |
+          wasm="target/${COMPONENT}.wasm"
+          offenders=$(wasm-tools component wit "${wasm}" \
+            | sed -n 's/^[[:space:]]*import[[:space:]]\{1,\}\([^;]*\);.*$/\1/p' \
+            | grep -v '^rcommander:plugin/' || true)
+          if [[ -n "${offenders}" ]]; then
+            echo "::error::${wasm} imports outside rcommander:plugin:"
+            echo "${offenders}"
+            exit 1
+          fi
+
+      - name: Package, sign, verify and run conformance
+        if: env.SIGN == 'true'
+        env:
+          # The PEM private key; `plugin package` reads it from this variable when `--key` is
+          # not given.
+          RCOMMANDER_PLUGIN_SIGNING_KEY: ${{ secrets.PLUGIN_SIGNING_KEY }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' manifest.toml | head -n 1)
+          key_id=$(sed -n 's/^key_id = "\(.*\)"/\1/p' manifest.toml)
+          public_key=$(sed -n 's/^public_key = "\(.*\)"/\1/p' manifest.toml)
+          package="${COMPONENT}-${version}.rcplug"
+          rcommander plugin package \
+            --manifest manifest.toml \
+            --component "target/${COMPONENT}.wasm" \
+            --locales locales \
+            --output "${package}"
+          rcommander plugin verify --trusted-key "${key_id}=${public_key}" "${package}"
+          rcommander plugin conformance --json --trusted-key "${key_id}=${public_key}" "${package}"
+
+      - name: Package, verify and run conformance, unsigned
+        if: env.SIGN != 'true'
+        # What development mode accepts: the same build and checks without the signature, so a
+        # pull request is checked before anything is signed.
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' manifest.toml | head -n 1)
+          package="${COMPONENT}-${version}.rcplug"
+          rcommander plugin package --development \
+            --manifest manifest.toml \
+            --component "target/${COMPONENT}.wasm" \
+            --locales locales \
+            --output "${package}"
+          rcommander plugin verify --development-mode "${package}"
+          rcommander plugin conformance --json --development-mode "${package}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.SIGN == 'true' && 'plugin' || 'plugin-unsigned' }}
+          path: "*.rcplug"
+          if-no-files-found: error

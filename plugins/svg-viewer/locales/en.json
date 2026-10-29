@@ -1,0 +1,10 @@
+{
+  "name": "SVG viewer",
+  "description": "Shows SVG and SVGZ pictures, and their source coloured as XML.",
+  "codes": {
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_large": "The SVG is larger than 64 MiB, or unpacks to more.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.bad_gzip": "The compressed SVG (.svgz) is damaged and cannot be unpacked.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.not_svg": "The picture cannot be drawn: the file is not a readable SVG, or it has no size.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_complex": "The picture repeats its parts (<use>) too often to be drawn."
+  }
+}

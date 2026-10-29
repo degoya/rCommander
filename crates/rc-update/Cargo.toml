@@ -1,0 +1,56 @@
+[package]
+name = "rc-update"
+description = "rCommander's self-update: the signed update manifest per channel, the check and the verified download, the journalled install with its roll-back, and the rc-pack publishing tool"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# A leaf on purpose (RC-100-04): the updater of RC-100-06 runs this before the new version is known
+# to start, so nothing here pulls in the database, the engine or iced. The engine hands it what it
+# needs (the free space, the database copy) and keeps the state in its settings.
+
+[lib]
+path = "src/lib.rs"
+
+# The publishing half (wave 0.8-w30): `rc-pack keygen` and `rc-pack update manifest build|verify`,
+# so signing a release does not build the iced program (rDownloader's lesson, RD-150-20).
+[[bin]]
+name = "rc-pack"
+path = "src/pack/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+# The checked copy of the database before an update and its digest in the journal (RC-100-06).
+blake3.workspace = true
+# Dates of manifests, journals and the stored state, written as RFC 3339.
+chrono = { workspace = true, features = ["serde"] }
+clap.workspace = true
+ed25519-dalek.workspace = true
+# The portable Linux archive (`.tar.gz`) the switch unpacks.
+flate2.workspace = true
+rand.workspace = true
+rc-process = { path = "../rc-process" }
+# The update check and the download over https (RC-100-05): rustls with the platform verifier,
+# so the system's roots and a company proxy's own root count; the system proxy is read.
+reqwest = { workspace = true, features = ["rustls", "system-proxy"] }
+semver.workspace = true
+serde.workspace = true
+# The manifest's payload is signed as the bytes it arrived as (`sign/envelope.rs`).
+serde_json = { workspace = true, features = ["raw_value"] }
+sha2.workspace = true
+tar.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

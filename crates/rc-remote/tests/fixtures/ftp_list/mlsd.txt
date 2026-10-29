@@ -1,0 +1,7 @@
+type=cdir;modify=20260110120000;perm=flcdmpe; .
+type=pdir;modify=20260110120000;perm=flcdmpe; ..
+type=dir;modify=20260110120000;UNIX.mode=0755; public_html
+type=file;size=5368709120;modify=20250701080000;UNIX.mode=0644; backup 2025.tar
+type=file;size=12;modify=20260110120000.123;perm=r; read only.txt
+type=OS.unix=slink:/var/www;modify=20260110120000; www
+type=file;size=3;modify=20260110120000; semi;colon.txt

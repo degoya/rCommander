@@ -1,0 +1,16 @@
+[package]
+name = "rc-plugin-text"
+description = "The text encodings rCommander's bundled plugins read: BOM detection and a streaming decoder to UTF-8"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# MIT, as the plugins that link it (docs/plugins.md, "SDK").
+license = "MIT"
+publish = false
+
+# No dependency: a plugin links it into its component, so it builds for wasm32-unknown-unknown and
+# adds nothing but the tables of three code pages.
+[dependencies]
+
+[lints]
+workspace = true

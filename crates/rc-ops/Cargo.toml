@@ -1,0 +1,51 @@
+[package]
+name = "rc-ops"
+description = "rCommander's file operations queue: copy, move, delete, mkdir and multi-rename against Vfs, with progress, pause, cancel and conflicts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+blake3.workspace = true
+# Packing (RC-030-04): the archive writers, the same pure-Rust crates rc-vfs reads with.
+bzip2.workspace = true
+chrono.workspace = true
+flate2.workspace = true
+# Checksum files, split and combine as jobs (RC-020-05).
+rc-checksum = { path = "../rc-checksum" }
+lzma-rust2.workspace = true
+# The steps of a multi-rename job (`JobKind::Rename`).
+rc-rename = { path = "../rc-rename" }
+rc-vfs = { path = "../rc-vfs" }
+ruzstd.workspace = true
+serde.workspace = true
+sevenz-rust2.workspace = true
+tar.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+# A part file left that cannot be removed is logged (RC-080-37).
+tracing.workspace = true
+zip.workspace = true
+
+# The recycle bin (`trash.rs`): the crate drives `IFileOperation` itself, so rCommander needs no
+# `unsafe` of its own for it; on macOS `NSFileManager` (RC-100-44). Linux deletes permanently.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+trash = { version = "5.2", default-features = false, features = ["coinit_apartmentthreaded"] }
+
+[dev-dependencies]
+# The in-process SSH server with SFTP: transfers to and from a server end to end (RC-060-05).
+rc-remote = { path = "../rc-remote", features = ["testkit"] }
+rc-vfs = { path = "../rc-vfs", features = ["conformance", "memory"] }
+# The tests' archive and server passwords; `ArchivePassword` itself comes from rc-vfs.
+secrecy.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+# The paused clock of the throughput test between two slow servers (RC-060-06).
+tokio = { workspace = true, features = ["test-util"] }
+tokio-util.workspace = true
+
+[lints]
+workspace = true

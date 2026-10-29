@@ -1,0 +1,37 @@
+[package]
+name = "rc-plugin-svg-viewer"
+description = "rCommander's bundled SVG viewer plugin: the picture rendered with resvg, and the source coloured as XML"
+# The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
+version = "0.1.1"
+edition.workspace = true
+rust-version.workspace = true
+# Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK"). The bundled font is OFL-1.1
+# (fonts/OFL.txt).
+license = "MIT"
+publish = false
+
+# resvg renders (it re-exports usvg, tiny-skia and, with `text`, fontdb); roxmltree parses the
+# document once for the `<use>` budget and for usvg; flate2 inflates `.svgz` under a limit. The
+# source text and its tokens are the XML viewer's (RC-100-15), taken as a library: without its
+# guest binding, so its WIT exports do not clash with this plugin's. The guest binding
+# (src/guest.rs) needs wit-bindgen on wasm32 only, against `crates/rc-plugin-api/wit`.
+[dependencies]
+flate2.workspace = true
+rc-plugin-xml-viewer = { path = "../xml-viewer", default-features = false }
+resvg.workspace = true
+roxmltree.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen.workspace = true
+
+[dev-dependencies]
+# The `data:` URLs of the tests.
+base64.workspace = true
+
+[lib]
+# `rlib`, as the other bundled viewers: `cargo test` runs the logic natively; the component is
+# linked for wasm32 by `scripts/build-plugins.sh` alone, with `cargo rustc --crate-type cdylib`.
+crate-type = ["rlib"]
+
+[lints]
+workspace = true

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">rCommander App Icon</title>
+  <desc id="desc">Two file panels with a bidirectional transfer arrow in a rounded dark square.</desc>
+
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="#0F172A" stroke="#2DD4BF" stroke-width="16"/>
+
+  <path d="M100 184V144Q100 124 120 124H154L178 148H224V316Q224 336 204 336H120Q100 336 100 316Z"
+        fill="none" stroke="#2DD4BF" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M288 184V144Q288 124 308 124H342L366 148H412V316Q412 336 392 336H308Q288 336 288 316Z"
+        fill="none" stroke="#2DD4BF" stroke-width="18" stroke-linejoin="round"/>
+
+  <path d="M130 198H194M130 246H194M130 294H176" fill="none" stroke="#D8FFFA" stroke-width="16" stroke-linecap="round"/>
+  <path d="M318 198H382M318 246H382M318 294H364" fill="none" stroke="#D8FFFA" stroke-width="16" stroke-linecap="round"/>
+
+  <path d="M120 390H392" fill="none" stroke="#2DD4BF" stroke-width="20" stroke-linecap="round"/>
+  <path d="M148 362L120 390L148 418M364 362L392 390L364 418" fill="none" stroke="#2DD4BF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

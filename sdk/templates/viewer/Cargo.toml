@@ -1,0 +1,19 @@
+[package]
+name = "{{PLUGIN_SLUG}}"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# The scaffold is a crate of its own, not a member of a workspace around it.
+[workspace]
+
+# Only the component needs wit-bindgen: `cargo test` builds the logic for your own machine
+# without it. A guest needs nothing but the contract, which ships in `wit/`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = "0.62"
+
+[lib]
+# `cdylib` makes the core module `wasm-tools component new` turns into the component; `rlib`
+# lets `cargo test` build the logic for your own machine.
+crate-type = ["cdylib", "rlib"]
+

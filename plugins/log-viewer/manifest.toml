@@ -1,0 +1,51 @@
+# rCommander's bundled log file viewer (RC-100-25). The fields every bundled plugin shares are in
+# plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code starts with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `probe` and `open` read `encoding` and `open` reads
+# `level_colour`.
+api_version = "0.3.0"
+id = "01a159b7-2a8f-7014-9357-344c5730dbd4"
+name = "Log viewer"
+version = "0.1.1"
+
+[match]
+# rCommander takes what follows the last dot of a name as its extension: `app.log` and
+# `nohup.out` match, a rotated `app.log.1` has the extension `1` and does not (README).
+extensions = ["log", "out", "err"]
+magic = []
+# Larger than the other viewers' 256 MiB: a log of hundreds of MiB is the case this plugin is for.
+# Its text stops at `plugins.viewer_output_limit_mib` (256 MiB unless raised) like any viewer's.
+max_size = 1073741824
+
+[viewer]
+# Read coloured; a log has no structure worth a tree.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows log files coloured: levels, timestamps, addresses, paths and stack traces."
+
+# The host's 64 MiB of memory hold the line index of at most 8 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.
+[limits]
+# `open` reads the whole file once, up to 1 GiB, which on a slow remote takes a while.
+timeout_milliseconds = 120000
+
+# `word` colours the level word of a line; `line` colours the whole line of an error or a warning,
+# and the stack trace that follows it, in the level's colour.
+[[settings]]
+key = "level_colour"
+type = "choice"
+values = ["word", "line"]
+default = "word"
+
+# How the file's bytes are read: `auto` takes a byte-order mark (UTF-8, UTF-16), else UTF-8 when
+# the whole file is valid UTF-8, else Windows-1252.
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "utf-16le", "windows-1252"]
+default = "auto"

@@ -1,0 +1,2 @@
+# Not matched by config.d/*.conf, so never read.
+Host not-included

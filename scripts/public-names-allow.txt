@@ -1,0 +1,20 @@
+# Where the public tree may still match one of the private names of scripts/public-names.txt
+# (RC-100-30), read by scripts/lib/public-names.py and held by scripts/tests/public-names.sh.
+# What stays is a made-up placeholder: a Windows profile of nobody in a WSL path.
+#
+# One entry per line: <path or glob> | <regular expression found in the line> | <reason>. What
+# the expression finds is cut from the line before the private names are looked for again, so a
+# placeholder never carries a real name beside it. An entry whose glob starts with `wiki/`
+# applies to the handbook's pages (scripts/export-wiki.sh); an entry of the repository that no
+# line needs any more fails the test. An expression spells a name with a character class
+# (`User[s]`) so that this list does not match itself.
+
+# The WSL path translation and the WSL terminal, with made-up users.
+crates/rc-term/src/wsl_path.rs | /mnt/c/User[s]/x` | the module's example
+crates/rc-term/src/wsl_path_tests.rs | /mnt/c/User[s]/(x|J\\u\{fc\}rgen)\b | made-up users of the translation's cases
+crates/rc-term/src/wsl_tests.rs | /mnt/c/User[s]/x/ | a made-up user's folder
+crates/rc-engine/src/commands/terminal_image_tests.rs | /mnt/c/User[s]/Ann Lee/ | a made-up user's temporary folder
+
+# The handbook: the reader's own profile, as a placeholder.
+wiki/reference/mcp.md | /mnt/c/User[s]/<you>/ | the reader's profile in a WSL path
+wiki/using/terminal.md | /mnt/c/User[s]/you/ | the reader's profile in a WSL path

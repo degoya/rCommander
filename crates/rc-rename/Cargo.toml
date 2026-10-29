@@ -1,0 +1,21 @@
+[package]
+name = "rc-rename"
+description = "The multi-rename engine: Total Commander masks, preview, conflicts, rename order and undo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# `serde` for the modification time of a `RenameSource` an MCP call sends.
+chrono = { workspace = true, features = ["serde"] }
+regex.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

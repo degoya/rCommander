@@ -1,0 +1,26 @@
+# Nextest profiles.
+#
+# A test that hangs is ended after five minutes instead of holding the run forever; nextest
+# reports it as slow after one minute.
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+# The CI run, for when there is one (scripts/check.sh is the local equivalent):
+#
+#   cargo nextest run -P ci --workspace
+#
+# * JUnit, written to target/nextest/ci/junit.xml.
+# * One retry. A test that fails and then passes is reported as FLAKY in the summary and keeps
+#   its failed attempt in the JUnit file, so it is visible rather than hidden; it is a finding
+#   to fix, not a pass to shrug at.
+# * The final summary lists slow and flaky tests, not only failures: a test drifting towards
+#   the default profile's 60 s `slow-timeout` shows up there runs before it is terminated.
+[profile.ci]
+retries = 1
+fail-fast = false
+final-status-level = "slow"
+
+[profile.ci.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true

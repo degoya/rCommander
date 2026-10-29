@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "size": { "width": 1280, "height": 800 },
+  "startup_ms": 3000,
+  "scenes": [
+    {
+      "name": "panels-dark",
+      "theme": "dark",
+      "settle_ms": 1000,
+      "steps": [
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "website" } } },
+        { "command": { "command": "panel.toggle_selection", "params": { "panel": "right", "names": ["index.html", "style.css"] } } },
+        { "command": { "command": "panel.set_cursor", "params": { "panel": "left", "target": "Documents" } } },
+        { "command": { "command": "panel.switch_active", "params": { "panel": "left" } } }
+      ]
+    },
+    {
+      "name": "panels-light",
+      "theme": "light",
+      "settle_ms": 1000
+    },
+    {
+      "name": "archive-in-panel",
+      "theme": "dark",
+      "settle_ms": 1000,
+      "steps": [
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "Downloads" } } },
+        { "command": { "command": "panel.set_cursor", "params": { "panel": "left", "target": "website-0.9.0.tar" } } },
+        { "command": { "command": "panel.open_entry", "params": { "panel": "left" } } }
+      ]
+    },
+    {
+      "name": "connection-manager",
+      "settle_ms": 1200,
+      "steps": [
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
+        { "key": "Ctrl+F" }
+      ]
+    },
+    {
+      "name": "multi-rename",
+      "settle_ms": 1200,
+      "steps": [
+        { "key": "Escape" },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "Photos" } } },
+        { "command": { "command": "panel.select_all", "params": { "panel": "left" } } },
+        { "key": "Ctrl+M" }
+      ]
+    },
+    {
+      "name": "compare",
+      "settle_ms": 1500,
+      "steps": [
+        { "key": "Escape" },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "Projects" } } },
+        { "command": { "command": "panel.toggle_selection", "params": { "panel": "left", "names": ["config.old.toml", "config.toml"] } } },
+        { "command": { "command": "compare.open_diff", "params": {} } }
+      ]
+    },
+    {
+      "name": "synchronize",
+      "settle_ms": 1500,
+      "steps": [
+        { "key": "Escape" },
+        { "command": { "command": "panel.deselect_all", "params": { "panel": "left" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "website" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "Projects" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "website-backup" } } },
+        { "command": { "command": "sync.open_dialog", "params": {} } }
+      ]
+    },
+    {
+      "name": "mcp-question",
+      "settle_ms": 1000,
+      "steps": [
+        { "key": "Escape" },
+        { "command": { "command": "panel.toggle_selection", "params": { "panel": "left", "names": ["index.html", "style.css"] } } },
+        {
+          "mcp_question": {
+            "tool": "ops_copy",
+            "class": "write",
+            "arguments": [
+              { "name": "panel", "value": "left" },
+              { "name": "target", "value": "{demo}\\Downloads" }
+            ],
+            "session": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "terminal",
+      "settle_ms": 3000,
+      "steps": [
+        { "command": { "command": "panel.deselect_all", "params": { "panel": "left" } } },
+        { "command": { "command": "panel.switch_active", "params": { "panel": "right" } } },
+        { "key": "Ctrl+`" }
+      ]
+    },
+    {
+      "name": "lister",
+      "capture": "lister",
+      "settle_ms": 1500,
+      "steps": [
+        { "key": "Ctrl+`" },
+        { "command": { "command": "panel.switch_active", "params": { "panel": "left" } } },
+        { "command": { "command": "view.open", "params": { "panel": "left", "path": "README.md" } } }
+      ]
+    },
+    {
+      "name": "settings",
+      "capture": "settings",
+      "settle_ms": 1500,
+      "steps": [
+        { "close": "lister" },
+        { "open": "settings" }
+      ]
+    }
+  ]
+}

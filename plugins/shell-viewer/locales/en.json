@@ -1,0 +1,4 @@
+{
+  "name": "Shell script viewer",
+  "description": "Shows shell scripts (sh, bash, zsh, ksh) coloured like an editor."
+}

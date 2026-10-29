@@ -1,0 +1,20 @@
+[package]
+name = "rc-plugin-types"
+description = "The vocabulary rCommander's plugins share with the host: Failure, FailureKind, MessageParams"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# The one crate a plugin's native half depends on besides rc-plugin-api (docs/plugins.md, "What is
+# taken over"), so it builds for wasm32-unknown-unknown too: nothing here touches the platform.
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

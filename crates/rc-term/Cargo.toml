@@ -1,0 +1,41 @@
+[package]
+name = "rc-term"
+description = "rCommander's terminal sessions: back ends (local PTY, WSL, SSH channel) feeding alacritty_terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+alacritty_terminal.workspace = true
+# PowerShell's shell integration as `-EncodedCommand` (`integration/`).
+base64.workspace = true
+portable-pty.workspace = true
+rc-vfs = { path = "../rc-vfs" }
+# The SSH back end drives a session channel of the connection rc-remote opened.
+russh.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# A terminal's program in a job object of its own, ended with the terminal and with rCommander
+# (`local_pty/job.rs`, RC-040-06); the version already in the tree.
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+] }
+
+[dev-dependencies]
+rc-process = { path = "../rc-process" }
+# The in-process shell server the SSH back end is tested against.
+rc-remote = { path = "../rc-remote", features = ["testkit"] }
+serde_json.workspace = true
+tempfile.workspace = true
+tokio-util.workspace = true
+
+[lints]
+workspace = true

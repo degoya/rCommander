@@ -1,0 +1,48 @@
+# rCommander's bundled configuration file viewer (RC-100-22). The fields every bundled plugin
+# shares are in plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it
+# packages. A failure code and a setting's label start with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `encoding`.
+api_version = "0.3.0"
+id = "01a159c1-6b39-7240-9bbb-81ecaf343ed1"
+name = "Config viewer"
+version = "0.1.1"
+
+[match]
+# rCommander takes what follows the last dot of a name as its extension, so `desktop.ini` matches
+# `ini`, `.env` matches `env` and `.gitconfig` matches `gitconfig`; `.env.local` ends in `local`,
+# which is not claimed. `lock` is for `Cargo.lock`: `probe` declines every other `.lock` file.
+# The format is chosen by the name (src/types.rs, `Format::from_name`): `.ini`, `.inf`, `.cfg`,
+# `.conf`, `.editorconfig` and `.gitconfig` are read as INI.
+extensions = [
+    "ini", "inf", "cfg", "conf", "reg", "env", "properties", "editorconfig", "gitconfig",
+    "gitattributes", "gitignore", "toml", "lock",
+]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured, or unfold the sections, tables and keys; `highlighted` is shown first.
+outputs = ["highlighted", "tree"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows INI, .reg, .env, properties and TOML files coloured, or their sections and keys as a tree."
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+# How the file's bytes are read: `auto` takes the encoding a byte-order mark names (a .reg export
+# is UTF-16 LE with one), else UTF-8 when the first 64 KiB are valid UTF-8, else Windows-1252.
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "utf-16le", "windows-1252"]
+default = "auto"

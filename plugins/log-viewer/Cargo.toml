@@ -1,0 +1,28 @@
+[package]
+name = "rc-plugin-log-viewer"
+description = "rCommander's bundled log file viewer plugin: levels, timestamps and stack traces coloured, for files of hundreds of MiB"
+# The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
+version = "0.1.1"
+edition.workspace = true
+rust-version.workspace = true
+# Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").
+license = "MIT"
+publish = false
+
+# The encodings come from rc-plugin-text, shared by the bundled viewers and built for wasm32. The
+# guest binding (src/guest.rs) needs wit-bindgen on wasm32 only, against
+# `crates/rc-plugin-api/wit`, so the native build of the workspace - clippy, the Windows lint, the
+# tests - neither builds nor links it.
+[dependencies]
+rc-plugin-text.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen.workspace = true
+
+[lib]
+# `rlib`, as the JSON viewer: `cargo test` runs the logic natively; the component is linked for
+# wasm32 by `scripts/build-plugins.sh` alone, with `cargo rustc --crate-type cdylib`.
+crate-type = ["rlib"]
+
+[lints]
+workspace = true

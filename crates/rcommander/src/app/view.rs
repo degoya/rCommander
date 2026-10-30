@@ -53,8 +53,16 @@ impl App {
         parts.extend(drive_bar::above_panels(self, tokens));
         parts.push(panels.into());
         parts.push(bottom.into());
+        // macOS: the content reaches under the transparent title bar (`startup.rs`); its
+        // height stays free for the traffic lights.
+        let top = if cfg!(target_os = "macos") { 30.0 } else { 8.0 };
         let window = container(column(parts).spacing(8))
-            .padding(8)
+            .padding(iced::Padding {
+                top,
+                right: 8.0,
+                bottom: 8.0,
+                left: 8.0,
+            })
             .width(Length::Fill)
             .height(Length::Fill)
             .style(move |_| theme::window(tokens));

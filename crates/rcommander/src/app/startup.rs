@@ -308,6 +308,14 @@ impl App {
         window.icon = super::settings::window_icon();
         // Its X asks first: the tabs and the places are stored before the app ends.
         window.exit_on_close_request = false;
+        // macOS: one surface from the top edge, the traffic lights over it, as Finder's
+        // (`view.rs` keeps the title bar's height free).
+        #[cfg(target_os = "macos")]
+        {
+            window.platform_specific.title_hidden = true;
+            window.platform_specific.titlebar_transparent = true;
+            window.platform_specific.fullsize_content_view = true;
+        }
         let (main, opened) = window::open(window);
         let mut app = Self::new(setup.engine, setup.keymap);
         app.dialog_windows = DialogWindows::new(main, setup.dialogs);

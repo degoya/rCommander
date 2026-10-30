@@ -1928,6 +1928,7 @@
   "menubar.title.view": "&Affichage",
   "menubar.title.configuration": "C&onfiguration",
   "menubar.title.help": "Ai&de",
+  "macos.window_menu": "Fenêtre",
   "menubar.view_file": "&Afficher",
   "menubar.edit_file": "&Modifier",
   "menubar.new_text_file": "&Nouveau fichier texte...",

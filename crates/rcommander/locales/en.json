@@ -1928,6 +1928,7 @@
   "menubar.title.view": "&View",
   "menubar.title.configuration": "C&onfiguration",
   "menubar.title.help": "&Help",
+  "macos.window_menu": "Window",
   "menubar.view_file": "&View",
   "menubar.edit_file": "&Edit",
   "menubar.new_text_file": "Ne&w text file...",

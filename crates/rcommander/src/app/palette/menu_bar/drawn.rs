@@ -1,5 +1,4 @@
-//! The menu bar rCommander draws itself where no system menu is attached - Linux and, until its
-//! own menu comes, macOS (RC-080-33): the menus of [`super::build`] as a row of titles above the
+//! The menu bar rCommander draws itself where no system menu is attached - Linux (RC-080-33): the menus of [`super::build`] as a row of titles above the
 //! drive bar, an open menu as a card under its title (`view.rs`). A choice is the same
 //! [`MenuBarMsg::Chosen`] the Win32 menu sends, so it runs what the palette runs.
 //!
@@ -18,8 +17,9 @@ use crate::{
     theme::mnemonic::Label,
 };
 
-/// Whether rCommander draws the bar: everywhere but Windows, which attaches a Win32 menu.
-pub const DRAWN: bool = cfg!(not(windows));
+/// Whether rCommander draws the bar: on Linux; Windows attaches a Win32 menu, macOS puts the
+/// menus into the system's menu bar.
+pub const DRAWN: bool = cfg!(not(any(windows, target_os = "macos")));
 
 /// The open menu: its index among the menus, and the entry the keyboard or the pointer is on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

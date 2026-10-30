@@ -213,7 +213,10 @@ async fn the_tab_menu_shows_the_keymaps_keys() {
         let popup = harness.app.tabs.popup.as_ref().expect("the menu");
         popup.rows.iter().map(|row| row.key.clone()).collect()
     };
-    assert_eq!(keys(&harness), [None, None, Some("Ctrl+W".to_owned())]);
+    assert_eq!(
+        keys(&harness),
+        [None, None, Some(crate::keymap::label_text("Ctrl+W"))]
+    );
 
     let settings = TabsMessage::Settings {
         drag: true,

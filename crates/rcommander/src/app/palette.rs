@@ -75,6 +75,9 @@ pub struct Entry {
     pub label: String,
     /// Its chords, as the keymap prints them (`Backspace, Ctrl+PageUp`); empty without a key.
     pub keys: String,
+    /// Its chords as the keymap writes them, also on a Mac where `keys` shows ⌘: the query finds
+    /// either.
+    pub chords: String,
     pub action: Action,
 }
 
@@ -111,10 +114,13 @@ pub fn entries(keymap: &Keymap, rows: &[ReachRow], network: bool) -> Vec<Entry> 
             Some(at) => {
                 let shown = crate::keymap::label(chord);
                 entries[at].keys = format!("{}, {shown}", entries[at].keys);
+                entries[at].chords = format!("{}, {chord}", entries[at].chords);
             }
             None => {
                 let shown = crate::keymap::label(chord);
-                entries.push(entry(name, shown, Action::Press(chord.clone())));
+                let mut new = entry(name, shown, Action::Press(chord.clone()));
+                new.chords = chord.to_string();
+                entries.push(new);
             }
         }
     };
@@ -184,6 +190,7 @@ fn entry(name: &str, keys: String, action: Action) -> Entry {
         name: name.to_owned(),
         label: i18n::code_text("keys", name),
         keys,
+        chords: String::new(),
         action,
     }
 }
@@ -213,7 +220,8 @@ impl Palette {
             .iter()
             .enumerate()
             .filter(|(_, entry)| {
-                let text = format!("{} {}", entry.label, entry.keys).to_lowercase();
+                let text =
+                    format!("{} {} {}", entry.label, entry.keys, entry.chords).to_lowercase();
                 words.iter().all(|word| text.contains(word))
             })
             .map(|(index, _)| index)

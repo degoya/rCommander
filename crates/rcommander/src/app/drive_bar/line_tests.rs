@@ -92,8 +92,18 @@ fn the_buttons_run_the_keymap_s_root_and_parent_rows() {
             assert_eq!(row.command, step.command(None), "{}", step.binding());
         }
     }
-    assert_eq!(keys_of(&keymap, "root_folder"), "Ctrl+\\");
-    assert_eq!(keys_of(&keymap, "parent_folder"), "Backspace, Ctrl+PageUp");
+    assert_eq!(
+        keys_of(&keymap, "root_folder"),
+        crate::keymap::label_text("Ctrl+\\")
+    );
+    assert_eq!(
+        keys_of(&keymap, "parent_folder"),
+        format!(
+            "{}, {}",
+            crate::keymap::label_text("Backspace"),
+            crate::keymap::label_text("Ctrl+PageUp")
+        )
+    );
 }
 
 #[test]

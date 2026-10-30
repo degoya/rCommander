@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **A Mac look on macOS**: the menus sit in the system's menu bar (muda's `NSMenu`, with the
+  application menu - About, Settings on Cmd+, , Services, Hide, Quit - and the Window menu) instead
+  of the bar rCommander draws (`DRAWN` is now Linux only); entries carry no key equivalent, so the
+  keymap's keys and the text fields' Cmd+C still reach the window. Cmd acts as the keymap's Ctrl
+  (Cmd+R refreshes, Cmd+Shift+P opens the palette; Ctrl still works) and keys show as the Mac
+  writes them (Cmd+Shift+F as ⇧⌘F). The colours are macOS's greys for light and dark mode with the
+  accent chosen in System Settings (`AppleAccentColor`), the interface font is San Francisco and
+  the monospace font Menlo. The main window's title bar is transparent over the content, with the
+  traffic lights on the window's own surface (Finder's look); the content keeps their height free.
+
 ## [0.10.0] - 2026-10-30
 
 ### Added

@@ -27,9 +27,16 @@ use crate::platform::key_label;
 /// The chord of a key press; `None` for a key no chord can name (a modifier on its own) and for
 /// any press with the Windows key, which belongs to the system.
 pub fn chord(key: &Key, physical: Physical, modifiers: Modifiers) -> Option<Chord> {
-    if modifiers.logo() {
-        return None;
-    }
+    // macOS: Cmd is the keymap's Ctrl (Cmd+C copies, Cmd+R refreshes), Ctrl stays Ctrl. Elsewhere
+    // the Windows key belongs to the system.
+    let ctrl = if cfg!(target_os = "macos") {
+        modifiers.logo() || modifiers.control()
+    } else {
+        if modifiers.logo() {
+            return None;
+        }
+        modifiers.control()
+    };
     let code = match physical {
         Physical::Code(code) => rc_engine::physical_code(&format!("{code:?}")),
         Physical::Unidentified(_) => None,
@@ -44,11 +51,11 @@ pub fn chord(key: &Key, physical: Physical, modifiers: Modifiers) -> Option<Chor
         (Key::Character(text), _) if text.as_str() == "+" => "Plus".to_owned(),
         (Key::Character(text), _) => text.to_string(),
         // A dead key: no character, but a place.
-        (Key::Unidentified, _) if modifiers.control() || modifiers.alt() => format!("[{}]", code?),
+        (Key::Unidentified, _) if ctrl || modifiers.alt() => format!("[{}]", code?),
         _ => return None,
     };
     let mut chord = Chord::plain(&name)?;
-    chord.ctrl = modifiers.control();
+    chord.ctrl = ctrl;
     chord.shift = modifiers.shift();
     chord.alt = modifiers.alt();
     chord.physical = code;
@@ -58,7 +65,65 @@ pub fn chord(key: &Key, physical: Physical, modifiers: Modifiers) -> Option<Chor
 /// `chord` as a person reads it: a key named by place as the active keyboard layout prints it,
 /// else as a US keyboard does.
 pub fn label(chord: &Chord) -> String {
-    chord.label(key_label::character)
+    let text = chord.label(key_label::character);
+    if cfg!(target_os = "macos") {
+        mac_label(&text)
+    } else {
+        text
+    }
+}
+
+/// A label as a Mac shows keys: the modifiers as symbols in Apple's order, Option, Shift,
+/// Command (the keymap's Ctrl is Cmd there, [`chord`]), with no plus signs: `Ctrl+Shift+F` is
+/// ⇧⌘F.
+pub fn mac_label(text: &str) -> String {
+    let (mut ctrl, mut shift, mut alt) = (false, false, false);
+    let mut rest = text;
+    loop {
+        if let Some(after) = rest.strip_prefix("Ctrl+") {
+            ctrl = true;
+            rest = after;
+        } else if let Some(after) = rest.strip_prefix("Shift+") {
+            shift = true;
+            rest = after;
+        } else if let Some(after) = rest.strip_prefix("Alt+") {
+            alt = true;
+            rest = after;
+        } else {
+            break;
+        }
+    }
+    let key = match rest {
+        "" => "+",
+        "Plus" => "+",
+        "Enter" => "↩",
+        "Escape" => "⎋",
+        "Backspace" => "⌫",
+        "Delete" => "⌦",
+        "Tab" => "⇥",
+        "Space" => "Space",
+        "ArrowUp" | "Up" => "↑",
+        "ArrowDown" | "Down" => "↓",
+        "ArrowLeft" | "Left" => "←",
+        "ArrowRight" | "Right" => "→",
+        "PageUp" => "⇞",
+        "PageDown" => "⇟",
+        "Home" => "↖",
+        "End" => "↘",
+        other => other,
+    };
+    let mut label = String::new();
+    if alt {
+        label.push('⌥');
+    }
+    if shift {
+        label.push('⇧');
+    }
+    if ctrl {
+        label.push('⌘');
+    }
+    label.push_str(key);
+    label
 }
 
 /// What the active layout prints on every key a chord can name by place: it changes with the

@@ -1928,6 +1928,7 @@
   "menubar.title.view": "&Ver",
   "menubar.title.configuration": "C&onfiguración",
   "menubar.title.help": "A&yuda",
+  "macos.window_menu": "Ventana",
   "menubar.view_file": "&Ver",
   "menubar.edit_file": "&Editar",
   "menubar.new_text_file": "&Nuevo archivo de texto...",

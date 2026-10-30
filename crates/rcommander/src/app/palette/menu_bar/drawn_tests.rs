@@ -104,7 +104,7 @@ fn enter_or_a_letter_takes_an_entry_and_escape_closes() {
     assert_eq!(open.menu, index(&menus, "&File"));
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 mod drawn {
     use super::*;
     use crate::app::{Message, harness::Harness, palette::PaletteMsg};

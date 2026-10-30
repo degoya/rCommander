@@ -18,6 +18,8 @@ pub mod fonts;
 pub mod icon;
 pub mod layout;
 mod light;
+#[cfg(target_os = "macos")]
+mod mac;
 pub mod mnemonic;
 pub mod page_tabs;
 mod syntax;
@@ -113,9 +115,24 @@ pub fn tokens(dark: bool) -> &'static Tokens {
     }
     let [light, dark_tokens] = TOKENS.get_or_init(|| {
         let [light, dark] = system_accent();
-        [light::tokens(light), dark::tokens(dark)]
+        if cfg!(target_os = "macos") {
+            mac_tokens(light, dark)
+        } else {
+            [light::tokens(light), dark::tokens(dark)]
+        }
     });
     if dark { dark_tokens } else { light }
+}
+
+/// The Mac's light and dark tokens; WinUI's on other systems.
+#[cfg(target_os = "macos")]
+fn mac_tokens(light: Color, dark: Color) -> [Tokens; 2] {
+    [mac::light(light), mac::dark(dark)]
+}
+
+#[cfg(not(target_os = "macos"))]
+fn mac_tokens(light: Color, dark: Color) -> [Tokens; 2] {
+    [light::tokens(light), dark::tokens(dark)]
 }
 
 /// The look the setting `appearance.theme` chooses.
@@ -173,6 +190,9 @@ pub fn iced_theme(tokens: &Tokens) -> Theme {
 /// on Windows 10, where the name does not resolve and cosmic-text falls back to Segoe UI).
 pub const UI_FONT: Font = if cfg!(windows) {
     Font::with_name("Segoe UI Variable")
+} else if cfg!(target_os = "macos") {
+    // San Francisco, the Mac's interface font (/System/Library/Fonts/SFNS.ttf)
+    Font::with_name("System Font")
 } else {
     Font::DEFAULT
 };
@@ -187,6 +207,8 @@ pub const UI_FONT_STRONG: Font = Font {
 /// terminal's and the viewer's until another is chosen ([`fonts`]).
 pub const MONO_FONT: Font = if cfg!(windows) {
     Font::with_name("Cascadia Mono")
+} else if cfg!(target_os = "macos") {
+    Font::with_name("Menlo")
 } else {
     Font::MONOSPACE
 };

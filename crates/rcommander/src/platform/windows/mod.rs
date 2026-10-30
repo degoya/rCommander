@@ -8,5 +8,6 @@ pub mod dialog_window;
 pub mod drag_out;
 pub mod file_dialog;
 pub mod gpu_loss;
+pub mod key_label;
 pub mod menu_bar;
 pub mod popup_menus;

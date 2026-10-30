@@ -79,24 +79,25 @@ impl<'a> TerminalView<'a> {
         clipboard: &mut dyn iced_graphics::core::Clipboard,
         shell: &mut iced_graphics::core::Shell<'_, Event>,
     ) -> bool {
-        let (key, modifiers, text) = match event {
+        let (key, physical, modifiers, text) = match event {
             keyboard::Event::ModifiersChanged(modifiers) => {
                 state.modifiers = *modifiers;
                 return false;
             }
             keyboard::Event::KeyPressed {
                 key,
+                physical_key,
                 modifiers,
                 text,
                 ..
-            } => (key, *modifiers, text),
+            } => (key, *physical_key, *modifiers, text),
             _ => return false,
         };
         if self
             .term
             .reserved
             .iter()
-            .any(|reserved| reserved.matches(key, modifiers))
+            .any(|reserved| reserved.matches(key, physical, modifiers))
         {
             return false;
         }

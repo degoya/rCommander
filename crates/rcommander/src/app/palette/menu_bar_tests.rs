@@ -302,6 +302,6 @@ async fn the_look_leaves_alt_letters_to_a_terminal() {
             .map(|look| look.alt_letters)
     };
     assert_eq!(letters(&mut harness), Some(true), "the files");
-    harness.press("Ctrl+\u{f6}").await;
+    harness.press("Ctrl+[Semicolon]").await;
     assert_eq!(letters(&mut harness), Some(false), "the terminal");
 }

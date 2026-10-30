@@ -112,14 +112,14 @@ python3 -I - "$SITE/app/data/release.json" <<'PY'
 import json, sys
 path = sys.argv[1]
 data = json.load(open(path))
-data["date"] = "2026-10-30"
+data["date"] = "2000-01-01"  # never today, or the commit below has nothing to commit
 json.dump(data, open(path, "w"), indent=2)
 open(path, "a").write("\n")
 PY
 git -C "$SITE" commit -qam "a release date set by hand"
 run_status bash "$SCRIPT" 0.9.0 --push
 expect_status "a re-run of the same version runs through" 0
-expect "a re-run keeps the release date" "2026-10-30" "$(field release.json date)"
+expect "a re-run keeps the release date" "2000-01-01" "$(field release.json date)"
 expect_output "a re-run commits nothing" "nothing to commit"
 expect "--push pushes the branch" "$(git -C "$SITE" rev-parse HEAD)" \
     "$(git -C "$SCRATCH/origin.git" rev-parse main)"

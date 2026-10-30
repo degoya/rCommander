@@ -137,7 +137,7 @@ mod drawn {
     async fn alt_with_a_letter_in_a_terminal_opens_no_menu() {
         let (_root, mut harness) = Harness::temp_with_db().await;
         harness.send(bar(MenuBarMsg::Shown(true))).await;
-        harness.press("Ctrl+\u{f6}").await;
+        harness.press("Ctrl+[Semicolon]").await;
         assert_eq!(
             harness.app.pane(harness.app.active).state.view,
             rc_engine::PanelView::Terminal

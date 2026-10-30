@@ -142,7 +142,7 @@ pub(super) fn keys_of(keymap: &Keymap, name: &str) -> String {
         .bindings()
         .iter()
         .filter(|binding| binding.name == name)
-        .map(|binding| binding.chord.to_string())
+        .map(|binding| crate::keymap::label(&binding.chord))
         .collect::<Vec<_>>()
         .join(", ")
 }

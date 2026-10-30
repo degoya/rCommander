@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use schema::AGENT_MAX_KEYS_KEY;
+pub use schema::LANGUAGE_KEY;
 pub use schema::archive::DECODER_MEMORY_KEY;
 pub use schema::backup::BACKUP_KEEP_KEY;
 pub use schema::checksum::CHECKSUM_ENTER_KEY;

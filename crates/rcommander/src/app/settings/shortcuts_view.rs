@@ -90,7 +90,7 @@ pub fn view<'a>(
     }
     if let (Some(conflict), Some(row)) = (&page.asking, selected) {
         body = body.push(question(
-            &conflict.chord.to_string(),
+            &crate::keymap::label(&conflict.chord),
             &conflict.holder,
             &row.name,
         ));
@@ -115,7 +115,7 @@ fn key_row<'a>(
     let keys = if row.keys.is_empty() {
         t!("settings.shortcuts.no_key").to_owned()
     } else {
-        row.keys.clone()
+        crate::keymap::label_text(&row.keys)
     };
     let key_cell = fit::cell(keys, key_share, row.keys.is_empty(), tokens);
     let when = match row.when {

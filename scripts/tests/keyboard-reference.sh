@@ -4,7 +4,8 @@
 # page is written into a temp wiki with the rows the keymap gives (a snapshot of its shape), --check
 # passes on it, a renamed action makes --check fail as stale, and data that does not fit is refused
 # with exit 2 - a command without a key and without a reach row, a reach row for a command with
-# a key, a name without its words. Without a wiki - none given, none beside the checkout -
+# a key, a name without its words, a key named by a place no keyboard has (a key by place,
+# `Ctrl+[Semicolon]`, reads as a German and a US keyboard print it). Without a wiki - none given, none beside the checkout -
 # --check skips the page with exit 0 and still checks the data.
 #
 # Pure python3 and bash: it runs in a second. check.sh --preflight runs it.
@@ -46,6 +47,7 @@ expect_true "a name with all its keys" 'grep -qF "| Ctrl+R, F2 | Reread the pane
 expect_true "a key with parameters by its own name" 'grep -qF "| Ctrl+F3 | Sort by name (again: reverse) | \`panel.sort\` |" "$PAGE"'
 expect_true "a window key" 'grep -qF "| Ctrl+Shift+P | Command palette | window |" "$PAGE"'
 expect_true "the toggle leaves a terminal" 'grep -qF "| Switch between file list and terminal (also in a terminal) |" "$PAGE"'
+expect_true "a key by place reads as on a German and a US keyboard" 'grep -qF "| Ctrl+Ö / Ctrl+;, Ctrl+^ / Ctrl+\\\` | Switch between" "$PAGE"'
 expect_true "a reserved key" 'grep -qF "| Ctrl+Shift+Alt+F11 | a later job (script test) |" "$PAGE"'
 expect_true "a command through a dialog" 'grep -qF "| \`hotlist.open\` | An entry of the hotlist (Ctrl+D) (\`hotlist.list\`) |" "$PAGE"'
 expect_true "a palette command" 'grep -qF "| \`vault.lock\` | Command palette: *Lock the vault* |" "$PAGE"'
@@ -72,6 +74,12 @@ sed -i 's/^\[$/[\n  { "keys": "F11", "command": "vault.lock" },/' "$KEYMAP"
 run_status python3 -B "$SCRIPT" "$TREE" "$WIKI" --check
 expect_status "a row for a bound command is refused" 2
 expect_output "the row is named" "vault.lock has a key: drop its row"
+cp "$ROOT/crates/rc-engine/keymap/default.json" "$KEYMAP"
+
+sed -i 's/^\[$/[\n  { "keys": "Ctrl+[Nowhere]", "window": "cmdline_history" },/' "$KEYMAP"
+run_status python3 -B "$SCRIPT" "$TREE" "$WIKI" --check
+expect_status "a key by an unknown place is refused" 2
+expect_output "the place is named" "no key is named [Nowhere]"
 cp "$ROOT/crates/rc-engine/keymap/default.json" "$KEYMAP"
 
 sed -i 's/^\[$/[\n  { "keys": "F11", "window": "zz_unknown" },/' "$KEYMAP"

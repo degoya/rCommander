@@ -53,9 +53,9 @@ fn there_is_always_a_shell_to_offer() {
     assert!(!shells().is_empty());
 }
 
-/// The chords a terminal leaves to the app are the toggle's, Ctrl+O-umlaut (German layout) and
-/// Ctrl+` (US layout), the maximize's (RC-040-05), Ctrl+A-umlaut and Ctrl+', and the list of the
-/// sessions (RC-080-16), Ctrl+Shift+A; nothing else.
+/// The chords a terminal leaves to the app are the toggle's, the key right of L by place
+/// (RC-100-48) and the key left of 1 by place, the maximize's (RC-040-05), the key beside it by place,
+/// and the list of the sessions (RC-080-16), Ctrl+Shift+A; nothing else.
 #[test]
 fn the_reserved_keys_are_the_toggle_the_maximize_and_the_session_list() {
     use iced::keyboard::Modifiers;
@@ -79,10 +79,9 @@ fn the_reserved_keys_are_the_toggle_the_maximize_and_the_session_list() {
     assert_eq!(
         reserved,
         [
-            toggle("\u{f6}"),
-            toggle("`"),
-            toggle("\u{e4}"),
-            toggle("'"),
+            toggle("[Semicolon]"),
+            toggle("[Backquote]"),
+            toggle("[Quote]"),
             image,
             list
         ]

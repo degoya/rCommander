@@ -364,7 +364,10 @@ impl App {
                 }
                 return self.answer(job, Answer::Error { choice });
             }
-            FileOpsMsg::Modifiers(modifiers) => self.file_ops.modifiers = modifiers,
+            FileOpsMsg::Modifiers(modifiers) => {
+                self.file_ops.modifiers = modifiers;
+                return self.follow_layout();
+            }
             FileOpsMsg::Key(command) => {
                 let active = self.active;
                 return self
@@ -483,6 +486,7 @@ impl App {
             ctrl: modifiers.control(),
             shift: modifiers.shift(),
             alt: modifiers.alt(),
+            physical: None,
         }
     }
 }

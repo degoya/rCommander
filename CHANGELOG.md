@@ -5,6 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-30
+
+### Added
+
+- **The interface in German, French and Spanish** (RC-100-47): `locales/de.json`, `fr.json` and
+  `es.json` are compiled in beside English, a key a catalogue lacks reads in English. The new
+  setting `appearance.language` (Appearance > Window; Automatic, English, Deutsch, Français,
+  Español - each name in its own language) picks one; Automatic takes the system's language when
+  rCommander has it, else English. It takes effect at the next start and is a schema row, so
+  `settings.get`/`settings.set` reach it over MCP. The repo lint `catalogues` holds every
+  catalogue to `en.json`'s keys and placeholders, without an empty text.
+
+### Changed
+
+- **The terminal keys sit on the physical key** (RC-100-48): the keymap can name a key of the
+  main block by where it sits, `Ctrl+[Semicolon]` (the W3C code in brackets; `keymap/physical.rs`).
+  The terminal toggle, the new terminal and the maximize are bound this way, so they are Ctrl+Ö /
+  Ctrl+Ä on a German keyboard, Ctrl+; / Ctrl+' on a US one and Ctrl+Ñ / Ctrl+´ (a dead key) on a
+  Spanish one, also after a layout switch. The toggle and the new terminal also sit on the key
+  left of 1, `Ctrl+[Backquote]`: Ctrl+` on US, Ctrl+^ (a dead key) on German, Ctrl+² on French
+  AZERTY, where Ctrl+M stays Multi-Rename (owner 2026-10-29). Menus, palette, context menus, the drive
+  bar and the Shortcuts tab show the active layout's character (Windows: `MapVirtualKey` through
+  winsafe, the menu bar again after a switch; elsewhere the US character). Keys in character form
+  keep working and win over a key by place; the Shortcuts tab records a punctuation mark, an
+  umlaut or a dead key by place. The keyboard reference prints such a key as `Ctrl+Ö / Ctrl+;`.
+
 ## [0.9.1] - 2026-10-29
 
 ### Fixed

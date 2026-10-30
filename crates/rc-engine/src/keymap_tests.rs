@@ -138,13 +138,14 @@ fn the_total_commander_keys_run_their_commands() {
     );
 }
 
-/// The terminal toggle (owner 2026-10-17, as VS Code): Ctrl+O-umlaut on a German layout,
-/// Ctrl+` on a US one - the same key there (`VK_OEM_3`), two characters to the keymap.
-const TOGGLES: [&str; 2] = ["Ctrl+\u{f6}", "Ctrl+`"];
-const NEW_TERMINAL: [&str; 2] = ["Ctrl+Shift+\u{f6}", "Ctrl+Shift+`"];
-/// The terminal over the whole window (RC-040-05): Ctrl+A-umlaut on a German layout, Ctrl+' on
-/// a US one - the same key there (`VK_OEM_7`), right beside the toggle on both.
-const MAXIMIZE: [&str; 2] = ["Ctrl+\u{e4}", "Ctrl+'"];
+/// The terminal toggle on the key right of L, wherever the layout puts it (RC-100-48: Ctrl+O-umlaut
+/// on a German layout, Ctrl+; on a US one), and the key left of 1 by place too (VS Code's Ctrl+`
+/// on a US layout, Ctrl+^ on German, Ctrl+2-superscript on French AZERTY; owner 2026-10-29).
+const TOGGLES: [&str; 2] = ["Ctrl+[Semicolon]", "Ctrl+[Backquote]"];
+const NEW_TERMINAL: [&str; 2] = ["Ctrl+Shift+[Semicolon]", "Ctrl+Shift+[Backquote]"];
+/// The terminal over the whole window (RC-040-05) on the key beside the toggle's (Ctrl+A-umlaut on
+/// a German layout, Ctrl+' on a US one).
+const MAXIMIZE: [&str; 1] = ["Ctrl+[Quote]"];
 /// The clipboard's image pasted into the terminal as a path (RC-040-08).
 const PASTE_IMAGE: [&str; 1] = ["Ctrl+Alt+V"];
 
@@ -192,7 +193,7 @@ fn a_terminal_gets_every_key_but_the_toggle_and_the_maximize() {
     }
 }
 
-/// Ctrl+Shift+O-umlaut (Ctrl+Shift+` on a US layout) opens another terminal from the file list
+/// Ctrl+Shift+O-umlaut (Ctrl+Shift+; or Ctrl+Shift+` on a US layout, by place) opens another terminal from the file list
 /// (the window asks for the shell); in a terminal the shell gets it, as every key but the
 /// toggle.
 #[test]
@@ -275,7 +276,8 @@ fn chords_read_and_print_alike() {
             key: "f".into(),
             ctrl: true,
             shift: true,
-            alt: false
+            alt: false,
+            physical: None,
         }
     );
     assert_eq!(ctrl_shift_f.to_string(), "Ctrl+Shift+F");

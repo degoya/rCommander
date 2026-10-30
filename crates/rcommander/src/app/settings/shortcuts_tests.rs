@@ -168,6 +168,35 @@ async fn a_second_key_is_added_to_the_row() {
     assert_eq!(copy, ["F5", "Ctrl+K"]);
 }
 
+/// A key whose character the layout decides is kept by where it sits (RC-100-48), so it stays on
+/// the key after a switch of the layout; a letter stays a letter.
+#[tokio::test]
+async fn a_layout_key_is_recorded_by_its_place() {
+    let root = tempfile::tempdir().expect("dir");
+    let mut harness = harness(&root).await;
+    select(&mut harness, "copy", "F5").await;
+    harness
+        .send(page_message(ShortcutsMsg::Record(Recording::Add)))
+        .await;
+    harness.send(Message::KeyCaptured(chord("Enter"))).await;
+    let comma = Chord {
+        physical: Some("Comma"),
+        ..chord("Ctrl+Alt+,")
+    };
+    harness.send(Message::Key(comma)).await;
+    assert_eq!(overrides(&harness), "Ctrl+Alt+[Comma]=copy");
+    harness
+        .send(page_message(ShortcutsMsg::Record(Recording::Add)))
+        .await;
+    harness.send(Message::KeyCaptured(chord("Enter"))).await;
+    let letter = Chord {
+        physical: Some("Semicolon"),
+        ..chord("Ctrl+Alt+M")
+    };
+    harness.send(Message::Key(letter)).await;
+    assert_eq!(overrides(&harness), "Ctrl+Alt+[Comma]=copy Ctrl+Alt+M=copy");
+}
+
 /// A key another row holds asks first; Escape keeps it there, Enter moves it.
 #[tokio::test]
 async fn a_taken_key_asks_before_it_moves() {

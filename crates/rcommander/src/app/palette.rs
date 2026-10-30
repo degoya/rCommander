@@ -108,8 +108,14 @@ pub fn entries(keymap: &Keymap, rows: &[ReachRow], network: bool) -> Vec<Entry> 
     let mut add = |name: &str, chord: &Chord| {
         let known = entries.iter().position(|entry| entry.name == name);
         match known {
-            Some(at) => entries[at].keys = format!("{}, {chord}", entries[at].keys),
-            None => entries.push(entry(name, chord.to_string(), Action::Press(chord.clone()))),
+            Some(at) => {
+                let shown = crate::keymap::label(chord);
+                entries[at].keys = format!("{}, {shown}", entries[at].keys);
+            }
+            None => {
+                let shown = crate::keymap::label(chord);
+                entries.push(entry(name, shown, Action::Press(chord.clone())));
+            }
         }
     };
     for binding in keymap.bindings() {

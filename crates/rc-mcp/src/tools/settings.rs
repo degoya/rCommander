@@ -44,7 +44,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Read rCommander's keys in force: one row per key with keys (such as Ctrl+K; empty for a row whose keys the person took away), name (the action, as the command palette names it), when (files: while the panel shows its file list; always: in a terminal too), command (the registry command with its params; none for a key the window handles itself), changed (the person's keymap differs from the standard here) and locked (focus, escape, access_key or window: a key the window keeps); stale lists stored deviations this version no longer has. Read only: only a person changes keys, in the settings."
+        description = "Read rCommander's keys in force: one row per key with keys (such as Ctrl+K, or Ctrl+[Semicolon] for a key named by where it sits - the key right of L, whatever character the keyboard layout puts there; empty for a row whose keys the person took away), name (the action, as the command palette names it), when (files: while the panel shows its file list; always: in a terminal too), command (the registry command with its params; none for a key the window handles itself), changed (the person's keymap differs from the standard here) and locked (focus, escape, access_key or window: a key the window keeps); stale lists stored deviations this version no longer has. Read only: only a person changes keys, in the settings."
     )]
     pub(crate) async fn keymap_list(&self) -> ToolResult {
         self.run(Command::ListKeymap).await

@@ -55,6 +55,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
     (
         Tab::Window,
         &[
+            "appearance.language",
             "appearance.theme",
             "appearance.menu_bar",
             "appearance.function_key_bar",

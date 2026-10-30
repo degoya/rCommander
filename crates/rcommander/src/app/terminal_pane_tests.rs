@@ -46,7 +46,7 @@ async fn the_paste_question_takes_every_key_until_answered() {
         .send(Message::Terminal(TermMessage::Widget(pasted)))
         .await;
     assert!(harness.app.terms.paste.is_some());
-    for keys in ["Tab", "ArrowDown", "Ctrl+`", "Shift+Enter"] {
+    for keys in ["Tab", "ArrowDown", "Ctrl+[Backquote]", "Shift+Enter"] {
         harness.press(keys).await;
     }
     assert_eq!(
@@ -88,7 +88,7 @@ async fn ctrl_shift_backquote_opens_the_shell_picker() {
     }
     let root = root();
     let mut harness = Harness::headless(root.path()).await;
-    harness.press("Ctrl+Shift+\u{f6}").await;
+    harness.press("Ctrl+Shift+[Semicolon]").await;
     assert_eq!(
         harness.app.terms.picker,
         Some(Picker {
@@ -169,7 +169,7 @@ mod with_a_shell {
     async fn the_toggle_switches_and_the_terminal_keeps_the_panel_keys() {
         let root = root();
         let mut harness = Harness::headless(root.path()).await;
-        harness.press("Ctrl+\u{f6}").await;
+        harness.press("Ctrl+[Semicolon]").await;
         assert_eq!(view(&harness, PanelId::Left), PanelView::Terminal);
         assert_eq!(harness.terminals_shown, [PanelId::Left]);
         let tabs = harness.app.engine().panel_terminals(PanelId::Left);
@@ -192,8 +192,8 @@ mod with_a_shell {
             "Backspace",
             "Ctrl+Tab",
             "Ctrl+Shift+Tab",
-            "Ctrl+Shift+\u{f6}",
-            "Ctrl+Shift+`",
+            "Ctrl+Shift+[Semicolon]",
+            "Ctrl+Shift+[Backquote]",
         ] {
             let effects = harness.app.apply(Message::Key(chord(keys)));
             assert!(
@@ -207,7 +207,7 @@ mod with_a_shell {
         assert_eq!(harness.app.terms.picker, None);
         assert_eq!(view(&harness, PanelId::Right), PanelView::Files);
 
-        harness.press("Ctrl+`").await;
+        harness.press("Ctrl+[Backquote]").await;
         assert_eq!(view(&harness, PanelId::Left), PanelView::Files);
         harness.press("Tab").await;
         assert_eq!(
@@ -216,7 +216,7 @@ mod with_a_shell {
             "Tab is the panels' again"
         );
         harness.press("Tab").await;
-        harness.press("Ctrl+`").await;
+        harness.press("Ctrl+[Backquote]").await;
         assert_eq!(view(&harness, PanelId::Left), PanelView::Terminal);
         assert_eq!(
             harness.app.engine().shown_terminal(PanelId::Left),

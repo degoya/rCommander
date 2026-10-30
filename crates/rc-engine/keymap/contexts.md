@@ -147,8 +147,8 @@ progress window sends the running job to the background, where the queue window 
 | Shift+PgUp / Shift+PgDn, mouse wheel | Scroll back through the terminal's history |
 | 1-9, Enter / Esc (in the shell choice) | Start a shell / cancel |
 
-Every other key goes to the shell; only the terminal toggle (Ctrl+Ö, Ctrl+` on a US keyboard),
-the terminal over the whole window (Ctrl+Ä, Ctrl+') and the list of the terminal's sessions
+Every other key goes to the shell; only the terminal toggle (Ctrl+Ö or Ctrl+^, Ctrl+; or Ctrl+` on
+a US keyboard, Ctrl+² on a French one), the terminal over the whole window (Ctrl+Ä, Ctrl+') and the list of the terminal's sessions
 (Ctrl+Shift+A) leave it.
 
 ### Function-key bar and mouse

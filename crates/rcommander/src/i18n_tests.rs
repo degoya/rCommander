@@ -1,4 +1,5 @@
 use super::{Catalogue, english, error_text, fill, lookup, resolve};
+use crate::locale::Lang;
 
 #[test]
 fn the_catalogue_parses_and_is_not_empty() {
@@ -29,6 +30,29 @@ fn a_key_missing_in_a_language_falls_back_to_english() {
         english().get("column.size").map(String::as_str)
     );
     assert_eq!(resolve("no.such.key", &german, english()), None);
+}
+
+/// An empty text in a translation is no text: the key reads in English (RC-100-47).
+#[test]
+fn an_empty_translation_falls_back_to_english() {
+    let german: Catalogue = [("column.name".to_owned(), String::new())]
+        .into_iter()
+        .collect();
+    assert_eq!(resolve("column.name", &german, english()), Some("Name"));
+}
+
+/// Every language's catalogue is compiled in and parses: one that did not would be empty, and
+/// the whole interface would fall back to English without a word (RC-100-47).
+#[test]
+fn every_catalogue_is_compiled_in_and_parses() {
+    for (lang, text) in [
+        (Lang::De, include_str!("../locales/de.json")),
+        (Lang::Fr, include_str!("../locales/fr.json")),
+        (Lang::Es, include_str!("../locales/es.json")),
+    ] {
+        let parsed = serde_json::from_str::<Catalogue>(text);
+        assert!(parsed.is_ok(), "the catalogue of {lang:?} does not parse");
+    }
 }
 
 #[test]

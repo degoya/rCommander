@@ -104,7 +104,8 @@ pub fn shown(keymap: &Keymap, search: &str) -> Vec<KeymapRow> {
         .rows()
         .into_iter()
         .filter(|row| {
-            let text = format!("{} {}", label(&row.name), row.keys).to_lowercase();
+            let shown = crate::keymap::label_text(&row.keys);
+            let text = format!("{} {} {shown}", label(&row.name), row.keys).to_lowercase();
             words.iter().all(|word| text.contains(word))
         })
         .collect()
@@ -233,7 +234,8 @@ impl App {
     pub(in crate::app) fn shortcut_recording(&mut self, message: &Message) -> Option<Vec<Effect>> {
         let recording = self.settings.as_ref()?.shortcuts.recording?;
         let chord = match message {
-            Message::Key(chord) => chord.clone(),
+            // A key whose character the layout decides is kept by where it sits (RC-100-48).
+            Message::Key(chord) => chord.stored(),
             // A key a control took - the Enter that pressed "Change key" - is no new key.
             Message::KeyCaptured(_) => return Some(Vec::new()),
             _ => return None,
@@ -349,7 +351,8 @@ fn refused(chord: &Chord, refusal: Refusal) -> String {
         Refusal::Locked(lock) => lock_reason(lock),
         Refusal::UnknownName => t!("settings.shortcuts.unknown"),
     };
-    t!("settings.shortcuts.refused", key = chord, reason = reason)
+    let key = crate::keymap::label(chord);
+    t!("settings.shortcuts.refused", key = key, reason = reason)
 }
 
 #[cfg(test)]

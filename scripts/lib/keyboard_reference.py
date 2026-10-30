@@ -46,7 +46,27 @@ name, also the ones without a key.
 
 These are the standard keys. **Settings > Keyboard > Shortcuts** changes, adds or removes any of
 them; the menus, the context menus and the command palette then show your keys.
+
+A key written like **Ctrl+\u00d6 / Ctrl+;** is one key, named by where it sits: the key right of L
+is Ctrl+\u00d6 on a German keyboard, Ctrl+; on a US one and Ctrl+\u00d1 on a Spanish one, also after
+you switch the layout; **Ctrl+^ / Ctrl+`** is the key left of 1 (Ctrl+\u00b2 on a French keyboard).
+The menus and the palette show what your layout prints on it.
 """
+
+# The keys a chord names by where they sit (crates/rc-engine/src/keymap/physical.rs, written
+# `[Code]`), as a German and a US keyboard print them.
+PHYSICAL = {
+    "Backquote": ("^", "`"),
+    "Minus": ("\u00df", "-"),
+    "Equal": ("\u00b4", "="),
+    "BracketLeft": ("\u00dc", "["),
+    "BracketRight": ("Plus", "]"),
+    "Semicolon": ("\u00d6", ";"),
+    "Quote": ("\u00c4", "'"),
+    "Comma": (",", ","),
+    "Period": (".", "."),
+    "Slash": ("-", "/"),
+}
 
 
 class DataError(ValueError):
@@ -55,7 +75,8 @@ class DataError(ValueError):
 
 def chord(text: str) -> str:
     """A chord as the program prints it (`keymap.rs`, `Display for Chord`): Ctrl, Shift, Alt,
-    then the key, one character in upper case."""
+    then the key, one character in upper case; a key named by where it sits as a German and a US
+    keyboard print it (`Ctrl+[Semicolon]` is `Ctrl+\u00d6 / Ctrl+;`)."""
     modifiers, _, key = text.rpartition("+")
     held = {part.lower() for part in modifiers.split("+") if part}
     if not key:
@@ -64,6 +85,12 @@ def chord(text: str) -> str:
     if unknown:
         raise DataError(f"{text!r}: unknown modifier {sorted(unknown)}")
     names = [name for name in ("Ctrl", "Shift", "Alt") if name.lower() in held]
+    if key.startswith("[") and key.endswith("]"):
+        if key[1:-1] not in PHYSICAL:
+            raise DataError(f"{text!r}: no key is named {key}")
+        german, us = PHYSICAL[key[1:-1]]
+        printed = [german] if german == us else [german, us]
+        return " / ".join("+".join(names + [shown]) for shown in printed)
     return "+".join(names + [key.upper() if len(key) == 1 else key])
 
 

@@ -11,7 +11,7 @@
 //! does not get through also says so in the terminal, and the shell is the person's after it.
 //!
 //! Keys: while a terminal has the keyboard every key is the shell's but the toggle,
-//! Ctrl+O-umlaut or Ctrl+`, and the terminal over the whole window, Ctrl+A-umlaut or Ctrl+'
+//! Ctrl+O-umlaut or Ctrl+` (both by place), and the terminal over the whole window, Ctrl+A-umlaut or Ctrl+'
 //! (`always` in the keymap, the widget's reserved keys); while the picker
 //! or the paste question is open every key is theirs. Ctrl+Shift+O-umlaut (Ctrl+Shift+` on a US
 //! layout: `terminal.open` without a shell) asks for the shell first when there is more than one.

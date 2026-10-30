@@ -10,7 +10,7 @@ use alacritty_terminal::{event::Event as TermUiEvent, grid::Scroll, term::Clipbo
 use iced::{
     Font, Size, Subscription,
     futures::{Stream, StreamExt, stream},
-    keyboard::{Key, Modifiers},
+    keyboard::{Key, Modifiers, key::Physical},
     widget::canvas::Cache,
 };
 use rc_term::{TermEvent, TermId, TermSession};
@@ -40,7 +40,8 @@ pub enum Event {
 
 /// A chord the app keeps for itself: the widget neither sends it to the program nor captures
 /// it. A character key, matched by the character the layout gives it without modifiers (lower
-/// case), as the app's keymap reads keys.
+/// case), or a key named by where it sits, `[Semicolon]` - the W3C code in brackets -, matched by
+/// its place whatever the layout prints on it (RC-100-48); as the app's keymap reads keys.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReservedKey {
     pub character: String,
@@ -48,11 +49,22 @@ pub struct ReservedKey {
 }
 
 impl ReservedKey {
-    /// Whether `key` pressed with `modifiers` is this chord.
+    /// Whether `key`, pressed on `physical` with `modifiers`, is this chord.
     #[must_use]
-    pub fn matches(&self, key: &Key, modifiers: Modifiers) -> bool {
-        matches!(key, Key::Character(character) if character.to_lowercase() == self.character)
-            && modifiers == self.modifiers
+    pub fn matches(&self, key: &Key, physical: Physical, modifiers: Modifiers) -> bool {
+        let place = self
+            .character
+            .strip_prefix('[')
+            .and_then(|rest| rest.strip_suffix(']'));
+        let same_key = match place {
+            Some(code) => {
+                matches!(physical, Physical::Code(pressed) if format!("{pressed:?}") == code)
+            }
+            None => {
+                matches!(key, Key::Character(character) if character.to_lowercase() == self.character)
+            }
+        };
+        same_key && modifiers == self.modifiers
     }
 }
 

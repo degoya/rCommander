@@ -5,8 +5,8 @@
 //! rows: the token is a secret (shown only to copy), the policy has its own type in `rc-mcp`;
 //! both are protected like every `mcp.*` key. The rows of one area are in `schema/<area>.rs`
 //! (fonts, layout, keys, delete, drive_line, transfers, windows, exchange, mouse, checksum, sort,
-//! viewer, mcp, plugins, colours, archive, quick_search, ftp, update); how a value is checked
-//! against its row is `schema/check.rs`.
+//! viewer, mcp, plugins, colours, archive, quick_search, ftp, update, language); how a value is
+//! checked against its row is `schema/check.rs`.
 
 pub(super) mod archive;
 pub(super) mod backup;
@@ -21,6 +21,7 @@ mod exchange;
 mod fonts;
 pub(super) mod ftp;
 mod keys;
+mod language;
 pub(super) mod layout;
 pub(super) mod login_scripts;
 mod lookup;
@@ -58,6 +59,7 @@ pub use keys::{
     CONFIRM_QUIT_KEY, CONNECTIONS_FOCUS_LIST_KEY, CONTEXT_MENU_KEYS_KEY, F10_KEY, KEYMAP_KEY,
     UNDERLINE_ACCESS_KEYS_KEY,
 };
+pub use language::LANGUAGE_KEY;
 pub use lookup::{is_protected, setting};
 pub use mcp::{MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY};
 pub use mouse::{CLICK_CLEARS_MARKS_KEY, TAB_DRAG_KEY};
@@ -232,6 +234,7 @@ pub const INTEGRATION_KEY: &str = "terminal.shell_integration";
 
 /// Every setting, in the dialog's order.
 pub const SETTINGS: &[SettingSpec] = &[
+    language::LANGUAGE,
     SettingSpec {
         key: THEME_KEY,
         page: SettingPage::Appearance,

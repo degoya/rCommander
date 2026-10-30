@@ -16,7 +16,7 @@ use iced::{Task, system, window};
 use rc_db::Db;
 use rc_engine::{
     Command, Engine, EngineError, Keymap, Outcome, VfsPath,
-    settings::{LEFT_START_KEY, RIGHT_START_KEY, THEME_KEY, stored_setting},
+    settings::{LANGUAGE_KEY, LEFT_START_KEY, RIGHT_START_KEY, THEME_KEY, stored_setting},
 };
 use rc_vault::Vault;
 
@@ -101,13 +101,10 @@ async fn prepare() -> Result<Setup, EngineError> {
     // one whose digest the window's restore stored in the database and that passes its check
     // again (RC-080-09); another file
     // of that name is set aside, and the notice says so.
-    if let Ok(path) = Db::default_path() {
-        match rc_db::apply_pending_restore(&path).await {
-            Ok(true) => info = Some(t!("db.restore_applied").to_owned()),
-            Ok(false) => {}
-            Err(error) => notice = Some(error_text(error.code())),
-        }
-    }
+    let restored = match Db::default_path() {
+        Ok(path) => Some(rc_db::apply_pending_restore(&path).await),
+        Err(_) => None,
+    };
     let db = match open_db().await {
         Ok(db) => Some(db),
         Err(error) => {
@@ -116,6 +113,15 @@ async fn prepare() -> Result<Setup, EngineError> {
             Db::open_in_memory().await.ok()
         }
     };
+    // The language of this run, before the window's first text (RC-100-47).
+    if let Some(db) = &db {
+        choose_language(db).await;
+    }
+    match restored {
+        Some(Ok(true)) => info = Some(t!("db.restore_applied").to_owned()),
+        Some(Err(error)) => notice = notice.or_else(|| Some(error_text(error.code()))),
+        Some(Ok(false)) | None => {}
+    }
     if let Some(db) = &db {
         // Warn and error lines into the error log, the console on stderr; the watch for a lost
         // graphics device beside them.
@@ -240,6 +246,12 @@ async fn prepare() -> Result<Setup, EngineError> {
         info,
         dialogs,
     })
+}
+
+/// The language the setting names, taken for this run; `auto` leaves the desktop's.
+async fn choose_language(db: &Db) {
+    let value = stored_setting(db, LANGUAGE_KEY).await;
+    crate::locale::choose_setting(value.as_ref().and_then(|v| v.as_str()).unwrap_or_default());
 }
 
 async fn saved_theme(db: &Db) -> ThemeChoice {

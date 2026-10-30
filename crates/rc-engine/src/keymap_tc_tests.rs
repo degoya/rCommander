@@ -81,12 +81,11 @@ fn rcommanders_own_keys_are_listed() {
         .map(|row| row.keys.parse().expect("a chord"))
         .collect();
     for keys in [
-        "Ctrl+\u{f6}",
-        "Ctrl+`",
-        "Ctrl+Shift+\u{f6}",
-        "Ctrl+Shift+`",
-        "Ctrl+\u{e4}",
-        "Ctrl+'",
+        "Ctrl+[Semicolon]",
+        "Ctrl+[Backquote]",
+        "Ctrl+Shift+[Semicolon]",
+        "Ctrl+Shift+[Backquote]",
+        "Ctrl+[Quote]",
         "Ctrl+Shift+P",
     ] {
         let chord: Chord = keys.parse().expect("a chord");

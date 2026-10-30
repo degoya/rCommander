@@ -54,9 +54,10 @@ pub fn shell_label(profile: &ShellProfile) -> String {
 }
 
 /// The chords the app keeps while a terminal has the keyboard: the keymap's `always` bindings
-/// and window keys on character keys - the toggle, Ctrl+O-umlaut and Ctrl+`, the terminal over
-/// the whole window, Ctrl+A-umlaut and Ctrl+', and the list of the sessions, Ctrl+Shift+A
-/// (`term_tests` holds that there are no others).
+/// and window keys on character keys and on keys named by place - the toggle, `Ctrl+[Semicolon]`
+/// (Ctrl+O-umlaut on a German layout) and `Ctrl+[Backquote]` (Ctrl+` on US), the terminal over the whole window,
+/// `Ctrl+[Quote]` (Ctrl+A-umlaut), and the list of the sessions, Ctrl+Shift+A (`term_tests` holds
+/// that there are no others).
 pub fn reserved_keys(keymap: &Keymap) -> Vec<ReservedKey> {
     let bindings = keymap
         .bindings()
@@ -65,7 +66,10 @@ pub fn reserved_keys(keymap: &Keymap) -> Vec<ReservedKey> {
     let window = keymap.window().iter().map(|key| (&key.chord, key.when));
     bindings
         .chain(window)
-        .filter(|(chord, when)| *when == KeyContext::Always && chord.key.chars().count() == 1)
+        .filter(|(chord, when)| {
+            *when == KeyContext::Always
+                && (chord.key.chars().count() == 1 || chord.code().is_some())
+        })
         .map(|(chord, _)| {
             let mut modifiers = Modifiers::empty();
             modifiers.set(Modifiers::CTRL, chord.ctrl);

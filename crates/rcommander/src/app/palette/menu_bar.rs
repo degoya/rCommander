@@ -8,7 +8,8 @@
 //! `dialog_windows.rs`): attached once the setting `appearance.menu_bar` is read and on, hidden
 //! when it is off, dark with the app's look, greyed out while a dialog is open (a choice that
 //! still arrives then is ignored), and Alt with a letter left to the quick search or a terminal
-//! that wants it; its keys follow a changed keymap (`relabel_menu_bar`, RC-100-21). The popup
+//! that wants it; its keys follow a changed keymap (`relabel_menu_bar`, RC-100-21) and a switched
+//! keyboard layout (`follow_layout`, RC-100-48). The popup
 //! menus - the bar's and the Explorer's - follow the look too
 //! (`platform::popup_menus`, owner 2026-10-18).
 
@@ -105,6 +106,8 @@ pub struct MenuBar {
     applied: Option<Look>,
     /// Whether the popup menus were asked to be dark, last; `None` before the first time.
     popups_dark: Option<bool>,
+    /// What the keyboard layout printed on the keys named by place when last looked at.
+    layout: Option<String>,
 }
 
 impl MenuBar {
@@ -178,7 +181,8 @@ fn items(menu: &Menu, keymap: &Keymap, entries: &[Entry]) -> Vec<BarItem> {
     items
 }
 
-/// The first key the keymap gives `name`, as the palette and the keyboard reference print it.
+/// The first key the keymap gives `name`, as the palette prints it: a key named by place as the
+/// active layout prints it.
 pub fn key_of(keymap: &Keymap, name: &str) -> Option<String> {
     let binding = keymap
         .bindings()
@@ -186,8 +190,8 @@ pub fn key_of(keymap: &Keymap, name: &str) -> Option<String> {
         .find(|binding| binding.name == name);
     let window = keymap.window().iter().find(|key| key.name == name);
     binding
-        .map(|binding| binding.chord.to_string())
-        .or_else(|| window.map(|key| key.chord.to_string()))
+        .map(|binding| crate::keymap::label(&binding.chord))
+        .or_else(|| window.map(|key| crate::keymap::label(&key.chord)))
 }
 
 /// The slot of the entry `id`, in any menu.
@@ -342,6 +346,19 @@ impl App {
         };
         let entries = super::entries(&self.keymap, &reach::standard(), self.drive_bar.network);
         platform::relabel(main, build(&self.keymap, &entries)).discard()
+    }
+
+    /// The bar's keys again when the keyboard layout changed, so a key named by place shows the
+    /// new layout's character (RC-100-48). Looked at when a modifier changes: a layout switch is
+    /// Alt+Shift, Ctrl+Shift or Win+Space.
+    pub(in crate::app) fn follow_layout(&mut self) -> Vec<Effect> {
+        let layout = crate::keymap::layout();
+        let bar = &mut self.dialog_windows.menu_bar;
+        if bar.layout.as_ref() == Some(&layout) {
+            return Vec::new();
+        }
+        bar.layout = Some(layout);
+        vec![Effect::Task(self.relabel_menu_bar())]
     }
 
     /// Whether Alt with a letter may open a menu: not when it is the quick search's key, nor while

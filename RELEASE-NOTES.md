@@ -11,6 +11,11 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.10.0
+
+- rCommander speaks German, French and Spanish beside English: choose the language in the settings, or leave it on Automatic to follow your system.
+- The terminal keys stay on the same key on every keyboard: the key right of L (Ctrl+Ö, Ctrl+;) and the key left of 1 (Ctrl+^, Ctrl+`, Ctrl+²); menus show your layout's character.
+
 ## 0.9.1
 
 - The first release you can download: 0.9.0 was announced but its packages never reached the download page. 0.9.1 brings everything 0.9.0 lists.

@@ -35,7 +35,7 @@ pub fn of_command(keymap: &Keymap, id: &str) -> Option<String> {
 
 /// `chord` as the menu shows it; none while the keys are hidden.
 pub fn of_chord(chord: &Chord) -> Option<String> {
-    shown().then(|| chord.to_string())
+    shown().then(|| crate::keymap::label(chord))
 }
 
 /// `key`, a window's own key for an entry, while the keys are shown.

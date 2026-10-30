@@ -15,10 +15,13 @@
 //! [`Keymap::lookup`] and [`Keymap::window_key`]. The keyboard reference
 //! (`scripts/keyboard-reference.sh`) reads the same data. The keymap in force is the standard
 //! with the person's deviations from it (RC-100-21): `overrides.rs` keeps them as the setting
-//! `keys.overrides`, `edit.rs` applies them and makes the Shortcuts tab's edits.
+//! `keys.overrides`, `edit.rs` applies them and makes the Shortcuts tab's edits. A key whose
+//! character the layout decides can be bound by where it sits, `Ctrl+[Semicolon]` (RC-100-48,
+//! `physical.rs`).
 
 mod edit;
 mod overrides;
+mod physical;
 
 use std::{fmt, str::FromStr};
 
@@ -27,10 +30,11 @@ use serde_json::{Value, json};
 
 pub use self::edit::{KeymapRow, Lock, Refusal};
 pub use self::overrides::{MAX_OVERRIDE_TEXT, MAX_OVERRIDES, Override, Overrides};
+pub use self::physical::{PHYSICAL_KEYS, physical_code};
 use crate::{Command, PanelView};
 
-/// The standard bindings: Total Commander 11's, plus Ctrl+O-umlaut (Ctrl+` on a US layout)
-/// for the terminal.
+/// The standard bindings: Total Commander 11's, plus the key right of L (Ctrl+O-umlaut on a
+/// German layout, Ctrl+; on a US one) for the terminal.
 const DEFAULT: &str = include_str!("../keymap/default.json");
 
 /// The named keys a chord can use: the W3C `KeyboardEvent.key` names, which iced reports.
@@ -74,14 +78,20 @@ const NAMED_KEYS: &[&str] = &[
     "Tab",
 ];
 
-/// A key with its modifiers, written `Tab`, `Ctrl+PageUp` or ``Ctrl+` ``.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// A key with its modifiers, written `Tab`, `Ctrl+PageUp`, ``Ctrl+` `` or `Ctrl+[Semicolon]`.
+/// Equal by key and modifiers alone (`physical.rs`).
+#[derive(Debug, Clone)]
 pub struct Chord {
-    /// A named key (`Enter`, `F5`, `ArrowUp`) or one character in lower case (`a`, `` ` ``).
+    /// A named key (`Enter`, `F5`, `ArrowUp`), one character in lower case (`a`, `` ` ``) or a
+    /// key named by where it sits (`[Semicolon]`, [`PHYSICAL_KEYS`]).
     pub key: String,
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
+    /// The code of the key pressed, when a chord can name that key by place: the window sets it,
+    /// so a binding on `[Semicolon]` finds the key whatever character the layout gives it. Never
+    /// read from text nor printed.
+    pub physical: Option<&'static str>,
 }
 
 impl Chord {
@@ -93,6 +103,7 @@ impl Chord {
             ctrl: false,
             shift: false,
             alt: false,
+            physical: None,
         })
     }
 
@@ -102,14 +113,15 @@ impl Chord {
         !(self.ctrl || self.shift || self.alt)
     }
 
-    /// How a chord spells `key`: a named key as it is, one character in lower case; `None` for
-    /// anything else.
+    /// How a chord spells `key`: a named key and a key named by place as they are, one
+    /// character in lower case; `None` for anything else.
     #[must_use]
     pub fn key_name(key: &str) -> Option<String> {
         let mut chars = key.chars();
         match (chars.next(), chars.next()) {
             (Some(c), None) if !c.is_whitespace() && c != '+' => Some(c.to_lowercase().collect()),
-            _ => NAMED_KEYS.contains(&key).then(|| key.to_owned()),
+            _ => (NAMED_KEYS.contains(&key) || physical::bracketed(key).is_some())
+                .then(|| key.to_owned()),
         }
     }
 }
@@ -353,22 +365,30 @@ impl Keymap {
         &self.window
     }
 
-    /// The command `chord` runs while the active panel shows `view`; a reserved chord and a
-    /// window key run none.
+    /// The command the key press `chord` runs while the active panel shows `view`; a reserved
+    /// chord and a window key run none. A binding on the key's character goes before one on its
+    /// place ([`Chord::matches`]): a key the person bound by its character keeps it.
     #[must_use]
     pub fn lookup(&self, chord: &Chord, view: PanelView) -> Option<&Command> {
-        self.bindings
-            .iter()
-            .find(|binding| binding.chord == *chord && binding.when.applies(view))
+        let rows = || {
+            self.bindings
+                .iter()
+                .filter(move |binding| binding.when.applies(view))
+        };
+        rows()
+            .find(|binding| binding.chord == *chord)
+            .or_else(|| rows().find(|binding| binding.chord.matches(chord)))
             .map(|binding| &binding.command)
     }
 
-    /// The name of the window key `chord` is while the active panel shows `view`.
+    /// The name of the window key the key press `chord` is while the active panel shows `view`;
+    /// as [`Keymap::lookup`], its character before its place.
     #[must_use]
     pub fn window_key(&self, chord: &Chord, view: PanelView) -> Option<&str> {
-        self.window
-            .iter()
-            .find(|key| key.chord == *chord && key.when.applies(view))
+        let rows = || self.window.iter().filter(move |key| key.when.applies(view));
+        rows()
+            .find(|key| key.chord == *chord)
+            .or_else(|| rows().find(|key| key.chord.matches(chord)))
             .map(|key| key.name.as_str())
     }
 }
@@ -394,3 +414,7 @@ mod window_tests;
 #[cfg(test)]
 #[path = "keymap_tc_tests.rs"]
 mod tc_tests;
+
+#[cfg(test)]
+#[path = "keymap_physical_tests.rs"]
+mod physical_tests;

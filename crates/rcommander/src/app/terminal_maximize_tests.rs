@@ -54,24 +54,24 @@ mod with_a_shell {
         tempfile::tempdir().expect("temp dir")
     }
 
-    /// Ctrl+A-umlaut on the files opens the terminal and lays it over both panels; Ctrl+' (the
-    /// same key on a US layout) from inside the terminal lays it back, and the session is the
-    /// same throughout. Ctrl+O-umlaut to the files shows both panels, and back in the terminal
-    /// it is not maximized again.
+    /// Ctrl+A-umlaut (Ctrl+' on a US layout, the key `Quote` by place) on the files opens the
+    /// terminal and lays it over both panels; from inside the terminal it lays it back, and the
+    /// session is the same throughout. Ctrl+O-umlaut to the files shows both panels, and back in
+    /// the terminal it is not maximized again.
     #[tokio::test]
     async fn ctrl_ae_toggles_and_the_files_show_both_panels() {
         let root = root();
         let mut harness = Harness::headless(root.path()).await;
-        harness.press("Ctrl+\u{e4}").await;
+        harness.press("Ctrl+[Quote]").await;
         assert_eq!(view(&harness), PanelView::Terminal);
         assert_eq!(harness.app.maximized(), Some(PanelId::Left));
         let session = harness.app.engine().shown_terminal(PanelId::Left);
         assert!(session.is_some());
 
-        harness.press("Ctrl+'").await;
+        harness.press("Ctrl+[Quote]").await;
         assert_eq!(harness.app.maximized(), None, "the shell did not get it");
         assert_eq!(view(&harness), PanelView::Terminal);
-        harness.press("Ctrl+\u{e4}").await;
+        harness.press("Ctrl+[Quote]").await;
         assert_eq!(harness.app.maximized(), Some(PanelId::Left));
         assert_eq!(
             harness.app.engine().shown_terminal(PanelId::Left),
@@ -80,10 +80,10 @@ mod with_a_shell {
         );
         assert_eq!(harness.app.engine().panel_terminals(PanelId::Left).len(), 1);
 
-        harness.press("Ctrl+\u{f6}").await;
+        harness.press("Ctrl+[Semicolon]").await;
         assert_eq!(view(&harness), PanelView::Files);
         assert_eq!(harness.app.terms.maximized, None);
-        harness.press("Ctrl+\u{f6}").await;
+        harness.press("Ctrl+[Semicolon]").await;
         assert_eq!(view(&harness), PanelView::Terminal);
         assert_eq!(harness.app.maximized(), None, "both panels until asked");
     }
@@ -93,7 +93,7 @@ mod with_a_shell {
     async fn closing_the_maximized_terminal_shows_both_panels() {
         let root = root();
         let mut harness = Harness::headless(root.path()).await;
-        harness.press("Ctrl+\u{e4}").await;
+        harness.press("Ctrl+[Quote]").await;
         assert_eq!(harness.app.maximized(), Some(PanelId::Left));
         let session = harness
             .app
@@ -120,7 +120,7 @@ mod with_a_shell {
     async fn another_active_panel_shows_both_panels() {
         let root = root();
         let mut harness = Harness::headless(root.path()).await;
-        harness.press("Ctrl+\u{e4}").await;
+        harness.press("Ctrl+[Quote]").await;
         assert_eq!(harness.app.maximized(), Some(PanelId::Left));
         harness
             .app

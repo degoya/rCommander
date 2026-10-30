@@ -96,14 +96,14 @@
       "steps": [
         { "command": { "command": "panel.deselect_all", "params": { "panel": "left" } } },
         { "command": { "command": "panel.switch_active", "params": { "panel": "right" } } },
-        { "key": "Ctrl+`" }
+        { "key": "Ctrl+[Backquote]" }
       ]
     },
     {
       "name": "lister",
       "settle_ms": 1500,
       "steps": [
-        { "key": "Ctrl+`" },
+        { "key": "Ctrl+[Backquote]" },
         { "command": { "command": "panel.switch_active", "params": { "panel": "left" } } },
         { "command": { "command": "view.open", "params": { "panel": "left", "path": "README.md" } } }
       ]

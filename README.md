@@ -14,19 +14,28 @@ Rust.
   encrypted behind an optional master password.
 - Copying local to remote and remote to remote over SFTP and FTP/FTPS; multi-rename.
 - Every action is also available to AI agents through a built-in MCP server.
+- In English, German, French and Spanish.
 
 Website: <https://rcommander.net>
 
 ## Status
 
 Early development: expect rough edges and changes between releases. What each release changed
-is in [CHANGELOG.md](CHANGELOG.md). Windows comes first; Linux and macOS follow.
+is in [CHANGELOG.md](CHANGELOG.md). Every release ships for Windows, Linux and macOS.
 
 ## Download
 
 Every release is on [GitHub Releases](https://github.com/degoya/rCommander/releases), and the
-current one on [rcommander.net](https://rcommander.net). On Windows, unpack the zip anywhere and
-start `rcommander.exe`; no installer and no administrator rights are needed.
+current one on [rcommander.net](https://rcommander.net). No installer and no administrator rights
+are needed:
+
+- **Windows x64**: unpack the zip anywhere and start `rcommander.exe`.
+- **Linux x64 and arm64** (glibc 2.39 or newer, e.g. Ubuntu 24.04): unpack the tarball and start
+  `./rcommander`.
+- **macOS, Apple Silicon and Intel**: unzip it and move `rCommander.app` to *Applications*. The
+  app is not notarised, so open it the first time with a right-click and *Open*.
+
+Every release lists its files with their SHA-256 in `SHA256SUMS`.
 
 ## Documentation
 

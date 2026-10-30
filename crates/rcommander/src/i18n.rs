@@ -1,10 +1,11 @@
 //! The interface's words, by key, from the catalogues in `locales/` compiled in.
 //!
 //! Every visible string goes through a key: `t!("key")`, or [`error_text`] for a stable error
-//! code. A key is looked up in the language of the desktop ([`crate::locale::current`]) and, where
-//! that catalogue lacks it, in English; a key no catalogue has shows itself. Only English ships for
-//! now, so a second language is one more catalogue file, not a rewrite. The repo lint `i18n_keys`
-//! holds the `t!` keys and `locales/en.json` against each other.
+//! code. A key is looked up in the language of the interface ([`crate::locale::current`]:
+//! English, German, French or Spanish, RC-100-47) and, where that catalogue lacks it or holds an
+//! empty text, in English; a key no catalogue has shows itself. The repo lint `i18n_keys` holds
+//! the `t!` keys and `locales/en.json` against each other, `catalogues` every other catalogue
+//! against `en.json`.
 
 use std::{collections::HashMap, sync::OnceLock};
 
@@ -13,26 +14,36 @@ use crate::locale::{self, Lang};
 /// One language's strings, by key.
 type Catalogue = HashMap<String, String>;
 
-/// The English catalogue, read once. One that does not parse is empty and every lookup then shows
-/// its key; the tests keep that from shipping.
+/// The catalogue `text` in `cell`, parsed on first use. One that does not parse is empty and every
+/// lookup then falls back to English (or shows its key); the tests keep that from shipping.
+fn loaded(cell: &'static OnceLock<Catalogue>, text: &'static str) -> &'static Catalogue {
+    cell.get_or_init(|| serde_json::from_str(text).unwrap_or_default())
+}
+
+/// The English catalogue, every key's fallback.
 fn english() -> &'static Catalogue {
     static CATALOGUE: OnceLock<Catalogue> = OnceLock::new();
-    CATALOGUE.get_or_init(|| {
-        serde_json::from_str(include_str!("../locales/en.json")).unwrap_or_default()
-    })
+    loaded(&CATALOGUE, include_str!("../locales/en.json"))
 }
 
 /// The catalogue of `lang`.
 fn catalogue(lang: Lang) -> &'static Catalogue {
+    static GERMAN: OnceLock<Catalogue> = OnceLock::new();
+    static FRENCH: OnceLock<Catalogue> = OnceLock::new();
+    static SPANISH: OnceLock<Catalogue> = OnceLock::new();
     match lang {
         Lang::En => english(),
+        Lang::De => loaded(&GERMAN, include_str!("../locales/de.json")),
+        Lang::Fr => loaded(&FRENCH, include_str!("../locales/fr.json")),
+        Lang::Es => loaded(&SPANISH, include_str!("../locales/es.json")),
     }
 }
 
-/// `key` in `primary`, or in `fallback` where `primary` lacks it.
+/// `key` in `primary`, or in `fallback` where `primary` lacks it or holds an empty text.
 fn resolve<'a>(key: &str, primary: &'a Catalogue, fallback: &'a Catalogue) -> Option<&'a str> {
     primary
         .get(key)
+        .filter(|text| !text.is_empty())
         .or_else(|| fallback.get(key))
         .map(String::as_str)
 }

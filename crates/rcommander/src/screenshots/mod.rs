@@ -164,6 +164,8 @@ async fn prepare(plan: &Plan, profile: &Path, demo: &Path) -> Result<Setup> {
         .await
         .map_err(|error| anyhow!("the throwaway database does not open: {error}"))?;
     theme::init();
+    // The website's and the wiki's pictures are English, whatever the machine's language.
+    crate::locale::choose_setting("en");
     let engine = Engine::open(VfsPath::local(demo), VfsPath::local(demo.join("Projects")))
         .await
         .map_err(|error| anyhow!("the demo folders do not open: {}", error.code()))?;

@@ -4,6 +4,7 @@
 //! * `no_german` - Rust sources are English-only.
 //! * `no_console_window` - every spawn asks for no console window on Windows.
 //! * `i18n_keys` - every `t!` key is in `locales/en.json`, every key there is used, none twice.
+//! * `catalogues` - every translation has `en.json`'s keys and placeholders, no empty text.
 //! * `focus_ring` - every checkbox, toggler, pick list, radio group, slider and hand-drawn
 //!   button of a dialog is a stop of its focus ring.
 //!
@@ -12,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
+mod catalogues;
 mod file_length;
 mod focus_ring;
 mod i18n_keys;

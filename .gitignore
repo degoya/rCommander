@@ -12,3 +12,4 @@
 !/.claude/hooks/
 !/.claude/agents/
 .vscode
+__pycache__/

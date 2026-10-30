@@ -48,9 +48,9 @@ fn modifiers_and_characters_are_spelled_like_the_keymap() {
     );
 }
 
-/// The toggle as the owner wants it (2026-10-17, as VS Code): Ctrl+O-umlaut on a German
-/// layout, Ctrl+` on a US one - the same virtual key `VK_OEM_3`, sitting where US has `;` and
-/// left of 1 respectively. The German key left of 1 (`^`) is no toggle.
+/// The toggle on the key right of L (RC-100-48): Ctrl+O-umlaut on a German layout, Ctrl+; on a
+/// US one; the key left of 1 by place as well (owner 2026-10-29): VS Code's Ctrl+` on US, the
+/// circumflex on German - a dead key, which gives no character -, the superscript two on AZERTY.
 #[test]
 fn the_toggle_is_ctrl_oe_on_german_and_ctrl_backquote_on_us() {
     let keymap = Keymap::standard();
@@ -65,7 +65,12 @@ fn the_toggle_is_ctrl_oe_on_german_and_ctrl_backquote_on_us() {
         Physical::Code(Code::Backquote),
         Modifiers::CTRL,
     );
-    for pressed in [german_oe, us_backquote] {
+    let us_semicolon = chord(
+        &Key::Character(";".into()),
+        Physical::Code(Code::Semicolon),
+        Modifiers::CTRL,
+    );
+    for pressed in [german_oe, us_backquote, us_semicolon] {
         let command = pressed
             .clone()
             .and_then(|chord| keymap.lookup(&chord, PanelView::Terminal).cloned());
@@ -76,9 +81,22 @@ fn the_toggle_is_ctrl_oe_on_german_and_ctrl_backquote_on_us() {
         Physical::Code(Code::Backquote),
         Modifiers::CTRL,
     );
-    let command =
-        german_circumflex.and_then(|chord| keymap.lookup(&chord, PanelView::Terminal).cloned());
-    assert_eq!(command, None, "Ctrl+^ goes to the shell");
+    let german_dead = chord(
+        &Key::Unidentified,
+        Physical::Code(Code::Backquote),
+        Modifiers::CTRL,
+    );
+    let azerty_two = chord(
+        &Key::Character("\u{b2}".into()),
+        Physical::Code(Code::Backquote),
+        Modifiers::CTRL,
+    );
+    for pressed in [german_circumflex, german_dead, azerty_two] {
+        let command = pressed
+            .clone()
+            .and_then(|chord| keymap.lookup(&chord, PanelView::Terminal).cloned());
+        assert_eq!(command, toggle, "{pressed:?}");
+    }
     let new_terminal = chord(
         &Key::Character("\u{f6}".into()),
         Physical::Code(Code::Semicolon),
@@ -88,7 +106,7 @@ fn the_toggle_is_ctrl_oe_on_german_and_ctrl_backquote_on_us() {
 }
 
 /// The terminal over the whole window (RC-040-05): Ctrl+A-umlaut on a German layout, Ctrl+' on
-/// a US one - the same virtual key `VK_OEM_7`, right of the toggle's key on both.
+/// a US one - the key `Quote`, right of the toggle's key on both.
 #[test]
 fn maximize_is_ctrl_ae_on_german_and_ctrl_quote_on_us() {
     let keymap = Keymap::standard();
@@ -209,4 +227,67 @@ fn altgr_with_a_letter_it_types_nothing_for_is_ctrl_alt() {
         ),
         "^".parse::<Chord>().ok()
     );
+}
+
+/// A dead key gives iced no character - the Spanish key right of n-tilde is the acute accent -:
+/// with Ctrl it is a chord on its place and reaches the maximize; alone it starts a letter.
+#[test]
+fn a_dead_key_with_ctrl_is_a_chord_on_its_place() {
+    let quote = Physical::Code(Code::Quote);
+    let acute = chord(&Key::Unidentified, quote, Modifiers::CTRL).expect("a chord");
+    assert_eq!(acute, "Ctrl+[Quote]".parse::<Chord>().expect("a chord"));
+    assert_eq!(acute.physical, Some("Quote"));
+    assert_eq!(
+        Keymap::standard().lookup(&acute, PanelView::Terminal),
+        Some(&Command::MaximizeTerminal { panel: None })
+    );
+    assert_eq!(chord(&Key::Unidentified, quote, Modifiers::empty()), None);
+    assert_eq!(
+        chord(
+            &Key::Unidentified,
+            Physical::Code(Code::KeyQ),
+            Modifiers::CTRL
+        ),
+        None,
+        "a key no chord names by place"
+    );
+    let altgr_dead = pressed(
+        &Key::Unidentified,
+        &Key::Unidentified,
+        quote,
+        Modifiers::ALT,
+    );
+    assert_eq!(altgr_dead, "Alt+[Quote]".parse::<Chord>().ok());
+}
+
+/// A press tells its place for the keys a chord can name by it, and only for those.
+#[test]
+fn a_press_tells_its_place_for_a_layout_key_only() {
+    let semicolon = chord(
+        &Key::Character("\u{f6}".into()),
+        Physical::Code(Code::Semicolon),
+        Modifiers::CTRL,
+    );
+    assert_eq!(
+        semicolon.map(|chord| chord.physical),
+        Some(Some("Semicolon"))
+    );
+    let letter = chord(
+        &Key::Character("a".into()),
+        Physical::Code(Code::KeyA),
+        Modifiers::CTRL,
+    );
+    assert_eq!(letter.map(|chord| chord.physical), Some(None));
+}
+
+/// Off Windows no layout is asked: a key named by place reads as a US keyboard prints it.
+#[cfg(not(windows))]
+#[test]
+fn a_key_named_by_place_reads_as_on_a_us_keyboard_without_a_layout() {
+    use super::label_text;
+
+    assert_eq!(label_text("Ctrl+[Semicolon]"), "Ctrl+;");
+    assert_eq!(label_text("Ctrl+Shift+[Quote]"), "Ctrl+Shift+'");
+    assert_eq!(label_text("Ctrl+K"), "Ctrl+K");
+    assert_eq!(label_text(""), "");
 }

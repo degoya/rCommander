@@ -7,14 +7,18 @@
 //! other backend; one whose session is gone ([`SftpVfs::is_closed`]: a call found out, or the
 //! session ended) is replaced on the next use, which opens the session again. One unused for the
 //! session's idle time is dropped, so the session can close ([`kept`]). A locked vault is
-//! announced only for the window, never for an MCP call (`announce`).
+//! announced only for the window, never for an MCP call (`announce`). Whether the server folds
+//! case is probed when the backend opens, unless `sftp.case_sensitivity` says (RC-080-60).
 
 mod kept;
 
 use std::{path::Path, sync::Arc};
 
 use rc_ops::Backend;
-use rc_remote::{SftpVfs, SshError, sftp::SftpLimits};
+use rc_remote::{
+    SftpVfs, SshError,
+    sftp::{SftpCase, SftpLimits},
+};
 use rc_vfs::{BackendId, Vfs, VfsPath};
 
 pub(crate) use self::kept::KeptSftp;
@@ -23,6 +27,7 @@ use crate::{
     ConnectionId, ConnectionKind, Engine, EngineError,
     remote::{fold, location, strip_scheme},
     sessions::{ChannelLease, SessionChannel},
+    settings::{SFTP_CASE_KEY, stored_setting},
 };
 
 /// The scheme of an SFTP location.
@@ -37,6 +42,16 @@ pub fn sftp_location(name: &str, path: &Path) -> String {
 /// `target` without its `sftp://`, ignoring ASCII case; `None` when it is no SFTP location.
 pub(crate) fn strip_sftp_scheme(target: &str) -> Option<&str> {
     strip_scheme(target, SFTP_SCHEME)
+}
+
+/// The case rule of the setting `sftp.case_sensitivity`: probed (`auto`, and anything else), or
+/// as it says.
+fn case_rule(value: Option<&str>) -> SftpCase {
+    match value {
+        Some("sensitive") => SftpCase::Sensitive,
+        Some("insensitive") => SftpCase::Insensitive,
+        _ => SftpCase::Detect,
+    }
 }
 
 /// The backend of connection `id`.
@@ -74,7 +89,12 @@ impl Engine {
         let idle = names.lease.idle_close();
         let used = Use::new();
         let leases = Leases::new(vec![names.lease, files.lease], Arc::clone(&used));
-        let opened = SftpVfs::connect(names.channel, files.channel, SftpLimits::default())
+        let case = match self.db() {
+            Ok(db) => stored_setting(db, SFTP_CASE_KEY).await,
+            Err(_) => None,
+        };
+        let case = case_rule(case.as_ref().and_then(serde_json::Value::as_str));
+        let opened = SftpVfs::connect_as(names.channel, files.channel, SftpLimits::default(), case)
             .await?
             .ending_with(gone)
             .holding(Box::new(leases));
@@ -239,3 +259,7 @@ mod pair_tests;
 #[cfg(test)]
 #[path = "sftp_paths_tests.rs"]
 mod paths_tests;
+
+#[cfg(test)]
+#[path = "sftp_case_tests.rs"]
+mod case_tests;

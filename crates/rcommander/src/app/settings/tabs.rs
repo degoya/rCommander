@@ -58,6 +58,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "appearance.language",
             "appearance.theme",
             "appearance.menu_bar",
+            "appearance.macos_look",
             "appearance.function_key_bar",
             "appearance.dialog_windows",
             "appearance.gpu_loss_notice",
@@ -120,6 +121,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
         Tab::Viewer,
         &[
             "viewer.markdown_preview",
+            "viewer.markdown_select",
             "viewer.picture_megapixels",
             "viewer.dos_extensions",
             "viewer.dos_tight_lines",

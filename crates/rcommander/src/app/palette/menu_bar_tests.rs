@@ -128,23 +128,29 @@ fn the_keys_come_from_the_keymap() {
     assert_eq!(text_of(&menus, "copy").as_deref(), Some("&Copy...\tF5"));
     assert_eq!(text_of(&menus, "delete").as_deref(), Some("&Delete\tF8"));
     assert_eq!(
-        text_of(&menus, "panel.refresh").as_deref(),
-        Some("&Reread\tCtrl+R")
+        text_of(&menus, "panel.refresh"),
+        Some(format!("&Reread\t{}", crate::keymap::label_text("Ctrl+R")))
     );
     assert_eq!(
-        text_of(&menus, "disconnect").as_deref(),
-        Some("&Disconnect\tCtrl+Shift+F"),
+        text_of(&menus, "disconnect"),
+        Some(format!(
+            "&Disconnect\t{}",
+            crate::keymap::label_text("Ctrl+Shift+F")
+        )),
         "a window key"
     );
     assert_eq!(
-        text_of(&menus, "palette").as_deref(),
-        Some("&Command palette...\tCtrl+Shift+P"),
+        text_of(&menus, "palette"),
+        Some(format!(
+            "&Command palette...\t{}",
+            crate::keymap::label_text("Ctrl+Shift+P")
+        )),
         "the palette's own window key"
     );
     assert_eq!(text_of(&menus, "settings").as_deref(), Some("&Settings..."));
     assert_eq!(
-        key_of(&keymap, "file.properties").as_deref(),
-        Some("Alt+Enter")
+        key_of(&keymap, "file.properties"),
+        Some(crate::keymap::label_text("Alt+Enter"))
     );
     assert_eq!(key_of(&keymap, "no_such_name"), None);
 }

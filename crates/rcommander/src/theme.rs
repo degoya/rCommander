@@ -5,7 +5,8 @@
 //! stroke fills, `TextFillColorPrimary/Secondary`, the default accent). iced reports the system's
 //! light or dark mode ([`iced::system::theme`]); the user's accent colour comes from the registry
 //! on Windows (`system.rs`), Windows' default blue elsewhere. The setting `appearance.theme`
-//! chooses light, dark or the system's look ([`ThemeChoice`]).
+//! chooses light, dark or the system's look ([`ThemeChoice`]). On macOS `appearance.macos_look`
+//! (RC-100-49, on) draws with the Mac's colours, accent and fonts instead ([`mac_look`]).
 
 mod chrome;
 pub mod colour_rules;
@@ -18,13 +19,18 @@ pub mod fonts;
 pub mod icon;
 pub mod layout;
 mod light;
+#[cfg(target_os = "macos")]
+mod mac;
 pub mod mnemonic;
 pub mod page_tabs;
 mod syntax;
 mod system;
 pub mod wheel;
 
-use std::sync::OnceLock;
+use std::sync::{
+    OnceLock,
+    atomic::{AtomicBool, Ordering},
+};
 
 pub use chrome::{
     alternate, drive_line, drive_line_rule, header_cell, set_stripes, striped_row, tab,
@@ -89,6 +95,8 @@ const fn hex(rgb: u32, alpha: f32) -> Color {
 }
 
 static TOKENS: OnceLock<[Tokens; 2]> = OnceLock::new();
+/// `appearance.macos_look`, as the start read it: the tokens are made once.
+static MAC_LOOK: AtomicBool = AtomicBool::new(true);
 /// The system's accent for the light and the dark look, read once.
 static ACCENT: OnceLock<system::Accent> = OnceLock::new();
 
@@ -99,10 +107,22 @@ pub fn system_accent() -> [Color; 2] {
     [accent.light, accent.dark]
 }
 
-/// Reads the system's accent colour; the start calls it before the window opens, so drawing
-/// never touches the registry. Later calls change nothing.
-pub fn init() {
+/// Takes the setting `appearance.macos_look` for this run and reads the system's accent colour;
+/// the start calls it before the window opens, so drawing never touches the registry. Later
+/// calls change nothing.
+pub fn init(mac_look: bool) {
+    MAC_LOOK.store(mac_look, Ordering::Relaxed);
+    #[cfg(target_os = "macos")]
+    if mac_look {
+        mac::fonts();
+    }
     tokens(false);
+}
+
+/// Whether this run draws the Mac's look: on macOS while `appearance.macos_look` is on; the
+/// colours, the accent, the fonts and the title bar follow it.
+pub fn mac_look() -> bool {
+    cfg!(target_os = "macos") && MAC_LOOK.load(Ordering::Relaxed)
 }
 
 /// The tokens of the light or the dark look, with the system's accent; with the person's colours
@@ -113,9 +133,24 @@ pub fn tokens(dark: bool) -> &'static Tokens {
     }
     let [light, dark_tokens] = TOKENS.get_or_init(|| {
         let [light, dark] = system_accent();
-        [light::tokens(light), dark::tokens(dark)]
+        if mac_look() {
+            mac_tokens(light, dark)
+        } else {
+            [light::tokens(light), dark::tokens(dark)]
+        }
     });
     if dark { dark_tokens } else { light }
+}
+
+/// The Mac's light and dark tokens; WinUI's on other systems.
+#[cfg(target_os = "macos")]
+fn mac_tokens(light: Color, dark: Color) -> [Tokens; 2] {
+    [mac::light(light), mac::dark(dark)]
+}
+
+#[cfg(not(target_os = "macos"))]
+fn mac_tokens(light: Color, dark: Color) -> [Tokens; 2] {
+    [light::tokens(light), dark::tokens(dark)]
 }
 
 /// The look the setting `appearance.theme` chooses.
@@ -170,7 +205,8 @@ pub fn iced_theme(tokens: &Tokens) -> Theme {
 }
 
 /// The interface font: Segoe UI Variable on Windows 11, the system's sans-serif elsewhere (and
-/// on Windows 10, where the name does not resolve and cosmic-text falls back to Segoe UI).
+/// on Windows 10, where the name does not resolve and cosmic-text falls back to Segoe UI) - San
+/// Francisco on macOS with the Mac's look ([`mac_look`]).
 pub const UI_FONT: Font = if cfg!(windows) {
     Font::with_name("Segoe UI Variable")
 } else {
@@ -183,8 +219,9 @@ pub const UI_FONT_STRONG: Font = Font {
     ..UI_FONT
 };
 
-/// The monospace font: Cascadia Mono (Windows 11, Windows Terminal) where present; the
-/// terminal's and the viewer's until another is chosen ([`fonts`]).
+/// The monospace font: Cascadia Mono (Windows 11, Windows Terminal) where present, Menlo on
+/// macOS with the Mac's look; the terminal's and the viewer's until another is chosen
+/// ([`fonts`]).
 pub const MONO_FONT: Font = if cfg!(windows) {
     Font::with_name("Cascadia Mono")
 } else {

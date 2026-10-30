@@ -6,9 +6,12 @@ use super::*;
 fn an_entry_shows_its_commands_key_unless_the_keys_are_hidden() {
     let keymap = Keymap::standard();
     let close: Chord = "Ctrl+W".parse().expect("chord");
-    assert_eq!(of_command(&keymap, "tabs.close").as_deref(), Some("Ctrl+W"));
+    assert_eq!(
+        of_command(&keymap, "tabs.close"),
+        Some(crate::keymap::label_text("Ctrl+W"))
+    );
     assert_eq!(of_command(&keymap, "tabs.lock"), None, "no key of its own");
-    assert_eq!(of_chord(&close).as_deref(), Some("Ctrl+W"));
+    assert_eq!(of_chord(&close), Some(crate::keymap::label_text("Ctrl+W")));
     assert_eq!(of_text(Some("Delete")), Some("Delete"));
 
     set_shown(false);

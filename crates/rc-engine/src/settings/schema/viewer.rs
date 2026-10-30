@@ -1,5 +1,7 @@
 //! The internal viewer's switches (RC-020-09): a Markdown file opens as a formatted preview, or
 //! as text as before. On by default; not protected - an agent may switch it with `settings_set`.
+//! Whether the mouse, Ctrl+A and Ctrl+C select and copy in that preview (RC-020-14), on by
+//! default and not protected either: it reads nothing the preview does not already show.
 //! How many pixels the image view shows of a picture before it scales it down (owner,
 //! 2026-10-19); not protected either: it only trades sharpness for memory. Which files open as
 //! DOS text in code page 437, unwrapped (RC-020-11): `.nfo` and `.diz` by default. Whether
@@ -12,6 +14,8 @@ use super::{Choice, SettingKind, SettingPage, SettingSpec};
 
 /// Whether Lister and Quick View show a `.md` or `.markdown` file as a formatted preview.
 pub const MARKDOWN_PREVIEW_KEY: &str = "viewer.markdown_preview";
+/// Whether the Markdown preview selects and copies its text.
+pub const MARKDOWN_SELECT_KEY: &str = "viewer.markdown_select";
 /// The most pixels, in millions, the image view shows of a picture; a larger one is scaled down.
 pub const PICTURE_MEGAPIXELS_KEY: &str = "viewer.picture_megapixels";
 /// The extensions, without dots and separated by spaces, of the files Lister and Quick View
@@ -38,6 +42,16 @@ pub(super) const MARKDOWN_PREVIEW: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.viewer.markdown_preview",
     help: "setting.viewer.markdown_preview.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const MARKDOWN_SELECT: SettingSpec = SettingSpec {
+    key: MARKDOWN_SELECT_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.viewer.markdown_select",
+    help: "setting.viewer.markdown_select.help",
     protected: false,
     restart: false,
 };

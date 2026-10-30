@@ -4,7 +4,8 @@
 # nothing, a tree the chain would stop on - not on development, dirty, the tag taken, the
 # changelog without the version's entries, the release notes without its section - naming each;
 # a complete tree starts the pipeline detached, which writes its PID and, at the end, its exit
-# code; --resume starts without the preconditions; a chain still running is not started twice.
+# code; --resume starts without the preconditions; a chain still running is not started twice;
+# the chain finds the tools in ~/.local/bin without a profile having put it on PATH.
 # The pipeline is a stand-in that records its arguments, so no real chain can start from here.
 #
 #   scripts/tests/release-start.sh
@@ -27,6 +28,7 @@ cp "$ROOT/scripts/lib/release-tag.sh" "$ROOT/scripts/lib/release-docs.sh" "$BASE
 cat > "$BASE/scripts/release-pipeline.sh" << 'EOF'
 #!/usr/bin/env bash
 echo "$*" > "$RC_RELEASE_RUN_DIR/pipeline-args"
+echo "$PATH" > "$RC_RELEASE_RUN_DIR/pipeline-path"
 exit "${FAKE_PIPELINE_EXIT:-0}"
 EOF
 chmod +x "$BASE/scripts/release-pipeline.sh"
@@ -67,6 +69,14 @@ expect_output "naming its PID" "started, detached, as PID"
 expect "the chain ends with the pipeline's exit" 0 "$(chain_exit)"
 expect "and the pipeline got the version and --push" "9.9.9 --push" "$(cat "$RC_RELEASE_RUN_DIR/pipeline-args")"
 expect_true "the chain's output is kept" 'grep -qF "chain ended with exit 0" "$RC_RELEASE_RUN_DIR/chain.log"'
+
+mkdir -p "$SCRATCH/home"
+HOME="$SCRATCH/home" PATH="/usr/local/bin:/usr/bin:/bin" start_case no-profile ':' 9.9.9
+expect "a PATH without ~/.local/bin: the chain gets it first" "$SCRATCH/home/.local/bin" \
+    "$(chain_exit > /dev/null; cut -d: -f1 "$RC_RELEASE_RUN_DIR/pipeline-path")"
+HOME="$SCRATCH/home" PATH="$SCRATCH/home/.local/bin:/usr/bin:/bin" start_case on-path ':' 9.9.9
+expect "already on PATH: not added twice" 1 \
+    "$(chain_exit > /dev/null; tr : '\n' < "$RC_RELEASE_RUN_DIR/pipeline-path" | grep -cxF "$SCRATCH/home/.local/bin")"
 
 export FAKE_PIPELINE_EXIT=5
 start_case red ':' 9.9.9

@@ -3,7 +3,8 @@
 //! is Lister's formatted view of an HTML file; here it shows a Markdown file formatted. Ctrl++,
 //! Ctrl+- and Ctrl+0 size the text, or zoom the picture in the image view (RC-020-12). `7` steps
 //! through a plugin document's views (RC-100-10): Lister picks its modes by digit, and 7 is the
-//! one digit of that row still free here.
+//! one digit of that row still free here. Ctrl+A and Ctrl+C select and copy in the Markdown
+//! preview, as the text view's editor does in the text (RC-020-14).
 //!
 //! The keys are the viewer's while it is open, not the keymap's: they would collide with the
 //! panels' bindings (N, P, digits), and a viewer has nothing an agent could call.
@@ -60,6 +61,9 @@ pub enum ListerKey {
     /// R and Shift+R: the image turned a quarter right or left (not saved).
     RotateRight,
     RotateLeft,
+    /// Ctrl+A and Ctrl+C: all of the Markdown preview selected, the selection copied.
+    SelectAll,
+    Copy,
 }
 
 impl ListerKey {
@@ -112,6 +116,8 @@ pub fn action(chord: &Chord) -> Option<ListerKey> {
         "F3" if plain => K::FindNext,
         "F3" if shift => K::FindPrevious,
         "g" if ctrl => K::GoTo,
+        "a" if ctrl => K::SelectAll,
+        "c" if ctrl => K::Copy,
         "ArrowUp" if plain => K::Scroll(Scroll::LineUp),
         "ArrowDown" if plain => K::Scroll(Scroll::LineDown),
         "ArrowLeft" if plain => K::Scroll(Scroll::Left),

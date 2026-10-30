@@ -27,9 +27,15 @@ fn named<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
 fn the_palette_lists_every_way_in() {
     let entries = standard();
     let refresh = named(&entries, "panel.refresh");
-    assert_eq!(refresh.keys, "Ctrl+R, F2");
+    assert_eq!(
+        refresh.keys,
+        format!("{}, F2", crate::keymap::label_text("Ctrl+R"))
+    );
     assert_eq!(refresh.action, Action::Press(chord("Ctrl+R")));
-    assert_eq!(named(&entries, "sort_name").keys, "Ctrl+F3");
+    assert_eq!(
+        named(&entries, "sort_name").keys,
+        crate::keymap::label_text("Ctrl+F3")
+    );
     assert_eq!(
         named(&entries, "cmdline_insert_folder").action,
         Action::Press(chord("Ctrl+P"))

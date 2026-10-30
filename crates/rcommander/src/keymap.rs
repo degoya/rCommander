@@ -14,7 +14,12 @@
 //! keypad's grey keys are `NumAdd`, `NumSubtract`, `NumMultiply` and `NumDivide`, apart from `+`,
 //! `-`, `*` and `/` elsewhere; the `+` of the main block is `Plus`, as `+` joins a chord's parts
 //! (RC-020-12). AltGr with a letter it types nothing for is Ctrl+Alt with it ([`pressed`]).
-//! A person reads a key named by place as the active layout prints it ([`label`]).
+//! A person reads a key named by place as the active layout prints it ([`label`]). On macOS Cmd is
+//! the keymap's Ctrl and keys show as the Mac writes them, while `keys.macos_cmd_as_ctrl` is on
+//! (RC-100-49, [`set_cmd_as_ctrl`]); off, Cmd is left to the system as the Windows key is
+//! elsewhere, and Ctrl shows as the Mac's Control symbol.
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use iced::keyboard::{
     Key, Modifiers,
@@ -24,12 +29,38 @@ use rc_engine::Chord;
 
 use crate::platform::key_label;
 
+/// `keys.macos_cmd_as_ctrl`, read at the start and after every change (`settings/apply.rs`).
+static CMD_AS_CTRL: AtomicBool = AtomicBool::new(true);
+
+/// Whether Cmd is the keymap's Ctrl on macOS, as the setting says.
+pub fn set_cmd_as_ctrl(on: bool) {
+    CMD_AS_CTRL.store(on, Ordering::Relaxed);
+}
+
+/// Whether a press with Cmd counts as Ctrl: on macOS while `keys.macos_cmd_as_ctrl` is on.
+fn cmd_as_ctrl() -> bool {
+    cfg!(target_os = "macos") && CMD_AS_CTRL.load(Ordering::Relaxed)
+}
+
 /// The chord of a key press; `None` for a key no chord can name (a modifier on its own) and for
-/// any press with the Windows key, which belongs to the system.
+/// any press with the Windows key, which belongs to the system - or with Cmd, unless it is the
+/// keymap's Ctrl ([`cmd_as_ctrl`]).
 pub fn chord(key: &Key, physical: Physical, modifiers: Modifiers) -> Option<Chord> {
-    if modifiers.logo() {
+    chord_with(key, physical, modifiers, cmd_as_ctrl())
+}
+
+/// [`chord`], with `cmd_as_ctrl` saying whether the logo key - Cmd - is Ctrl (Cmd+C copies,
+/// Cmd+R refreshes; Ctrl stays Ctrl) or the system's.
+fn chord_with(
+    key: &Key,
+    physical: Physical,
+    modifiers: Modifiers,
+    cmd_as_ctrl: bool,
+) -> Option<Chord> {
+    if modifiers.logo() && !cmd_as_ctrl {
         return None;
     }
+    let ctrl = modifiers.control() || modifiers.logo();
     let code = match physical {
         Physical::Code(code) => rc_engine::physical_code(&format!("{code:?}")),
         Physical::Unidentified(_) => None,
@@ -44,11 +75,11 @@ pub fn chord(key: &Key, physical: Physical, modifiers: Modifiers) -> Option<Chor
         (Key::Character(text), _) if text.as_str() == "+" => "Plus".to_owned(),
         (Key::Character(text), _) => text.to_string(),
         // A dead key: no character, but a place.
-        (Key::Unidentified, _) if modifiers.control() || modifiers.alt() => format!("[{}]", code?),
+        (Key::Unidentified, _) if ctrl || modifiers.alt() => format!("[{}]", code?),
         _ => return None,
     };
     let mut chord = Chord::plain(&name)?;
-    chord.ctrl = modifiers.control();
+    chord.ctrl = ctrl;
     chord.shift = modifiers.shift();
     chord.alt = modifiers.alt();
     chord.physical = code;
@@ -58,7 +89,68 @@ pub fn chord(key: &Key, physical: Physical, modifiers: Modifiers) -> Option<Chor
 /// `chord` as a person reads it: a key named by place as the active keyboard layout prints it,
 /// else as a US keyboard does.
 pub fn label(chord: &Chord) -> String {
-    chord.label(key_label::character)
+    let text = chord.label(key_label::character);
+    if cfg!(target_os = "macos") {
+        mac_label(&text, cmd_as_ctrl())
+    } else {
+        text
+    }
+}
+
+/// A label as a Mac shows keys: the modifiers as symbols in Apple's order, Control, Option,
+/// Shift, Command, with no plus signs. The keymap's Ctrl is Command while `cmd` is on
+/// ([`chord`]): `Ctrl+Shift+F` is ⇧⌘F; off, it is Control: ⌃⇧F.
+pub fn mac_label(text: &str, cmd: bool) -> String {
+    let (mut ctrl, mut shift, mut alt) = (false, false, false);
+    let mut rest = text;
+    loop {
+        if let Some(after) = rest.strip_prefix("Ctrl+") {
+            ctrl = true;
+            rest = after;
+        } else if let Some(after) = rest.strip_prefix("Shift+") {
+            shift = true;
+            rest = after;
+        } else if let Some(after) = rest.strip_prefix("Alt+") {
+            alt = true;
+            rest = after;
+        } else {
+            break;
+        }
+    }
+    let key = match rest {
+        "" => "+",
+        "Plus" => "+",
+        "Enter" => "↩",
+        "Escape" => "⎋",
+        "Backspace" => "⌫",
+        "Delete" => "⌦",
+        "Tab" => "⇥",
+        "Space" => "Space",
+        "ArrowUp" | "Up" => "↑",
+        "ArrowDown" | "Down" => "↓",
+        "ArrowLeft" | "Left" => "←",
+        "ArrowRight" | "Right" => "→",
+        "PageUp" => "⇞",
+        "PageDown" => "⇟",
+        "Home" => "↖",
+        "End" => "↘",
+        other => other,
+    };
+    let mut label = String::new();
+    if ctrl && !cmd {
+        label.push('⌃');
+    }
+    if alt {
+        label.push('⌥');
+    }
+    if shift {
+        label.push('⇧');
+    }
+    if ctrl && cmd {
+        label.push('⌘');
+    }
+    label.push_str(key);
+    label
 }
 
 /// What the active layout prints on every key a chord can name by place: it changes with the

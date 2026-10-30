@@ -6,12 +6,18 @@
 //! Three of iced's defaults are drawn here instead: an image is never loaded and shows its alt
 //! text in a frame; a code block takes the theme's surface rather than iced's fixed dark one; a
 //! paragraph with links names their targets in a tooltip, a link that never opens marked so.
+//!
+//! While selecting is on (RC-020-14) each paragraph line, heading and code line is a
+//! [`Selectable`] block, numbered as `select::blocks` numbers them, and the selected bytes carry
+//! the theme's selection colour.
+
+use std::{cell::Cell, sync::Arc};
 
 use iced::{
-    Background, Border, Element, Length, Padding,
+    Background, Border, Element, Font, Length, Padding, Pixels, padding,
     widget::{
         Column, column, container,
-        markdown::{self, Highlight, Settings, Style, Text, Uri, Viewer},
+        markdown::{self, HeadingLevel, Highlight, Settings, Style, Text, Uri, Viewer},
         rich_text, scrollable,
         scrollable::{Direction, Scrollbar},
         sensor,
@@ -22,6 +28,8 @@ use super::{
     ViewerMessage, links,
     lister::Lister,
     markdown::{PreviewMessage, scroll_id},
+    select::{self, Gesture, Selection, Span},
+    selectable::Selectable,
     wrap,
 };
 use crate::{
@@ -34,13 +42,24 @@ const PADDING: f32 = 12.0;
 
 /// Lister `lister`'s preview of `items`; a clicked link comes back as a message.
 pub fn view<'a>(
-    lister: &Lister,
+    lister: &'a Lister,
     items: &'a [markdown::Item],
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let id = lister.id;
-    let shown = markdown::view_with(items, settings(tokens, lister.font()), &Look { tokens })
-        .map(move |url| wrap(ViewerMessage::Preview(id, PreviewMessage::Link(url))));
+    let look = Look {
+        tokens,
+        selection: lister.selection(),
+        next: Cell::new(0),
+    };
+    let shown =
+        markdown::view_with(items, settings(tokens, lister.font()), &look).map(move |shown| {
+            let message = match shown {
+                Shown::Link(url) => PreviewMessage::Link(url),
+                Shown::Select(gesture) => PreviewMessage::Select(gesture),
+            };
+            wrap(ViewerMessage::Preview(id, message))
+        });
     // Where it is scrolled to, so that a new text size keeps the place (RC-020-12).
     let page = scrollable(container(shown).padding(PADDING).width(Length::Fill))
         .id(scroll_id(id))
@@ -89,14 +108,79 @@ pub fn settings(tokens: &Tokens, viewer: AreaFont) -> Settings {
     settings
 }
 
-/// How the preview draws what iced's defaults would draw wrong here.
-struct Look {
-    tokens: &'static Tokens,
+/// What the preview reports: a link clicked, or the mouse selecting.
+#[derive(Debug, Clone)]
+enum Shown {
+    Link(Uri),
+    Select(Gesture),
 }
 
-impl<'a> Viewer<'a, Uri> for Look {
-    fn on_link_click(url: Uri) -> Uri {
-        url
+/// How the preview draws what iced's defaults would draw wrong here.
+struct Look<'s> {
+    tokens: &'static Tokens,
+    /// `None` while selecting is off.
+    selection: Option<&'s Selection>,
+    /// The number of the next block.
+    next: Cell<usize>,
+}
+
+impl<'a> Look<'a> {
+    /// `text` in `size`, one block a line while selecting is on.
+    fn text(
+        &self,
+        style: Style,
+        text: &Text,
+        size: Pixels,
+        font: Option<Font>,
+    ) -> Element<'a, Shown> {
+        let spans = text.spans(style);
+        // Without a hard break the block draws iced's cached spans, never a copy of them.
+        if !spans.iter().any(|span| span.text.contains('\n')) {
+            return self.block(spans, size, font);
+        }
+        let mut lines: Vec<Element<'a, Shown>> = select::lines(&spans)
+            .into_iter()
+            .map(|spans| self.block(spans.into(), size, font))
+            .collect();
+        if lines.len() == 1
+            && let Some(line) = lines.pop()
+        {
+            return line;
+        }
+        Column::with_children(lines).into()
+    }
+
+    /// One line of text, numbered and marked where it is selected.
+    fn block(&self, spans: Arc<[Span]>, size: Pixels, font: Option<Font>) -> Element<'a, Shown> {
+        let block = self.next.get();
+        self.next.set(block + 1);
+        let selection = self.selection.cloned().unwrap_or_default();
+        let len = spans.iter().map(|span| span.text.len()).sum();
+        let drawn = match selection.range_in(block, len) {
+            Some(range) => select::marked(&spans, range, selected(self.tokens)).into(),
+            None => Arc::clone(&spans),
+        };
+        let mut content = rich_text(drawn).size(size).on_link_click(Shown::Link);
+        if let Some(font) = font {
+            content = content.font(font);
+        }
+        Selectable {
+            content: content.into(),
+            spans,
+            size,
+            font,
+            block,
+            dragging: selection.dragging,
+            releases: selection.anchor_block() == Some(block),
+            on_select: Shown::Select,
+        }
+        .into()
+    }
+}
+
+impl<'a> Viewer<'a, Shown> for Look<'a> {
+    fn on_link_click(url: Uri) -> Shown {
+        Shown::Link(url)
     }
 
     /// Never loaded: the alt text in a frame.
@@ -106,9 +190,9 @@ impl<'a> Viewer<'a, Uri> for Look {
         _url: &'a Uri,
         _title: &'a str,
         alt: &Text,
-    ) -> Element<'a, Uri> {
+    ) -> Element<'a, Shown> {
         let tokens = self.tokens;
-        let alt: Element<'a, Uri> = rich_text(alt.spans(settings.style))
+        let alt: Element<'a, Shown> = rich_text(alt.spans(settings.style))
             .size(settings.text_size)
             .into();
         container(alt)
@@ -117,8 +201,41 @@ impl<'a> Viewer<'a, Uri> for Look {
             .into()
     }
 
-    fn paragraph(&self, settings: Settings, text: &Text) -> Element<'a, Uri> {
-        let shown = markdown::paragraph(settings, text, Self::on_link_click);
+    fn heading(
+        &self,
+        settings: Settings,
+        level: &'a HeadingLevel,
+        text: &'a Text,
+        index: usize,
+    ) -> Element<'a, Shown> {
+        if self.selection.is_none() {
+            return markdown::heading(settings, level, text, index, Self::on_link_click);
+        }
+        let size = match level {
+            HeadingLevel::H1 => settings.h1_size,
+            HeadingLevel::H2 => settings.h2_size,
+            HeadingLevel::H3 => settings.h3_size,
+            HeadingLevel::H4 => settings.h4_size,
+            HeadingLevel::H5 => settings.h5_size,
+            HeadingLevel::H6 => settings.h6_size,
+        };
+        // The gap iced's own heading keeps above every heading but the first.
+        let gap = if index > 0 {
+            settings.text_size / 2.0
+        } else {
+            Pixels::ZERO
+        };
+        container(self.text(settings.style, text, size, None))
+            .padding(padding::top(gap))
+            .into()
+    }
+
+    fn paragraph(&self, settings: Settings, text: &Text) -> Element<'a, Shown> {
+        let shown = if self.selection.is_some() {
+            self.text(settings.style, text, settings.text_size, None)
+        } else {
+            markdown::paragraph(settings, text, Self::on_link_click)
+        };
         let mut targets: Vec<String> = Vec::new();
         for span in text.spans(settings.style).iter() {
             if let Some(url) = &span.link
@@ -139,11 +256,15 @@ impl<'a> Viewer<'a, Uri> for Look {
         _language: Option<&'a str>,
         _code: &'a str,
         lines: &'a [Text],
-    ) -> Element<'a, Uri> {
+    ) -> Element<'a, Shown> {
         let tokens = self.tokens;
-        let lines: Column<'a, Uri> = column(lines.iter().map(|line| {
+        let font = settings.style.code_block_font;
+        let lines: Column<'a, Shown> = column(lines.iter().map(|line| {
+            if self.selection.is_some() {
+                return self.text(settings.style, line, settings.code_size, Some(font));
+            }
             rich_text(line.spans(settings.style))
-                .font(settings.style.code_block_font)
+                .font(font)
                 .size(settings.code_size)
                 .into()
         }));
@@ -181,6 +302,17 @@ fn surface(tokens: &Tokens) -> container::Style {
             radius: 4.0.into(),
         },
         ..container::Style::default()
+    }
+}
+
+/// The selected text's background: the text editor's selection colour.
+fn selected(tokens: &Tokens) -> Highlight {
+    Highlight {
+        background: Background::Color(iced::Color {
+            a: 0.35,
+            ..tokens.accent
+        }),
+        border: Border::default(),
     }
 }
 

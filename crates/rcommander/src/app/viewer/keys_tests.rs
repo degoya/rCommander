@@ -89,5 +89,11 @@ fn other_chords_do_nothing() {
     assert_eq!(key("Ctrl+1"), None);
     assert_eq!(key("Alt+N"), None);
     assert_eq!(key("Tab"), None);
-    assert_eq!(key("Ctrl+C"), None);
+    assert_eq!(key("Ctrl+X"), None);
+}
+
+#[test]
+fn ctrl_a_and_ctrl_c_select_and_copy() {
+    assert_eq!(key("Ctrl+A"), Some(ListerKey::SelectAll));
+    assert_eq!(key("Ctrl+C"), Some(ListerKey::Copy));
 }

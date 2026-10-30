@@ -163,7 +163,7 @@ async fn prepare(plan: &Plan, profile: &Path, demo: &Path) -> Result<Setup> {
     let db = Db::open(profile.join("rcommander.db"))
         .await
         .map_err(|error| anyhow!("the throwaway database does not open: {error}"))?;
-    theme::init();
+    theme::init(true);
     // The website's and the wiki's pictures are English, whatever the machine's language.
     crate::locale::choose_setting("en");
     let engine = Engine::open(VfsPath::local(demo), VfsPath::local(demo.join("Projects")))

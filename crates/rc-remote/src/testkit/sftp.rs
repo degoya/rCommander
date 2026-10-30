@@ -4,9 +4,12 @@
 //!
 //! [`SftpServe::hostile_names`] are listed in every directory before its real entries, as a
 //! hostile server would; [`SftpServe::block`] is how many names one `READDIR` answers.
+//! [`SftpServe::fold_case`] makes it a server that folds case on any disk, as OpenSSH on NTFS
+//! or APFS does (RC-080-60).
 
 use std::{
     collections::{HashMap, VecDeque},
+    ffi::{OsStr, OsString},
     fs::{self, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     path::{Component, Path, PathBuf},
@@ -32,6 +35,8 @@ pub struct SftpServe {
     pub hostile_names: Vec<String>,
     /// Names per `READDIR` answer.
     pub block: usize,
+    /// Each name of a path finds an existing entry that differs from it only in ASCII case.
+    pub fold_case: bool,
 }
 
 impl SftpServe {
@@ -43,6 +48,7 @@ impl SftpServe {
             home: "/".to_owned(),
             hostile_names: Vec::new(),
             block: 100,
+            fold_case: false,
         }
     }
 }
@@ -124,7 +130,12 @@ impl Served {
         let mut path = self.options.root.clone();
         for component in Path::new(&self.absolute(wire)).components() {
             if let Component::Normal(name) = component {
-                path.push(name);
+                let found = if self.options.fold_case {
+                    folded(&path, name)
+                } else {
+                    None
+                };
+                path.push(found.as_deref().unwrap_or(name));
             }
         }
         path
@@ -351,6 +362,25 @@ impl russh_sftp::server::Handler for Served {
     ) -> Result<Status, Self::Error> {
         done(id, make_link(&targetpath, &self.local(&linkpath)))
     }
+}
+
+/// The entry of `dir` that `name` stands for when case does not count, one that differs from it
+/// only in ASCII case; `None` when `name` itself is there or nothing matches, so it is taken as
+/// written.
+fn folded(dir: &Path, name: &OsStr) -> Option<OsString> {
+    if fs::symlink_metadata(dir.join(name)).is_ok() {
+        return None;
+    }
+    let wanted = name.to_str()?;
+    fs::read_dir(dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name())
+        .find(|found| {
+            found
+                .to_str()
+                .is_some_and(|found| found.eq_ignore_ascii_case(wanted))
+        })
 }
 
 #[cfg(unix)]

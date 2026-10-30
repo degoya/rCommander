@@ -62,6 +62,12 @@ repository, refreshed at every release: a pull request is a proposal that is app
 with credit. [CONTRIBUTING.md](CONTRIBUTING.md) explains how, and [SECURITY.md](SECURITY.md) how
 to report a vulnerability privately.
 
+## Thanks
+
+- [dogsventuring-sascha](https://github.com/dogsventuring-sascha) contributed the macOS look: the
+  menus in the system's menu bar, Cmd as the shortcut key, the Mac's colours, accent and fonts
+  and the transparent title bar.
+
 ## Licence
 
 GPL-3.0-or-later, see [LICENSE](LICENSE).

@@ -28,7 +28,7 @@ use tokio::{
 };
 
 use super::{
-    SftpLimits,
+    SftpCase, SftpLimits, case,
     error::{SftpError, into_vfs},
     path::wire_path,
     stream::TransferFile,
@@ -50,6 +50,8 @@ pub struct SftpVfs {
     files: SftpSession,
     home: PathBuf,
     pub(super) limits: SftpLimits,
+    /// Whether names that differ only in case are different names (`case.rs`).
+    case_sensitive: bool,
     /// Set once a call or a file stream found the session gone.
     lost: Arc<AtomicBool>,
     /// The SSH session's end ([`crate::SshSession::closed_signal`]), when the caller gave it.
@@ -63,6 +65,7 @@ impl fmt::Debug for SftpVfs {
         formatter
             .debug_struct("SftpVfs")
             .field("home", &self.home)
+            .field("case_sensitive", &self.case_sensitive)
             .field("lost", &self.is_closed())
             .finish_non_exhaustive()
     }
@@ -70,17 +73,34 @@ impl fmt::Debug for SftpVfs {
 
 impl SftpVfs {
     /// Starts the `sftp` subsystem on `names` and `files`, two fresh session channels of one
-    /// SSH session, and reads the home directory.
+    /// SSH session, reads the home directory and probes whether the server folds case
+    /// ([`SftpCase::Detect`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`SftpVfs::connect_as`].
+    pub async fn connect(
+        names: SshChannel,
+        files: SshChannel,
+        limits: SftpLimits,
+    ) -> Result<Self, SftpError> {
+        Self::connect_as(names, files, limits, SftpCase::Detect).await
+    }
+
+    /// As [`SftpVfs::connect`], with `case` deciding whether names that differ only in case are
+    /// different names: probed, or as the caller says. A failed probe counts as case-sensitive
+    /// and never fails the connection.
     ///
     /// # Errors
     ///
     /// The server refuses the subsystem (`sftp_unavailable`), does not answer in time
     /// (`sftp_timeout`), closes the channel (`connection_lost`) or does not speak SFTP
     /// (`sftp_protocol`).
-    pub async fn connect(
+    pub async fn connect_as(
         names: SshChannel,
         files: SshChannel,
         limits: SftpLimits,
+        case: SftpCase,
     ) -> Result<Self, SftpError> {
         let config = Config {
             request_timeout_secs: limits.request_secs(),
@@ -104,11 +124,19 @@ impl SftpVfs {
             .ok()
             .and_then(|name| name.files.into_iter().next());
         let home = crate::wire::home(home.as_ref().map(|file| file.filename.as_str()));
+        let case_sensitive = match (case, wire_path(&home)) {
+            (SftpCase::Sensitive, _) => true,
+            (SftpCase::Insensitive, _) => false,
+            (SftpCase::Detect, Ok(wire)) => case::detect(&raw, &wire).await,
+            (SftpCase::Detect, Err(_)) => true,
+        };
+        tracing::debug!(case_sensitive, ?case, "SFTP backend opened");
         Ok(Self {
             raw: Arc::new(raw),
             files,
             home,
             limits,
+            case_sensitive,
             lost: Arc::new(AtomicBool::new(false)),
             gone: None,
             _held: None,
@@ -286,7 +314,7 @@ impl Vfs for SftpVfs {
         Capabilities {
             rename_across_dirs: true,
             symlinks: true,
-            case_sensitive: true,
+            case_sensitive: self.case_sensitive,
             unix_mode: true,
             set_mtime: true,
             free_space: false,
@@ -364,4 +392,4 @@ impl Vfs for SftpVfs {
 
 #[cfg(test)]
 #[path = "vfs_tests.rs"]
-mod tests;
+pub(super) mod tests;

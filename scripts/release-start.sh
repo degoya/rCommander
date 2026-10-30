@@ -25,6 +25,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The pinned tools a user installs (docs/development.md: shellcheck through uv) sit in
+# ~/.local/bin, which a shell started without the profile lacks; the chain's check then finds an
+# older system shellcheck and fails `shellcheck-version` (0.10.0, 2026-10-30).
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
 # shellcheck source=lib/release-tag.sh
 source "$ROOT/scripts/lib/release-tag.sh"
 # shellcheck source=lib/release-docs.sh

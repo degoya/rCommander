@@ -1,6 +1,8 @@
+use std::cell::Cell;
+
 use rc_engine::{PanelId, VfsPath};
 
-use super::{link_tip, settings, view};
+use super::{Look, Selection, link_tip, select, settings, view};
 use crate::{
     app::viewer::{lister::Lister, markdown},
     i18n::t,
@@ -53,4 +55,22 @@ fn the_hostile_fixture_draws() {
     for dark in [false, true] {
         let _element = view(&lister, &preview.items, theme::tokens(dark));
     }
+}
+
+#[test]
+fn the_preview_numbers_its_blocks_as_the_parse_collects_them() {
+    let source = include_str!("../../../tests/fixtures/markdown/hostile.md");
+    let preview =
+        markdown::parse(source.as_bytes(), rc_engine::viewer::detect(b"")).expect("parses");
+    let collected = select::blocks(&preview.items);
+    let selection = Selection::default();
+    let look = Look {
+        tokens: theme::tokens(false),
+        selection: Some(&selection),
+        next: Cell::new(0),
+    };
+    let settings = settings(theme::tokens(false), theme::fonts::fonts().viewer);
+    let _element = iced::widget::markdown::view_with(&preview.items, settings, &look);
+    assert!(!collected.is_empty());
+    assert_eq!(look.next.get(), collected.len());
 }

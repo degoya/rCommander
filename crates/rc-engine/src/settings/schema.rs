@@ -5,8 +5,8 @@
 //! rows: the token is a secret (shown only to copy), the policy has its own type in `rc-mcp`;
 //! both are protected like every `mcp.*` key. The rows of one area are in `schema/<area>.rs`
 //! (fonts, layout, keys, delete, drive_line, transfers, windows, exchange, mouse, checksum, sort,
-//! viewer, mcp, plugins, colours, archive, quick_search, ftp, update, language); how a value is
-//! checked against its row is `schema/check.rs`.
+//! viewer, mcp, plugins, colours, archive, quick_search, ftp, sftp, update, language, macos); how a
+//! value is checked against its row is `schema/check.rs`.
 
 pub(super) mod archive;
 pub(super) mod backup;
@@ -25,10 +25,12 @@ mod language;
 pub(super) mod layout;
 pub(super) mod login_scripts;
 mod lookup;
+mod macos;
 mod mcp;
 mod mouse;
 mod plugins;
 mod quick_search;
+pub(super) mod sftp;
 pub(super) mod sort;
 mod ssh_agent;
 pub(super) mod terminal;
@@ -61,6 +63,7 @@ pub use keys::{
 };
 pub use language::LANGUAGE_KEY;
 pub use lookup::{is_protected, setting};
+pub use macos::{MACOS_CMD_AS_CTRL_KEY, MACOS_LOOK_KEY};
 pub use mcp::{MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY};
 pub use mouse::{CLICK_CLEARS_MARKS_KEY, TAB_DRAG_KEY};
 pub use plugins::{
@@ -266,6 +269,7 @@ pub const SETTINGS: &[SettingSpec] = &[
         restart: false,
     },
     layout::MENU_BAR,
+    macos::MACOS_LOOK,
     fonts::LIST_FONT,
     fonts::LIST_FONT_SIZE,
     fonts::NAME_CUT,
@@ -276,6 +280,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     fonts::VIEWER_FONT,
     fonts::VIEWER_FONT_SIZE,
     viewer::MARKDOWN_PREVIEW,
+    viewer::MARKDOWN_SELECT,
     viewer::PICTURE_MEGAPIXELS,
     viewer::DOS_EXTENSIONS,
     viewer::DOS_TIGHT_LINES,
@@ -381,6 +386,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     keys::UNDERLINE_ACCESS_KEYS,
     keys::CONTEXT_MENU_KEYS,
     keys::CONNECTIONS_FOCUS_LIST,
+    macos::MACOS_CMD_AS_CTRL,
     keys::KEYMAP,
     vault::IDLE_LOCK,
     vault::MAX_UNLOCKED,
@@ -478,6 +484,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     ssh_agent::AGENT_MAX_KEYS,
     backup::KEEP,
     ftp::RESOLVE_LINKS,
+    sftp::CASE,
     update::CHECK_ENABLED,
     update::CHECK_INTERVAL,
     update::CHANNEL,

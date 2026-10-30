@@ -11,6 +11,20 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.12.0
+
+- rCommander looks like a Mac app on macOS: menus in the menu bar, Cmd works as Ctrl, macOS colours and fonts with your accent colour; the settings can switch the look and Cmd back.
+- Plugins run on an updated WebAssembly engine that fixes three security flaws.
+- Thanks to dogsventuring-sascha, who contributed the Mac look.
+
+## 0.11.1
+
+- SFTP servers on Windows or macOS that ignore upper and lower case are recognised: renaming a.txt to A.TXT works there, and copying a folder into itself under another case is refused.
+
+## 0.11.0
+
+- Select and copy in the Markdown preview: drag across paragraphs, lists, tables and code, double-click a word, Ctrl+A for all, Ctrl+C copies plain text.
+
 ## 0.10.0
 
 - rCommander speaks German, French and Spanish beside English: choose the language in the settings, or leave it on Automatic to follow your system.

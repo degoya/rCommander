@@ -63,17 +63,6 @@ fn code_of<T>(result: crate::Result<T>, what: &str) -> &'static str {
 
 /// Every check, each in a directory of its own under `root`, which must exist and be empty.
 pub async fn run(vfs: &dyn Vfs, root: &Path) {
-    run_but_case(vfs, root).await;
-    let case = root.join("case");
-    vfs.mkdir(&case, false)
-        .await
-        .unwrap_or_else(|error| panic!("conformance case: mkdir: {error}"));
-    case_follows_the_capability(vfs, &case).await;
-}
-
-/// Every check but [`case_follows_the_capability`], for a test server whose disk does not match
-/// the case its backend claims (an SFTP server on APFS or NTFS).
-pub async fn run_but_case(vfs: &dyn Vfs, root: &Path) {
     let dir = |name: &str| -> PathBuf { root.join(name) };
     let checks = [
         "write_modes",
@@ -85,6 +74,7 @@ pub async fn run_but_case(vfs: &dyn Vfs, root: &Path) {
         "remove",
         "set_mtime",
         "free_space",
+        "case",
     ];
     for name in checks {
         vfs.mkdir(&dir(name), false)
@@ -100,6 +90,7 @@ pub async fn run_but_case(vfs: &dyn Vfs, root: &Path) {
     remove_files_and_directories(vfs, &dir("remove")).await;
     set_mtime_is_what_stat_reads_back(vfs, &dir("set_mtime")).await;
     free_space_when_offered(vfs, &dir("free_space")).await;
+    case_follows_the_capability(vfs, &dir("case")).await;
 }
 
 /// `CreateNew` refuses an existing file, `Append` continues it, `open_read_at` reads from an

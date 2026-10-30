@@ -87,6 +87,41 @@ rc_record_ci() {
     for image in "$@"; do printf '%s %s %s\n' "$tree" "$image" "$when" >> "$file"; done
 }
 
+# The marker of the run this machine started on public branch $1, in the public clone's git
+# directory: "<public commit> <tree> <image>...". A second public-ci.sh of the same tree - the
+# release chain's step beside a run started ahead of it - waits for that run instead of exporting
+# again: the re-push would make GitHub's concurrency group cancel the run (0.10.0, 2026-10-30).
+rc_public_ci_marker() {
+    printf '%s/rc-ci-running/%s\n' "$(git -C "$PUBLIC_DIR" rev-parse --absolute-git-dir)" "${1//\//-}"
+}
+
+# Marks public branch $1 at commit $2 as running tree $3 on the runner images $4....
+rc_public_ci_mark() {
+    local file
+    file="$(rc_public_ci_marker "$1")" || return 1
+    mkdir -p "${file%/*}" && printf '%s\n' "${*:2}" > "$file"
+}
+
+# The public commit of a run of tree $2 on public branch $1 covering the runner images $3..., when
+# this machine marked one, the branch still stands on it and none of its finished runs is red;
+# nothing and non-zero otherwise.
+rc_public_ci_running() {
+    local branch="$1" tree="$2" file sha marked images image head listed
+    shift 2
+    file="$(rc_public_ci_marker "$branch" 2> /dev/null)" && [[ -f "$file" ]] || return 1
+    read -r sha marked images < "$file"
+    [[ -n "$sha" && "$marked" == "$tree" ]] || return 1
+    for image in "$@"; do [[ " $images " == *" $image "* ]] || return 1; done
+    head="$(git -C "$PUBLIC_DIR" ls-remote origin "refs/heads/$branch" 2> /dev/null)" || return 1
+    [[ "${head%%[[:space:]]*}" == "$sha" ]] || return 1
+    listed="$(gh run list --repo "$PUBLIC_REPO" --branch "$branch" --commit "$sha" \
+        --event workflow_dispatch --json databaseId,status,conclusion,url,name \
+        --jq "$RC_PUBLIC_CI_RUN_JQ" 2> /dev/null < /dev/null)" || return 1
+    ! awk '$2 == "completed" && $3 !~ /^(success|skipped|neutral)$/ { found = 1 } END { exit !found }' <<< "$listed" \
+        || return 1
+    printf '%s\n' "$sha"
+}
+
 # Starts ci.yml on public branch $1 for the platforms in JSON list $2.
 rc_public_ci_dispatch() {
     echo "starting ci.yml on $1 for $2"
@@ -147,6 +182,8 @@ rc_public_ci_wait() {
         now="$(rc_public_ci_now)"
         if [[ "$seen" -eq 0 ]] && ((now >= deadline)); then
             echo "no CI run appeared within ${PUBLIC_CI_TIMEOUT}s; $branch is kept" >&2
+            # A run that never started is nothing the next call should wait for.
+            rm -f "$(rc_public_ci_marker "$branch" 2> /dev/null)"
             return 1
         fi
         if ((now >= ceiling)); then
@@ -157,9 +194,17 @@ rc_public_ci_wait() {
     done
 }
 
-# Deletes branch $1 from the public repository and from the local clone.
+# Deletes branch $1 from the public repository and from the local clone, and its run's marker. A
+# branch already gone - deleted by the other call that waited for the same run - is no failure.
 rc_public_ci_delete() {
-    git -C "$PUBLIC_DIR" push --quiet origin --delete "$1" || return 1
+    local status=0
+    rm -f "$(rc_public_ci_marker "$1" 2> /dev/null)"
+    git -C "$PUBLIC_DIR" ls-remote --exit-code --heads origin "refs/heads/$1" > /dev/null 2>&1 || status=$?
+    case "$status" in
+        0) git -C "$PUBLIC_DIR" push --quiet origin --delete "$1" || return 1 ;;
+        2) ;;
+        *) return 1 ;;
+    esac
     # Before the first release the clone has no main to return to and still stands on the
     # branch; its local ref then stays until the next export.
     git -C "$PUBLIC_DIR" branch -D "$1" > /dev/null 2>&1 || true

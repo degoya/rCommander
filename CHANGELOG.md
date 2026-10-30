@@ -5,6 +5,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-30
+
+### Changed
+
+- **A Mac look on macOS**: the menus sit in the system's menu bar (muda's `NSMenu`, with the
+  application menu - About, Settings on Cmd+, , Services, Hide, Quit - and the Window menu) instead
+  of the bar rCommander draws (`DRAWN` is now Linux only); entries carry no key equivalent, so the
+  keymap's keys and the text fields' Cmd+C still reach the window. Cmd acts as the keymap's Ctrl
+  (Cmd+R refreshes, Cmd+Shift+P opens the palette; Ctrl still works) and keys show as the Mac
+  writes them (Cmd+Shift+F as ⇧⌘F). The colours are macOS's greys for light and dark mode with the
+  accent chosen in System Settings (`AppleAccentColor`), the interface font is San Francisco and
+  the monospace font Menlo. The main window's title bar is transparent over the content, with the
+  traffic lights on the window's own surface (Finder's look); the content keeps their height free.
+  Two settings, both on, switch it (RC-100-49): `appearance.macos_look` (at the next start) gives
+  macOS the look of the other systems - WinUI's colours with the default accent, the default fonts
+  and the system's title bar - while the menus stay in the system's menu bar;
+  `keys.macos_cmd_as_ctrl` (at once) leaves Cmd to the system, so only Ctrl is the keymap's Ctrl
+  and keys show with the Control symbol (⌃⇧F). Contributed by dogsventuring-sascha (PR #2).
+
+### Fixed
+
+- **wasmtime 49.0.5**: the plugin host's Wasmtime is raised from 49.0.4 to 49.0.5 in
+  `Cargo.lock` (cranelift 0.136.5), which fixes RUSTSEC-2026-0422 (typed functions with `i31` or
+  `nullref` arguments may panic), RUSTSEC-2026-0423 (cross-engine type confusion with host-created
+  struct types) and RUSTSEC-2026-0424 (unchecked memory use when borrowed resources move between
+  components); `cargo deny` on GitHub refused the old version.
+
+## [0.11.1] - 2026-10-30
+
+### Fixed
+
+- **An SFTP server that folds case is treated as one**: when the backend opens it `stat`s the
+  home directory as named and with one name in the other case, both at once (one round trip,
+  nothing written); the same object means the server folds case, as OpenSSH on NTFS or APFS
+  does, and an error or a home without a letter keeps it case-sensitive. Copying `Data` into
+  `data/sub` is refused there and a rename that only changes the case goes through a temporary
+  name; the setting `sftp.case_sensitivity` (`auto`, `sensitive`, `insensitive`) overrides the
+  probe. The SFTP conformance test runs its case check again on every disk, and the test server
+  can fold case (RC-080-60).
+
+## [0.11.0] - 2026-10-30
+
+### Added
+
+- **Selecting and copying in the Markdown preview** (RC-020-14): the mouse selects across
+  paragraphs, headings, list items, table cells and code lines; Shift+click extends, a double
+  click takes a word, a triple click a line; Ctrl+A selects all and Ctrl+C copies the selection
+  as plain text, one line a block. iced's `rich_text` is drawn unchanged inside a `Selectable`
+  wrapper (`viewer/selectable.rs`) that hit-tests a paragraph of its own; the blocks' text is
+  collected with the parse by the same `markdown::view_with` pass (`viewer/select.rs`). The new
+  setting `viewer.markdown_select` (on) turns it off.
+
 ## [0.10.0] - 2026-10-30
 
 ### Added

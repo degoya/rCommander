@@ -5,7 +5,8 @@
 //! starts the `sftp` subsystem on each: one carries the requests on names (listings, `stat`,
 //! `mkdir`, `rename`, removals, attributes), the other the file streams, so a long transfer never
 //! holds up a listing. The home directory (`realpath(".")`) is read once and is where a panel
-//! starts.
+//! starts. Whether the server folds case is probed once on the home directory (`case.rs`,
+//! [`SftpCase`]), unless the caller says.
 //!
 //! Paths are absolute POSIX paths on the server, whatever the local platform writes; `..` is not
 //! resolved here and a name holding NUL is refused before it is sent.
@@ -19,6 +20,7 @@
 //! when a file stream finds the channel closed (`stream.rs`), so an interrupted transfer resumes on
 //! a new session (RC-060-07). The server's own error texts never reach a message.
 
+mod case;
 mod change;
 mod error;
 mod listing;
@@ -29,6 +31,7 @@ mod vfs;
 
 use std::time::Duration;
 
+pub use case::SftpCase;
 pub use error::{SFTP_LISTING_TOO_LARGE, SFTP_PROTOCOL, SFTP_TIMEOUT, SFTP_UNAVAILABLE, SftpError};
 pub use vfs::SftpVfs;
 

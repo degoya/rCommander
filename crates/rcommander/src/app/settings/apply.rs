@@ -1,14 +1,16 @@
 //! What the window applies at once when a setting changes - the theme, the stripes, the fonts,
 //! the colours (RC-100-43),
-//! the menu bar, the drive lines, the keys (RC-100-21) - and the light or dark look. Split from `settings.rs` to keep it
+//! the menu bar, the drive lines, the keys (RC-100-21) and whether Cmd is Ctrl on macOS
+//! (RC-100-49) - and the light or dark look. Split from `settings.rs` to keep it
 //! under 500 lines (RC-100-09).
 
 use iced::{Task, system, theme::Mode as SystemMode};
 use rc_engine::Keymap;
 use rc_engine::settings::{
     ALTERNATE_ROWS_KEY, DOS_TIGHT_LINES_KEY, KEYMAP_KEY, LIST_FONT_KEY, LIST_FONT_SIZE_KEY,
-    MARK_HIDDEN_KEY, MENU_BAR_KEY, NAME_CUT_KEY, NAME_TIP_DELAY_KEY, TERMINAL_FONT_KEY,
-    TERMINAL_FONT_SIZE_KEY, THEME_KEY, VIEWER_FONT_KEY, VIEWER_FONT_SIZE_KEY,
+    MACOS_CMD_AS_CTRL_KEY, MARK_HIDDEN_KEY, MENU_BAR_KEY, NAME_CUT_KEY, NAME_TIP_DELAY_KEY,
+    TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY, THEME_KEY, VIEWER_FONT_KEY, VIEWER_FONT_SIZE_KEY,
+    stored_bool,
 };
 
 use super::{SettingsMessage, colours_page, save, wrap};
@@ -32,7 +34,7 @@ impl App {
         if key == MENU_BAR_KEY {
             return vec![Effect::Task(self.menu_bar_task())];
         }
-        if key == KEYMAP_KEY {
+        if key == KEYMAP_KEY || key == MACOS_CMD_AS_CTRL_KEY {
             return vec![Effect::Task(self.keymap_task())];
         }
         if drive_bar::line_concerns(key) {
@@ -93,10 +95,19 @@ impl App {
         })
     }
 
-    /// Reads the keymap in force: the standard with the stored deviations (RC-100-21).
+    /// Reads the keymap in force: the standard with the stored deviations (RC-100-21); and
+    /// whether Cmd is Ctrl on macOS (RC-100-49), taken before the keymap comes back, so the
+    /// keys and their labels change together.
     fn keymap_task(&self) -> Task<Message> {
         let engine = self.engine.clone();
-        Task::perform(async move { engine.keymap().await }, |keymap| {
+        let db = self.db.clone();
+        let read = async move {
+            if let Some(db) = db {
+                crate::keymap::set_cmd_as_ctrl(stored_bool(&db, MACOS_CMD_AS_CTRL_KEY).await);
+            }
+            engine.keymap().await
+        };
+        Task::perform(read, |keymap| {
             wrap(SettingsMessage::Keymap(Box::new(keymap)))
         })
     }

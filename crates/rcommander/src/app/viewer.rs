@@ -33,6 +33,8 @@ mod picture;
 mod plugin;
 mod quick;
 mod run;
+mod select;
+mod selectable;
 mod spans;
 mod text_size;
 mod tree;
@@ -463,8 +465,11 @@ impl App {
             return None;
         }
         let key = keys::action(chord)?;
-        // With the text size keys off, Ctrl+NumAdd and Ctrl+NumSubtract are the panel's again.
-        let given_back = key.sizes_text() && !self.viewers.text_zoom.enabled;
+        // With the text size keys off, Ctrl+NumAdd and Ctrl+NumSubtract are the panel's again;
+        // Ctrl+A and Ctrl+C are, unless a preview selects.
+        let given_back = (key.sizes_text() && !self.viewers.text_zoom.enabled)
+            || (matches!(key, ListerKey::SelectAll | ListerKey::Copy)
+                && lister.selection().is_none());
         if given_back
             || matches!(
                 key,

@@ -205,7 +205,7 @@ pub fn relabel(id: window::Id, menus: Vec<BarMenu>) -> Task<()> {
                                 _ => None,
                             });
                     if let Some(text) = text {
-                        item.set_text(text);
+                        item.set_text(entry_text(text));
                     }
                 }
             }
@@ -239,17 +239,21 @@ fn forward(event: MenuEvent) {
     }
 }
 
-/// The muda menu of `menus` and its menus, to grey them out.
+/// The muda menu of `menus` and its menus, to grey them out. On macOS the bar starts with the
+/// application menu and ends with the Window menu, as every Mac app's does; those two stay
+/// enabled while a dialog is open.
 fn build(menus: &[BarMenu]) -> muda::Result<(Menu, Vec<Submenu>)> {
     let bar = Menu::new();
     let mut submenus = Vec::with_capacity(menus.len());
+    #[cfg(target_os = "macos")]
+    bar.append(&macos::app_menu(menus)?)?;
     for menu in menus {
         let submenu = Submenu::new(&menu.title, true);
         for item in &menu.items {
             match item {
                 // No accelerator: the key stays the keymap's, the text after the tab shows it.
                 BarItem::Entry { id, text } => {
-                    submenu.append(&MenuItem::with_id(*id, text, true, None))?;
+                    submenu.append(&MenuItem::with_id(*id, entry_text(text), true, None))?;
                 }
                 BarItem::Separator => submenu.append(&PredefinedMenuItem::separator())?,
             }
@@ -257,7 +261,78 @@ fn build(menus: &[BarMenu]) -> muda::Result<(Menu, Vec<Submenu>)> {
         bar.append(&submenu)?;
         submenus.push(submenu);
     }
+    #[cfg(target_os = "macos")]
+    bar.append(&macos::window_menu()?)?;
     Ok((bar, submenus))
+}
+
+/// An entry's text as the system menu shows it: on macOS without the key after the tab - an
+/// `NSMenuItem` prints the tab, and a key equivalent would take the key from the window (the
+/// keymap's keys, and the text fields' Cmd+C, must reach rCommander).
+fn entry_text(text: &str) -> &str {
+    if cfg!(target_os = "macos") {
+        text.split('\t').next().unwrap_or(text)
+    } else {
+        text
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos {
+    use muda::{AboutMetadata, MenuItem, PredefinedMenuItem, Submenu};
+
+    use crate::i18n::t;
+
+    use super::{BarItem, BarMenu, entry_text};
+
+    /// The application menu: About, the settings (the bar's own `settings` entry, Cmd+,),
+    /// Services, Hide, Hide Others, Show All and Quit. macOS titles it with the app's name.
+    pub(super) fn app_menu(menus: &[BarMenu]) -> muda::Result<Submenu> {
+        let app = Submenu::new("rCommander", true);
+        let about = AboutMetadata {
+            name: Some("rCommander".to_owned()),
+            version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+            license: Some("GPL-3.0-or-later".to_owned()),
+            website: Some("https://rcommander.net".to_owned()),
+            ..AboutMetadata::default()
+        };
+        app.append(&PredefinedMenuItem::about(None, Some(about)))?;
+        app.append(&PredefinedMenuItem::separator())?;
+        let settings = menus
+            .iter()
+            .flat_map(|menu| &menu.items)
+            .find_map(|item| match item {
+                BarItem::Entry { id, text } if *id == "settings" => {
+                    Some(entry_text(text).to_owned())
+                }
+                _ => None,
+            });
+        if let Some(text) = settings {
+            let comma = "cmd+comma".parse().ok();
+            app.append(&MenuItem::with_id("settings", text, true, comma))?;
+            app.append(&PredefinedMenuItem::separator())?;
+        }
+        app.append(&PredefinedMenuItem::services(None))?;
+        app.append(&PredefinedMenuItem::separator())?;
+        app.append(&PredefinedMenuItem::hide(None))?;
+        app.append(&PredefinedMenuItem::hide_others(None))?;
+        app.append(&PredefinedMenuItem::show_all(None))?;
+        app.append(&PredefinedMenuItem::separator())?;
+        app.append(&PredefinedMenuItem::quit(None))?;
+        Ok(app)
+    }
+
+    /// The Window menu: minimise, zoom, full screen, and the windows macOS lists itself.
+    pub(super) fn window_menu() -> muda::Result<Submenu> {
+        let window = Submenu::new(t!("macos.window_menu"), true);
+        window.append(&PredefinedMenuItem::minimize(None))?;
+        window.append(&PredefinedMenuItem::maximize(None))?;
+        window.append(&PredefinedMenuItem::fullscreen(None))?;
+        window.append(&PredefinedMenuItem::separator())?;
+        window.append(&PredefinedMenuItem::bring_all_to_front(None))?;
+        window.set_as_windows_menu_for_nsapp();
+        Ok(window)
+    }
 }
 
 /// The mnemonic of a label: the character after its `&` (`&&` is an ampersand), in lower case.
@@ -280,7 +355,14 @@ fn attach_to(window: &dyn window::Window, menu: &Menu, look: Look, letters: Vec<
     super::windows::menu_bar::attach(window, menu, look, letters)
 }
 
-#[cfg(not(windows))]
+/// macOS: the bar is the system's menu bar for the whole app; it stays whatever the look.
+#[cfg(target_os = "macos")]
+fn attach_to(_window: &dyn window::Window, menu: &Menu, _look: Look, _letters: Vec<char>) -> bool {
+    menu.init_for_nsapp();
+    true
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn attach_to(_window: &dyn window::Window, _menu: &Menu, _look: Look, _letters: Vec<char>) -> bool {
     false
 }

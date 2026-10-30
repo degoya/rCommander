@@ -51,6 +51,11 @@ A key written like **Ctrl+\u00d6 / Ctrl+;** is one key, named by where it sits: 
 is Ctrl+\u00d6 on a German keyboard, Ctrl+; on a US one and Ctrl+\u00d1 on a Spanish one, also after
 you switch the layout; **Ctrl+^ / Ctrl+`** is the key left of 1 (Ctrl+\u00b2 on a French keyboard).
 The menus and the palette show what your layout prints on it.
+
+On macOS **Cmd** does what Ctrl does (Cmd+R refreshes, Cmd+Shift+P opens the palette; Ctrl still
+works), and the menus and the palette write the keys as the Mac does: Ctrl+Shift+F is \u21e7\u2318F.
+**Settings > Keyboard > Cmd works as Ctrl on macOS** turns that off: Cmd is left to the system and
+Ctrl shows as \u2303.
 """
 
 # The keys a chord names by where they sit (crates/rc-engine/src/keymap/physical.rs, written

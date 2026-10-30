@@ -1,7 +1,8 @@
 //! The system's accent colour, as WinUI uses it: Windows keeps a palette of eight shades of the
 //! user's accent (`AccentPalette`, `HKCU\...\Explorer\Accent`, eight RGBA quadruples from
 //! lightest to darkest); a light theme draws with the first darker shade, a dark theme with the
-//! second lighter one. Elsewhere, or when the value is missing or malformed, Windows' default
+//! second lighter one. On macOS with the Mac's look the accent chosen in System Settings
+//! (`AppleAccentColor`). Elsewhere, or when the value is missing or malformed, Windows' default
 //! blue. The light or dark mode itself comes from iced ([`iced::system::theme`]), which follows
 //! Windows' `AppsUseLightTheme` and its changes while the app runs.
 
@@ -29,8 +30,13 @@ pub const DEFAULT_ACCENT: Accent = Accent {
 const LIGHT_SHADE: usize = 4;
 const DARK_SHADE: usize = 1;
 
-/// This user's accent; read once at the start.
+/// This user's accent; read once at the start. On macOS with the Mac's look the one chosen in
+/// System Settings; without it Windows' default blue, as on Linux (RC-100-49).
 pub fn accent() -> Accent {
+    #[cfg(target_os = "macos")]
+    if super::mac_look() {
+        return mac_accent();
+    }
     #[cfg(windows)]
     let palette = windows::accent_palette();
     #[cfg(not(windows))]
@@ -54,4 +60,32 @@ pub fn from_palette(bytes: &[u8]) -> Option<Accent> {
         light: shade(LIGHT_SHADE),
         dark: shade(DARK_SHADE),
     })
+}
+
+/// macOS: the accent chosen in System Settings, Appearance (`AppleAccentColor` in the global
+/// domain; missing = multicolour, which draws blue), as `controlAccentColor` is for a light and a
+/// dark background.
+#[cfg(target_os = "macos")]
+fn mac_accent() -> Accent {
+    // console-window: allow (macOS opens no console window for a spawned program)
+    let chosen = std::process::Command::new("/usr/bin/defaults")
+        .args(["read", "-g", "AppleAccentColor"])
+        .output()
+        .ok()
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .and_then(|text| text.trim().parse::<i32>().ok());
+    let (light, dark) = match chosen {
+        Some(-1) => (0x8C8C8C, 0x989898), // graphite
+        Some(0) => (0xE0383E, 0xFF5257),  // red
+        Some(1) => (0xF7821B, 0xF7821B),  // orange
+        Some(2) => (0xFCB827, 0xFFC600),  // yellow
+        Some(3) => (0x62BA46, 0x62BA46),  // green
+        Some(5) => (0x953D96, 0xA550A7),  // purple
+        Some(6) => (0xF74F9E, 0xF74F9E),  // pink
+        _ => (0x007AFF, 0x0A84FF),        // blue
+    };
+    Accent {
+        light: hex(light, 1.0),
+        dark: hex(dark, 1.0),
+    }
 }

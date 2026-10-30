@@ -6,7 +6,9 @@
 # starts ci.yml there by hand for the runner images no recorded green covers, waits, records the
 # green per image and tree, and deletes the public branch. On red it prints the failed jobs' lines
 # that say what broke (scripts/ci-log.sh) and the branch stays, so the run can be read next to its
-# tree; the next export of the same name replaces it.
+# tree; the next export of the same name replaces it. A run of the same tree that another call on
+# this machine started, still going or green, is waited for instead of exported again - the
+# release chain's step beside a run started ahead of it (scripts/lib/public-ci.sh, the marker).
 #
 # A wave's integration branch runs this on Windows before it is merged into development (the
 # `wave` skill); the release pipeline runs the candidate as ci/<version> (RC-100-32).
@@ -97,12 +99,20 @@ if [[ ${#missing[@]} -eq 0 ]]; then
 fi
 
 rc_public_ci_gh_ready || exit 2
-"$ROOT/scripts/export-public.sh" "$version" --ref "$commit" --branch "$public_branch" --skip-push-ci \
-    || { echo "!! the export of $public_branch failed; nothing was run" >&2; exit 1; }
-sha="$(git -C "$PUBLIC_DIR" rev-parse --verify --quiet "refs/heads/$public_branch")" \
-    || { echo "!! the export left no $public_branch in $PUBLIC_DIR" >&2; exit 1; }
-rc_public_ci_dispatch "$public_branch" "$(rc_public_ci_json "${missing[@]}")" \
-    || { echo "!! ci.yml could not be started on $public_branch" >&2; exit 1; }
+# A run of this tree that another call started from this machine and that is still going (or
+# green) is waited for, not exported again: the re-push would cancel it.
+if sha="$(rc_public_ci_running "$public_branch" "$tree" "${missing[@]}")"; then
+    echo "==> a run of this tree is already on $public_branch (${sha:0:12}); waiting for it instead of exporting again"
+else
+    "$ROOT/scripts/export-public.sh" "$version" --ref "$commit" --branch "$public_branch" --skip-push-ci \
+        || { echo "!! the export of $public_branch failed; nothing was run" >&2; exit 1; }
+    sha="$(git -C "$PUBLIC_DIR" rev-parse --verify --quiet "refs/heads/$public_branch")" \
+        || { echo "!! the export left no $public_branch in $PUBLIC_DIR" >&2; exit 1; }
+    rc_public_ci_dispatch "$public_branch" "$(rc_public_ci_json "${missing[@]}")" \
+        || { echo "!! ci.yml could not be started on $public_branch" >&2; exit 1; }
+    rc_public_ci_mark "$public_branch" "$sha" "$tree" "${missing[@]}" \
+        || echo "!! no marker for the run on $public_branch; a second call would export again" >&2
+fi
 if ! rc_public_ci_wait "$public_branch" "$sha"; then
     # What broke, from the failed jobs' logs; the run itself goes on on GitHub.
     if [[ -n "$RC_PUBLIC_CI_RED_RUN" ]]; then

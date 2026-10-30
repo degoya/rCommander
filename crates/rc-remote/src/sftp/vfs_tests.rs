@@ -18,14 +18,15 @@ use crate::{
     },
 };
 
-/// A server, the directory it serves as `/`, and the session the backend runs on.
-struct Fixture {
+/// A server, the directory it serves as `/`, and the session the backend runs on; the case
+/// probe's tests use it too (`case_tests.rs`).
+pub(crate) struct Fixture {
     server: TestServer,
-    root: tempfile::TempDir,
+    pub(crate) root: tempfile::TempDir,
 }
 
 impl Fixture {
-    async fn start(adjust: impl FnOnce(&mut SftpServe)) -> Self {
+    pub(crate) async fn start(adjust: impl FnOnce(&mut SftpServe)) -> Self {
         let root = tempfile::tempdir().expect("served directory");
         let mut serve = SftpServe::new(root.path());
         adjust(&mut serve);
@@ -37,11 +38,11 @@ impl Fixture {
         Self { server, root }
     }
 
-    fn local(&self, name: &str) -> std::path::PathBuf {
+    pub(crate) fn local(&self, name: &str) -> std::path::PathBuf {
         self.root.path().join(name)
     }
 
-    async fn session(&self) -> SshSession {
+    pub(crate) async fn session(&self) -> SshSession {
         let target = SshTarget {
             host: "127.0.0.1".to_owned(),
             port: self.server.port,
@@ -71,22 +72,24 @@ impl Fixture {
         (vfs, session)
     }
 
-    async fn vfs(&self) -> (SftpVfs, SshSession) {
+    pub(crate) async fn vfs(&self) -> (SftpVfs, SshSession) {
         self.vfs_with(SftpLimits::default()).await
     }
 }
 
+/// The case check holds against what the probe found: case-sensitive on ext4, folding on APFS
+/// or NTFS; `case_tests.rs` runs it on a server that folds case on any disk.
 #[tokio::test]
 async fn sftp_conforms() {
-    let fixture = Fixture::start(|_| {}).await;
+    let fixture = Fixture::start(|serve| serve.home = "/conformance".to_owned()).await;
     std::fs::create_dir(fixture.local("conformance")).expect("root");
     let (vfs, _session) = fixture.vfs().await;
-    // `SftpVfs` claims a case-sensitive server; a served APFS or NTFS directory is not one.
-    if crate::ftp::test_server::case_sensitive(fixture.root.path()) {
-        conformance::run(&vfs, Path::new("/conformance")).await;
-    } else {
-        conformance::run_but_case(&vfs, Path::new("/conformance")).await;
-    }
+    assert_eq!(
+        vfs.capabilities().case_sensitive,
+        crate::ftp::test_server::case_sensitive(fixture.root.path()),
+        "the probe tells the served disk"
+    );
+    conformance::run(&vfs, Path::new("/conformance")).await;
 }
 
 #[tokio::test]

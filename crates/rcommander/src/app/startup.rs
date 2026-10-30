@@ -16,7 +16,10 @@ use iced::{Task, system, window};
 use rc_db::Db;
 use rc_engine::{
     Command, Engine, EngineError, Keymap, Outcome, VfsPath,
-    settings::{LANGUAGE_KEY, LEFT_START_KEY, RIGHT_START_KEY, THEME_KEY, stored_setting},
+    settings::{
+        LANGUAGE_KEY, LEFT_START_KEY, MACOS_CMD_AS_CTRL_KEY, MACOS_LOOK_KEY, RIGHT_START_KEY,
+        THEME_KEY, stored_bool, stored_setting,
+    },
 };
 use rc_vault::Vault;
 
@@ -127,8 +130,17 @@ async fn prepare() -> Result<Setup, EngineError> {
         // graphics device beside them.
         rc_db::install_diagnostics_with(db, crate::gpu_loss::layer());
     }
-    // The accent colour, found off the UI thread.
-    theme::init();
+    // The Mac's look and its Cmd key (RC-100-49), before the first text and the first key; then
+    // the accent colour, found off the UI thread.
+    let (mac_look, cmd_as_ctrl) = match &db {
+        Some(db) => (
+            stored_bool(db, MACOS_LOOK_KEY).await,
+            stored_bool(db, MACOS_CMD_AS_CTRL_KEY).await,
+        ),
+        None => (true, true),
+    };
+    crate::keymap::set_cmd_as_ctrl(cmd_as_ctrl);
+    theme::init(mac_look);
     let home = start_directory();
     let left = VfsPath::local(start_folder(db.as_ref(), LEFT_START_KEY, &home).await);
     let right = VfsPath::local(start_folder(db.as_ref(), RIGHT_START_KEY, &home).await);
@@ -308,6 +320,15 @@ impl App {
         window.icon = super::settings::window_icon();
         // Its X asks first: the tabs and the places are stored before the app ends.
         window.exit_on_close_request = false;
+        // macOS with the Mac's look: one surface from the top edge, the traffic lights over it,
+        // as Finder's (`view.rs` keeps the title bar's height free); without it the system's
+        // title bar (RC-100-49).
+        #[cfg(target_os = "macos")]
+        if theme::mac_look() {
+            window.platform_specific.title_hidden = true;
+            window.platform_specific.titlebar_transparent = true;
+            window.platform_specific.fullsize_content_view = true;
+        }
         let (main, opened) = window::open(window);
         let mut app = Self::new(setup.engine, setup.keymap);
         app.dialog_windows = DialogWindows::new(main, setup.dialogs);

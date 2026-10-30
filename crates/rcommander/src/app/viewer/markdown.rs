@@ -9,6 +9,9 @@
 //! before it, raw HTML is turned into text ([`html_as_text`]), because iced would drop it
 //! silently - it is shown, never rendered. Nothing is fetched: an image shows its alt text
 //! (`markdown_view.rs`), and a link opens only on a click through `links.rs`.
+//!
+//! While `viewer.markdown_select` is on, the text of the preview's blocks is collected with the
+//! parse, and the mouse, Ctrl+A and Ctrl+C select and copy it (`select.rs`, RC-020-14).
 
 use std::{borrow::Cow, sync::Arc};
 
@@ -24,7 +27,7 @@ use pulldown_cmark::{Event, Options, Parser};
 use rc_db::Db;
 use rc_engine::{
     VfsPath,
-    settings::{MARKDOWN_PREVIEW_KEY, stored_bool},
+    settings::{MARKDOWN_PREVIEW_KEY, MARKDOWN_SELECT_KEY, stored_bool},
     viewer::{Detected, FileWindow, ViewMode, encoding},
 };
 
@@ -33,6 +36,7 @@ use super::{
     keys::{ListerKey, Scroll},
     links,
     lister::{Lister, Request},
+    select::{self, Gesture, Selection},
     wrap,
 };
 use crate::{
@@ -63,12 +67,11 @@ pub enum Markdown {
     #[default]
     Text,
     /// Being read and parsed; shown once ready while `show` holds.
-    Asked {
-        show: bool,
-    },
+    Asked { show: bool },
     Ready {
         preview: Preview,
         shown: bool,
+        selection: Selection,
     },
 }
 
@@ -76,6 +79,8 @@ pub enum Markdown {
 #[derive(Debug, Clone)]
 pub struct Preview {
     pub items: Vec<Item>,
+    /// The text of each block, while selecting is on (`select::blocks`).
+    pub blocks: Option<Vec<String>>,
 }
 
 /// A message of the preview.
@@ -89,6 +94,8 @@ pub enum PreviewMessage {
     LinkOpened(bool),
     /// The preview scrolled to this share of the way down (RC-020-12).
     Scrolled(f32),
+    /// The mouse selecting (RC-020-14).
+    Select(Gesture),
 }
 
 /// The options iced's parser runs with: the HTML found here is the HTML it would see.
@@ -140,37 +147,45 @@ pub fn parse(bytes: &[u8], detected: Detected) -> Result<Preview, &'static str> 
     let text = html_as_text(&text).ok_or("markdown_broken")?;
     Ok(Preview {
         items: markdown::parse(&text).collect(),
+        blocks: None,
     })
 }
 
 /// The preview of `file`, read and parsed off the UI thread; `None` while the setting is off,
-/// unless `forced` by the key.
+/// unless `forced` by the key. Its blocks' text comes along while selecting is on.
 pub async fn render(
     file: Arc<FileWindow>,
     detected: Detected,
     db: Option<Db>,
     forced: bool,
 ) -> Result<Option<Preview>, &'static str> {
-    if !forced && !preview_on(db).await {
+    if !forced && !setting_on(db.clone(), MARKDOWN_PREVIEW_KEY).await {
         return Ok(None);
     }
+    let selecting = setting_on(db, MARKDOWN_SELECT_KEY).await;
     if file.size() > PREVIEW_LIMIT {
         return Err("markdown_too_large");
     }
     let len = usize::try_from(file.size()).map_err(|_| "markdown_too_large")?;
     let bytes = file.read_uncached(0, len).await.map_err(|e| e.code())?;
-    tokio::task::spawn_blocking(move || parse(&bytes, detected))
-        .await
-        .map_err(|_| "markdown_broken")?
-        .map(Some)
+    tokio::task::spawn_blocking(move || {
+        let mut preview = parse(&bytes, detected)?;
+        if selecting {
+            preview.blocks = Some(select::blocks(&preview.items));
+        }
+        Ok(preview)
+    })
+    .await
+    .map_err(|_| "markdown_broken")?
+    .map(Some)
 }
 
-/// `viewer.markdown_preview`; on without a database, as its default is.
-async fn preview_on(db: Option<Db>) -> bool {
+/// A switch of the preview; on without a database, as both defaults are.
+async fn setting_on(db: Option<Db>, key: &str) -> bool {
     let Some(db) = db else {
         return true;
     };
-    stored_bool(&db, MARKDOWN_PREVIEW_KEY).await
+    stored_bool(&db, key).await
 }
 
 /// The id of lister `id`'s preview, to scroll it by key.
@@ -185,7 +200,41 @@ impl Lister {
             Some(Markdown::Ready {
                 preview,
                 shown: true,
+                ..
             }) if self.mode == ViewMode::Text => Some(&preview.items),
+            _ => None,
+        }
+    }
+
+    /// The preview's selection, while it is shown and selecting is on.
+    pub fn selection(&self) -> Option<&Selection> {
+        match &self.markdown {
+            Some(Markdown::Ready {
+                preview: Preview {
+                    blocks: Some(_), ..
+                },
+                shown: true,
+                selection,
+            }) if self.mode == ViewMode::Text => Some(selection),
+            _ => None,
+        }
+    }
+
+    /// The shown preview's selection and its blocks' text, to change or copy it.
+    fn selecting(&mut self) -> Option<(&mut Selection, &[String])> {
+        if self.mode != ViewMode::Text {
+            return None;
+        }
+        match &mut self.markdown {
+            Some(Markdown::Ready {
+                preview:
+                    Preview {
+                        blocks: Some(blocks),
+                        ..
+                    },
+                shown: true,
+                selection,
+            }) => Some((selection, blocks.as_slice())),
             _ => None,
         }
     }
@@ -237,6 +286,7 @@ impl Lister {
             Ok(Some(preview)) => Markdown::Ready {
                 preview,
                 shown: show,
+                selection: Selection::default(),
             },
             Ok(None) => Markdown::Text,
             Err(code) => {
@@ -255,6 +305,21 @@ impl Lister {
             ListerKey::Preview => Some(self.toggle_preview()),
             ListerKey::Scroll(scroll) if self.preview().is_some() => {
                 Some(vec![Request::PreviewScroll(scroll)])
+            }
+            ListerKey::SelectAll => {
+                let (selection, blocks) = self.selecting()?;
+                selection.all(blocks);
+                Some(Vec::new())
+            }
+            ListerKey::Copy => {
+                let (selection, blocks) = self.selecting()?;
+                Some(
+                    selection
+                        .text(blocks)
+                        .map(Request::Copy)
+                        .into_iter()
+                        .collect(),
+                )
             }
             ListerKey::Mode(_)
             | ListerKey::Encoding(_)
@@ -327,6 +392,11 @@ impl App {
                 lister.preview_at = at.clamp(0.0, 1.0)
             }
             PreviewMessage::Scrolled(_) => {}
+            PreviewMessage::Select(gesture) => {
+                if let Some((selection, blocks)) = lister.selecting() {
+                    selection.apply(gesture, blocks);
+                }
+            }
             PreviewMessage::LinkOpened(false) => {
                 lister.note = Some(t!("viewer.link_failed").to_owned());
             }
@@ -356,6 +426,7 @@ impl App {
             Request::PreviewScroll(scroll) => {
                 scroll_task(id, scroll, lister.rows, lister.font().line_height())
             }
+            Request::Copy(text) => iced::clipboard::write(text),
             _ => Task::none(),
         }
     }

@@ -73,7 +73,7 @@ The drive menu lists every drive, also those behind the drive bar's `»`.
 | F7, Ctrl+F | Search text (with or without case) or hex bytes |
 | F3 / Shift+F3 | Find next / previous |
 | Ctrl+G | Go to an offset (*rC*) |
-| Ctrl+C | Copy the selected text |
+| Ctrl+C, Ctrl+A | Copy the selected text, select all - also in the Markdown preview |
 | Num `+` / Num `-` (also `+`, `=` / `-`) | Zoom an image in / out |
 | Ctrl+`+` / Ctrl+`-` (also Ctrl+Num `+` / Ctrl+Num `-`, Ctrl+`=`), Ctrl+wheel | Text a step larger / smaller, 6 to 72 pt; an image zooms (*rC*) |
 | Ctrl+0 | Text back to the viewer font size; an image fits the window (*rC*) |

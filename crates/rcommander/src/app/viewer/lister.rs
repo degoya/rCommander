@@ -60,6 +60,8 @@ pub enum Request {
     Render { forced: bool },
     /// The preview scrolled.
     PreviewScroll(Scroll),
+    /// The preview's selection copied.
+    Copy(String),
     /// A document's tokens for the lines starting at these offsets (RC-100-10).
     Tokens(Vec<u64>),
     /// A document's tree nodes: the children of a node, the top level for `None`.
@@ -409,6 +411,8 @@ impl Lister {
             | ListerKey::PreviousFile
             | ListerKey::NextView
             | ListerKey::Preview
+            | ListerKey::SelectAll
+            | ListerKey::Copy
             | ListerKey::TextLarger
             | ListerKey::TextSmaller
             | ListerKey::TextReset => Vec::new(),

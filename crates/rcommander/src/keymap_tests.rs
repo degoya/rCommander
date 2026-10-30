@@ -132,11 +132,70 @@ fn a_bare_modifier_or_the_windows_key_is_no_chord() {
         chord(&Key::Named(Named::Shift), ANY_KEY, Modifiers::SHIFT),
         None
     );
-    assert_eq!(
-        chord(&Key::Character("e".into()), ANY_KEY, Modifiers::LOGO),
-        None
-    );
+    if cfg!(not(target_os = "macos")) {
+        assert_eq!(
+            chord(&Key::Character("e".into()), ANY_KEY, Modifiers::LOGO),
+            None
+        );
+    }
     assert_eq!(chord(&Key::Unidentified, ANY_KEY, Modifiers::empty()), None);
+}
+
+/// On a Mac Cmd is the keymap's Ctrl: Cmd+R is the chord Ctrl+R.
+#[cfg(target_os = "macos")]
+#[test]
+fn cmd_is_the_keymaps_ctrl_on_macos() {
+    let pressed = chord(&Key::Character("r".into()), ANY_KEY, Modifiers::LOGO);
+    assert_eq!(
+        pressed.map(|chord| chord.to_string()),
+        Some("Ctrl+R".to_owned())
+    );
+}
+
+/// `keys.macos_cmd_as_ctrl` (RC-100-49): on, Cmd+R is the chord Ctrl+R and Ctrl+R stays it;
+/// off, a press with Cmd is no chord, as the Windows key is elsewhere, and Ctrl is still Ctrl.
+#[test]
+fn cmd_is_ctrl_only_while_the_setting_is_on() {
+    use super::chord_with;
+
+    let r = Key::Character("r".into());
+    let pressed_as = |modifiers: Modifiers, cmd: bool| {
+        chord_with(&r, ANY_KEY, modifiers, cmd).map(|c| c.to_string())
+    };
+    assert_eq!(pressed_as(Modifiers::LOGO, true).as_deref(), Some("Ctrl+R"));
+    assert_eq!(pressed_as(Modifiers::CTRL, true).as_deref(), Some("Ctrl+R"));
+    assert_eq!(
+        pressed_as(Modifiers::LOGO | Modifiers::SHIFT, true).as_deref(),
+        Some("Ctrl+Shift+R")
+    );
+    assert_eq!(pressed_as(Modifiers::LOGO, false), None);
+    assert_eq!(
+        pressed_as(Modifiers::CTRL, false).as_deref(),
+        Some("Ctrl+R")
+    );
+}
+
+#[test]
+fn a_mac_label_shows_the_modifiers_as_symbols() {
+    use super::mac_label;
+
+    assert_eq!(mac_label("Ctrl+Shift+F", true), "⇧⌘F");
+    assert_eq!(mac_label("Alt+F7", true), "⌥F7");
+    assert_eq!(mac_label("Ctrl+ArrowUp", true), "⌘↑");
+    assert_eq!(mac_label("F5", true), "F5");
+    assert_eq!(mac_label("Ctrl+Plus", true), "⌘+");
+}
+
+/// With Cmd left to the system the keymap's Ctrl is the Mac's Control key, first in Apple's
+/// order (RC-100-49).
+#[test]
+fn a_mac_label_shows_control_while_cmd_is_not_ctrl() {
+    use super::mac_label;
+
+    assert_eq!(mac_label("Ctrl+Shift+F", false), "⌃⇧F");
+    assert_eq!(mac_label("Ctrl+Alt+F", false), "⌃⌥F");
+    assert_eq!(mac_label("Alt+F7", false), "⌥F7");
+    assert_eq!(mac_label("F5", false), "F5");
 }
 
 /// Total Commander's Ctrl+\ is Ctrl+# on a German keyboard: the same key.
@@ -281,7 +340,7 @@ fn a_press_tells_its_place_for_a_layout_key_only() {
 }
 
 /// Off Windows no layout is asked: a key named by place reads as a US keyboard prints it.
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 #[test]
 fn a_key_named_by_place_reads_as_on_a_us_keyboard_without_a_layout() {
     use super::label_text;
@@ -289,5 +348,17 @@ fn a_key_named_by_place_reads_as_on_a_us_keyboard_without_a_layout() {
     assert_eq!(label_text("Ctrl+[Semicolon]"), "Ctrl+;");
     assert_eq!(label_text("Ctrl+Shift+[Quote]"), "Ctrl+Shift+'");
     assert_eq!(label_text("Ctrl+K"), "Ctrl+K");
+    assert_eq!(label_text(""), "");
+}
+
+/// On a Mac the same keys read with the Mac's symbols.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_key_named_by_place_reads_with_mac_symbols() {
+    use super::label_text;
+
+    assert_eq!(label_text("Ctrl+[Semicolon]"), "⌘;");
+    assert_eq!(label_text("Ctrl+Shift+[Quote]"), "⇧⌘'");
+    assert_eq!(label_text("Ctrl+K"), "⌘K");
     assert_eq!(label_text(""), "");
 }

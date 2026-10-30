@@ -131,7 +131,7 @@ async fn a_recorded_key_replaces_the_rows_key_and_the_menus_follow() {
         .iter()
         .find(|entry| entry.name == "copy")
         .expect("copy");
-    assert_eq!(copy.keys, "Ctrl+K");
+    assert_eq!(copy.keys, crate::keymap::label_text("Ctrl+K"));
     let menus = menu_bar::build(keymap, &rows);
     let shown = menus
         .iter()
@@ -141,8 +141,9 @@ async fn a_recorded_key_replaces_the_rows_key_and_the_menus_follow() {
             _ => None,
         })
         .expect("the menu's copy");
-    assert!(shown.ends_with("\tCtrl+K"), "{shown}");
-    assert_eq!(menu_bar::key_of(keymap, "copy").as_deref(), Some("Ctrl+K"));
+    let ctrl_k = crate::keymap::label_text("Ctrl+K");
+    assert!(shown.ends_with(&format!("\t{ctrl_k}")), "{shown}");
+    assert_eq!(menu_bar::key_of(keymap, "copy"), Some(ctrl_k));
 }
 
 #[tokio::test]

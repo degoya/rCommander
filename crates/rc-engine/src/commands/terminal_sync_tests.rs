@@ -36,6 +36,10 @@ mod with_a_shell {
     use crate::test_support::expect_terminal;
     use crate::{FollowStatus, Outcome, PanelView, PromptState, TermId, VfsPath};
 
+    /// How often `until` and `shows` look, 10 ms apart: at most thirty seconds. Ten were too few
+    /// for a shell's output on a loaded GitHub runner (0.10.0's ubuntu-24.04 run, 11.4 s).
+    const LOOKS: u32 = 3000;
+
     async fn type_line(engine: &Engine, terminal: TermId, line: &str) {
         engine
             .dispatch(Command::SendInput {
@@ -46,9 +50,9 @@ mod with_a_shell {
             .expect("input");
     }
 
-    /// Waits until `check` holds for the left panel's state, for at most ten seconds.
+    /// Waits until `check` holds for the left panel's state, for at most thirty seconds.
     async fn until(engine: &Engine, check: impl Fn(&PanelSnapshot) -> bool, what: &str) {
-        for _ in 0..1000 {
+        for _ in 0..LOOKS {
             if check(&state(engine, PanelId::Left).await) {
                 return;
             }
@@ -57,9 +61,10 @@ mod with_a_shell {
         panic!("{what} never happened");
     }
 
-    /// Waits until the shell's screen has a line that is exactly `line`.
+    /// Waits until the shell's screen has a line that is exactly `line`, for at most thirty
+    /// seconds.
     async fn shows(engine: &Engine, terminal: TermId, line: &str) {
-        for _ in 0..1000 {
+        for _ in 0..LOOKS {
             if let Ok(Outcome::Screen { screen, .. }) = engine
                 .dispatch(Command::ReadScreen {
                     terminal,

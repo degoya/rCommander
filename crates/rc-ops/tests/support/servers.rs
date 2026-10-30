@@ -40,8 +40,24 @@ impl Sftp {
     /// silent).
     pub async fn start_with(limits: SftpLimits) -> Self {
         let served = build_tempdir();
+        let serve = SftpServe::new(served.path());
+        Self::serving(served, serve, limits).await
+    }
+
+    /// A server that folds case on any disk, as OpenSSH on NTFS or APFS does (RC-080-60); its
+    /// home `/home` is where the backend's probe finds that out.
+    pub async fn folding() -> Self {
+        let served = build_tempdir();
+        std::fs::create_dir(served.path().join("home")).expect("home");
+        let mut serve = SftpServe::new(served.path());
+        serve.home = "/home".to_owned();
+        serve.fold_case = true;
+        Self::serving(served, serve, SftpLimits::default()).await
+    }
+
+    async fn serving(served: tempfile::TempDir, serve: SftpServe, limits: SftpLimits) -> Self {
         let server = TestServer::start(ServerOptions {
-            sftp: Some(SftpServe::new(served.path())),
+            sftp: Some(serve),
             ..ServerOptions::new(host_key_a())
         })
         .await;

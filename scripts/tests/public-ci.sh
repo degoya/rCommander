@@ -7,7 +7,8 @@
 # images, the export's arguments for a local branch and for a ci/ name, the dispatch with the
 # images still to run, a green run recorded per image and tree with its branch deleted, a second
 # call for the same tree running nothing, a red run and a red job ending the wait with the branch
-# kept and nothing recorded, no run within the timeout, a wrong platform and a wrong ref.
+# kept and nothing recorded, no run within the timeout, a run of the same tree another call
+# started waited for instead of exported again (and when not), a wrong platform and a wrong ref.
 #
 # Pure bash and git, a few seconds.
 #
@@ -131,6 +132,44 @@ public_ci ci/0.9.0 --platforms macos-15
 expect_status "no run within the timeout fails" 1
 expect_output "and says so" "no CI run appeared within 60s"
 expect_true "with no log to read" '[[ ! -e "$FAKE/ci-log.log" ]]'
+
+# A run of the same tree that another call on this machine started is waited for, not exported
+# again (0.10.0: the re-push made GitHub cancel it) - only while its branch still stands on the
+# marked commit, the marked images cover the call's and none of its finished runs is red.
+MARKER="$PUBLIC/.git/rc-ci-running/ci-0.9.0"
+public_head() { git -C "$ORIGIN" rev-parse "refs/heads/$1"; }
+mark() { mkdir -p "${MARKER%/*}"; printf '%s\n' "$*" > "$MARKER"; }
+expect_true "a run that never appeared leaves no marker" '[[ ! -e "$MARKER" ]]'
+
+mark "$(public_head ci/0.9.0) $TREE_ID macos-15-intel windows-2025"
+printf '%s\n' "104 completed success https://github.com/x/y/actions/runs/104 CI" > "$FAKE/runs"
+public_ci ci/0.9.0 --platforms macos-15-intel
+expect_status "a run of the same tree started by another call is waited for" 0
+expect_output "saying so" "waiting for it instead of exporting again"
+expect_true "without an export" '[[ ! -e "$FAKE/export.log" ]]'
+expect_true "or a dispatch" '[[ ! -e "$FAKE/dispatch.log" ]]'
+expect_true "its green is recorded" 'grep -q "^$TREE_ID macos-15-intel " "$VERIFIED"'
+expect_true "the branch goes" '! remote_has ci/0.9.0'
+expect_true "and the marker" '[[ ! -e "$MARKER" ]]'
+
+printf '%s\n' "105 completed failure https://github.com/x/y/actions/runs/105 CI" > "$FAKE/runs"
+git -C "$PUBLIC" push -q origin HEAD:refs/heads/ci/0.9.0
+mark "$(public_head ci/0.9.0) $TREE_ID macos-15-intel"
+public_ci ci/0.9.0 --platforms macos-15
+expect_true "a run for other images: exported" '[[ -e "$FAKE/export.log" ]]'
+expect_true "and the new run marked" 'grep -q "^$(public_head ci/0.9.0) $TREE_ID macos-15$" "$MARKER"'
+
+mark "$(public_head ci/0.9.0) 0123456789abcdef ubuntu-24.04"
+public_ci ci/0.9.0 --platforms ubuntu-24.04
+expect_true "a run of another tree: exported" '[[ -e "$FAKE/export.log" ]]'
+
+mark "0000000000000000000000000000000000000000 $TREE_ID ubuntu-24.04"
+public_ci ci/0.9.0 --platforms ubuntu-24.04
+expect_true "a branch moved on since: exported" '[[ -e "$FAKE/export.log" ]]'
+
+mark "$(public_head ci/0.9.0) $TREE_ID ubuntu-24.04"
+public_ci ci/0.9.0 --platforms ubuntu-24.04
+expect_true "a run already red: exported again" '[[ -e "$FAKE/export.log" ]]'
 
 public_ci ci/0.9.0 --platforms beos
 expect_status "an unknown platform is a wrong call" 2

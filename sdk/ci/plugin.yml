@@ -23,7 +23,7 @@ env:
   # The rCommander release whose `plugin package`, `verify` and `conformance` run here: the
   # release this SDK was published with, which accepts the `api_version` its templates declare
   # (`scripts/set-version.sh` writes it). Bump it when you build against a newer contract.
-  RCOMMANDER_VERSION: 0.12.0
+  RCOMMANDER_VERSION: 0.13.0
 
 defaults:
   run:

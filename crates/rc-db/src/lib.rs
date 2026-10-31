@@ -4,8 +4,8 @@
 //! vault's metadata and its encrypted columns (`secrets.rs`), the login scripts
 //! (`login_scripts.rs`), the panels' folder tabs with their history (`tabs.rs`), the directory
 //! hotlist (`hotlist.rs`), the FTPS certificates a person trusted (`tls_certificates.rs`), the
-//! transfer jobs that have not ended, to resume after a restart (`transfer_jobs.rs`), and the
-//! transfer lists a person saved (`saved_queues.rs`).
+//! transfer jobs that have not ended, to resume after a restart (`transfer_jobs.rs`), the
+//! transfer lists a person saved (`saved_queues.rs`) and the own colour themes (`themes.rs`).
 //!
 //! Writes are serialized: one dedicated connection behind a mutex does every write, and a small
 //! pool serves reads. SQLite allows one writer at a time anyway; taking turns in the process
@@ -53,6 +53,7 @@ mod secrets;
 mod session_prefs;
 mod settings;
 mod tabs;
+mod themes;
 mod tls_certificates;
 mod transfer_jobs;
 mod vault;
@@ -106,6 +107,7 @@ pub use secrets::{
 };
 pub use session_prefs::StoredSessionPrefs;
 pub use tabs::{StoredTab, StoredVisit};
+pub use themes::StoredTheme;
 pub use tls_certificates::{NewTrustedCertificate, TrustedCertificate};
 pub use transfer_jobs::StoredTransfer;
 pub use vault::{RekeyError, SECRET_COLUMNS, SecretColumn, VaultMeta, VaultRemoval};

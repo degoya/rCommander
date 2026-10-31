@@ -158,6 +158,9 @@ fn draft_of(source: &Connection, name: String) -> ConnectionDraft {
         notes: source.notes.clone(),
         ftp_data_mode: source.ftp_data_mode,
         ftp_encoding: source.ftp_encoding,
+        // The copy draws in the source's colours (RC-100-51).
+        theme_light: source.theme_light.clone(),
+        theme_dark: source.theme_dark.clone(),
     }
 }
 

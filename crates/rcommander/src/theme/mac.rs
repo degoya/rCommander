@@ -5,7 +5,7 @@
 
 use iced::Color;
 
-use super::{Tokens, hex, syntax};
+use super::{Tokens, hex, syntax, terminal};
 
 /// The Mac's fonts behind [`super::UI_FONT`] and [`super::MONO_FONT`], the generic sans-serif
 /// and monospace families: San Francisco (/System/Library/Fonts/SFNS.ttf) and Menlo. Set before
@@ -45,6 +45,7 @@ pub(super) fn light(accent: Color) -> Tokens {
         cursor_text: text,
         marked: accent,
         syntax: syntax::LIGHT,
+        terminal: terminal::ONE_HALF_LIGHT,
     }
 }
 
@@ -73,5 +74,6 @@ pub(super) fn dark(accent: Color) -> Tokens {
         cursor_text: hex(0xFFFFFF, 1.0),
         marked: accent,
         syntax: syntax::DARK,
+        terminal: terminal::CAMPBELL,
     }
 }

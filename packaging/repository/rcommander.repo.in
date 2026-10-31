@@ -1,0 +1,13 @@
+# rCommander for dnf (Fedora, RHEL): /etc/yum.repos.d/rcommander.repo
+# Packages and metadata are signed by @FINGERPRINT@. skip_if_unavailable=0: a repository that
+# fails its signature check stops dnf instead of being skipped with a warning (Fedora's default).
+[rcommander]
+name=rCommander
+type=rpm-md
+baseurl=@BASE_URL@/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+skip_if_unavailable=0
+gpgkey=@BASE_URL@/rcommander-packages.asc
+metadata_expire=6h

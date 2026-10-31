@@ -25,7 +25,7 @@ use rc_engine::{AuthMethod, Chord, ConnectionKind, CredentialId, DefaultView, Tr
 
 use super::{
     ConnMsg, ConnectionManager, Pending,
-    form::{Field, Form},
+    form::{Field, Form, theme_choices},
     tree_actions::unfocus,
     view::{FILTER_FIELD, TREE_SCROLL_ID, TREE_STOP_ID},
 };
@@ -307,6 +307,18 @@ fn change(
             form.set_script(cycle(&choices, form.script, by));
         }
         Field::Credential => form.set_shared(cycle(shared, form.shared, by)),
+        Field::ThemeLight | Field::ThemeDark => {
+            let dark = field == Field::ThemeDark;
+            let mut choices = vec![None];
+            choices.extend(theme_choices(dark).into_iter().map(|(id, _)| Some(id)));
+            let at = choices
+                .iter()
+                .position(|choice| choice.as_deref() == form.theme(dark))
+                .unwrap_or(0);
+            let places: Vec<usize> = (0..choices.len()).collect();
+            let next = cycle(&places, at, by);
+            form.set_theme(dark, choices.swap_remove(next));
+        }
         Field::ImportKey | Field::Favourite | Field::Forget(_) => form.toggle(field),
         _ => {}
     }

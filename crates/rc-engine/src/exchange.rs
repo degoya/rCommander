@@ -1,6 +1,7 @@
-//! The export and import of settings, connections, trusted host keys and certificates, the
-//! hotlist and the tabs (RC-080-19): one `.rcexport` file, unencrypted or sealed with an export
-//! password of its own (`rc_vault::seal_export`), never with the vault's key.
+//! The export and import of settings (with the own colour themes, RC-100-50), connections,
+//! trusted host keys and certificates, the hotlist and the tabs (RC-080-19): one `.rcexport`
+//! file, unencrypted or sealed with an export password of its own (`rc_vault::seal_export`),
+//! never with the vault's key.
 //!
 //! - `format`: the file - its JSON, the sealed form, the caps a file read from anywhere is held
 //!   to before anything of it is used.
@@ -17,6 +18,7 @@ mod error;
 mod format;
 mod report;
 mod sources;
+mod themes;
 
 pub use error::ExchangeError;
 pub use format::{
@@ -27,3 +29,4 @@ pub use format::{
 };
 pub use report::{ExchangePart, ExchangeReport, ExchangeRow, ExportParts, ExportReport, RowStatus};
 pub use sources::ExportedSource;
+pub use themes::ExportedTheme;

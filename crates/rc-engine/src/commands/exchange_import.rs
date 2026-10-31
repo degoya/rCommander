@@ -138,11 +138,24 @@ impl Engine {
         dry_run: bool,
     ) -> Result<Vec<ExchangeRow>, EngineError> {
         let mut rows = Vec::new();
+        // The themes before the settings that name them (RC-100-50).
+        if let Some(themes) = &content.themes {
+            rows.extend(self.exchange_themes(themes, only, dry_run).await?);
+        }
         if let Some(settings) = &content.settings {
             rows.extend(self.exchange_settings(settings, only, dry_run).await?);
         }
         if let Some(part) = &content.connections {
-            rows.extend(self.exchange_connections(part, only, dry_run).await?);
+            // A dry run wrote no theme yet: a connection may name one of the file's (RC-100-51).
+            let incoming = content
+                .themes
+                .as_deref()
+                .filter(|_| dry_run)
+                .unwrap_or_default();
+            rows.extend(
+                self.exchange_connections(part, incoming, only, dry_run)
+                    .await?,
+            );
         }
         if let Some(part) = &content.trust {
             rows.extend(

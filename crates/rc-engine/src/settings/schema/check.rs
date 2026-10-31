@@ -29,7 +29,8 @@ impl SettingSpec {
             | SettingKind::Colour { default }
             | SettingKind::ColourRules { default }
             | SettingKind::Source { default }
-            | SettingKind::Proxy { default } => Value::from(default),
+            | SettingKind::Proxy { default }
+            | SettingKind::Theme { default } => Value::from(default),
         }
     }
 
@@ -67,6 +68,24 @@ impl SettingSpec {
                     Ok(Value::from(text))
                 } else {
                     Err("expected at most 64 letters, digits, '.', '_' or '-'".to_owned())
+                }
+            }
+            // Which themes there are is the theme's own check (`settings/themes.rs`): a stored id
+            // that names none draws with Fluent.
+            SettingKind::Theme { .. } => {
+                let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
+                let fits = !text.is_empty()
+                    && text.len() <= 64
+                    && text
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+                if fits {
+                    Ok(Value::from(text))
+                } else {
+                    Err(
+                        "expected a theme's id such as fluent-dark, as theme.list names it"
+                            .to_owned(),
+                    )
                 }
             }
             SettingKind::Path { .. } => {
@@ -196,6 +215,7 @@ impl SettingSpec {
             SettingKind::ColourRules { .. } => "colour_rules",
             SettingKind::Source { .. } => "source",
             SettingKind::Proxy { .. } => "proxy",
+            SettingKind::Theme { .. } => "theme",
         }
     }
 }

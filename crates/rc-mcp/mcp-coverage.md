@@ -239,5 +239,9 @@ asks by.
 | `update.download` | gui_only | omitted: GUI only: human decision | Download the offered version, kept only when its size and SHA-256 match the manifest |
 | `update.install` | gui_only | omitted: GUI only: human decision | Install the downloaded version and restart; the old one comes back if the new fails |
 | `update.status` | read | `update_status` | Running version, channel, last check and its result, the offer with its notes, download and install state |
+| `theme.delete` | gui_only | omitted: GUI only: human decision | Delete an own colour theme; not a built-in one, nor the theme a mode draws with |
+| `theme.list` | read | `theme_list` | The colour themes: id, name, mode (light or dark), built in or own, and whether it is the mode's theme |
+| `theme.save` | gui_only | omitted: GUI only: human decision | Save an own colour theme from the Themes tab's editor or import; never over a built-in one |
+| `theme.select` | write | `theme_select` | Choose the colour theme of the light or the dark mode; the window draws with it at once |
 
-229 commands: 159 covered, 70 omitted.
+233 commands: 161 covered, 72 omitted.

@@ -15,6 +15,10 @@
 #   scripts/package-linux.sh --arch arm64             # for 64-bit ARM (aarch64)
 #   scripts/package-linux.sh --plugins <dir>          # the signed packages in <dir> (relative
 #                                                     # to the checkout), not built here
+#   scripts/package-linux.sh --deb --rpm              # also the deb and the rpm of the tarball
+#                                                     # (RC-100-54, scripts/package-deb-rpm.sh):
+#                                                     # artifacts/linux/rcommander-<version>-
+#                                                     # linux-<arch>.deb and .rpm; needs nfpm
 #
 # The version is held by scripts/set-version.sh --check first; a package of the same version from
 # another commit or a dirty tree stops the run before anything is built (scripts/lib/package.sh;
@@ -38,7 +42,8 @@ cd "$ROOT"
 profile=release
 arch=x64
 prebuilt=""
-usage="usage: scripts/package-linux.sh [--profile release|release-test] [--arch x64|arm64] [--plugins <dir>]"
+distribution=()
+usage="usage: scripts/package-linux.sh [--profile release|release-test] [--arch x64|arm64] [--plugins <dir>] [--deb] [--rpm]"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --profile)
@@ -55,6 +60,10 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 && -d "$2" ]] || { echo "$usage (an existing directory)" >&2; exit 2; }
             prebuilt="$(cd "$2" && pwd)"
             shift 2
+            ;;
+        --deb | --rpm)
+            distribution+=("$1")
+            shift
             ;;
         *) echo "$usage" >&2; exit 2 ;;
     esac
@@ -116,5 +125,9 @@ printf '%s\n' "rCommander $version" "commit $RC_BUILD_COMMIT" "built $RC_BUILD_T
 echo "==> writing $TARBALL"
 tar -C "$OUT" -czf "$TARBALL" "$(basename "$STAGE")"
 rm -rf "$STAGE"
+if [[ "${#distribution[@]}" -gt 0 ]]; then
+    echo "==> the distribution packages of $TARBALL"
+    "$ROOT/scripts/package-deb-rpm.sh" "$TARBALL" "$OUT" "${distribution[@]}"
+fi
 echo "==> done"
 ls -la "$TARBALL"

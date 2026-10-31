@@ -97,7 +97,7 @@ fn tab_title(tab: Tab) -> &'static str {
         Tab::Fonts => "Fonts",
         Tab::Lists => "Panels and lists",
         Tab::Viewer => "Viewer",
-        Tab::Colours => "Colours",
+        Tab::Themes => "Themes",
         Tab::Keys => "General",
         Tab::Shortcuts => "Shortcuts",
     }
@@ -120,7 +120,7 @@ async fn the_tabs_of_a_page_are_one_stop_and_take_arrows_and_clicks() {
             vec![
                 Tab::Window,
                 Tab::Fonts,
-                Tab::Colours,
+                Tab::Themes,
                 Tab::Lists,
                 Tab::Viewer,
             ],
@@ -401,4 +401,57 @@ async fn the_shortcuts_tab_has_its_table_and_buttons_in_the_ring() {
         );
     }
     assert_eq!(screen.loose_buttons(), 0);
+}
+
+/// The Themes tab and its editor (RC-100-50): every control is a stop of the ring, no button is
+/// left out - the modes' pick lists, the list, the buttons, the file, the rules; in the editor the
+/// name, the accent's switch and every colour's field.
+#[tokio::test]
+async fn the_themes_tab_and_its_editor_walk_their_controls() {
+    use rc_engine::{Command, Outcome, settings::themes::ThemeDraft};
+    use settings::ThemesMsg;
+
+    let themes = |message| Message::Settings(SettingsMessage::Themes(message));
+    let (_root, mut harness) = settings_open().await;
+    let db = harness.app.db.clone().expect("the database");
+    let read = settings::read_themes(db.clone()).await;
+    harness.send(themes(ThemesMsg::Read(Box::new(read)))).await;
+    harness
+        .send(Message::Settings(SettingsMessage::Page(Page::Appearance)))
+        .await;
+    harness
+        .send(Message::Settings(SettingsMessage::Tab(Tab::Themes)))
+        .await;
+    {
+        let mut screen = Screen::new(settings_window(&harness)).await;
+        let stops = walk_round(&mut screen, "the Themes tab");
+        assert!(stops.len() > 8, "the Themes tab: {stops:?}");
+        assert_eq!(screen.loose_buttons(), 0, "the Themes tab");
+    }
+    let saved = harness
+        .app
+        .engine()
+        .dispatch(Command::SaveTheme {
+            theme: ThemeDraft {
+                id: None,
+                name: "Ring".into(),
+                dark: false,
+                accent: "system".into(),
+                tokens: std::collections::BTreeMap::new(),
+            },
+        })
+        .await
+        .expect("saved");
+    let Outcome::Themes(outcome) = saved else {
+        panic!("the themes");
+    };
+    let read = settings::read_themes(db).await;
+    harness.send(themes(ThemesMsg::Read(Box::new(read)))).await;
+    let id = outcome.saved.expect("its id");
+    harness.send(themes(ThemesMsg::Choose(id))).await;
+    harness.send(themes(ThemesMsg::Edit)).await;
+    let mut screen = Screen::new(settings_window(&harness)).await;
+    let stops = walk_round(&mut screen, "the theme editor");
+    assert!(stops.len() > 45, "every colour's field: {}", stops.len());
+    assert_eq!(screen.loose_buttons(), 0, "the theme editor");
 }

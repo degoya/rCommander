@@ -71,6 +71,8 @@ async fn web(engine: &Engine) -> Connection {
             username: Some("deploy".into()),
             port: Some(2222),
             notes: Some("the web server".into()),
+            theme_light: Some("nord-light".into()),
+            theme_dark: Some("nord-dark".into()),
             ..ConnectionDraft::new(name, "example.org")
         };
         let request = SaveConnectionRequest {
@@ -156,6 +158,9 @@ async fn the_copy_has_every_field_and_its_own_secrets_right_under_the_original()
     );
     assert_eq!(copy.secrets, source.secrets);
     assert_eq!(copy.key, source.key);
+    // The copy keeps the source's colours (RC-100-51).
+    assert_eq!(copy.theme_light.as_deref(), Some("nord-light"));
+    assert_eq!(copy.theme_dark.as_deref(), Some("nord-dark"));
     for kind in SecretKind::ALL {
         assert_eq!(
             secret(&engine, copy.id, kind).await,

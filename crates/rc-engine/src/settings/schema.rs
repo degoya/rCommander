@@ -5,7 +5,8 @@
 //! rows: the token is a secret (shown only to copy), the policy has its own type in `rc-mcp`;
 //! both are protected like every `mcp.*` key. The rows of one area are in `schema/<area>.rs`
 //! (fonts, layout, keys, delete, drive_line, transfers, windows, exchange, mouse, checksum, sort,
-//! viewer, mcp, plugins, colours, archive, quick_search, ftp, sftp, update, language, macos); how a
+//! viewer, mcp, plugins, colours, archive, quick_search, ftp, sftp, update, language, macos,
+//! themes); how a
 //! value is checked against its row is `schema/check.rs`.
 
 pub(super) mod archive;
@@ -34,6 +35,7 @@ pub(super) mod sftp;
 pub(super) mod sort;
 mod ssh_agent;
 pub(super) mod terminal;
+mod themes;
 mod transfers;
 pub(super) mod update;
 mod vault;
@@ -75,6 +77,7 @@ pub use quick_search::{
     QUICK_SEARCH_KEYS_KEY,
 };
 pub use ssh_agent::AGENT_MAX_KEYS_KEY;
+pub use themes::{CONNECTION_THEMES_KEY, THEME_DARK_KEY, THEME_KEY, THEME_LIGHT_KEY};
 pub use transfers::{
     HIDE_SINGLE_LANE_KEY, ONE_JOB_PER_ITEM_KEY, QUEUE_WINDOW_OWN_KEY, SHOW_AT_ONCE_KEY,
     STRIP_ROWS_KEY, TOOLS_AT_ONCE_KEY, TOTAL_SPEED_KEY, TRANSFER_BUFFER_KEY,
@@ -183,6 +186,10 @@ pub enum SettingKind {
     Proxy {
         default: &'static str,
     },
+    /// The id of a colour theme, built in or own (RC-100-50, `schema/themes.rs`).
+    Theme {
+        default: &'static str,
+    },
 }
 
 /// One setting.
@@ -202,8 +209,6 @@ pub struct SettingSpec {
     pub restart: bool,
 }
 
-/// The light and dark look.
-pub const THEME_KEY: &str = "appearance.theme";
 /// The folder the left panel starts in; empty for the home folder.
 pub const LEFT_START_KEY: &str = "folders.left_start";
 /// The folder the right panel starts in; empty for the home folder.
@@ -238,18 +243,10 @@ pub const INTEGRATION_KEY: &str = "terminal.shell_integration";
 /// Every setting, in the dialog's order.
 pub const SETTINGS: &[SettingSpec] = &[
     language::LANGUAGE,
-    SettingSpec {
-        key: THEME_KEY,
-        page: SettingPage::Appearance,
-        kind: SettingKind::Choice {
-            choices: choices::THEMES,
-            default: "system",
-        },
-        label: "setting.appearance.theme",
-        help: "setting.appearance.theme.help",
-        protected: false,
-        restart: false,
-    },
+    themes::THEME,
+    themes::THEME_LIGHT,
+    themes::THEME_DARK,
+    themes::CONNECTION_THEMES,
     SettingSpec {
         key: FKEY_BAR_KEY,
         page: SettingPage::Appearance,

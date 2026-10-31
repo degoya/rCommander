@@ -49,10 +49,15 @@ impl Engine {
 
     /// The configuration in force: the stored one, the defaults without a database.
     pub(crate) async fn update_config(&self) -> UpdateConfig {
-        let config = match self.db() {
+        let mut config = match self.db() {
             Ok(db) => UpdateConfig::read(db, RUNNING).await,
             Err(_) => UpdateConfig::defaults(RUNNING),
         };
+        // A package manager's installation (RC-100-52): its channel carries plain releases only,
+        // and it never installs by itself, whatever the stored settings say.
+        if let Some(started) = self.desk().started.get() {
+            config.for_kind(started.installation.kind);
+        }
         self.desk_state().auto = config.auto;
         config
     }
@@ -188,6 +193,9 @@ impl Engine {
                 Some(started) => started.installation.reason.map(str::to_owned),
                 None => Some("update.not_started".to_owned()),
             },
+            install_command: started
+                .and_then(|started| started.installation.kind.update_command())
+                .map(str::to_owned),
             installing: state.handed,
             queue_busy,
             last_update: journal,

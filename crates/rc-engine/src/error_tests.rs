@@ -204,6 +204,21 @@ fn one_of_each_own() -> Vec<EngineError> {
         EngineError::SavedQueueNotFound { saved: 3 },
         EngineError::QueueListEmpty,
         EngineError::PanelChanged { panel: "left" },
+        EngineError::ThemeUnknown { id: "neon".into() },
+        EngineError::ThemeWrongMode {
+            id: "nord-dark".into(),
+            mode: "light",
+        },
+        EngineError::ThemeBuiltin {
+            id: "fluent-dark".into(),
+        },
+        EngineError::ThemeInUse { id: "own-1".into() },
+        EngineError::ThemeNameTaken {
+            name: "Night".into(),
+        },
+        EngineError::ThemeInvalid {
+            reason: "a theme needs a name".into(),
+        },
     ];
     for sample in &samples {
         match sample {
@@ -294,6 +309,12 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::SftpConnectionAmbiguous { .. } => {}
             EngineError::SavedQueueNotFound { .. } | EngineError::QueueListEmpty => {}
             EngineError::PanelChanged { .. } => {}
+            EngineError::ThemeUnknown { .. }
+            | EngineError::ThemeWrongMode { .. }
+            | EngineError::ThemeBuiltin { .. }
+            | EngineError::ThemeInUse { .. }
+            | EngineError::ThemeNameTaken { .. }
+            | EngineError::ThemeInvalid { .. } => {}
             EngineError::TcIniPathRefused { .. }
             | EngineError::TcIniUnreadable { .. }
             | EngineError::TcIniTooLarge { .. }

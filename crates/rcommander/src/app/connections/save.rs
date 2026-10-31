@@ -52,6 +52,14 @@ impl ConnectionManager {
                 form.set_script(script);
                 Field::Script
             }
+            ConnMsg::ThemeLight(theme) => {
+                form.set_theme(false, theme);
+                Field::ThemeLight
+            }
+            ConnMsg::ThemeDark(theme) => {
+                form.set_theme(true, theme);
+                Field::ThemeDark
+            }
             ConnMsg::Shared(shared) => {
                 form.set_shared(shared);
                 Field::Credential

@@ -29,7 +29,7 @@ impl App {
         };
         if changes.is_empty() {
             if close {
-                self.settings = None;
+                self.close_settings();
             }
             return Vec::new();
         }
@@ -70,7 +70,7 @@ impl App {
                     draft.stored(changes);
                 }
                 if close {
-                    self.settings = None;
+                    self.close_settings();
                 } else {
                     dialog.busy = false;
                     dialog.note = Some((t!("settings.saved").to_owned(), false));

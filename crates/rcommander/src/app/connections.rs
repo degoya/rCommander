@@ -169,6 +169,9 @@ pub enum ConnMsg {
     Auth(AuthMethod),
     View(DefaultView),
     Script(Option<i64>),
+    /// The theme of the light or the dark mode, by id; `None` for Default (RC-100-51).
+    ThemeLight(Option<String>),
+    ThemeDark(Option<String>),
     Toggle(Field),
     Reveal(bool),
     Save,
@@ -271,8 +274,17 @@ impl App {
         Some(effects)
     }
 
-    /// An event of [`concerns`].
+    /// An event of [`concerns`]. A change of the tree may change a connection's theme: the
+    /// panels' themes are read again, whether the manager is open or not (RC-100-51).
     pub(super) fn on_connections_event(&mut self, event: &EngineEvent) -> Vec<Effect> {
+        let mut effects = self.manager_event(event);
+        if let EngineEvent::ConnectionTree { .. } = event {
+            effects.push(Effect::Task(self.themes_task()));
+        }
+        effects
+    }
+
+    fn manager_event(&mut self, event: &EngineEvent) -> Vec<Effect> {
         if *event == EngineEvent::ConnectionManager {
             return self.open_connections();
         }

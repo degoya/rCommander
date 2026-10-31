@@ -47,6 +47,7 @@ pub(super) mod ssh_exec;
 pub(super) mod ssh_terminal;
 pub(super) mod tabs;
 pub(super) mod terminal;
+pub(super) mod theme;
 pub(super) mod update;
 pub(super) mod vault;
 pub(super) mod viewer;

@@ -1,7 +1,7 @@
 use rc_engine::settings::COLOUR_RULES_KEY;
 
 use super::{
-    ColourSettings, RuleOp, concerns, hex_of,
+    RuleOp, hex_of,
     rule_list::{Typed, edit_rule, typed_rules, with_rule_colour, written},
 };
 use crate::app::{
@@ -23,14 +23,6 @@ fn rules_as_typed_go_back_as_they_came() {
     // A half-typed rule keeps what was typed, for the check on Apply to judge.
     let typing: Vec<Typed> = vec![("*.t".to_owned(), "#12".to_owned(), String::new())];
     assert_eq!(typed_rules(&written(&typing)), typing);
-}
-
-#[test]
-fn the_colour_keys_concern_the_tab() {
-    assert!(concerns("appearance.colours.dark.cursor"));
-    assert!(concerns("appearance.colour_rules"));
-    assert!(!concerns("appearance.theme"));
-    assert_eq!(ColourSettings::default().rules, "");
 }
 
 /// The dialog's colour lands in the rule it was opened for, light or dark, the others untouched.

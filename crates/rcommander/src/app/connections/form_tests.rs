@@ -189,3 +189,46 @@ fn a_refusal_of_the_save_stands_at_its_field() {
     form.secret(SecretKind::Passphrase, SecretString::from(" "));
     assert_eq!(form.field_of("secret_empty"), Some(Field::Passphrase));
 }
+
+/// A connection's themes (RC-100-51): loaded with it, sent only when changed, Default sent as
+/// `""`; a new connection's draft carries them; each list has an id of its own.
+#[test]
+fn the_themes_of_each_mode_go_into_the_patch_and_the_draft() {
+    let mut stored = stored(false);
+    stored.theme_dark = Some("nord-dark".into());
+    let mut form = Form::of(&stored, false);
+    assert_eq!(form.theme(true), Some("nord-dark"));
+    assert_eq!(form.theme(false), None);
+    assert!(form.fields().contains(&Field::ThemeLight));
+    assert!(form.fields().contains(&Field::ThemeDark));
+    let unchanged = form.plan().expect("valid");
+    let SaveFields::Update { patch, .. } = &unchanged.fields else {
+        panic!("a change");
+    };
+    assert_eq!(*patch, ConnectionPatch::default());
+
+    form.set_theme(false, Some("classic-light".into()));
+    form.set_theme(true, None);
+    let plan = form.plan().expect("valid");
+    let SaveFields::Update { patch, .. } = plan.fields else {
+        panic!("a change");
+    };
+    assert_eq!(patch.theme_light.as_deref(), Some("classic-light"));
+    assert_eq!(patch.theme_dark.as_deref(), Some(""), "Default clears");
+    assert!(patch.only_themes());
+
+    let mut new = Form::new(None);
+    new.edit(Edit::Name("db".into()));
+    new.edit(Edit::Host("db.example.org".into()));
+    new.set_theme(true, Some("solarized-dark".into()));
+    let SaveFields::Create {
+        connection: draft, ..
+    } = new.plan().expect("valid").fields
+    else {
+        panic!("a new connection");
+    };
+    assert_eq!(draft.theme_dark.as_deref(), Some("solarized-dark"));
+    assert_eq!(draft.theme_light, None);
+    assert_ne!(Field::ThemeLight.id(), Field::ThemeDark.id());
+    assert_eq!(Field::of_code("theme_wrong_mode"), Some(Field::ThemeLight));
+}

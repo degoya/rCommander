@@ -22,7 +22,7 @@ use crate::{
         browse::{self, PathField},
         connections::{
             ConnMsg, ConnectionManager, Focus,
-            form::{Edit, Field, Form},
+            form::{Edit, Field, Form, theme_choices},
         },
     },
     i18n::t,
@@ -255,6 +255,8 @@ fn field_row<'a>(
                 shown,
             )
         }
+        Field::ThemeLight => theme_choice(form, false, ConnMsg::ThemeLight, shown),
+        Field::ThemeDark => theme_choice(form, true, ConnMsg::ThemeDark, shown),
         Field::ImportKey => switch(form.import_key, t!("connections.import_key"), shown),
         Field::Favourite => switch(form.favourite, t!("connections.favourite"), shown),
         Field::Forget(kind) => switch(form.forget.contains(&kind), forget_label(kind), shown),
@@ -348,10 +350,33 @@ impl<T> fmt::Display for Labeled<T> {
     }
 }
 
+/// The theme of the light or the `dark` mode (RC-100-51): Default, then each theme of the mode;
+/// one the window no longer knows shows as Default, which saving then stores.
+fn theme_choice<'a>(
+    form: &Form,
+    dark: bool,
+    message: fn(Option<String>) -> ConnMsg,
+    shown: Field,
+) -> Element<'a, Message> {
+    let themes = theme_choices(dark);
+    let current = form
+        .theme(dark)
+        .filter(|id| themes.iter().any(|(known, _)| known.as_str() == *id))
+        .map(str::to_owned);
+    let default = Labeled(None, t!("connections.theme_default").to_owned());
+    let options = themes.into_iter().map(|(id, name)| Labeled(Some(id), name));
+    choice(
+        std::iter::once(default).chain(options),
+        current,
+        message,
+        shown,
+    )
+}
+
 /// A choice of the form: a stop of the focus ring by the field's id; the arrows choose the option
 /// before and after, as a closed combo box does (RC-080-53), and Space changes it through the
 /// manager's keys (`keys.rs`).
-fn choice<'a, T: Copy + PartialEq + 'static>(
+fn choice<'a, T: Clone + PartialEq + 'static>(
     options: impl Iterator<Item = Labeled<T>>,
     current: T,
     message: fn(T) -> ConnMsg,
@@ -398,6 +423,8 @@ fn field_label(shown: Field) -> &'static str {
         Field::View => t!("connections.field.view"),
         Field::StartDirectory => t!("connections.field.start_directory"),
         Field::Notes => t!("connections.field.notes"),
+        Field::ThemeLight => t!("connections.field.theme_light"),
+        Field::ThemeDark => t!("connections.field.theme_dark"),
     }
 }
 

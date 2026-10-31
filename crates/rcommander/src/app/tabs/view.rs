@@ -56,6 +56,7 @@ pub(in crate::app) fn tab_bar<'a>(
     let drag = app.tabs.drag.filter(|drag| drag.panel == panel);
     let dragging = drag.is_some_and(|drag| drag.dragging);
     let marker = drag.and_then(|drag| drag.gap);
+    let dark = app.dark;
     let tabs = responsive(move |size| {
         let titles: Vec<(String, bool)> = strip.iter().map(|tab| title(tab, font)).collect();
         let widths: Vec<f32> = titles
@@ -81,7 +82,14 @@ pub(in crate::app) fn tab_bar<'a>(
                     width,
                     dragging,
                 };
-                tab_button(panel, tab, face, tokens)
+                // Each tab in the theme of its own place: the active one in its panel's, another
+                // on a server in that connection's (RC-100-51).
+                let look = if tab.active {
+                    tokens
+                } else {
+                    theme::themes::of_path(&tab.path, dark)
+                };
+                tab_button(panel, tab, face, look)
             })
             .collect();
         if dragging && let Some(gap) = marker.filter(|gap| shown.contains(gap) || *gap == shown.end)

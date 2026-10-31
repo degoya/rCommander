@@ -207,6 +207,13 @@ pub struct Connection {
     /// connections, and the name encoding without UTF-8.
     pub ftp_data_mode: Option<FtpDataMode>,
     pub ftp_encoding: Option<FtpEncoding>,
+    /// The colour theme its panel and its SSH terminal draw with in the light and in the dark
+    /// mode (RC-100-51), a theme's id; `None` for the window's. A deleted own theme reads as
+    /// `None`.
+    #[serde(default)]
+    pub theme_light: Option<String>,
+    #[serde(default)]
+    pub theme_dark: Option<String>,
     /// Its place among its folder's connections, smallest first.
     pub sort_order: i64,
     /// RFC 3339 in UTC, as SQLite writes it.
@@ -264,6 +271,12 @@ pub struct ConnectionDraft {
     pub ftp_data_mode: Option<FtpDataMode>,
     #[serde(default)]
     pub ftp_encoding: Option<FtpEncoding>,
+    /// The theme of the light and of the dark mode (RC-100-51), a theme's id; `None` or empty for
+    /// the window's.
+    #[serde(default)]
+    pub theme_light: Option<String>,
+    #[serde(default)]
+    pub theme_dark: Option<String>,
 }
 
 impl ConnectionDraft {
@@ -283,12 +296,15 @@ impl ConnectionDraft {
             notes: None,
             ftp_data_mode: None,
             ftp_encoding: None,
+            theme_light: None,
+            theme_dark: None,
         }
     }
 }
 
 /// A change to a connection: `None` keeps a field. For the optional text fields (`username`,
-/// `key_path`, `start_directory`, `notes`) an empty string clears the value.
+/// `key_path`, `start_directory`, `notes`, `theme_light`, `theme_dark`) an empty string clears
+/// the value.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectionPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -315,6 +331,23 @@ pub struct ConnectionPatch {
     pub ftp_data_mode: Option<FtpDataMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ftp_encoding: Option<FtpEncoding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_light: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_dark: Option<String>,
+}
+
+impl ConnectionPatch {
+    /// Whether the patch changes nothing but the themes (RC-100-51): an open session stays.
+    #[must_use]
+    pub fn only_themes(&self) -> bool {
+        let without = Self {
+            theme_light: None,
+            theme_dark: None,
+            ..self.clone()
+        };
+        without == Self::default()
+    }
 }
 
 /// The whole tree: the root's folders, connections and shared credentials, each folder with its

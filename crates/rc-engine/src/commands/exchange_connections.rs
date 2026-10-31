@@ -9,7 +9,8 @@
 //! adding twice. A new one goes into its folders, made where missing; a changed one keeps its
 //! place. A change of server for a connection with stored secrets waits for the person's tick:
 //! its secrets would otherwise go to another server. Secrets go into the vault, never anywhere
-//! else.
+//! else. A colour theme of a connection that is not here, nor among the file's themes, for its
+//! mode is left out with a hint (`theme_missing`, RC-100-51); the row stays chosen as it was.
 
 #[path = "exchange_connections_values.rs"]
 mod values;
@@ -18,26 +19,27 @@ use std::collections::{HashMap, HashSet};
 
 use rc_vault::SecretString;
 
-use self::values::{endpoint, folded, ids_by_label, patch_of, renamed, same, walk};
+use self::values::{endpoint, fit_themes, folded, ids_by_label, patch_of, renamed, same, walk};
 use super::{
     exchange_import::{choose, written},
     exchange_import_rows::{joined, refused, row},
 };
 use crate::{
-    Connection, ConnectionId, Engine, EngineError, FolderId, LoginScriptDraft, LoginScriptId,
-    LoginScriptInfo, LoginScriptPatch, Outcome, SecretKind, SecretParam, SecretSourceRef,
-    TreeChange, TreeItem,
+    Connection, ConnectionDraft, ConnectionId, Engine, EngineError, FolderId, LoginScriptDraft,
+    LoginScriptId, LoginScriptInfo, LoginScriptPatch, Outcome, SecretKind, SecretParam,
+    SecretSourceRef, TreeChange, TreeItem,
     exchange::{
-        ConnectionsPart, ExchangePart, ExchangeRow, ExportedConnection, ExportedScript, RowStatus,
-        SOURCE_PREFIX,
+        ConnectionsPart, ExchangePart, ExchangeRow, ExportedConnection, ExportedScript,
+        ExportedTheme, RowStatus, SOURCE_PREFIX,
     },
 };
 
 impl Engine {
-    /// The scripts, then the connections.
+    /// The scripts, then the connections; `incoming` the file's themes a dry run has not written.
     pub(super) async fn exchange_connections(
         &self,
         part: &ConnectionsPart,
+        incoming: &[ExportedTheme],
         only: Option<&[String]>,
         dry_run: bool,
     ) -> Result<Vec<ExchangeRow>, EngineError> {
@@ -60,7 +62,9 @@ impl Engine {
             .map(|(path, connection)| (path.clone(), folded(&connection.name)))
             .collect();
         let mut seen = HashSet::new();
+        let themes = crate::settings::themes::load(db).await;
         for entry in &part.connections {
+            let (draft, unthemed) = fit_themes(&entry.connection, &themes, incoming);
             let mut row = row(
                 format!("connection:{}/{}", entry.source, entry.key),
                 ExchangePart::Connections,
@@ -111,7 +115,7 @@ impl Engine {
                 None => RowStatus::New,
                 Some((_, connection)) => {
                     let runs = connection.login_script_id == script_id.map(|id| id.0);
-                    if same(connection, &entry.connection) && runs {
+                    if same(connection, &draft) && runs {
                         RowStatus::Exists
                     } else {
                         let draft = super::exchange_export::draft_of(connection);
@@ -138,10 +142,14 @@ impl Engine {
                 row.warning = Some("network_location".to_owned());
             }
             choose(&mut row, only);
+            // Only a hint: the connection comes in, without the theme.
+            if unthemed && row.warning.is_none() {
+                row.warning = Some("theme_missing".to_owned());
+            }
             if !dry_run && row.selected {
                 let there = there.map(|(_, connection)| connection);
                 let result = self
-                    .write_connection(entry, there, script_id, &path, &mut folders)
+                    .write_connection(entry, &draft, there, script_id, &path, &mut folders)
                     .await;
                 let done = if there.is_some() {
                     RowStatus::Updated
@@ -160,10 +168,12 @@ impl Engine {
         Ok(rows)
     }
 
-    /// Writes one chosen connection: made in its folders, or updated; its script; its secrets.
+    /// Writes one chosen connection, with the fields of `draft`: made in its folders, or
+    /// updated; its script; its secrets.
     async fn write_connection(
         &self,
         entry: &ExportedConnection,
+        draft: &ConnectionDraft,
         there: Option<&Connection>,
         script: Option<LoginScriptId>,
         path: &[String],
@@ -174,15 +184,13 @@ impl Engine {
             None => {
                 let folder = self.exchange_folder(&entry.folders, path, folders).await?;
                 let made = db
-                    .create_marked_connection(folder, &entry.connection, &entry.source, &entry.key)
+                    .create_marked_connection(folder, draft, &entry.source, &entry.key)
                     .await?;
                 self.announce(TreeItem::Connection(made.id), TreeChange::Created);
                 made
             }
-            Some(there) if !same(there, &entry.connection) => {
-                let updated = db
-                    .update_connection(there.id, &patch_of(&entry.connection))
-                    .await?;
+            Some(there) if !same(there, draft) => {
+                let updated = db.update_connection(there.id, &patch_of(draft)).await?;
                 self.forget_remote(there.id).await;
                 self.announce(TreeItem::Connection(there.id), TreeChange::Updated);
                 updated
@@ -391,3 +399,7 @@ impl Engine {
         Ok(id)
     }
 }
+
+#[cfg(test)]
+#[path = "exchange_connections_tests.rs"]
+mod tests;

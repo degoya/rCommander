@@ -1,0 +1,10 @@
+# rCommander's winget version manifest (RC-100-53). Rendered from
+# packaging/winget/degoya.rCommander.yaml.in in @REPOSITORY@ by scripts/package-managers.sh and
+# submitted to microsoft/winget-pkgs by the release workflow: change the template, not this file.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+
+PackageIdentifier: degoya.rCommander
+PackageVersion: @VERSION@
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.12.0

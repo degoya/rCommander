@@ -1,0 +1,356 @@
+name: Package channels
+
+# RC-100-52, RC-100-53: rCommander installed through the Homebrew cask and formula, the Scoop
+# manifest and the winget manifests as scripts/package-managers.sh renders them from this tree's
+# templates, against a published release's archives - the newest release, or the one named by
+# hand - and, with `upgrade_from`, an older release installed first and upgraded by the manager.
+# After each install and upgrade scripts/ci-channel-check.sh runs `rcommander --version` from
+# PATH and `rcommander install-kind`, which names the manager (the update check's view). The
+# published tap and bucket are not read: they exist only once the owner made them, and the
+# release workflow moves them after this proved the templates (adapted from rDownloader's
+# package-channels.yml and channels.yml).
+#
+# Homebrew: the cask on macos-15, the formula on ubuntu-24.04, each from a local tap. The cask's
+# download carries the quarantine flag as for a person, who confirms it once in Gatekeeper's
+# dialog; a runner has no dialog, so the flag is taken off before the program runs.
+# Scoop on windows-2025, from the rendered manifest's path: `scoop update` reads the same path,
+# so the newer manifest copied over it is the update; the Start menu entry is checked.
+# winget on windows-2025: `winget validate`, `winget install --manifest`, `rcommander` resolving
+# into the package folder, `winget upgrade --manifest`, `winget uninstall`.
+#
+#   gh workflow run package-channels.yml -f release=v1.0.0 -f upgrade_from=v0.12.0
+on:
+  push:
+    branches: ["**", "!dependabot/**"]
+    paths:
+      - ".github/workflows/package-channels.yml"
+      - "packaging/homebrew/**"
+      - "packaging/scoop/**"
+      - "packaging/winget/**"
+      - "scripts/package-managers.sh"
+      - "scripts/ci-channel-check.sh"
+  # The same list as above; keep the two in step.
+  pull_request:
+    paths:
+      - ".github/workflows/package-channels.yml"
+      - "packaging/homebrew/**"
+      - "packaging/scoop/**"
+      - "packaging/winget/**"
+      - "scripts/package-managers.sh"
+      - "scripts/ci-channel-check.sh"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Release whose archives the managers install, e.g. v1.0.0 (empty takes the newest release)
+        required: false
+        default: ""
+      upgrade_from:
+        description: Older release installed first and upgraded from, e.g. v0.12.0 (empty installs the release only)
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.gate.outputs.release }}
+      from: ${{ steps.gate.outputs.from }}
+    steps:
+      - name: Decide which release to install
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          FROM: ${{ inputs.upgrade_from }}
+        run: |
+          set -euo pipefail
+          tag='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+          if [[ -z "${RELEASE}" ]]; then
+            RELEASE="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName --jq .tagName)"
+          fi
+          for value in "${RELEASE}" ${FROM:+"${FROM}"}; do
+            if [[ ! "${value}" =~ ${tag} ]]; then
+              echo "::error::'${value}' is not a release tag like v1.0.0"
+              exit 1
+            fi
+          done
+          echo "installing ${RELEASE}${FROM:+, upgraded from ${FROM}}"
+          { echo "release=${RELEASE}"; echo "from=${FROM}"; } >> "${GITHUB_OUTPUT}"
+
+  # The files of each release, rendered once and shared by every job below.
+  render:
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      RELEASE: ${{ needs.gate.outputs.release }}
+      FROM: ${{ needs.gate.outputs.from }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Render the files of each release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for release in "${RELEASE}" ${FROM:+"${FROM}"}; do
+            gh release download "${release}" --repo "${GITHUB_REPOSITORY}" --pattern SHA256SUMS \
+              --dir "sums/${release}"
+            scripts/package-managers.sh "${release}" "sums/${release}/SHA256SUMS" \
+              "rendered/${release}" --repository "${GITHUB_REPOSITORY}"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rendered
+          path: rendered
+          if-no-files-found: error
+          retention-days: 1
+
+  homebrew:
+    needs: [gate, render]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            kind: cask
+          - os: ubuntu-24.04
+            kind: formula
+    name: homebrew (${{ matrix.kind }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RELEASE: ${{ needs.gate.outputs.release }}
+      FROM: ${{ needs.gate.outputs.from }}
+      KIND: ${{ matrix.kind }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rendered
+          path: rendered
+      # The Ubuntu image carries Homebrew without putting it on PATH.
+      - name: Put Homebrew on PATH
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          test -x /home/linuxbrew/.linuxbrew/bin/brew
+          echo /home/linuxbrew/.linuxbrew/bin >> "${GITHUB_PATH}"
+      - name: Install from a local tap, upgrade, check
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew tap-new --no-git local/rcommander
+          tap="$(brew --repository local/rcommander)"
+          place() {
+            mkdir -p "${tap}/Casks" "${tap}/Formula"
+            cp "rendered/$1/homebrew/Casks/rcommander.rb" "${tap}/Casks/rcommander.rb"
+            cp "rendered/$1/homebrew/Formula/rcommander.rb" "${tap}/Formula/rcommander.rb"
+          }
+          install() {
+            if [[ "${KIND}" == cask ]]; then
+              brew install --cask local/rcommander/rcommander
+              xattr -dr com.apple.quarantine /Applications/rCommander.app || true
+            else
+              brew install local/rcommander/rcommander
+            fi
+          }
+          upgrade() {
+            if [[ "${KIND}" == cask ]]; then
+              brew upgrade --cask local/rcommander/rcommander
+              xattr -dr com.apple.quarantine /Applications/rCommander.app || true
+            else
+              brew upgrade local/rcommander/rcommander
+            fi
+          }
+          if [[ -n "${FROM}" ]]; then
+            place "${FROM}"
+            install
+            scripts/ci-channel-check.sh homebrew "${FROM}"
+            place "${RELEASE}"
+            upgrade
+          else
+            place "${RELEASE}"
+            install
+          fi
+          scripts/ci-channel-check.sh homebrew "${RELEASE}"
+          if [[ "${KIND}" == formula ]]; then
+            brew test local/rcommander/rcommander
+            brew uninstall rcommander
+          else
+            test -d /Applications/rCommander.app
+            brew uninstall --cask rcommander
+            test ! -e /Applications/rCommander.app
+          fi
+
+  scoop:
+    needs: [gate, render]
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RELEASE: ${{ needs.gate.outputs.release }}
+      FROM: ${{ needs.gate.outputs.from }}
+      # The Scoop installer at a commit and its SHA-256, as rDownloader pins it.
+      SCOOP_INSTALLER_COMMIT: 1e2f334083d609986d8c8bc9e31ae8e87c39fab4
+      SCOOP_INSTALLER_SHA256: 94f983b190438311e006b957db7c8422709e0ba62a6c2ac04e278164108f2512
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rendered
+          path: rendered
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Join-Path $env:RUNNER_TEMP 'scoop-install.ps1'
+          Invoke-WebRequest "https://raw.githubusercontent.com/ScoopInstaller/Install/$($env:SCOOP_INSTALLER_COMMIT)/install.ps1" -OutFile $installer
+          $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
+          if ($hash -ne $env:SCOOP_INSTALLER_SHA256) { throw "the Scoop installer's SHA-256 is $hash" }
+          & $installer -RunAsAdmin
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\scoop\shims"
+      # One manifest path for both: `scoop update` reads the path the install came from.
+      - name: Install from the manifest, update, check
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="${RUNNER_TEMP}/rcommander.json"
+          if [[ -n "${FROM}" ]]; then
+            cp "rendered/${FROM}/scoop/bucket/rcommander.json" "${manifest}"
+            scoop install "$(cygpath -w "${manifest}")"
+            scripts/ci-channel-check.sh scoop "${FROM}"
+            cp "rendered/${RELEASE}/scoop/bucket/rcommander.json" "${manifest}"
+            scoop update rcommander
+          else
+            cp "rendered/${RELEASE}/scoop/bucket/rcommander.json" "${manifest}"
+            scoop install "$(cygpath -w "${manifest}")"
+          fi
+          scripts/ci-channel-check.sh scoop "${RELEASE}"
+          shortcut="${APPDATA}/Microsoft/Windows/Start Menu/Programs/Scoop Apps/rCommander.lnk"
+          test -f "${shortcut}" || { echo "::error::no Start menu entry at ${shortcut}"; exit 1; }
+          scoop uninstall rcommander
+
+  winget:
+    needs: [gate, render]
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RELEASE: ${{ needs.gate.outputs.release }}
+      FROM: ${{ needs.gate.outputs.from }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rendered
+          path: rendered
+      # The runner image's winget can be older than the manifests' schema (1.12.0). A client
+      # older than the pinned one is replaced by that winget-cli release, its App Installer bundle
+      # and the x64 dependencies it ships, each checked against its SHA-256 (rDownloader's pins).
+      # Windows PowerShell, not pwsh: the Appx cmdlets belong to it.
+      - name: Bring winget up to date
+        shell: powershell
+        env:
+          WINGET_CLI_VERSION: 1.29.380
+          WINGET_BUNDLE_SHA256: 65dea9c01ce08ee7b763366b27c0e651f97db857c11ca9b9c301826c10092f2e
+          WINGET_DEPENDENCIES_SHA256: ba875afe9d190f61218985ac0292a99d1db710bf93e13c68944ca9d89f0d82d1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $aliases = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
+          $env:PATH = "$aliases;$env:PATH"
+          Add-Content -Path $env:GITHUB_PATH -Value $aliases
+          $present = [version]'0.0.0'
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            if ("$(winget --version)" -match '^v?(\d+\.\d+\.\d+)') { $present = [version]$Matches[1] }
+          }
+          Write-Host "winget on the image: $present, pinned: $($env:WINGET_CLI_VERSION)"
+          if ($present -lt [version]$env:WINGET_CLI_VERSION) {
+            $dir = Join-Path $env:RUNNER_TEMP 'winget-cli'
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            $base = "https://github.com/microsoft/winget-cli/releases/download/v$($env:WINGET_CLI_VERSION)"
+            $files = @{
+              'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle' = $env:WINGET_BUNDLE_SHA256
+              'DesktopAppInstaller_Dependencies.zip' = $env:WINGET_DEPENDENCIES_SHA256
+            }
+            foreach ($name in $files.Keys) {
+              curl.exe --fail --silent --show-error --location --retry 3 --output "$dir\$name" "$base/$name"
+              if ($LASTEXITCODE -ne 0) { throw "cannot download $name ($LASTEXITCODE)" }
+              $hash = (Get-FileHash -Algorithm SHA256 -Path "$dir\$name").Hash
+              if ($hash -ne $files[$name]) { throw "$name has SHA-256 $hash, expected $($files[$name])" }
+            }
+            Expand-Archive -Path "$dir\DesktopAppInstaller_Dependencies.zip" -DestinationPath "$dir\dependencies"
+            foreach ($appx in Get-ChildItem -Path "$dir\dependencies\x64\*.appx") {
+              $package, $version = $appx.BaseName.Split('_')[0, 1]
+              $installed = @(Get-AppxPackage -Name $package | Where-Object { $_.Architecture -eq 'X64' -and [version]$_.Version -ge [version]$version })
+              if ($installed.Count -eq 0) {
+                Write-Host "adding $($appx.Name)"
+                Add-AppxPackage -Path $appx.FullName
+              }
+            }
+            Add-AppxPackage -Path "$dir\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -ForceApplicationShutdown
+          }
+          winget --version
+          if ($LASTEXITCODE -ne 0) { throw "winget is not usable" }
+          winget settings --enable LocalManifestFiles
+          if ($LASTEXITCODE -ne 0) { throw "cannot allow local manifests" }
+      - name: Validate, install, upgrade, uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $common = @('--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+          $new = Join-Path $env:GITHUB_WORKSPACE "rendered\$($env:RELEASE)\winget"
+          winget validate --manifest $new
+          if ($LASTEXITCODE -ne 0) { throw "winget validate refused the manifests of $($env:RELEASE) ($LASTEXITCODE)" }
+          $bash = 'C:\Program Files\Git\bin\bash.exe'
+          function Refresh-Path {
+            # winget puts the package folder on the user's PATH; a new shell would see it. Each
+            # entry once, so the PATH does not grow with every call.
+            $entries = ([Environment]::GetEnvironmentVariable('PATH', 'User') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + $env:PATH) -split ';'
+            $env:PATH = ($entries | Where-Object { $_ } | Select-Object -Unique) -join ';'
+          }
+          function Check($release) {
+            Refresh-Path
+            & $bash scripts/ci-channel-check.sh winget $release
+            if ($LASTEXITCODE -ne 0) { throw "the check of $release failed" }
+          }
+          if ($env:FROM) {
+            winget install --manifest (Join-Path $env:GITHUB_WORKSPACE "rendered\$($env:FROM)\winget") @common
+            if ($LASTEXITCODE -ne 0) { throw "winget install of $($env:FROM) failed ($LASTEXITCODE)" }
+            Check $env:FROM
+            winget upgrade --manifest $new @common
+            if ($LASTEXITCODE -ne 0) { throw "winget upgrade to $($env:RELEASE) failed ($LASTEXITCODE)" }
+          } else {
+            winget install --manifest $new @common
+            if ($LASTEXITCODE -ne 0) { throw "winget install of $($env:RELEASE) failed ($LASTEXITCODE)" }
+          }
+          Check $env:RELEASE
+          # The program runs from the package folder itself, not from a link in WinGet\Links:
+          # its bundled plugins are beside it.
+          $folders = @(Get-ChildItem -Directory "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Filter 'degoya.rCommander_*')
+          if ($folders.Count -ne 1) { throw "expected one degoya.rCommander_* package folder, found $($folders.Count)" }
+          $resolved = (Get-Command rcommander).Source
+          if (-not $resolved.StartsWith($folders[0].FullName)) { throw "rcommander resolves to $resolved, not into $($folders[0].FullName)" }
+          if (-not (Test-Path (Join-Path (Split-Path $resolved) 'plugins'))) { throw "no plugins folder beside $resolved" }
+          winget uninstall --manifest $new --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { throw "winget uninstall failed ($LASTEXITCODE)" }
+          exit 0

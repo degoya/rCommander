@@ -19,7 +19,7 @@ use super::{
     database_dialog::DatabaseMsg,
     multi_rename::{Field, MrMsg},
     quick_connect::QuickMsg,
-    settings::{PluginsMsg, SettingsMessage},
+    settings::{PluginsMsg, SettingsMessage, ThemesMsg},
 };
 use crate::{
     i18n::t,
@@ -55,6 +55,8 @@ pub enum PathField {
     ChecksumTarget,
     /// A plugin package to install (RC-100-09).
     PluginPackage,
+    /// The `.rctheme` file the Themes tab imports or exports (RC-100-50).
+    ThemeFile,
 }
 
 impl PathField {
@@ -158,6 +160,17 @@ impl PathField {
                 ],
                 Fallback::Dialog,
             ),
+            Self::ThemeFile => (
+                Kind::Open,
+                vec![
+                    Filter {
+                        label: t!("browse.filter.themes"),
+                        spec: "*.rctheme",
+                    },
+                    all,
+                ],
+                Fallback::Dialog,
+            ),
             Self::RenameLog => (
                 Kind::Save,
                 vec![
@@ -196,6 +209,7 @@ impl PathField {
             Self::PluginPackage => {
                 Message::Settings(SettingsMessage::Plugins(PluginsMsg::Path(path)))
             }
+            Self::ThemeFile => Message::Settings(SettingsMessage::Themes(ThemesMsg::File(path))),
         }
     }
 }

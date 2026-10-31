@@ -416,5 +416,22 @@ pub(super) fn more() -> Vec<Command> {
         Command::ListSecretSources {
             connection_id: Some(ConnectionId(1)),
         },
+        Command::ListThemes {},
+        Command::SelectTheme {
+            mode: crate::settings::themes::ThemeMode::Dark,
+            id: "nord-dark".into(),
+        },
+        Command::SaveTheme {
+            theme: crate::settings::themes::ThemeDraft {
+                id: Some("own-1f2e3d4c".into()),
+                name: "Night".into(),
+                dark: true,
+                accent: "system".into(),
+                tokens: [("window".to_owned(), "#101010".to_owned())].into(),
+            },
+        },
+        Command::DeleteTheme {
+            id: "own-1f2e3d4c".into(),
+        },
     ]
 }

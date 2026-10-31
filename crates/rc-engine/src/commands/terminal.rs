@@ -106,6 +106,15 @@ impl Engine {
             .map(|entry| Arc::clone(&entry.session))
     }
 
+    /// The SSH connection a terminal session runs on; `None` for a local or WSL shell, and for
+    /// a session that is gone (RC-100-51: its colours are the connection's theme's).
+    #[must_use]
+    pub fn terminal_connection(&self, terminal: TermId) -> Option<ConnectionId> {
+        self.terminals()
+            .get(&terminal)
+            .and_then(|entry| entry.remote.as_ref().map(|remote| remote.connection))
+    }
+
     /// `terminal.open`: a local or WSL shell in `cwd` (resolved against the panel's folder), or
     /// in the panel's folder. The panel shows it at once, in place of its files or of the session
     /// it showed; an MCP client's terminal appears where the person looks.

@@ -414,6 +414,24 @@ pub enum EngineError {
     /// [`crate::UpdateRefusal`].
     #[error(transparent)]
     Update(crate::UpdateRefusal),
+    /// No colour theme has this id, or none this system offers (RC-100-50).
+    #[error("there is no theme {id:?}")]
+    ThemeUnknown { id: String },
+    /// The theme is of the other mode than the one it was chosen or saved for.
+    #[error("theme {id:?} is not a {mode} theme")]
+    ThemeWrongMode { id: String, mode: &'static str },
+    /// A built-in theme is neither changed nor deleted; Duplicate makes an own one of it.
+    #[error("theme {id:?} is built in; duplicate it to change it")]
+    ThemeBuiltin { id: String },
+    /// A mode draws with the theme; another is chosen before it is deleted.
+    #[error("theme {id:?} is chosen; choose another before deleting it")]
+    ThemeInUse { id: String },
+    /// Another own theme has this name (case does not count).
+    #[error("another theme is named {name:?}")]
+    ThemeNameTaken { name: String },
+    /// A theme to save that does not fit: no name, an unknown token, a colour no `#rrggbb`.
+    #[error("the theme does not fit: {reason}")]
+    ThemeInvalid { reason: String },
     /// An MCP call the person allowed found a panel in another folder than the question showed
     /// (RC-080-34): the names it carries would mean other entries there.
     #[error(

@@ -115,7 +115,9 @@ fn every_error_code_has_a_message() {
         .chain(rc_engine::ScriptInvalid::ALL_CODES)
         .chain(rc_remote::login_script::ScriptError::ALL_CODES)
         .chain(rc_mcp::ALL_CODES)
-        .chain(rc_engine::plugins::ALL_CODES);
+        .chain(rc_engine::plugins::ALL_CODES)
+        .chain(rc_engine::settings::themes::ThemeFileError::ALL_CODES)
+        .chain(&["theme_file_unreadable", "theme_file_unwritable"]);
     let missing: Vec<String> = codes
         .map(|code| format!("error.{code}"))
         .filter(|key| !english().contains_key(key))

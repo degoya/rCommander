@@ -1,5 +1,5 @@
 //! What the window applies at once when a setting changes - the theme, the stripes, the fonts,
-//! the colours (RC-100-43),
+//! the colour themes and the colours by file type (RC-100-50, RC-100-43),
 //! the menu bar, the drive lines, the keys (RC-100-21) and whether Cmd is Ctrl on macOS
 //! (RC-100-49) - and the light or dark look. Split from `settings.rs` to keep it
 //! under 500 lines (RC-100-09).
@@ -13,7 +13,7 @@ use rc_engine::settings::{
     stored_bool,
 };
 
-use super::{SettingsMessage, colours_page, save, wrap};
+use super::{SettingsMessage, save, themes_page, wrap};
 use crate::{
     app::{App, Effect, Message, drive_bar},
     theme::ThemeChoice,
@@ -28,8 +28,8 @@ impl App {
         if FONT_KEYS.contains(&key) {
             return vec![Effect::Task(self.fonts_task())];
         }
-        if colours_page::concerns(key) {
-            return vec![Effect::Task(self.colours_task())];
+        if themes_page::concerns(key) {
+            return vec![Effect::Task(self.themes_task())];
         }
         if key == MENU_BAR_KEY {
             return vec![Effect::Task(self.menu_bar_task())];
@@ -58,7 +58,7 @@ impl App {
         vec![Effect::Task(task)]
     }
 
-    /// Reads whether the lists and tables are striped, the fonts and colours they are drawn in
+    /// Reads whether the lists and tables are striped, the fonts and the themes they are drawn in
     /// and what the drive lines show (the start reads all four here).
     pub(in crate::app) fn stripes_task(&self) -> Task<Message> {
         let Some(db) = self.db.clone() else {
@@ -70,19 +70,9 @@ impl App {
         Task::batch([
             stripes,
             self.fonts_task(),
-            self.colours_task(),
+            self.themes_task(),
             self.drive_line_task(),
         ])
-    }
-
-    /// Reads the colours of the lists and the rules by file type (RC-100-43).
-    fn colours_task(&self) -> Task<Message> {
-        let Some(db) = self.db.clone() else {
-            return Task::none();
-        };
-        Task::perform(colours_page::read(db), |colours| {
-            wrap(SettingsMessage::Colours(Box::new(colours)))
-        })
     }
 
     /// Reads the chosen fonts and resolves them against the installed ones (RC-010-17).
@@ -124,6 +114,8 @@ impl App {
     pub(in crate::app) fn set_theme(&mut self, choice: ThemeChoice) -> Vec<Effect> {
         self.follow_system = choice == ThemeChoice::System;
         self.dark = choice.is_dark(self.system_dark);
+        // The terminals take the colours of the mode's theme (RC-100-50).
+        self.restyle_terminals();
         if self.follow_system {
             return vec![Effect::Task(system::theme().map(Message::SystemTheme))];
         }

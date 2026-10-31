@@ -230,6 +230,11 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
         "one row per open folder tab of the two panels, rewritten whole when the app ends",
     ),
     (
+        "themes",
+        "one row per colour theme a person made, duplicated or imported (RC-100-50); a person \
+         removes them, an edit replaces its row",
+    ),
+    (
         "tls_certificates",
         "at most one row per FTPS host and port: the certificate a person trusted; removed by a \
          person, never appended",

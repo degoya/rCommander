@@ -476,6 +476,8 @@ pub enum Outcome {
     SecretSources(Box<crate::SecretSourcesOutcome>),
     /// The self-update's state (`update.*`, RC-100-05).
     Update(Box<crate::UpdateStatus>),
+    /// The colour themes after a `theme` command (RC-100-50).
+    Themes(Box<crate::settings::themes::ThemesOutcome>),
 }
 
 impl Outcome {

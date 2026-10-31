@@ -12,7 +12,8 @@
 //! * [`offer`] - which verified version is offered: never a downgrade, never a beta on stable.
 //! * [`download`] - an artifact streamed to disk and kept only when size and SHA-256 match.
 //! * [`state`] - what an installation remembers between starts (`update.state`).
-//! * [`install_kind`] - whether this installation updates itself (the portable package only).
+//! * [`install_kind`] - whether this installation updates itself (the portable package only) or
+//!   a package manager does, and its command (Scoop, Homebrew, winget, deb, rpm).
 //! * [`install`] - the journalled switch, the updater's run, the roll-back and the recovery at
 //!   start (RC-100-06).
 //! * [`auto_install`] - when an offer installs by itself (RC-100-07).

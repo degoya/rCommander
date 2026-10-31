@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rCommander packages</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; }
+  pre { background: #f4f4f5; padding: 0.75rem; overflow-x: auto; }
+  @media (prefers-color-scheme: dark) { body { background: #18181b; color: #e4e4e7; } pre { background: #27272a; } a { color: #93c5fd; } }
+</style>
+</head>
+<body>
+<h1>rCommander packages for apt and dnf</h1>
+<p>The signed apt and dnf repositories of <a href="https://rcommander.net">rCommander</a>, for x86-64 and arm64.</p>
+<h2>Debian and Ubuntu</h2>
+<pre>sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL @BASE_URL@/rcommander-packages.asc | sudo tee /etc/apt/keyrings/rcommander-packages.asc &gt; /dev/null
+curl -fsSL @BASE_URL@/rcommander.sources | sudo tee /etc/apt/sources.list.d/rcommander.sources &gt; /dev/null
+sudo apt update
+sudo apt install rcommander</pre>
+<h2>Fedora</h2>
+<pre>sudo curl -fsSL -o /etc/yum.repos.d/rcommander.repo @BASE_URL@/rcommander.repo
+sudo dnf install rcommander</pre>
+<p>Signing key: <a href="rcommander-packages.asc"><code>@FINGERPRINT@</code></a>. The last @KEEP@ versions of each package stay for a downgrade.
+Installation handbook: <a href="https://github.com/@REPOSITORY@/wiki/installation">wiki/installation</a>.</p>
+</body>
+</html>

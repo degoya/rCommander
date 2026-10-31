@@ -35,10 +35,24 @@ RC_PUBLIC_CI_ALL="linux,windows,macos"
 # One run as a line, "<id> <status> <conclusion or -> <url> <name>", from `gh run list`'s JSON.
 RC_PUBLIC_CI_RUN_JQ='.[] | "\(.databaseId) \(.status) \(if (.conclusion // "") == "" then "-" else .conclusion end) \(.url) \(.name)"'
 
+# gh usable for github.com: 0 yes; 2 no gh, or gh's own answer that nobody is signed in or the
+# token is invalid; 1 when `gh auth status` failed three times otherwise - a timeout or the
+# network, seen in a freshly detached session - which is "not finished", not a missing login.
 rc_public_ci_gh_ready() {
-    command -v gh > /dev/null || { echo "gh is required to watch the public CI" >&2; return 1; }
-    gh auth status --hostname github.com > /dev/null 2>&1 \
-        || { echo "gh is not signed in to github.com (gh auth login)" >&2; return 1; }
+    command -v gh > /dev/null || { echo "gh is required to watch the public CI" >&2; return 2; }
+    local attempt out=""
+    for attempt in 1 2 3; do
+        [[ $attempt -eq 1 ]] || sleep "${RC_PUBLIC_CI_AUTH_PAUSE:-10}"
+        out="$(timeout "${RC_PUBLIC_CI_AUTH_TIMEOUT:-30}" gh auth status --hostname github.com 2>&1)" \
+            && return 0
+        if grep -qiE 'not logged in|token .* is invalid' <<< "$out"; then
+            echo "gh is not signed in to github.com (gh auth login)" >&2
+            return 2
+        fi
+    done
+    echo "gh auth status failed three times, not for want of a login (timeout or network?):" >&2
+    printf '%s\n' "${out:-(no output; timed out after ${RC_PUBLIC_CI_AUTH_TIMEOUT:-30} s)}" >&2
+    return 1
 }
 
 # The runner images, one per line, of a comma-separated list of systems (linux, windows, macos)

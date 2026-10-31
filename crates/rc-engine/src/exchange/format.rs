@@ -109,6 +109,9 @@ pub struct Content {
     pub trust: Option<TrustPart>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotlist: Option<HotlistPart>,
+    /// The own colour themes, which go with the settings (RC-100-50).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub themes: Option<Vec<super::ExportedTheme>>,
 }
 
 /// One setting of the schema and its value.
@@ -378,6 +381,9 @@ impl Content {
                     text(field, "a certificate")?;
                 }
             }
+        }
+        if let Some(themes) = &self.themes {
+            items(themes.len(), "themes")?;
         }
         if let Some(hotlist) = &self.hotlist {
             items(hotlist.items.len(), "hotlist")?;

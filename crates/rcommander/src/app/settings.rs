@@ -18,8 +18,9 @@
 //! back, resumes and removes them, and sets their own settings; its switches and limits are
 //! schema rows like any other. The Plugins and Appearance pages are split into tabs (RC-100-20,
 //! `tabs.rs`); the tab each shows is the app's for the session. The Keyboard page's Shortcuts tab
-//! changes the keys (RC-100-21, `shortcuts.rs`). What the window applies at once when a setting
-//! changes - the keys among it - is `apply.rs`.
+//! changes the keys (RC-100-21, `shortcuts.rs`); the Appearance page's Themes tab chooses, edits,
+//! imports and exports the colour themes (RC-100-50, `themes_page.rs`). What the window applies at
+//! once when a setting changes - the keys among it - is `apply.rs`.
 
 mod about;
 mod apply;
@@ -36,6 +37,7 @@ mod saving;
 mod shortcuts;
 mod shortcuts_view;
 mod tabs;
+mod themes_page;
 mod view;
 
 use iced::Task;
@@ -50,6 +52,9 @@ pub use self::plugins::{PluginsCall, PluginsMsg};
 pub use self::save::Stored;
 pub use self::shortcuts::ShortcutsMsg;
 pub use self::tabs::{Tab, Tabs};
+pub use self::themes_page::ThemesMsg;
+// The themes read before the window opens (`startup.rs`).
+pub(super) use self::themes_page::read as read_themes;
 // The read the dialog's task runs, for the tests that draw the pages (`field_walk`).
 #[cfg(test)]
 pub(super) use self::save::load;
@@ -151,10 +156,9 @@ pub enum SettingsMessage {
     MonoOnly(bool),
     /// The fonts the settings choose, resolved; read at the start and after one changed.
     Fonts(Box<Fonts>),
-    /// The colours and the rules by file type, read at the start and after one changed
-    /// (RC-100-43).
-    Colours(Box<colours_page::ColourSettings>),
-    /// Opens the system's colour dialog for a colour of the Colours tab.
+    /// The Themes tab and the themes the window draws with (RC-100-50).
+    Themes(ThemesMsg),
+    /// Opens the system's colour dialog for a colour of the rules by file type.
     Pick(colours_page::PickTarget),
     /// The colour the dialog gave, `#rrggbb`; `None` when it was cancelled.
     Picked(colours_page::PickTarget, Option<String>),
@@ -178,6 +182,7 @@ pub struct SettingsDialog {
     host_keys: host_keys::HostKeysPage,
     plugins: plugins::PluginsPage,
     shortcuts: shortcuts::ShortcutsPage,
+    themes: themes_page::ThemesPage,
     /// What the Updates page shows, read when the dialog opens and after each change.
     updates: Option<Box<rc_engine::UpdateStatus>>,
 }
@@ -194,6 +199,7 @@ impl SettingsDialog {
             host_keys: host_keys::HostKeysPage::default(),
             plugins: plugins::PluginsPage::default(),
             shortcuts: shortcuts::ShortcutsPage::default(),
+            themes: themes_page::ThemesPage::default(),
             updates: None,
         }
     }
@@ -259,11 +265,14 @@ impl App {
         if let SettingsMessage::Theme(choice) = message {
             return self.set_theme(choice);
         }
+        if let SettingsMessage::Themes(message) = message {
+            return self.themes_message(message);
+        }
         if let SettingsMessage::Stripes(on) = message {
             theme::set_stripes(on);
             return Vec::new();
         }
-        // The Colours tab: what is stored applied, the colour dialog opened and answered.
+        // The rules by file type: a rule edited, the colour dialog opened and answered.
         let message = match self.colours_message(message) {
             Ok(effects) => return effects,
             Err(message) => message,
@@ -274,7 +283,7 @@ impl App {
             return Vec::new();
         }
         if let SettingsMessage::Cancel = message {
-            self.settings = None;
+            self.close_settings();
             return Vec::new();
         }
         // Also when the dialog closed while it saved: the result is the window's then.
@@ -375,7 +384,7 @@ impl App {
             | SettingsMessage::Theme(_)
             | SettingsMessage::Stripes(_)
             | SettingsMessage::Fonts(_)
-            | SettingsMessage::Colours(_)
+            | SettingsMessage::Themes(_)
             | SettingsMessage::Pick(_)
             | SettingsMessage::Picked(..)
             | SettingsMessage::ColourRule(..)
@@ -400,8 +409,16 @@ impl App {
         });
         vec![
             Effect::Task(task),
+            Effect::Task(self.themes_task()),
             super::update_ui::status_task(&self.engine),
         ]
+    }
+
+    /// The dialog closed: a theme's preview it drew ends with it, so the terminals take the
+    /// chosen theme's colours again (RC-100-50).
+    pub(super) fn close_settings(&mut self) {
+        self.settings = None;
+        self.restyle_terminals();
     }
 
     /// While the dialog is open, keys and clicks belong to it: Escape closes it, Enter is OK (as
@@ -428,7 +445,7 @@ impl App {
         }
         match message {
             Message::Key(chord) if *chord == escape() => {
-                self.settings = None;
+                self.close_settings();
                 Some(Vec::new())
             }
             Message::Key(chord) if *chord == enter() => Some(if busy {

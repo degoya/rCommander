@@ -8,9 +8,13 @@
 //!
 //! The same form edits a shared credential (RC-050-12, [`Subject::Credential`]): its name, its
 //! user and its secrets. A connection that points at one shows the choice instead of secret
-//! fields of its own.
+//! fields of its own. A connection chooses a colour theme for each mode (RC-100-51): Default (the
+//! window's) or a theme of that mode.
 
 mod plan;
+mod themes;
+
+pub use themes::theme_choices;
 
 use rc_engine::{
     AuthMethod, Connection, ConnectionId, ConnectionKind, Credential, CredentialId, DefaultView,
@@ -39,6 +43,9 @@ pub enum Field {
     View,
     StartDirectory,
     Notes,
+    /// The theme of its panel and SSH terminal in the light and in the dark mode (RC-100-51).
+    ThemeLight,
+    ThemeDark,
     Favourite,
 }
 
@@ -65,6 +72,8 @@ impl Field {
             Self::Forget(SecretKind::Passphrase) => "rcommander.connections.forget_passphrase",
             Self::Script => "rcommander.connections.script",
             Self::View => "rcommander.connections.view",
+            Self::ThemeLight => "rcommander.connections.theme_light",
+            Self::ThemeDark => "rcommander.connections.theme_dark",
             Self::Favourite => "rcommander.connections.favourite",
         }
     }
@@ -79,6 +88,8 @@ impl Field {
             "auth_unsupported" => Self::Auth,
             "credential_not_found" => Self::Credential,
             "view_unsupported" => Self::View,
+            // The engine names no mode: the light one's list stands first (RC-100-51).
+            "theme_unknown" | "theme_wrong_mode" => Self::ThemeLight,
             "secret_empty" => Self::Password,
             "key_format_unknown" | "key_file_unreadable" | "key_path_refused" => Self::KeyPath,
             "key_passphrase_needed" | "key_passphrase_wrong" => Self::Passphrase,
@@ -136,6 +147,9 @@ pub struct Form {
     pub view: DefaultView,
     pub start_directory: String,
     pub notes: String,
+    /// The theme id of the light and of the dark mode; `None` for the window's (RC-100-51).
+    pub theme_light: Option<String>,
+    pub theme_dark: Option<String>,
     pub favourite: bool,
     /// Which secrets are stored; never their values.
     pub stored: SecretFlags,
@@ -176,6 +190,8 @@ impl Form {
             view: DefaultView::default(),
             start_directory: String::new(),
             notes: String::new(),
+            theme_light: None,
+            theme_dark: None,
             favourite: folder.is_none(),
             stored: SecretFlags::default(),
             stored_key: None,
@@ -245,6 +261,8 @@ impl Form {
             view: connection.default_view,
             start_directory: connection.start_directory.clone().unwrap_or_default(),
             notes: connection.notes.clone().unwrap_or_default(),
+            theme_light: connection.theme_light.clone(),
+            theme_dark: connection.theme_dark.clone(),
             favourite,
             stored: connection.secrets,
             stored_key: connection.key.clone(),
@@ -391,6 +409,8 @@ impl Form {
             Field::View,
             Field::StartDirectory,
             Field::Notes,
+            Field::ThemeLight,
+            Field::ThemeDark,
             Field::Favourite,
         ]);
         fields

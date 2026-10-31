@@ -57,6 +57,7 @@ mod ssh_exec;
 mod ssh_terminal;
 mod tabs;
 mod terminal;
+mod theme;
 mod update;
 mod vault;
 mod viewer;
@@ -137,6 +138,7 @@ macro_rules! command_groups {
             queue,
             app,
             update,
+            theme,
         ] }
     };
 }

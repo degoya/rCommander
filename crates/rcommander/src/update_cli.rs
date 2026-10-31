@@ -6,6 +6,11 @@
 //! the files, starts the new version and waits for its proof in the journal, or takes the switch
 //! back. Its output goes to `<data>/update/updater.log` (the window started it so); it opens no
 //! window and no console.
+//!
+//! `install-kind` (hidden, RC-100-52) prints what the update check takes this installation for -
+//! `portable`, `scoop`, `homebrew`, `winget`, `deb`, `rpm` or `unknown` - and on a second line
+//! the package manager's command, if one updates it: what the package channels' CI checks after
+//! installing through a manager (`package-channels.yml`, `packages-repo.yml`).
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -62,4 +67,19 @@ pub fn recover_before_window() -> bool {
             false
         }
     }
+}
+
+/// `rcommander install-kind`.
+pub fn print_install_kind() -> ExitCode {
+    crate::console::attach_parent();
+    let Ok(executable) = std::env::current_exe() else {
+        eprintln!("rcommander install-kind: the running program cannot be located");
+        return ExitCode::FAILURE;
+    };
+    let found = rc_update::install_kind::detect(&executable);
+    println!("{}", found.kind.as_str());
+    if let Some(command) = found.kind.update_command() {
+        println!("{command}");
+    }
+    ExitCode::SUCCESS
 }

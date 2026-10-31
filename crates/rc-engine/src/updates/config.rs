@@ -47,6 +47,20 @@ impl UpdateConfig {
         }
     }
 
+    /// What a package manager's installation (RC-100-52 ... RC-100-54) makes of the stored
+    /// settings: the stable channel, since the tap, the bucket, winget and the repositories carry
+    /// no pre-release, and no automatic install, since the manager updates it. Portable and
+    /// unknown installations keep them.
+    pub(crate) fn for_kind(&mut self, kind: rc_update::InstallKind) {
+        if kind.update_command().is_none() {
+            return;
+        }
+        if !kind.receives_betas() {
+            self.channel = Channel::Stable;
+        }
+        self.auto = AutoMode::Off;
+    }
+
     /// The settings stored in `db`.
     pub(crate) async fn read(db: &Db, running: &str) -> Self {
         let text = |value: Option<Value>| {

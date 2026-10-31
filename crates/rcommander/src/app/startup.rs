@@ -141,6 +141,13 @@ async fn prepare() -> Result<Setup, EngineError> {
     };
     crate::keymap::set_cmd_as_ctrl(cmd_as_ctrl);
     theme::init(mac_look);
+    // The colour themes before the window opens, so its first frame has them (RC-100-50).
+    if let Some(db) = &db {
+        let read = super::settings::read_themes(db.clone()).await;
+        theme::themes::set_state(&read.state);
+        theme::themes::set_assigned(read.connections);
+        theme::colour_rules::set_rules(&read.rules);
+    }
     let home = start_directory();
     let left = VfsPath::local(start_folder(db.as_ref(), LEFT_START_KEY, &home).await);
     let right = VfsPath::local(start_folder(db.as_ref(), RIGHT_START_KEY, &home).await);

@@ -30,6 +30,7 @@ mod model;
 mod origin;
 mod save;
 mod store;
+mod themes;
 mod validate;
 
 use sqlx::{Row as _, sqlite::SqliteRow};
@@ -50,7 +51,8 @@ pub use model::{
 pub use origin::{ConnectionOrigin, INSTALLATION_KEY, check_draft};
 pub use save::{ConnectionSave, SaveError, SaveTarget, SecretWrite};
 pub(crate) use store::fetch;
-pub use validate::{MAX_PATH_CHARS, MAX_TEXT_CHARS};
+pub use themes::ConnectionThemes;
+pub use validate::{MAX_PATH_CHARS, MAX_TEXT_CHARS, MAX_THEME_ID_CHARS};
 
 /// How deep folders may nest; the root's folders are level 1.
 pub const MAX_DEPTH: usize = 32;
@@ -58,13 +60,33 @@ pub const MAX_DEPTH: usize = 32;
 /// The result of every connection-tree call.
 pub type TreeResult<T> = Result<T, ConnectionError>;
 
+/// A connection's theme column as it is read (RC-100-51): an own theme's id that no row of
+/// `themes` has any more reads as NULL - the theme was deleted, the window's applies.
+macro_rules! theme_column {
+    ($column:literal) => {
+        concat!(
+            "CASE WHEN ",
+            $column,
+            " LIKE 'own-%' AND NOT EXISTS (SELECT 1 FROM themes WHERE themes.id = connections.",
+            $column,
+            ") THEN NULL ELSE ",
+            $column,
+            " END AS ",
+            $column
+        )
+    };
+}
+
 /// `SELECT <every connection column> FROM connections <tail>`, as one static string.
 macro_rules! select_connections {
     ($tail:literal) => {
         concat!(
             "SELECT id, folder_id, name, kind, host, port, username, auth_method, key_path, \
-             login_script_id, default_view, start_directory, notes, ftp_data_mode, ftp_encoding, \
-             sort_order, created_at, updated_at, password_enc IS NOT NULL AS has_password, \
+             login_script_id, default_view, start_directory, notes, ftp_data_mode, ftp_encoding, ",
+            $crate::connections::theme_column!("theme_light"),
+            ", ",
+            $crate::connections::theme_column!("theme_dark"),
+            ", sort_order, created_at, updated_at, password_enc IS NOT NULL AS has_password, \
              key_enc IS NOT NULL AS has_key, passphrase_enc IS NOT NULL AS has_passphrase, \
              key_type, key_fingerprint, key_comment, key_public, credential_id FROM connections ",
             $tail
@@ -85,6 +107,7 @@ macro_rules! select_folders {
 
 pub(crate) use select_connections;
 pub(crate) use select_folders;
+pub(crate) use theme_column;
 
 /// A TEXT column holding one of an enum's names.
 fn text_column<T>(row: &SqliteRow, column: &str, parse: fn(&str) -> Option<T>) -> sqlx::Result<T> {
@@ -134,6 +157,8 @@ pub(crate) fn connection_from_row(row: &SqliteRow) -> sqlx::Result<Connection> {
         notes: row.try_get("notes")?,
         ftp_data_mode: optional_text_column(row, "ftp_data_mode", FtpDataMode::parse)?,
         ftp_encoding: optional_text_column(row, "ftp_encoding", FtpEncoding::parse)?,
+        theme_light: row.try_get("theme_light")?,
+        theme_dark: row.try_get("theme_dark")?,
         sort_order: row.try_get("sort_order")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,

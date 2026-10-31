@@ -1,0 +1,166 @@
+name: Package repository
+
+# RC-100-54: the deb and rpm packages and the signed apt and dnf repository that
+# scripts/package-deb-rpm.sh and scripts/package-repo.sh write, installed from as a user would
+# (adapted from rDownloader's packages-repo.yml). The `build` job runs the scripts' tests with
+# every tool they need, so both halves run, checks the menu entry with desktop-file-validate,
+# builds the real packages of two releases from their published Linux tarballs and files them
+# into two states of a repository signed with a throwaway key:
+# states/1 holds the older release, states/2 adds the newer one. Each install job serves a state
+# at file:///repo, adds the key and the .sources or .repo file exactly as the README says,
+# installs, checks `rcommander --version`, the install-kind marker the update check reads, the
+# menu entry and its icons, upgrades to the newer release and checks again; then shows that a
+# repository whose signed index was altered fails the update and installs nothing, and that the
+# same state unaltered installs again (scripts/ci-package-repo.sh).
+#
+# apt runs in debian:stable and ubuntu:24.04, dnf in fedora:latest, each on ubuntu-24.04 and
+# ubuntu-24.04-arm, so every client takes the amd64/x86_64 and the arm64/aarch64 package from the
+# same indexes.
+#
+#   gh workflow run packages-repo.yml -f release=v1.0.0 -f upgrade_from=v0.12.0
+on:
+  push:
+    branches: ["**", "!dependabot/**"]
+    paths:
+      - ".github/workflows/packages-repo.yml"
+      - "packaging/linux/**"
+      - "packaging/repository/**"
+      - "scripts/package-deb-rpm.sh"
+      - "scripts/package-repo.sh"
+      - "scripts/ci-package-repo.sh"
+      - "scripts/tests/package-deb-rpm.sh"
+      - "scripts/tests/package-repo.sh"
+  # The same list as above; keep the two in step.
+  pull_request:
+    paths:
+      - ".github/workflows/packages-repo.yml"
+      - "packaging/linux/**"
+      - "packaging/repository/**"
+      - "scripts/package-deb-rpm.sh"
+      - "scripts/package-repo.sh"
+      - "scripts/ci-package-repo.sh"
+      - "scripts/tests/package-deb-rpm.sh"
+      - "scripts/tests/package-repo.sh"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Newer release the upgrade goes to, e.g. v1.0.0 (empty takes the newest release)
+        required: false
+        default: ""
+      upgrade_from:
+        description: Older release installed first, e.g. v0.12.0 (empty takes the release before it)
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    outputs:
+      release: ${{ steps.gate.outputs.release }}
+      from: ${{ steps.gate.outputs.from }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Decide which releases to package
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          FROM: ${{ inputs.upgrade_from }}
+        run: |
+          set -euo pipefail
+          tag='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          mapfile -t newest < <(gh release list --repo "${GITHUB_REPOSITORY}" --exclude-pre-releases \
+            --limit 2 --json tagName --jq '.[].tagName')
+          RELEASE="${RELEASE:-${newest[0]:-}}"
+          FROM="${FROM:-${newest[1]:-}}"
+          for value in "${RELEASE}" "${FROM}"; do
+            if [[ ! "${value}" =~ ${tag} ]]; then
+              echo "::error::'${value}' is not a release tag like v1.0.0 (two published releases are needed)"
+              exit 1
+            fi
+          done
+          echo "packaging ${FROM} and ${RELEASE}"
+          { echo "release=${RELEASE}"; echo "from=${FROM}"; } >> "${GITHUB_OUTPUT}"
+      - name: Install the package and repository tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends apt-utils rpm createrepo-c librsvg2-bin \
+            desktop-file-utils python3-yaml
+      - name: Install nfpm
+        run: scripts/release-channels.sh install-nfpm
+      - name: The menu entry is valid
+        run: desktop-file-validate packaging/linux/rcommander.desktop
+      - name: Test the scripts
+        run: |
+          scripts/tests/package-deb-rpm.sh
+          scripts/tests/package-repo.sh
+      - name: Build the packages of both releases and the two repository states
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ steps.gate.outputs.release }}
+          FROM: ${{ steps.gate.outputs.from }}
+        run: scripts/ci-package-repo.sh build "${FROM}" "${RELEASE}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-repo-states
+          path: states
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  install:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["debian:stable", "ubuntu:24.04", "fedora:latest"]
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        include:
+          - image: "debian:stable"
+            pm: apt
+          - image: "ubuntu:24.04"
+            pm: apt
+          - image: "fedora:latest"
+            pm: dnf
+    name: install (${{ matrix.pm }}, ${{ matrix.image }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE: ${{ needs.build.outputs.release }}
+      FROM: ${{ needs.build.outputs.from }}
+      # The recommended X11 and Wayland libraries pull in packages that would ask otherwise.
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      # The script only: the images need not carry git, and checkout falls back to the API then.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/ci-package-repo.sh
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package-repo-states
+          path: states
+      - name: Install the older release from the repository, upgrade to the newer
+        env:
+          PM: ${{ matrix.pm }}
+        run: bash scripts/ci-package-repo.sh "${PM}" install "${FROM}" "${RELEASE}"
+      - name: An altered index is refused
+        env:
+          PM: ${{ matrix.pm }}
+        run: bash scripts/ci-package-repo.sh "${PM}" refused "${RELEASE}"

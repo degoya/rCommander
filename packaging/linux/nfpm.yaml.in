@@ -1,0 +1,130 @@
+# The deb and rpm packages of rCommander (RC-100-54), for nfpm. Rendered by
+# scripts/package-deb-rpm.sh from a Linux release tarball, once per format: @STAGE@ is the
+# unpacked tarball, @KIND_FILE@ the install-kind marker naming the format, @ICONS@ the hicolor
+# renderings of the app icon, @PACKAGING@ this folder. Change this template, not a rendered copy.
+# Adapted from rDownloader's packaging/linux/nfpm.yaml.in (RD-180-05) at commit 8c30caac8.
+#
+# The program lives in /usr/lib/rcommander with the bundled plugins beside it, where rCommander
+# installs them from at its first start, and is linked into /usr/bin. The install-kind marker
+# tells the update check that apt or dnf updates it (it never replaces itself). The data never
+# lives here: settings, connections and the vault are in the user's data folder, and no
+# maintainer script touches it, so removing or upgrading the package keeps it.
+#
+# Dependencies, from the 0.12.0 x64 binary (readelf -d, and the libraries winit, wgpu and
+# xkbcommon open at run time): NEEDED are only libc, libm and libgcc_s, with a glibc floor of 2.39
+# (built on Ubuntu 24.04). xkbcommon is opened on X11 and Wayland alike; the X11, Wayland, EGL and
+# Vulkan libraries only for the display server and renderer in use, so they are recommended.
+# Fonts are compiled in: no fontconfig.
+name: rcommander
+arch: "@ARCH@"
+platform: linux
+version: "@VERSION@"
+version_schema: semver
+section: utils
+priority: optional
+maintainer: DEGOYA.digital
+description: |-
+  Two-panel file manager with terminals, SSH and SFTP
+  rCommander is a two-panel file manager in the tradition of Total Commander. Each panel shows
+  a file list or a terminal; SSH servers sit in the drive bar, files are copied over SFTP and
+  FTP/FTPS, and a built-in MCP server offers every action to AI agents.
+vendor: DEGOYA.digital
+homepage: https://rcommander.net
+license: GPL-3.0-or-later
+
+depends:
+  - libc6 (>= 2.39)
+  - libgcc-s1
+  - libxkbcommon0
+recommends:
+  - libx11-6
+  - libx11-xcb1
+  - libxcursor1
+  - libxi6
+  - libxkbcommon-x11-0
+  - libwayland-client0
+  - libwayland-egl1
+  - libegl1
+  - libvulkan1
+overrides:
+  rpm:
+    depends:
+      - glibc >= 2.39
+      - libgcc
+      - libxkbcommon
+    recommends:
+      - libX11
+      - libX11-xcb
+      - libXcursor
+      - libXi
+      - libxkbcommon-x11
+      - libwayland-client
+      - libwayland-egl
+      - libglvnd-egl
+      - vulkan-loader
+
+contents:
+  # Owned, so removing the rpm takes the folder with it: rpm removes only the directories a
+  # package names, where dpkg also drops one it created and left empty.
+  - dst: /usr/lib/rcommander
+    type: dir
+    file_info:
+      mode: 0755
+  - src: "@STAGE@/rcommander"
+    dst: /usr/lib/rcommander/rcommander
+    file_info:
+      mode: 0755
+  - src: "@STAGE@/plugins"
+    dst: /usr/lib/rcommander/plugins
+    type: tree
+  - src: "@STAGE@/VERSION.txt"
+    dst: /usr/lib/rcommander/VERSION.txt
+    file_info:
+      mode: 0644
+  - src: "@KIND_FILE@"
+    dst: /usr/lib/rcommander/install-kind
+    file_info:
+      mode: 0644
+  - src: /usr/lib/rcommander/rcommander
+    dst: /usr/bin/rcommander
+    type: symlink
+  - src: "@PACKAGING@/rcommander.desktop"
+    dst: /usr/share/applications/rcommander.desktop
+    file_info:
+      mode: 0644
+  - src: "@ICONS@/rcommander.svg"
+    dst: /usr/share/icons/hicolor/scalable/apps/rcommander.svg
+    file_info:
+      mode: 0644
+  - src: "@ICONS@/48/rcommander.png"
+    dst: /usr/share/icons/hicolor/48x48/apps/rcommander.png
+    file_info:
+      mode: 0644
+  - src: "@ICONS@/64/rcommander.png"
+    dst: /usr/share/icons/hicolor/64x64/apps/rcommander.png
+    file_info:
+      mode: 0644
+  - src: "@ICONS@/128/rcommander.png"
+    dst: /usr/share/icons/hicolor/128x128/apps/rcommander.png
+    file_info:
+      mode: 0644
+  - src: "@ICONS@/256/rcommander.png"
+    dst: /usr/share/icons/hicolor/256x256/apps/rcommander.png
+    file_info:
+      mode: 0644
+  - src: "@ICONS@/512/rcommander.png"
+    dst: /usr/share/icons/hicolor/512x512/apps/rcommander.png
+    file_info:
+      mode: 0644
+  - src: "@STAGE@/README.md"
+    dst: /usr/share/doc/rcommander/README.md
+    file_info:
+      mode: 0644
+  - src: "@STAGE@/LICENSE"
+    dst: /usr/share/doc/rcommander/LICENSE
+    file_info:
+      mode: 0644
+  - src: "@STAGE@/NOTICE"
+    dst: /usr/share/doc/rcommander/NOTICE
+    file_info:
+      mode: 0644

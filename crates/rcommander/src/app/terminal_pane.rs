@@ -375,7 +375,8 @@ impl App {
                 return Task::none();
             };
             let reserved = term::reserved_keys(&self.keymap);
-            let settings = term::settings(theme::tokens(self.dark), reserved, self.terms.copy);
+            let tokens = terminal_tokens(&self.engine, terminal, self.dark);
+            let settings = term::settings(tokens, reserved, self.terms.copy);
             self.terms
                 .widgets
                 .insert(terminal, Terminal::new(session, &settings));
@@ -398,10 +399,12 @@ impl App {
         }
     }
 
-    /// The terminals in the light or dark look the window just took.
+    /// The terminals in the light or dark look the window just took; an SSH terminal in its
+    /// connection's theme (RC-100-51). The sessions stay.
     pub(super) fn restyle_terminals(&mut self) {
-        let palette = theme::terminal_palette(theme::tokens(self.dark));
-        for widget in self.terms.widgets.values_mut() {
+        let (engine, dark) = (&self.engine, self.dark);
+        for (terminal, widget) in &mut self.terms.widgets {
+            let palette = theme::terminal_palette(terminal_tokens(engine, *terminal, dark));
             widget.set_palette(&palette);
         }
     }
@@ -413,6 +416,17 @@ impl App {
             widget.set_font(&font);
         }
     }
+}
+
+/// The look `terminal` draws with: its SSH connection's theme for the mode, else the window's -
+/// a local or WSL shell's always (RC-100-51).
+fn terminal_tokens(
+    engine: &rc_engine::Engine,
+    terminal: TermId,
+    dark: bool,
+) -> &'static theme::Tokens {
+    let connection = engine.terminal_connection(terminal).map(|id| id.0);
+    theme::themes::of_connection(connection, dark)
 }
 
 #[cfg(test)]

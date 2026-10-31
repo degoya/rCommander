@@ -5,9 +5,13 @@
 //! stroke fills, `TextFillColorPrimary/Secondary`, the default accent). iced reports the system's
 //! light or dark mode ([`iced::system::theme`]); the user's accent colour comes from the registry
 //! on Windows (`system.rs`), Windows' default blue elsewhere. The setting `appearance.theme`
-//! chooses light, dark or the system's look ([`ThemeChoice`]). On macOS `appearance.macos_look`
-//! (RC-100-49, on) draws with the Mac's colours, accent and fonts instead ([`mac_look`]).
+//! chooses light, dark or the system's look ([`ThemeChoice`]). The colours of each mode are its
+//! colour theme's (RC-100-50, `themes.rs`): a built-in one (`builtin.rs`) or the person's own,
+//! the terminal's colours with them (`terminal.rs`); Fluent (the sets of `light.rs` and `dark.rs`)
+//! until the themes are read. On macOS `appearance.macos_look` (RC-100-49, on) draws with the
+//! Mac's accent and fonts ([`mac_look`]) and starts with the Mac theme.
 
+pub mod builtin;
 mod chrome;
 pub mod colour_rules;
 pub mod colours;
@@ -25,6 +29,8 @@ pub mod mnemonic;
 pub mod page_tabs;
 mod syntax;
 mod system;
+pub mod terminal;
+pub mod themes;
 pub mod wheel;
 
 use std::sync::{
@@ -37,6 +43,7 @@ pub use chrome::{
 };
 pub use layout::large_dialog;
 pub use syntax::Syntax;
+pub use terminal::terminal_palette;
 
 use iced::{
     Background, Border, Color, Font, Shadow, Theme,
@@ -46,7 +53,7 @@ use iced::{
 };
 
 /// The colours of one appearance.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tokens {
     pub dark: bool,
     /// The window behind the panels.
@@ -83,6 +90,8 @@ pub struct Tokens {
     pub marked: Color,
     /// A plugin document's coloured text, per token class (RC-100-10).
     pub syntax: Syntax,
+    /// The terminal's colours (RC-100-50).
+    pub terminal: terminal::Terminal,
 }
 
 const fn hex(rgb: u32, alpha: f32) -> Color {
@@ -94,14 +103,15 @@ const fn hex(rgb: u32, alpha: f32) -> Color {
     }
 }
 
-static TOKENS: OnceLock<[Tokens; 2]> = OnceLock::new();
+/// Fluent's light and dark looks with the system's accent: the looks before the themes are read.
+static FIXED: OnceLock<[Tokens; 2]> = OnceLock::new();
 /// `appearance.macos_look`, as the start read it: the tokens are made once.
 static MAC_LOOK: AtomicBool = AtomicBool::new(true);
 /// The system's accent for the light and the dark look, read once.
 static ACCENT: OnceLock<system::Accent> = OnceLock::new();
 
 /// The system's accent for the light and the dark look, as [`tokens`] draws with it unless the
-/// person chose another (RC-100-43).
+/// theme brings its own (RC-100-50).
 pub fn system_accent() -> [Color; 2] {
     let accent = ACCENT.get_or_init(system::accent);
     [accent.light, accent.dark]
@@ -125,32 +135,19 @@ pub fn mac_look() -> bool {
     cfg!(target_os = "macos") && MAC_LOOK.load(Ordering::Relaxed)
 }
 
-/// The tokens of the light or the dark look, with the system's accent; with the person's colours
-/// laid over them while any is chosen ([`colours::set_colours`]).
+/// The tokens of the light or the dark look: its colour theme's ([`themes::current`]), the
+/// editor's preview while it edits one of that mode, Fluent's before the themes are read.
 pub fn tokens(dark: bool) -> &'static Tokens {
-    if let Some(chosen) = colours::chosen(dark) {
-        return chosen;
-    }
-    let [light, dark_tokens] = TOKENS.get_or_init(|| {
+    themes::current(dark).unwrap_or_else(|| fixed(dark))
+}
+
+/// Fluent's look of the light or the dark mode with the system's accent.
+pub(crate) fn fixed(dark: bool) -> &'static Tokens {
+    let [light, dark_tokens] = FIXED.get_or_init(|| {
         let [light, dark] = system_accent();
-        if mac_look() {
-            mac_tokens(light, dark)
-        } else {
-            [light::tokens(light), dark::tokens(dark)]
-        }
+        [light::tokens(light), dark::tokens(dark)]
     });
     if dark { dark_tokens } else { light }
-}
-
-/// The Mac's light and dark tokens; WinUI's on other systems.
-#[cfg(target_os = "macos")]
-fn mac_tokens(light: Color, dark: Color) -> [Tokens; 2] {
-    [mac::light(light), mac::dark(dark)]
-}
-
-#[cfg(not(target_os = "macos"))]
-fn mac_tokens(light: Color, dark: Color) -> [Tokens; 2] {
-    [light::tokens(light), dark::tokens(dark)]
 }
 
 /// The look the setting `appearance.theme` chooses.
@@ -412,81 +409,6 @@ pub fn page_entry(tokens: &Tokens, chosen: bool, status: button::Status) -> butt
         text_color: if chosen { tokens.accent } else { tokens.text },
         border: Border::default().rounded(4.0),
         ..button::Style::default()
-    }
-}
-
-/// The terminal's colours: Windows Terminal's Campbell on dark, One Half Light on light.
-pub fn terminal_palette(tokens: &Tokens) -> rc_term_widget::ColorPalette {
-    let [
-        fg,
-        bg,
-        black,
-        red,
-        green,
-        yellow,
-        blue,
-        magenta,
-        cyan,
-        white,
-    ] = if tokens.dark {
-        [
-            "#cccccc", "#1c1c1c", "#0c0c0c", "#c50f1f", "#13a10e", "#c19c00", "#0037da", "#881798",
-            "#3a96dd", "#cccccc",
-        ]
-    } else {
-        [
-            "#383a42", "#ffffff", "#383a42", "#e45649", "#50a14f", "#c18401", "#0184bc", "#a626a4",
-            "#0997b3", "#fafafa",
-        ]
-    };
-    let [
-        b_black,
-        b_red,
-        b_green,
-        b_yellow,
-        b_blue,
-        b_magenta,
-        b_cyan,
-        b_white,
-    ] = if tokens.dark {
-        [
-            "#767676", "#e74856", "#16c60c", "#f9f1a5", "#3b78ff", "#b4009e", "#61d6d6", "#f2f2f2",
-        ]
-    } else {
-        [
-            "#4f525d", "#df6c75", "#98c379", "#e4c07a", "#61afef", "#c577dd", "#56b5c1", "#ffffff",
-        ]
-    };
-    let s = str::to_owned;
-    rc_term_widget::ColorPalette {
-        foreground: s(fg),
-        background: s(bg),
-        black: s(black),
-        red: s(red),
-        green: s(green),
-        yellow: s(yellow),
-        blue: s(blue),
-        magenta: s(magenta),
-        cyan: s(cyan),
-        white: s(white),
-        bright_black: s(b_black),
-        bright_red: s(b_red),
-        bright_green: s(b_green),
-        bright_yellow: s(b_yellow),
-        bright_blue: s(b_blue),
-        bright_magenta: s(b_magenta),
-        bright_cyan: s(b_cyan),
-        bright_white: s(b_white),
-        bright_foreground: None,
-        dim_foreground: s(b_black),
-        dim_black: s(black),
-        dim_red: s(red),
-        dim_green: s(green),
-        dim_yellow: s(yellow),
-        dim_blue: s(blue),
-        dim_magenta: s(magenta),
-        dim_cyan: s(cyan),
-        dim_white: s(white),
     }
 }
 

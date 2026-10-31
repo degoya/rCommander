@@ -51,6 +51,10 @@ policy, idle lock) only a person changes in the window, and `settings_set` refus
 setting_protected. `keymap_list` reads the keys in force, the person's changes marked; only the
 person moves a key.
 
+`theme_list` reads the colour themes, built in and the person's own, the one of each mode
+marked; `theme_select` chooses the light or the dark mode's theme by its id. Editing, importing and
+exporting a theme are for the person in rCommander only.
+
 `db_backup` backs rCommander's database up into its backup folder under a generated name; it takes
 no path, and restoring a backup is for the person in rCommander only.
 

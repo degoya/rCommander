@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use crate::{
     Connection, ConnectionDraft, ConnectionPatch, FolderId, FolderNode, LoginScriptInfo,
     ScriptSecretRef, Step,
+    exchange::ExportedTheme,
+    settings::themes::{ThemesState, is_own_id},
 };
 
 /// A name as the tree compares it: trimmed, ASCII lower case.
@@ -43,6 +45,8 @@ pub(super) fn same(connection: &Connection, draft: &ConnectionDraft) -> bool {
         && connection.default_view == draft.default_view
         && text(connection.start_directory.as_ref()) == text(draft.start_directory.as_ref())
         && text(connection.notes.as_ref()) == text(draft.notes.as_ref())
+        && text(connection.theme_light.as_ref()) == text(draft.theme_light.as_ref())
+        && text(connection.theme_dark.as_ref()) == text(draft.theme_dark.as_ref())
         && (!ftp
             || (connection.ftp_data_mode == draft.ftp_data_mode
                 && connection.ftp_encoding == draft.ftp_encoding))
@@ -64,7 +68,42 @@ pub(super) fn patch_of(draft: &ConnectionDraft) -> ConnectionPatch {
         notes: clear(&draft.notes),
         ftp_data_mode: draft.ftp_data_mode,
         ftp_encoding: draft.ftp_encoding,
+        theme_light: clear(&draft.theme_light),
+        theme_dark: clear(&draft.theme_dark),
     }
+}
+
+/// `draft` without a theme that is neither here nor among the file's (`incoming`, the themes a
+/// dry run has not written yet) for its mode (RC-100-51), and whether one was left out: the
+/// connection comes in without it, with a hint.
+pub(super) fn fit_themes(
+    draft: &ConnectionDraft,
+    here: &ThemesState,
+    incoming: &[ExportedTheme],
+) -> (ConnectionDraft, bool) {
+    let known = |id: &str, dark: bool| {
+        here.theme(id).is_some_and(|theme| theme.dark == dark)
+            || incoming
+                .iter()
+                .any(|theme| theme.id == id && theme.dark == dark && is_own_id(id))
+    };
+    let mut fitted = draft.clone();
+    let mut dropped = false;
+    for (slot, dark) in [
+        (&mut fitted.theme_light, false),
+        (&mut fitted.theme_dark, true),
+    ] {
+        let id = text(slot.as_ref()).map(str::to_owned);
+        match id {
+            Some(id) if !known(&id, dark) => {
+                *slot = None;
+                dropped = true;
+            }
+            Some(id) => *slot = Some(id),
+            None => *slot = None,
+        }
+    }
+    (fitted, dropped)
 }
 
 /// `steps` with each stored secret's id `from` names (by label) as `to` names it; an id with no

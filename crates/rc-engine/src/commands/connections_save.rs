@@ -20,9 +20,8 @@ use super::{
     secrets::{open_key, read_key_file},
 };
 use crate::{
-    Connection, ConnectionId, ConnectionPatch, Engine, EngineError, EngineEvent, Outcome,
-    SaveConnectionRequest, SaveFields, SecretChange, SecretKind, StoredKey, TreeChange, TreeItem,
-    read_guard,
+    Connection, ConnectionId, Engine, EngineError, EngineEvent, Outcome, SaveConnectionRequest,
+    SaveFields, SecretChange, SecretKind, StoredKey, TreeChange, TreeItem, read_guard,
     secrets::{field, local_key_path},
 };
 
@@ -66,6 +65,14 @@ impl Engine {
             held = Some(self.inner.secret_writes.lock().await);
             self.refuse_endpoint_move(*id, patch).await?;
         }
+        let (light, dark) = match &request.fields {
+            SaveFields::Create { connection, .. } => {
+                (&connection.theme_light, &connection.theme_dark)
+            }
+            SaveFields::Update { patch, .. } => (&patch.theme_light, &patch.theme_dark),
+        };
+        self.check_connection_themes(light.as_deref(), dark.as_deref())
+            .await?;
         db.check_connection_save(target).await?;
         let ready = self.ready_secrets(&request.secrets).await?;
         let save = ConnectionSave {
@@ -181,7 +188,8 @@ impl Engine {
         let change = match &request.fields {
             SaveFields::Create { .. } => TreeChange::Created,
             SaveFields::Update { patch, .. } => {
-                if *patch != ConnectionPatch::default()
+                // A new theme alone keeps the session (RC-100-51).
+                if !patch.only_themes()
                     || !request.secrets.is_empty()
                     || request.credential.is_some()
                 {

@@ -9,6 +9,10 @@
 //! (the way past a proxy that asks for a login; nothing here starts a browser), and Install and
 //! restart with what ends with it. A running, waiting or paused job holds the install back.
 //! "Updated to X" shows only while X runs.
+//!
+//! An installation a package manager owns (Scoop, Homebrew, winget, apt, dnf; RC-100-52 ...
+//! RC-100-54) never installs: the page says so with the reason and shows the manager's command,
+//! and "Copy command" stands where "Install and restart" would.
 
 use std::{
     hash::{Hash, Hasher},
@@ -58,6 +62,8 @@ pub enum UpdateMsg {
     OpenFolder,
     /// The artifact's address to the clipboard.
     CopyAddress,
+    /// The package manager's update command to the clipboard.
+    CopyCommand,
     Install,
     /// The engine's status, read for the Updates page.
     Status(Box<UpdateStatus>),
@@ -157,6 +163,15 @@ impl App {
                 });
                 match address {
                     Some(address) => vec![Effect::Task(iced::clipboard::write(address))],
+                    None => Vec::new(),
+                }
+            }
+            UpdateMsg::CopyCommand => {
+                match self
+                    .shown_updates()
+                    .and_then(|status| status.install_command.clone())
+                {
+                    Some(command) => vec![Effect::Task(iced::clipboard::write(command))],
                     None => Vec::new(),
                 }
             }
@@ -268,6 +283,9 @@ pub(in crate::app) fn page<'a>(
     if let Some(reason) = &status.install_reason {
         page = page.push(hint(error_text(reason)));
     }
+    if let Some(line) = manager_line(status) {
+        page = page.push(label(line));
+    }
     let offer = status.offer.as_ref();
     match offer {
         Some(offer) => {
@@ -295,6 +313,19 @@ pub(in crate::app) fn page<'a>(
         page = page.push(hint(t!("update.page.install_ends").to_owned()));
     }
     page.push(buttons(status)).into()
+}
+
+/// "Update it with Scoop: scoop update rcommander" for a manager's installation.
+pub(super) fn manager_line(status: &UpdateStatus) -> Option<String> {
+    let command = status.install_command.as_deref()?;
+    let manager = rc_update::InstallKind::parse(&status.install_kind)
+        .and_then(rc_update::InstallKind::manager_name)
+        .unwrap_or(status.install_kind.as_str());
+    Some(t!(
+        "update.page.manager_command",
+        manager = manager,
+        command = command
+    ))
 }
 
 fn last_check(status: &UpdateStatus) -> String {
@@ -338,7 +369,12 @@ fn buttons<'a>(status: &UpdateStatus) -> Element<'a, Message> {
     let running = matches!(status.download, DownloadState::Running { .. });
     let portable = status.install_kind == "portable";
     let when = |on: bool, message: UpdateMsg| on.then(|| wrap(message));
-    let install = if status.queue_busy {
+    let install = if status.install_command.is_some() {
+        layout::primary_button(
+            t!("update.page.copy_command"),
+            Some(wrap(UpdateMsg::CopyCommand)),
+        )
+    } else if status.queue_busy {
         layout::primary_button(t!("update.page.install_when_empty"), None)
     } else {
         layout::primary_button(

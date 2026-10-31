@@ -74,6 +74,10 @@ enum Command {
         #[arg(long)]
         journal: PathBuf,
     },
+    /// How the update check takes this installation (RC-100-52), for the package channels' CI;
+    /// hidden.
+    #[command(hide = true)]
+    InstallKind,
 }
 
 fn main() -> ExitCode {
@@ -96,6 +100,7 @@ fn main() -> ExitCode {
         Some(Command::Backup { target, overwrite }) => backup_cli::run(&target, overwrite),
         Some(Command::Plugin { command }) => plugin_cli::run(command),
         Some(Command::ApplyUpdate { journal }) => update_cli::apply(&journal),
+        Some(Command::InstallKind) => update_cli::print_install_kind(),
         Some(Command::Mcp) => {
             let served = match tokio::runtime::Runtime::new() {
                 Ok(runtime) => runtime

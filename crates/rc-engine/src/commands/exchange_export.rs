@@ -94,6 +94,7 @@ impl Engine {
             let settings = export_settings(db).await;
             report.settings = settings.len();
             content.settings = Some(settings);
+            content.themes = Some(super::exchange_themes::export_themes(db).await);
         }
         if parts.connections {
             let part = self
@@ -414,6 +415,8 @@ pub(crate) fn draft_of(connection: &Connection) -> ConnectionDraft {
         notes: connection.notes.clone(),
         ftp_data_mode: connection.ftp_data_mode,
         ftp_encoding: connection.ftp_encoding,
+        theme_light: connection.theme_light.clone(),
+        theme_dark: connection.theme_dark.clone(),
     }
 }
 

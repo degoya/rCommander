@@ -24,7 +24,8 @@
 # (macos-15, macos-15-intel) or runner images, comma-separated; without it, all of them. An image
 # already green for the tree is not run again; with every one green nothing is exported.
 #
-# Exit: 0 green, 1 red or not finished (the branch is kept), 2 a wrong call or no usable gh.
+# Exit: 0 green, 1 red or not finished (the branch is kept; also `gh auth status` failing on a
+# timeout or the network), 2 a wrong call, no gh or gh not signed in.
 #
 # Outward: the tree becomes public while the run lasts, minus what scripts/public-exclude.txt
 # leaves out - every export is a push, so it runs only on the owner's word (RC-100-31).
@@ -98,7 +99,7 @@ if [[ ${#missing[@]} -eq 0 ]]; then
     exit 0
 fi
 
-rc_public_ci_gh_ready || exit 2
+rc_public_ci_gh_ready || exit $?
 # A run of this tree that another call started from this machine and that is still going (or
 # green) is waited for, not exported again: the re-push would cancel it.
 if sha="$(rc_public_ci_running "$public_branch" "$tree" "${missing[@]}")"; then

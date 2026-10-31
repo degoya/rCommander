@@ -59,6 +59,7 @@ fn fields() -> Vec<(PathField, Kind, Vec<&'static str>)> {
             Kind::Open,
             vec!["*.rcplug", "*.*"],
         ),
+        (PathField::ThemeFile, Kind::Open, vec!["*.rctheme", "*.*"]),
     ]
 }
 

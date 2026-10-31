@@ -120,6 +120,8 @@ fn stored() -> Connection {
         notes: Some("blue rack".into()),
         ftp_data_mode: None,
         ftp_encoding: None,
+        theme_light: None,
+        theme_dark: None,
         sort_order: 0,
         created_at: String::new(),
         updated_at: String::new(),

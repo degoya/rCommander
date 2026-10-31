@@ -121,6 +121,8 @@ impl Form {
         draft.default_view = self.view;
         draft.start_directory = optional(&self.start_directory);
         draft.notes = optional(&self.notes);
+        draft.theme_light = self.theme_light.clone();
+        draft.theme_dark = self.theme_dark.clone();
         draft
     }
 
@@ -143,6 +145,15 @@ impl Form {
             default_view: (self.view != original.default_view).then_some(self.view),
             start_directory: text(&self.start_directory, &original.start_directory),
             notes: text(&self.notes, &original.notes),
+            // Back to Default is sent as `""`, which clears it (RC-100-51).
+            theme_light: text(
+                self.theme_light.as_deref().unwrap_or_default(),
+                &original.theme_light,
+            ),
+            theme_dark: text(
+                self.theme_dark.as_deref().unwrap_or_default(),
+                &original.theme_dark,
+            ),
             ..ConnectionPatch::default()
         }
     }

@@ -129,6 +129,8 @@ impl Engine {
         folder_id: Option<FolderId>,
         draft: &ConnectionDraft,
     ) -> Result<Outcome, EngineError> {
+        self.check_connection_themes(draft.theme_light.as_deref(), draft.theme_dark.as_deref())
+            .await?;
         let connection = self.db()?.create_connection(folder_id, draft).await?;
         self.announce(TreeItem::Connection(connection.id), TreeChange::Created);
         Ok(Outcome::Connection { connection })
@@ -143,6 +145,8 @@ impl Engine {
         id: ConnectionId,
         patch: &ConnectionPatch,
     ) -> Result<Outcome, EngineError> {
+        self.check_connection_themes(patch.theme_light.as_deref(), patch.theme_dark.as_deref())
+            .await?;
         let connection = {
             let _writes = if read_guard::from_mcp() {
                 Some(self.inner.secret_writes.lock().await)
@@ -152,7 +156,10 @@ impl Engine {
             let rule = endpoint_rule();
             self.db()?.update_connection_with(id, patch, rule).await?
         };
-        self.forget_remote(id).await;
+        // A new theme only recolours its panels: the session stays (RC-100-51).
+        if !patch.only_themes() {
+            self.forget_remote(id).await;
+        }
         self.announce(TreeItem::Connection(id), TreeChange::Updated);
         Ok(Outcome::Connection { connection })
     }

@@ -8,9 +8,11 @@
 //! changes those through [`Engine::set_protected_setting`], which is no command and so out of
 //! MCP's reach. The keymap's deviations are such a protected row; `keymap.rs` reads the keymap
 //! in force from it (`keymap.list`) and stores it from the window (`keymap.set`, RC-100-21).
+//! The colour themes of each mode and their commands are `themes.rs` (RC-100-50).
 
 mod keymap;
 mod schema;
+pub mod themes;
 
 use std::collections::BTreeMap;
 
@@ -66,6 +68,7 @@ pub use schema::{
     F10_KEY, GPU_LOSS_NOTICE_KEY, KEYMAP_KEY, ONE_JOB_PER_ITEM_KEY, PERMANENT_WITHOUT_TRASH_KEY,
     QUEUE_WINDOW_OWN_KEY, STRIP_ROWS_KEY, UNDERLINE_ACCESS_KEYS_KEY,
 };
+pub use schema::{CONNECTION_THEMES_KEY, THEME_DARK_KEY, THEME_LIGHT_KEY};
 pub use schema::{
     DEFAULT_FONT_SIZE, LIST_FONT_KEY, LIST_FONT_SIZE_KEY, MARK_HIDDEN_KEY, MAX_FONT_SIZE,
     MIN_FONT_SIZE, NAME_CUT_KEY, NAME_TIP_DELAY_KEY, TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY,

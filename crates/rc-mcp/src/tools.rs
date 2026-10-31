@@ -40,6 +40,7 @@ mod ssh_import;
 mod tabs;
 mod tc_import;
 mod terminal;
+mod theme;
 mod update;
 mod vault;
 mod wsl;

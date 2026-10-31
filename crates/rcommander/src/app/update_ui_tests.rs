@@ -4,7 +4,7 @@
 
 use rc_engine::{DownloadState, UpdateNotice, UpdateStatus};
 
-use super::{UpdateMsg, notice_line};
+use super::{UpdateMsg, manager_line, notice_line};
 use crate::app::{Message, harness::Harness, settings::Page};
 
 fn status() -> UpdateStatus {
@@ -21,6 +21,7 @@ fn status() -> UpdateStatus {
         download: DownloadState::None,
         install_kind: "unknown".to_owned(),
         install_reason: Some("update.kind_no_version_file".to_owned()),
+        install_command: None,
         installing: false,
         queue_busy: false,
         last_update: None,
@@ -99,4 +100,19 @@ fn every_update_code_has_a_text() {
         let text = crate::i18n::error_text(code);
         assert_ne!(text, code, "error.{code} has no text in locales/en.json");
     }
+}
+
+/// A package manager's installation names its manager and command; the others name none.
+#[test]
+fn a_managers_installation_shows_its_command() {
+    assert_eq!(manager_line(&status()), None);
+    let scoop = UpdateStatus {
+        install_kind: "scoop".to_owned(),
+        install_reason: Some("update.kind_package_manager".to_owned()),
+        install_command: Some("scoop update rcommander".to_owned()),
+        ..status()
+    };
+    let line = manager_line(&scoop).expect("a line");
+    assert!(line.contains("Scoop"), "{line}");
+    assert!(line.contains("scoop update rcommander"), "{line}");
 }

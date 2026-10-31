@@ -338,3 +338,34 @@ fn every_refusal_code_is_named_once() {
     assert_eq!(unique.len(), codes.len());
     assert!(codes.iter().all(|code| code.starts_with("update.")));
 }
+
+/// A package manager's installation (RC-100-52): the stable channel and no automatic install,
+/// whatever is stored; portable and unknown keep the settings.
+#[test]
+fn a_managers_installation_reads_stable_and_never_installs_by_itself() {
+    let stored = config::UpdateConfig {
+        channel: Channel::Beta,
+        auto: AutoMode::WhenIdle,
+        ..config::UpdateConfig::defaults(RUNNING)
+    };
+    for kind in [
+        rc_update::InstallKind::Scoop,
+        rc_update::InstallKind::Homebrew,
+        rc_update::InstallKind::Winget,
+        rc_update::InstallKind::Deb,
+        rc_update::InstallKind::Rpm,
+    ] {
+        let mut config = stored.clone();
+        config.for_kind(kind);
+        assert_eq!(config.channel, Channel::Stable, "{kind:?}");
+        assert_eq!(config.auto, AutoMode::Off, "{kind:?}");
+    }
+    for kind in [
+        rc_update::InstallKind::Portable,
+        rc_update::InstallKind::Unknown,
+    ] {
+        let mut config = stored.clone();
+        config.for_kind(kind);
+        assert_eq!(config, stored, "{kind:?}");
+    }
+}

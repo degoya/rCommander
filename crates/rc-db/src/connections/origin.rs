@@ -89,8 +89,8 @@ impl Db {
         let done = sqlx::query(
             "INSERT INTO connections (folder_id, name, kind, host, port, username, auth_method, \
              key_path, default_view, start_directory, notes, ftp_data_mode, ftp_encoding, \
-             sort_order, import_source, import_key) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             theme_light, theme_dark, sort_order, import_source, import_key) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(folder.map(|folder| folder.0))
         .bind(&fields.name)
@@ -105,6 +105,8 @@ impl Db {
         .bind(&fields.notes)
         .bind(fields.ftp_data_mode.map(FtpDataMode::as_str))
         .bind(fields.ftp_encoding.map(FtpEncoding::as_str))
+        .bind(&fields.theme_light)
+        .bind(&fields.theme_dark)
         .bind(sort_order)
         .bind(source)
         .bind(key)

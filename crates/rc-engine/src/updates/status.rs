@@ -22,9 +22,13 @@ pub struct UpdateStatus {
     /// The verified offer of the last check, with its notes.
     pub offer: Option<rc_update::Offer>,
     pub download: DownloadState,
-    /// `portable` or `unknown`, and for `unknown` the reason's code.
+    /// `portable`, a package manager's kind (`scoop`, `homebrew`, `winget`, `deb`, `rpm`) or
+    /// `unknown`, and for all but `portable` the reason's code (RC-100-52).
     pub install_kind: String,
     pub install_reason: Option<String>,
+    /// The manager's command that updates this installation (`scoop update rcommander`, ...);
+    /// `None` for `portable` and `unknown`. A manager's installation never replaces itself.
+    pub install_command: Option<String>,
     /// Handed to the updater; the window ends now.
     pub installing: bool,
     /// A job runs, waits or is paused: the install waits for the empty queue.

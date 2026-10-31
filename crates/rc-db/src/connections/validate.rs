@@ -17,6 +17,9 @@ pub const MAX_TEXT_CHARS: usize = 255;
 /// The longest key path or start directory, in characters.
 pub const MAX_PATH_CHARS: usize = 4096;
 
+/// The longest theme id, as the `themes` table allows it (RC-100-51).
+pub const MAX_THEME_ID_CHARS: usize = 64;
+
 /// Refuses `text` of `field` when it is longer than [`MAX_TEXT_CHARS`].
 fn short(field: &'static str, text: &str) -> Result<(), ConnectionError> {
     if text.chars().count() > MAX_TEXT_CHARS {
@@ -105,6 +108,22 @@ pub(crate) fn port(raw: i64) -> Result<u16, ConnectionError> {
         .ok_or(ConnectionError::PortInvalid { port: raw })
 }
 
+/// A theme's id (RC-100-51): optional, trimmed, at most [`MAX_THEME_ID_CHARS`], no control
+/// characters. Whether it names a theme of its mode is the engine's to judge.
+pub(crate) fn theme(raw: Option<&str>) -> Result<Option<String>, ConnectionError> {
+    let id = optional_plain("theme", raw)?;
+    if id
+        .as_ref()
+        .is_some_and(|id| id.chars().count() > MAX_THEME_ID_CHARS)
+    {
+        return Err(ConnectionError::TextTooLong {
+            field: "theme",
+            max: MAX_THEME_ID_CHARS,
+        });
+    }
+    Ok(id)
+}
+
 /// Optional text: trimmed, and none when nothing is left.
 pub(crate) fn optional(raw: Option<&str>) -> Option<String> {
     raw.map(str::trim)
@@ -127,6 +146,8 @@ pub(crate) struct Fields {
     pub(crate) notes: Option<String>,
     pub(crate) ftp_data_mode: Option<FtpDataMode>,
     pub(crate) ftp_encoding: Option<FtpEncoding>,
+    pub(crate) theme_light: Option<String>,
+    pub(crate) theme_dark: Option<String>,
 }
 
 impl Fields {
@@ -148,6 +169,8 @@ impl Fields {
             notes: optional(draft.notes.as_deref()),
             ftp_data_mode: draft.ftp_data_mode,
             ftp_encoding: draft.ftp_encoding,
+            theme_light: theme(draft.theme_light.as_deref())?,
+            theme_dark: theme(draft.theme_dark.as_deref())?,
         }
         .consistent()
     }
@@ -190,6 +213,8 @@ impl Fields {
             notes: text(&patch.notes, &current.notes),
             ftp_data_mode: patch.ftp_data_mode.or(current.ftp_data_mode),
             ftp_encoding: patch.ftp_encoding.or(current.ftp_encoding),
+            theme_light: theme(text(&patch.theme_light, &current.theme_light).as_deref())?,
+            theme_dark: theme(text(&patch.theme_dark, &current.theme_dark).as_deref())?,
         }
         .consistent()
     }

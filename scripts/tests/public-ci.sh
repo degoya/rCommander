@@ -7,7 +7,8 @@
 # images, the export's arguments for a local branch and for a ci/ name, the dispatch with the
 # images still to run, a green run recorded per image and tree with its branch deleted, a second
 # call for the same tree running nothing, a red run and a red job ending the wait with the branch
-# kept and nothing recorded, no run within the timeout, a run of the same tree another call
+# kept and nothing recorded, no run within the timeout, `gh auth status` timing out (retried,
+# exit 1) apart from gh not signed in (exit 2), a run of the same tree another call
 # started waited for instead of exported again (and when not), a wrong platform and a wrong ref.
 #
 # Pure bash and git, a few seconds.
@@ -66,7 +67,10 @@ git_quiet -C "$PUBLIC" push -q origin HEAD:main
 cat > "$BIN/gh" << 'SH'
 #!/usr/bin/env bash
 case "$1 $2" in
-    "auth status") exit 0 ;;
+    "auth status")
+        [[ -e "$RC_FAKE/auth" ]] || exit 0
+        echo "$(( $(cat "$RC_FAKE/auth-calls" 2> /dev/null || echo 0) + 1 ))" > "$RC_FAKE/auth-calls"
+        cat "$RC_FAKE/auth" >&2; exit 1 ;;
     "workflow run") echo "$*" >> "$RC_FAKE/dispatch.log" ;;
     "run list")
         echo $(( $(cat "$RC_PUBLIC_CI_CLOCK") + 10 )) > "$RC_PUBLIC_CI_CLOCK"
@@ -80,7 +84,7 @@ chmod +x "$BIN/gh"
 public_ci() {
     echo 0 > "$FAKE/clock"
     rm -f "$FAKE/export.log" "$FAKE/dispatch.log" "$FAKE/ci-log.log"
-    run_status env PATH="$BIN:$PATH" RC_FAKE="$FAKE" RC_PUBLIC_DIR="$PUBLIC" RC_PUBLIC_CI_POLL=0 \
+    run_status env PATH="$BIN:$PATH" RC_FAKE="$FAKE" RC_PUBLIC_DIR="$PUBLIC" RC_PUBLIC_CI_POLL=0 RC_PUBLIC_CI_AUTH_PAUSE=0 \
         RC_PUBLIC_CI_TIMEOUT=60 RC_PUBLIC_CI_CLOCK="$FAKE/clock" "$TREE/scripts/public-ci.sh" "$@"
 }
 remote_has() { git -C "$ORIGIN" rev-parse --verify --quiet "refs/heads/$1" > /dev/null; }
@@ -91,6 +95,18 @@ expect "linux is both Ubuntu images" "ubuntu-24.04 ubuntu-24.04-arm" "$(rc_publi
 expect "macos both Mac images, a runner image itself" "macos-15 macos-15-intel windows-2025" \
     "$(rc_public_ci_images macos,windows-2025 | paste -sd' ' -)"
 expect "the platforms input is a JSON list" '["windows-2025","macos-15"]' "$(rc_public_ci_json windows-2025 macos-15)"
+
+echo "X Timeout trying to log in to github.com account someone (keyring)" > "$FAKE/auth"
+public_ci integration/0.9-w1 --platforms windows
+expect_status "gh auth status timing out is not finished, not a missing login" 1
+expect "and it is tried three times" 3 "$(cat "$FAKE/auth-calls")"
+expect_true "and nothing is exported" '[[ ! -e "$FAKE/export.log" ]]'
+rm -f "$FAKE/auth-calls"
+echo "You are not logged into any GitHub hosts. To log in, run: gh auth login" > "$FAKE/auth"
+public_ci integration/0.9-w1 --platforms windows
+expect_status "gh not signed in is no usable gh" 2
+expect "and it is not tried again" 1 "$(cat "$FAKE/auth-calls")"
+rm -f "$FAKE/auth" "$FAKE/auth-calls"
 
 printf '%s\n' "101 completed success https://github.com/x/y/actions/runs/101 CI" > "$FAKE/runs"
 public_ci integration/0.9-w1 --platforms windows

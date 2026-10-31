@@ -1,0 +1,20 @@
+# The menu entry of the deb and rpm packages (RC-100-54). The icon is
+# crates/rcommander/resources/brand/rCommander-icon.svg, installed as rcommander.svg into the
+# hicolor theme beside its renderings from 48 to 512 px (scripts/package-deb-rpm.sh).
+[Desktop Entry]
+Type=Application
+Name=rCommander
+GenericName=File Manager
+GenericName[de]=Dateimanager
+GenericName[es]=Gestor de archivos
+GenericName[fr]=Gestionnaire de fichiers
+Comment=Two-panel file manager with terminals, SSH and SFTP
+Comment[de]=Zwei-Fenster-Dateimanager mit Terminals, SSH und SFTP
+Comment[es]=Gestor de archivos de dos paneles con terminales, SSH y SFTP
+Comment[fr]=Gestionnaire de fichiers a deux panneaux avec terminaux, SSH et SFTP
+Exec=rcommander
+Icon=rcommander
+Terminal=false
+StartupNotify=true
+Categories=System;FileTools;FileManager;
+Keywords=files;file manager;commander;ssh;sftp;ftp;terminal;

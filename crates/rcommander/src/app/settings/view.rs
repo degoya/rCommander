@@ -20,7 +20,7 @@ use super::{
     draft::{Draft, Field, Limit},
     fonts_page, host_keys_view, mcp_page, plugins_view, shortcuts_view,
     tabs::{self, Tab, Tabs},
-    wrap,
+    themes_page, wrap,
 };
 use crate::{
     app::{
@@ -67,6 +67,13 @@ impl SettingsDialog {
             Some(draft) if tab == Some(Tab::Shortcuts) => {
                 shortcuts_view::view(&self.shortcuts, draft, tokens)
             }
+            // The themes and their editor, then the colours by file type (RC-100-50).
+            Some(draft) if tab == Some(Tab::Themes) => scrollable(
+                container(themes_page::view(&self.themes, draft, tokens)).padding([0, 12]),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
             Some(_) if tab == Some(Tab::Installed) => {
                 scrollable(plugins_view::view(&self.plugins, tokens).padding([0, 12]))
                     .width(Length::Fill)
@@ -310,10 +317,12 @@ fn setting_row<'a>(
         .align_y(Alignment::Center)
         .into(),
         SettingKind::Font { .. } => fonts_page::control(key, draft, tokens),
-        SettingKind::Colour { .. } => super::colours_page::control(spec, draft, tokens),
         SettingKind::ColourRules { .. } => super::colours_page::rules(draft, tokens),
-        // The keymap's deviations are the Shortcuts tab's table (`tabs::shows`), never drawn here.
-        SettingKind::Extensions { .. }
+        // The keymap's deviations are the Shortcuts tab's table (`tabs::shows`), never drawn here;
+        // the themes and RC-100-43's colours are the Themes tab's (`themes_page.rs`).
+        SettingKind::Colour { .. }
+        | SettingKind::Theme { .. }
+        | SettingKind::Extensions { .. }
         | SettingKind::Associations { .. }
         | SettingKind::Source { .. }
         | SettingKind::Proxy { .. }

@@ -11,6 +11,15 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.13.0
+
+- Colour themes: choose a theme for light and one for dark mode, from Fluent, Classic, High contrast, Solarized, Nord or Mac, covering the whole window and the terminal.
+- Make your own themes: duplicate one and edit every colour with a live preview of the window, a contrast warning, and export or import as a .rctheme file.
+- A connection can carry its own theme: the panel and the SSH terminal of that server take its colours, so you see at a glance which server you are on.
+- Your own colours from earlier versions become the theme Custom, and colours imported from Total Commander land there too.
+- Install and update rCommander through Homebrew on macOS and Linux, Scoop and winget on Windows, and apt or dnf on Debian, Ubuntu and Fedora.
+- An installation from a package manager is updated by it: the update page shows the command to run instead of installing by itself.
+
 ## 0.12.0
 
 - rCommander looks like a Mac app on macOS: menus in the menu bar, Cmd works as Ctrl, macOS colours and fonts with your accent colour; the settings can switch the look and Cmd back.

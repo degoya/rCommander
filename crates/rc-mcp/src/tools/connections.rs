@@ -128,6 +128,13 @@ pub(crate) struct CreateParams {
     /// FTP: latin1 (the default) or utf8 for names on a server without UTF8 in FEAT.
     #[serde(default)]
     pub ftp_encoding: Option<FtpEncodingArg>,
+    /// The theme its panel and SSH terminal draw with in the light mode: a light theme's id from
+    /// theme_list; omitted, the window's.
+    #[serde(default)]
+    pub theme_light: Option<String>,
+    /// The same for the dark mode: a dark theme's id.
+    #[serde(default)]
+    pub theme_dark: Option<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -163,6 +170,13 @@ pub(crate) struct UpdateParams {
     pub ftp_data_mode: Option<FtpModeArg>,
     #[serde(default)]
     pub ftp_encoding: Option<FtpEncodingArg>,
+    /// A light theme's id from theme_list for its panel and SSH terminal; an empty string draws
+    /// with the window's again.
+    #[serde(default)]
+    pub theme_light: Option<String>,
+    /// The same for the dark mode: a dark theme's id; an empty string clears it.
+    #[serde(default)]
+    pub theme_dark: Option<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -270,7 +284,7 @@ impl RcMcpServer {
 #[tool_router(router = connections_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), has_password, has_key, has_passphrase: whether a secret of that kind is stored, key: a private key stored in the vault as {type, fingerprint, comment, stored: true}, or null, and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, key and connections (how many use it). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key or passphrase itself."
+        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase: whether a secret of that kind is stored, key: a private key stored in the vault as {type, fingerprint, comment, stored: true}, or null, and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, key and connections (how many use it). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key or passphrase itself."
     )]
     pub(crate) async fn connections_list(&self) -> ToolResult {
         let engine = &self.context.engine;
@@ -302,7 +316,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Add an SSH, FTP or FTPS connection to the tree, in a folder or at the root. Takes no secrets: a password, key or passphrase among the arguments is refused (secret_not_accepted); the person enters them in rCommander. Answers the new connection. Errors: name_empty, name_taken, host_empty, host_invalid, port_invalid, folder_not_found, auth_unsupported (FTP logs in with password or anonymous, SSH never anonymous), username_empty (FTP with a password), view_unsupported (FTP has no terminal view), control_character (a line break or other control character in the name, username or start_directory), text_too_long (a name, host or user over 255 characters), path_too_long (a key path or start directory over 4096 characters)."
+        description = "Add an SSH, FTP or FTPS connection to the tree, in a folder or at the root. Takes no secrets: a password, key or passphrase among the arguments is refused (secret_not_accepted); the person enters them in rCommander. Answers the new connection. Errors: name_empty, name_taken, host_empty, host_invalid, port_invalid, folder_not_found, auth_unsupported (FTP logs in with password or anonymous, SSH never anonymous), username_empty (FTP with a password), view_unsupported (FTP has no terminal view), control_character (a line break or other control character in the name, username or start_directory), text_too_long (a name, host or user over 255 characters), path_too_long (a key path or start directory over 4096 characters), theme_unknown, theme_wrong_mode (theme_light names a dark theme or theme_dark a light one)."
     )]
     pub(crate) async fn connections_create(
         &self,
@@ -326,6 +340,8 @@ impl RcMcpServer {
             notes: params.notes,
             ftp_data_mode: params.ftp_data_mode.map(Into::into),
             ftp_encoding: params.ftp_encoding.map(Into::into),
+            theme_light: params.theme_light,
+            theme_dark: params.theme_dark,
         };
         self.run_connections(Command::CreateConnection {
             folder_id: params.folder_id.map(FolderId),
@@ -335,7 +351,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Change fields of a connection; omitted fields stay, an empty string clears username, key_path, start_directory or notes. Takes no secrets (secret_not_accepted). The host, port, kind and username of a connection with a stored password, key or passphrase are changed only in rCommander's window (endpoint_change_needs_gui): the secret would go to the new endpoint. Answers the changed connection. Errors: connection_not_found, name_empty, name_taken, host_empty, host_invalid, port_invalid, auth_unsupported, username_empty, view_unsupported, control_character, text_too_long, path_too_long, endpoint_change_needs_gui."
+        description = "Change fields of a connection; omitted fields stay, an empty string clears username, key_path, start_directory, notes, theme_light or theme_dark. A change of the themes alone keeps an open session. Takes no secrets (secret_not_accepted). The host, port, kind and username of a connection with a stored password, key or passphrase are changed only in rCommander's window (endpoint_change_needs_gui): the secret would go to the new endpoint. Answers the changed connection. Errors: connection_not_found, name_empty, name_taken, host_empty, host_invalid, port_invalid, auth_unsupported, username_empty, view_unsupported, control_character, text_too_long, path_too_long, theme_unknown, theme_wrong_mode, endpoint_change_needs_gui."
     )]
     pub(crate) async fn connections_update(
         &self,
@@ -354,6 +370,8 @@ impl RcMcpServer {
             notes: params.notes,
             ftp_data_mode: params.ftp_data_mode.map(Into::into),
             ftp_encoding: params.ftp_encoding.map(Into::into),
+            theme_light: params.theme_light,
+            theme_dark: params.theme_dark,
         };
         self.run_connections(Command::UpdateConnection {
             id: ConnectionId(params.id),

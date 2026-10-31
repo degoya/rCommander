@@ -31,8 +31,9 @@ pub enum Tab {
     Lists,
     /// Appearance: the Lister's own rows.
     Viewer,
-    /// Appearance: the lists' colours per look and the colours by file type (RC-100-43).
-    Colours,
+    /// Appearance: the colour themes of both modes and the colours by file type (RC-100-50,
+    /// RC-100-43); drawn by `themes_page.rs`, not row by row.
+    Themes,
     /// Keyboard: the page's schema rows - F10, the access keys, the menus' keys.
     Keys,
     /// Keyboard: every key in a table, to change (RC-100-21).
@@ -43,7 +44,7 @@ const PLUGINS: [Tab; 2] = [Tab::Installed, Tab::PluginSettings];
 const APPEARANCE_TABS: [Tab; 5] = [
     Tab::Window,
     Tab::Fonts,
-    Tab::Colours,
+    Tab::Themes,
     Tab::Lists,
     Tab::Viewer,
 ];
@@ -57,6 +58,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
         &[
             "appearance.language",
             "appearance.theme",
+            "appearance.connection_themes",
             "appearance.menu_bar",
             "appearance.macos_look",
             "appearance.function_key_bar",
@@ -76,8 +78,10 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
         ],
     ),
     (
-        Tab::Colours,
+        Tab::Themes,
         &[
+            "appearance.theme_light",
+            "appearance.theme_dark",
             "appearance.colours.light.text",
             "appearance.colours.light.background",
             "appearance.colours.light.stripe",
@@ -149,7 +153,7 @@ fn title(tab: Tab) -> &'static str {
         Tab::Fonts => t!("settings.tab.fonts"),
         Tab::Lists => t!("settings.tab.lists"),
         Tab::Viewer => t!("settings.tab.viewer"),
-        Tab::Colours => t!("settings.tab.colours"),
+        Tab::Themes => t!("settings.tab.themes"),
         Tab::Keys => t!("settings.tab.keys"),
         Tab::Shortcuts => t!("settings.tab.shortcuts"),
     }

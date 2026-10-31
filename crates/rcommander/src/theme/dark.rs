@@ -2,7 +2,7 @@
 
 use iced::Color;
 
-use super::{Tokens, hex, syntax};
+use super::{Tokens, hex, syntax, terminal};
 
 /// The cards' and the panels' fill, and the text on them.
 const SURFACE: u32 = 0x272727;
@@ -36,5 +36,6 @@ pub(super) fn tokens(accent: Color) -> Tokens {
         cursor_text: text,
         marked: accent,
         syntax: syntax::DARK,
+        terminal: terminal::CAMPBELL,
     }
 }

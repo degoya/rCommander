@@ -5,6 +5,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-31
+
+### Added
+
+- **Package managers** (RC-100-52): a Homebrew tap with a cask for macOS and a formula for Linux
+  (`degoya/homebrew-rcommander`) and a Scoop bucket (`degoya/scoop-rcommander`), rendered from
+  `packaging/` by `scripts/package-managers.sh` (`--check` against the last release) and pushed by
+  release.yml after each release. `rc_update::install_kind` knows `scoop`, `homebrew`, `winget`,
+  `deb` and `rpm` (`RCOMMANDER_INSTALL_KIND`, the path, the `install-kind` marker,
+  `VERSION.txt`): such an installation never replaces itself, reads the stable channel, has the
+  automatic install off, and the Updates page shows the manager's command with "Copy command";
+  `update.status` carries `install_command`. The hidden `rcommander install-kind` prints the kind
+  for the channels' CI (`package-channels.yml`).
+- **winget** (RC-100-53): `degoya.rCommander` as the portable zip, a pull request to
+  `microsoft/winget-pkgs` per release (komac, `WINGET_TOKEN`), the older open one closed
+  (`scripts/winget-supersede.sh`).
+- **deb and rpm, a signed apt and dnf repository** (RC-100-54): `scripts/package-deb-rpm.sh`
+  (`scripts/package-linux.sh --deb --rpm`) with nfpm, a desktop entry and hicolor icons; the
+  packages on every GitHub release; `scripts/package-repo.sh` and `release.yml`'s `apt-dnf` job
+  file them into `degoya/rcommander-packages`, signed with the key `rcommander-packages`, the
+  newest three versions kept; `packages-repo.yml` installs and upgrades with apt and dnf.
+- **Colour themes** (RC-100-50): a theme sets every colour of the window and the terminal's
+  palette; one per light and dark mode (`appearance.theme_light`, `appearance.theme_dark`).
+  Built in: Fluent (default), Mac (macOS), Classic, High contrast, Solarized and Nord, each light
+  and dark with terminal colours. Own themes (table `themes`, migration 0020) are made, duplicated,
+  renamed, deleted and edited on the Appearance page's tab *Themes* (formerly *Colours*), with a
+  live preview Cancel takes back, and exported and imported as `.rctheme` files checked at the
+  boundary; they go with the settings export. The list colours of RC-100-43 become a "Custom"
+  theme at the first start. Commands `theme.list`, `theme.select` (MCP `theme_list`,
+  `theme_select`) and the window's `theme.save`, `theme.delete`; open terminals take a new
+  palette without a restart.
+- **A theme per connection** (RC-100-51): a connection chooses a theme for the light and one
+  for the dark mode (connection manager, Theme (light) and Theme (dark), Default the window's;
+  `connections.theme_light`, `theme_dark`, migration 0021). Its panel - list, headers, status line,
+  tab - and its SSH terminal draw with it, an open terminal recoloured without a new session;
+  the window, dialogs, the other panel and local and WSL terminals stay global; a deleted theme
+  falls back. Switch `appearance.connection_themes` (on). `connections.create`, `.update`, `.save`
+  and their MCP tools take and check `theme_light`, `theme_dark` (`theme_unknown`,
+  `theme_wrong_mode`); a theme-only change keeps the session; duplicate and the connections export
+  carry them, an import without the theme says `theme_missing`.
+
+### Fixed
+
+- `scripts/public-ci.sh` no longer reads a timeout or network failure of `gh auth status` as
+  "not signed in" (exit 2): it tries three times and then ends with exit 1, not finished; only
+  gh's own not-signed-in or invalid-token answer is exit 2 (RC-100-31).
+
 ## [0.12.0] - 2026-10-30
 
 ### Changed

@@ -2,6 +2,9 @@
 //! the command line (`cmdline/view.rs`), the function-key bar and the status bar. A panel is its
 //! path bar (`path_bar.rs`), its file list or terminal, and its status line (`file_list.rs`).
 //! The panels share their area as the divider between them says (`resize.rs`, RC-010-20).
+//! A panel on a server, or showing an SSH terminal, draws its tabs and its card in its
+//! connection's theme (RC-100-51, [`App::panel_tokens`]); the drive bar, the bottom and every
+//! dialog stay in the window's.
 
 use iced::{
     Element, Length,
@@ -131,16 +134,28 @@ impl App {
         tokens: &'static Tokens,
     ) -> Element<'_, Message> {
         let mut parts = drive_bar::above_panel(self, side, tokens);
+        let own = self.panel_tokens(side);
         // The tabs stand on the panel, no gap: the active one joins its list.
-        parts.push(match tabs::tab_bar(self, side, tokens) {
-            Some(bar) => column![bar, self.panel(side, tokens)].into(),
-            None => self.panel(side, tokens),
+        parts.push(match tabs::tab_bar(self, side, own) {
+            Some(bar) => column![bar, self.panel(side, own)].into(),
+            None => self.panel(side, own),
         });
         column(parts)
             .spacing(4)
             .width(width)
             .height(Length::Fill)
             .into()
+    }
+
+    /// The look of `side`'s panel: the theme of the connection whose SSH terminal it shows, or
+    /// of the server it stands on; the window's on this machine (RC-100-51).
+    pub(super) fn panel_tokens(&self, side: PanelId) -> &'static Tokens {
+        let connection = self
+            .shown_terminal(side)
+            .and_then(|terminal| self.engine.terminal_connection(terminal))
+            .map(|connection| connection.0)
+            .or_else(|| theme::themes::connection_of(&self.pane(side).state.path));
+        theme::themes::of_connection(connection, self.dark)
     }
 
     fn panel(&self, side: PanelId, tokens: &'static Tokens) -> Element<'_, Message> {

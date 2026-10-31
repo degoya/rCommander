@@ -129,6 +129,12 @@ codes! {
         EngineError::SavedQueueNotFound { .. } => "saved_queue_not_found",
         EngineError::QueueListEmpty => "queue_list_empty",
         EngineError::PanelChanged { .. } => "panel_changed",
+        EngineError::ThemeUnknown { .. } => "theme_unknown",
+        EngineError::ThemeWrongMode { .. } => "theme_wrong_mode",
+        EngineError::ThemeBuiltin { .. } => "theme_builtin",
+        EngineError::ThemeInUse { .. } => "theme_in_use",
+        EngineError::ThemeNameTaken { .. } => "theme_name_taken",
+        EngineError::ThemeInvalid { .. } => "theme_invalid",
     }
     carried {
         // A session failure inside a file-system call keeps the FTP or SFTP code; a command

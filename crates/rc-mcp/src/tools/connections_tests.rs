@@ -168,6 +168,56 @@ async fn invalid_input_answers_the_same_codes_as_the_engine() {
 }
 
 #[tokio::test]
+async fn a_theme_of_each_mode_is_taken_one_of_the_other_refused() {
+    let setup = setup().await;
+    let client = connect(&setup.context).await;
+    let created = call(
+        &client,
+        "connections_create",
+        json!({ "name": "web", "host": "h", "theme_light": "nord-light", "theme_dark": "nord-dark" }),
+    )
+    .await;
+    assert_eq!(created["theme_light"], "nord-light", "{created}");
+    assert_eq!(created["theme_dark"], "nord-dark", "{created}");
+    let wrong = call(
+        &client,
+        "connections_create",
+        json!({ "name": "db", "host": "h", "theme_light": "nord-dark" }),
+    )
+    .await;
+    assert_eq!(wrong["code"], "theme_wrong_mode", "{wrong}");
+    let unknown = call(
+        &client,
+        "connections_update",
+        json!({ "id": created["id"], "theme_dark": "no-such-theme" }),
+    )
+    .await;
+    assert_eq!(unknown["code"], "theme_unknown", "{unknown}");
+    let wrong = call(
+        &client,
+        "connections_save",
+        json!({ "id": created["id"], "theme_dark": "classic-light" }),
+    )
+    .await;
+    assert_eq!(wrong["code"], "theme_wrong_mode", "{wrong}");
+    let cleared = call(
+        &client,
+        "connections_update",
+        json!({ "id": created["id"], "theme_light": "", "theme_dark": "solarized-dark" }),
+    )
+    .await;
+    assert_eq!(cleared["theme_light"], Value::Null, "{cleared}");
+    assert_eq!(cleared["theme_dark"], "solarized-dark", "{cleared}");
+    let saved = call(
+        &client,
+        "connections_save",
+        json!({ "name": "new", "host": "h", "theme_light": "classic-light" }),
+    )
+    .await;
+    assert_eq!(saved["theme_light"], "classic-light", "{saved}");
+}
+
+#[tokio::test]
 async fn a_password_in_a_call_is_refused_not_ignored() {
     let setup = setup().await;
     let client = connect(&setup.context).await;

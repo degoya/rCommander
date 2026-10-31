@@ -13,6 +13,8 @@ Rust.
 - A small SSH connection manager: servers, keys, credentials and login scripts, stored
   encrypted behind an optional master password.
 - Copying local to remote and remote to remote over SFTP and FTP/FTPS; multi-rename.
+- Colour themes for the whole window and the terminal, built in or your own, and a theme per
+  connection so each server's panel stands out.
 - Every action is also available to AI agents through a built-in MCP server.
 - In English, German, French and Spanish.
 
@@ -35,7 +37,26 @@ are needed:
 - **macOS, Apple Silicon and Intel**: unzip it and move `rCommander.app` to *Applications*. The
   app is not notarised, so open it the first time with a right-click and *Open*.
 
-Every release lists its files with their SHA-256 in `SHA256SUMS`.
+Every release lists its files with their SHA-256 in `SHA256SUMS`, and carries a `.deb` and an
+`.rpm` package for each Linux architecture.
+
+### Package managers
+
+```bash
+brew install --cask degoya/rcommander/rcommander   # macOS (Homebrew)
+brew install degoya/rcommander/rcommander          # Linux (Homebrew)
+scoop bucket add rcommander https://github.com/degoya/scoop-rcommander
+scoop install rcommander                           # Windows (Scoop)
+winget install degoya.rCommander                   # Windows (winget)
+```
+
+winget lists rCommander once Microsoft has reviewed its first submission.
+
+Debian, Ubuntu and Fedora install from the signed apt and dnf repository; its page
+<https://degoya.github.io/rcommander-packages> shows the two files to add. An installation through
+a package manager is updated by it (`brew upgrade`, `scoop update`, `winget upgrade`,
+`apt upgrade`, `dnf upgrade`); rCommander's update window then shows that command instead of
+installing the update itself.
 
 ## Documentation
 

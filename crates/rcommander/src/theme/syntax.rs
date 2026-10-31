@@ -23,6 +23,25 @@ pub struct Syntax {
     pub invalid: Color,
 }
 
+impl Syntax {
+    /// The colours of `rgb`, one per class in the order of the fields (RC-100-50).
+    pub(super) const fn of(rgb: [u32; 11]) -> Self {
+        Self {
+            keyword: hex(rgb[0], 1.0),
+            key: hex(rgb[1], 1.0),
+            string: hex(rgb[2], 1.0),
+            number: hex(rgb[3], 1.0),
+            literal: hex(rgb[4], 1.0),
+            comment: hex(rgb[5], 1.0),
+            punctuation: hex(rgb[6], 1.0),
+            operator: hex(rgb[7], 1.0),
+            type_name: hex(rgb[8], 1.0),
+            function: hex(rgb[9], 1.0),
+            invalid: hex(rgb[10], 1.0),
+        }
+    }
+}
+
 /// On `#FFFFFF`.
 pub(super) const LIGHT: Syntax = Syntax {
     keyword: hex(0x0000FF, 1.0),

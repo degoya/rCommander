@@ -78,6 +78,10 @@ pub(crate) enum Message {
 
 /// What the window does after a message.
 #[derive(Debug)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "one Action per click in the editor, handed on at once; boxing the Command buys nothing"
+)]
 pub(crate) enum Action {
     None,
     /// Run this command; answer with [`Message::Saved`] for a script outcome, [`Message::Deleted`]

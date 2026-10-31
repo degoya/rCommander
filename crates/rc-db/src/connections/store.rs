@@ -173,7 +173,8 @@ pub(super) async fn insert(
     let done = sqlx::query(
         "INSERT INTO connections (folder_id, name, kind, host, port, username, auth_method, \
          key_path, default_view, start_directory, notes, ftp_data_mode, ftp_encoding, \
-         sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         theme_light, theme_dark, sort_order) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(folder.map(|folder| folder.0))
     .bind(&fields.name)
@@ -188,6 +189,8 @@ pub(super) async fn insert(
     .bind(&fields.notes)
     .bind(fields.ftp_data_mode.map(FtpDataMode::as_str))
     .bind(fields.ftp_encoding.map(FtpEncoding::as_str))
+    .bind(&fields.theme_light)
+    .bind(&fields.theme_dark)
     .bind(sort_order)
     .execute(&mut *connection)
     .await
@@ -208,7 +211,8 @@ pub(super) async fn apply_patch(
     sqlx::query(
         "UPDATE connections SET name = ?, kind = ?, host = ?, port = ?, username = ?, \
          auth_method = ?, key_path = ?, default_view = ?, start_directory = ?, notes = ?, \
-         ftp_data_mode = ?, ftp_encoding = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
+         ftp_data_mode = ?, ftp_encoding = ?, theme_light = ?, theme_dark = ?, \
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
     )
     .bind(&fields.name)
     .bind(fields.kind.as_str())
@@ -222,6 +226,8 @@ pub(super) async fn apply_patch(
     .bind(&fields.notes)
     .bind(fields.ftp_data_mode.map(FtpDataMode::as_str))
     .bind(fields.ftp_encoding.map(FtpEncoding::as_str))
+    .bind(&fields.theme_light)
+    .bind(&fields.theme_dark)
     .bind(id.0)
     .execute(&mut *connection)
     .await

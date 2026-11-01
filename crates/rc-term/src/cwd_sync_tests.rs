@@ -220,7 +220,9 @@ fn a_network_share_reported_by_a_shell_never_becomes_the_panel_folder() {
         Some(PathBuf::from(r"\\wsl.localhost\Ubuntu\home\x"))
     );
     let mut wsl = CwdSync::new(PathBuf::from("/"), Vec::new());
+    assert_eq!(wsl.wsl_distro(), None, "a native shell until configured");
     wsl.configure(None, ShellPaths::Wsl(Some("Ubuntu".to_owned())));
+    assert_eq!(wsl.wsl_distro(), Some("Ubuntu"), "RC-100-56");
     mark(&mut wsl, b"7;file:///home/x");
     assert_eq!(
         wsl.reported(),

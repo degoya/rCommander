@@ -311,15 +311,13 @@ impl Connection {
         dispatch!(self, stream => stream.site(command).await)
     }
 
-    /// `REST <offset>`: the next `RETR` starts there.
+    /// `REST <offset>`: the next `RETR` starts there. Sent here, not through suppaftp's
+    /// `resume_transfer`: since suppaftp 12.2 that only arms the offset for suppaftp's own data
+    /// commands, and the pool opens its data connections itself (`pool/data.rs`).
     pub async fn rest(&mut self, offset: u64) -> FtpResult<()> {
-        let offset = usize::try_from(offset).map_err(|_| {
-            suppaftp::FtpError::ConnectionError(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "offset beyond this platform's address space",
-            ))
-        })?;
-        dispatch!(self, stream => stream.resume_transfer(offset).await)
+        self.custom(&format!("REST {offset}"), &[Status::RequestFilePending])
+            .await
+            .map(drop)
     }
 
     /// The port of a passive data connection: `EPSV` (`229 (|||port|)`) when `extended`, else

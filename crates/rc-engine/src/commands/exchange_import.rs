@@ -142,16 +142,20 @@ impl Engine {
         if let Some(themes) = &content.themes {
             rows.extend(self.exchange_themes(themes, only, dry_run).await?);
         }
+        // A dry run wrote no theme yet: a connection or a WSL distribution may name one of the
+        // file's (RC-100-51, RC-100-56).
+        let incoming = content
+            .themes
+            .as_deref()
+            .filter(|_| dry_run)
+            .unwrap_or_default();
         if let Some(settings) = &content.settings {
-            rows.extend(self.exchange_settings(settings, only, dry_run).await?);
+            rows.extend(
+                self.exchange_settings(settings, incoming, only, dry_run)
+                    .await?,
+            );
         }
         if let Some(part) = &content.connections {
-            // A dry run wrote no theme yet: a connection may name one of the file's (RC-100-51).
-            let incoming = content
-                .themes
-                .as_deref()
-                .filter(|_| dry_run)
-                .unwrap_or_default();
             rows.extend(
                 self.exchange_connections(part, incoming, only, dry_run)
                     .await?,

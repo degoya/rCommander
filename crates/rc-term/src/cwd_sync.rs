@@ -120,6 +120,14 @@ impl CwdSync {
         self.paths = paths;
     }
 
+    /// The WSL distribution of a WSL shell, when its name is known.
+    pub fn wsl_distro(&self) -> Option<&str> {
+        match &self.paths {
+            ShellPaths::Wsl(distro) => distro.as_deref(),
+            ShellPaths::Native(_) => None,
+        }
+    }
+
     /// The folder the shell last reported, as a panel's folder.
     pub fn reported(&self) -> Option<PathBuf> {
         self.reported
@@ -297,6 +305,13 @@ impl TermSession {
     #[must_use]
     pub fn fits_folder(&self, folder: &Path) -> bool {
         self.sync().fits(folder)
+    }
+
+    /// The WSL distribution a WSL shell runs in; `None` for any other shell and when WSL's
+    /// default was not known by name (RC-100-56: its colours are the distribution's theme's).
+    #[must_use]
+    pub fn wsl_distro(&self) -> Option<String> {
+        self.sync().wsl_distro().map(str::to_owned)
     }
 
     /// The folder the shell last reported (OSC 7 or OSC 9;9), as a panel's folder.

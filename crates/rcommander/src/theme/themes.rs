@@ -24,7 +24,7 @@ use std::sync::{
 use iced::Color;
 use rc_engine::settings::themes::{Theme, ThemeAccent, ThemesState};
 
-pub use connections::{Assigned, connection_of, of_connection, of_path, set_assigned};
+pub use connections::{Assigned, of_connection, of_distro, of_path, set_assigned};
 pub use slots::{KEYS, flatten, hex_of, seen, slot};
 
 use super::{Tokens, builtin, colours::parse_hex, dark, light};
@@ -78,6 +78,8 @@ pub fn look(theme: &Theme) -> &'static Tokens {
 struct Drawn {
     themes: Vec<Theme>,
     chosen: [&'static Tokens; 2],
+    /// The ids of the chosen themes, light and dark (the command palette marks them, RC-100-55).
+    chosen_ids: [Option<String>; 2],
 }
 
 static DRAWN: RwLock<Option<Drawn>> = RwLock::new(None);
@@ -88,19 +90,20 @@ static EDITORS: AtomicU64 = AtomicU64::new(0);
 
 /// The themes and the chosen ones from now on; their looks are built here, once each.
 pub fn set_state(state: &ThemesState) {
-    let chosen = [false, true].map(|dark| {
+    let themes = [false, true].map(|dark| {
         let fallback = || {
             let id = if dark { "fluent-dark" } else { "fluent-light" };
             state.theme(id).cloned()
         };
-        match state.chosen(dark).cloned().or_else(fallback) {
-            Some(theme) => look(&theme),
-            None => super::fixed(dark),
-        }
+        state.chosen(dark).cloned().or_else(fallback)
     });
     let drawn = Drawn {
         themes: state.themes.clone(),
-        chosen,
+        chosen: [0, 1].map(|at| match &themes[at] {
+            Some(theme) => look(theme),
+            None => super::fixed(at == 1),
+        }),
+        chosen_ids: themes.map(|theme| theme.map(|theme| theme.id)),
     };
     *DRAWN.write().unwrap_or_else(PoisonError::into_inner) = Some(drawn);
 }
@@ -160,6 +163,16 @@ pub fn tokens_of(id: &str, dark: bool) -> Option<&'static Tokens> {
         .find(|theme| theme.id == id && theme.dark == dark)?
         .clone();
     Some(look(&theme))
+}
+
+/// The id of the theme the light or the `dark` mode draws with; `None` before the themes are
+/// read.
+pub fn chosen_id(dark: bool) -> Option<String> {
+    DRAWN
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .and_then(|drawn| drawn.chosen_ids[usize::from(dark)].clone())
 }
 
 /// The themes of the light or the `dark` mode the window knows, built-in ones first: what a

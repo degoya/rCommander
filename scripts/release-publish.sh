@@ -8,7 +8,8 @@
 # Builds `<dir>/rcommander-update-stable.json` for a tag `vX.Y.Z`, `rcommander-update-beta.json`
 # for `vX.Y.Z-beta.N`, over the assets in <dir>, with `rc-pack update manifest build` and checks it
 # with `rc-pack update manifest verify`. The download base is the tag's GitHub release
-# (GITHUB_REPOSITORY, default degoya/rCommander).
+# (GITHUB_REPOSITORY, default degoya/rCommander). The notes are the version's section of
+# RELEASE-NOTES.md, which the Updates page shows with the offer (as scripts/sign-update.sh does).
 #
 # Environment:
 #   RCOMMANDER_UPDATE_SIGNING_KEY  the update key: its content (the repository secret) or the
@@ -20,8 +21,9 @@
 # read, removed on exit.
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/release-tag.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/release-tag.sh"
+source "$ROOT/scripts/lib/release-tag.sh"
 
 usage() {
     echo "usage: scripts/release-publish.sh update-manifest <dir> <tag>" >&2
@@ -56,7 +58,7 @@ update_manifest() {
     manifest="$dir/rcommander-update-$channel.json"
     "$pack" update manifest build --channel "$channel" --version "$version" --assets "$dir" \
         --base-url "https://github.com/${GITHUB_REPOSITORY:-degoya/rCommander}/releases/download/$tag/" \
-        --key "$key" --out "$manifest"
+        --key "$key" --notes "$ROOT/RELEASE-NOTES.md" --out "$manifest"
     "$pack" update manifest verify "$manifest" --assets "$dir"
     echo "release-publish: $manifest for $version ($channel), verified"
 }

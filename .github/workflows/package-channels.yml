@@ -158,10 +158,16 @@ jobs:
           set -euo pipefail
           brew tap-new --no-git local/rcommander
           tap="$(brew --repository local/rcommander)"
+          # Only the kind under test goes into the tap: with a cask and a formula of one name,
+          # `brew test` resolves the name to the cask and refuses it from an untrusted tap.
           place() {
-            mkdir -p "${tap}/Casks" "${tap}/Formula"
-            cp "rendered/$1/homebrew/Casks/rcommander.rb" "${tap}/Casks/rcommander.rb"
-            cp "rendered/$1/homebrew/Formula/rcommander.rb" "${tap}/Formula/rcommander.rb"
+            if [[ "${KIND}" == cask ]]; then
+              mkdir -p "${tap}/Casks"
+              cp "rendered/$1/homebrew/Casks/rcommander.rb" "${tap}/Casks/rcommander.rb"
+            else
+              mkdir -p "${tap}/Formula"
+              cp "rendered/$1/homebrew/Formula/rcommander.rb" "${tap}/Formula/rcommander.rb"
+            fi
           }
           install() {
             if [[ "${KIND}" == cask ]]; then

@@ -1,11 +1,18 @@
 //! The colour themes of a connection (RC-100-51): `theme_light` names a light theme this system
 //! offers, `theme_dark` a dark one, or none - the window's applies. Every way in - the window's
 //! form, `connections.create`, `connections.update`, `connections.save`, MCP - is checked here
-//! before the write; the repository checks only the id's length and characters.
+//! before the write; the repository checks only the id's length and characters. The themes of
+//! the WSL distributions (`appearance.wsl_themes`, RC-100-56) are checked the same way before
+//! `settings.set` stores them; the schema checks only the text's shape.
+
+use serde_json::Value;
 
 use crate::{
     Engine, EngineError,
-    settings::themes::{ThemeMode, ThemesState, load},
+    settings::{
+        parse_wsl_themes,
+        themes::{ThemeMode, ThemesState, load},
+    },
 };
 
 /// Refuses `id` for `mode` unless it names a theme of that mode `themes` offers; none or an
@@ -48,6 +55,21 @@ impl Engine {
         let themes = load(self.db()?).await;
         check_theme(&themes, light, ThemeMode::Light)?;
         check_theme(&themes, dark, ThemeMode::Dark)
+    }
+
+    /// The themes `value`, a checked `appearance.wsl_themes`, gives the distributions, checked
+    /// against those this system offers; a text that names none reads nothing.
+    pub(crate) async fn check_wsl_themes(&self, value: &Value) -> Result<(), EngineError> {
+        let rows = parse_wsl_themes(value.as_str().unwrap_or_default()).unwrap_or_default();
+        if rows.is_empty() {
+            return Ok(());
+        }
+        let themes = load(self.db()?).await;
+        for row in &rows {
+            check_theme(&themes, row.light.as_deref(), ThemeMode::Light)?;
+            check_theme(&themes, row.dark.as_deref(), ThemeMode::Dark)?;
+        }
+        Ok(())
     }
 }
 

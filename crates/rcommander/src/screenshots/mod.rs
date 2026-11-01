@@ -14,6 +14,7 @@
 //! the same `App::boot` with a setup of its own.
 
 mod demo;
+mod opening;
 mod out;
 mod scenes;
 mod shooter;
@@ -187,6 +188,7 @@ async fn prepare(plan: &Plan, profile: &Path, demo: &Path) -> Result<Setup> {
         .map_err(|error| anyhow!("the vault does not open: {}", error.code()))?;
     engine.attach_vault(vault);
     demo::add_connections(&engine).await?;
+    demo::add_theme(&engine).await?;
     let keymap = engine.keymap().await;
     let geometry = Geometry {
         width: plan.width as f32,

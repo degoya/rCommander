@@ -76,8 +76,8 @@ material="made-up-key-material"
 RCOMMANDER_UPDATE_SIGNING_KEY="$material" run_status "$PUBLISH" update-manifest "$dir" v9.9.9
 expect_status "with the key: the stable manifest" 0
 expect_true "is written" '[[ -s "$dir/rcommander-update-stable.json" ]]'
-expect "built for the stable channel and the tag's release" \
-    "update manifest build --channel stable --version 9.9.9 --assets $dir --base-url https://github.com/degoya/rCommander/releases/download/v9.9.9/ --key $(cat "$FAKE_PACK_CALLS.path") --out $dir/rcommander-update-stable.json" \
+expect "built for the stable channel and the tag's release, with its notes" \
+    "update manifest build --channel stable --version 9.9.9 --assets $dir --base-url https://github.com/degoya/rCommander/releases/download/v9.9.9/ --key $(cat "$FAKE_PACK_CALLS.path") --notes $ROOT/RELEASE-NOTES.md --out $dir/rcommander-update-stable.json" \
     "$(sed -n 1p "$FAKE_PACK_CALLS")"
 expect "then verified" "update manifest verify $dir/rcommander-update-stable.json --assets $dir" \
     "$(sed -n 2p "$FAKE_PACK_CALLS")"

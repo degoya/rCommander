@@ -1,4 +1,4 @@
-use super::{Rect, clamp};
+use super::{Rect, clamp, wayland};
 
 const fn rect(x: i32, y: i32, width: i32, height: i32) -> Rect {
     Rect {
@@ -57,4 +57,19 @@ fn a_window_moves_to_the_monitor_it_overlaps_most() {
 fn without_monitors_nothing_moves() {
     let window = rect(-5000, -5000, 900, 640);
     assert_eq!(clamp(window, &[]), window);
+}
+
+#[test]
+fn wayland_is_read_as_winit_reads_it() {
+    let env = |set: &'static [(&'static str, &'static str)]| {
+        move |name: &str| {
+            set.iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| std::ffi::OsString::from(value))
+        }
+    };
+    assert!(wayland(env(&[("WAYLAND_DISPLAY", "wayland-1")])));
+    assert!(wayland(env(&[("WAYLAND_SOCKET", "3")])));
+    assert!(!wayland(env(&[("WAYLAND_DISPLAY", ""), ("DISPLAY", ":0")])));
+    assert!(!wayland(env(&[("DISPLAY", ":0")])));
 }

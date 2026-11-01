@@ -116,6 +116,16 @@
         { "key": "Escape" },
         { "open": "settings" }
       ]
+    },
+    {
+      "name": "settings-themes",
+      "theme": "dark",
+      "capture": "settings",
+      "settle_ms": 1500,
+      "steps": [
+        { "key": "Escape" },
+        { "open": "settings", "page": "appearance", "tab": "themes" }
+      ]
     }
   ]
 }

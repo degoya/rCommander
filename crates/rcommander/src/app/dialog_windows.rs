@@ -331,7 +331,7 @@ impl App {
     /// next opening, or closed.
     fn drop_dialog_window(&mut self, id: window::Id) -> Task<Message> {
         match self.dialog_windows.closed(id) {
-            Some((kind, _)) if kind.reused() => {
+            Some((kind, _)) if kind.reused() && self.dialog_windows.hides => {
                 self.dialog_windows.park(kind, id);
                 Task::none()
             }
@@ -364,7 +364,7 @@ impl App {
         };
         let main = self.dialog_windows.main();
         let closed = match closing {
-            Some((kind, _)) if kind.reused() => {
+            Some((kind, _)) if kind.reused() && self.dialog_windows.hides => {
                 self.dialog_windows.park(kind, id);
                 platform::dialog_window::hide(id, main, modal)
             }

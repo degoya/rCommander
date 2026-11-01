@@ -11,6 +11,14 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.14.0
+
+- Give each WSL distribution its own light and dark theme: a panel on it, its tab and its terminal take those colours, so you see at a glance where you are.
+- Switch the colour theme from the command palette (Ctrl+Shift+P): one entry per theme and mode, your own themes included.
+- Put a theme on a key of its own in the keyboard settings; a key whose theme was deleted is marked and says so.
+- On Linux under Wayland (for example GNOME or Hyprland), the copy, move and other file dialogs no longer leave an empty window behind.
+- The update page now shows what a new version brings.
+
 ## 0.13.0
 
 - Colour themes: choose a theme for light and one for dark mode, from Fluent, Classic, High contrast, Solarized, Nord or Mac, covering the whole window and the terminal.

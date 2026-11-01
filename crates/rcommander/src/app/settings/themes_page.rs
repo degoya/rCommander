@@ -12,7 +12,8 @@
 //! rules - is applied to the window at the start and on every change ([`read`]); the colours of
 //! RC-100-43 become a Custom theme on the way ([`adopt_colours`]). The themes of the connections'
 //! panels and whether they apply (RC-100-51, `theme/themes/connections.rs`) are read with them,
-//! again after every change of the connection tree.
+//! again after every change of the connection tree; so are the WSL distributions' themes
+//! (RC-100-56), which the tab's own section edits on Windows (`wsl.rs`).
 
 mod actions;
 mod editor;
@@ -20,12 +21,13 @@ mod editor_view;
 mod file;
 mod labels;
 mod view;
+mod wsl;
 
 use iced::Task;
 use rc_db::Db;
 use rc_engine::settings::{
     COLOUR_KEYS, COLOUR_RULES_KEY, CONNECTION_THEMES_KEY, THEME_DARK_KEY, THEME_LIGHT_KEY,
-    stored_bool, stored_setting,
+    WSL_THEMES_KEY, parse_wsl_themes, stored_bool, stored_setting,
     themes::{self, ImportedTheme, Theme, ThemesOutcome, ThemesState, adopt_colours},
 };
 use serde_json::Value;
@@ -43,8 +45,19 @@ use crate::{
 pub struct ThemesRead {
     pub state: ThemesState,
     pub rules: String,
-    /// The connections' themes and `appearance.connection_themes` (RC-100-51).
+    /// The connections' and the WSL distributions' themes and `appearance.connection_themes`
+    /// (RC-100-51, RC-100-56).
     pub connections: theme::themes::Assigned,
+}
+
+/// The text setting `key` in force.
+async fn stored_text(db: &Db, key: &str) -> String {
+    stored_setting(db, key)
+        .await
+        .as_ref()
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
 }
 
 /// Takes the colours of RC-100-43 into themes, then reads the themes and the rules.
@@ -53,18 +66,14 @@ pub async fn read(db: Db) -> ThemesRead {
         tracing::warn!(%error, "the chosen list colours cannot become a theme");
     }
     let state = themes::load(&db).await;
-    let rules = stored_setting(&db, COLOUR_RULES_KEY)
-        .await
-        .as_ref()
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
+    let rules = stored_text(&db, COLOUR_RULES_KEY).await;
+    let distros = parse_wsl_themes(&stored_text(&db, WSL_THEMES_KEY).await).unwrap_or_default();
     let rows = db.connection_themes().await.unwrap_or_else(|error| {
         tracing::warn!(%error, "the connections' themes cannot be read; the window's apply");
         Vec::new()
     });
     let on = stored_bool(&db, CONNECTION_THEMES_KEY).await;
-    let connections = theme::themes::Assigned::of(on, rows);
+    let connections = theme::themes::Assigned::of(on, rows).with_distros(distros);
     ThemesRead {
         state,
         rules,
@@ -74,11 +83,12 @@ pub async fn read(db: Db) -> ThemesRead {
 
 /// Whether the setting `key` changes what the themes draw: a mode's theme, a colour of RC-100-43
 /// (an import writes them), the rules by file type (one of [`COLOUR_KEYS`]), the connections'
-/// themes switched on or off (RC-100-51).
+/// themes switched on or off (RC-100-51), the WSL distributions' themes (RC-100-56).
 pub fn concerns(key: &str) -> bool {
     key == THEME_LIGHT_KEY
         || key == THEME_DARK_KEY
         || key == CONNECTION_THEMES_KEY
+        || key == WSL_THEMES_KEY
         || COLOUR_KEYS.contains(&key)
 }
 
@@ -114,6 +124,8 @@ pub struct ThemesPage {
     /// A save, a delete or a file runs; the buttons wait.
     busy: bool,
     editor: Option<editor::Editor>,
+    /// The WSL distributions the drive bar found, for the section of their themes (RC-100-56).
+    distros: Vec<String>,
 }
 
 impl ThemesPage {
@@ -194,8 +206,16 @@ impl App {
         theme::themes::set_assigned(read.connections);
         theme::colour_rules::set_rules(&read.rules);
         self.restyle_terminals();
+        let distros: Vec<String> = self
+            .drive_bar
+            .drives
+            .iter()
+            .filter(|drive| drive.kind == rc_engine::DriveKind::Wsl)
+            .map(|drive| drive.label.clone())
+            .collect();
         if let Some(page) = self.settings.as_mut().map(|dialog| &mut dialog.themes) {
             let dark = self.dark;
+            page.distros = distros;
             let keep = page
                 .selected
                 .as_ref()

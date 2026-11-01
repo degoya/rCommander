@@ -179,6 +179,22 @@ pub fn hide<T: Send + 'static>(
     window::set_mode(id, Mode::Hidden)
 }
 
+/// Whether a dialog's window can be hidden for its next opening ([`hide`]). Not on Wayland:
+/// winit ignores a window's visibility there, so a hidden window stayed on screen, empty; it is
+/// closed instead.
+#[must_use]
+pub fn hides() -> bool {
+    !cfg!(all(unix, not(target_os = "macos"))) || !wayland(|name| std::env::var_os(name))
+}
+
+/// Whether winit takes Wayland, read as it does: `WAYLAND_DISPLAY` or `WAYLAND_SOCKET` set and
+/// not empty, through `var`.
+fn wayland(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    ["WAYLAND_DISPLAY", "WAYLAND_SOCKET"]
+        .into_iter()
+        .any(|name| var(name).is_some_and(|value| !value.is_empty()))
+}
+
 #[cfg(test)]
 #[path = "dialog_window_tests.rs"]
 mod tests;

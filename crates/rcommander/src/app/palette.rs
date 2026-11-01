@@ -10,10 +10,12 @@
 //! goes to [`App::on_key`]. The names are the keymap's i18n keys (`keys.<name>`), so the palette,
 //! the function keys and the keyboard reference say the same. The palette itself is a window
 //! key, not a registry command: there is nothing in it for MCP, which calls the commands directly.
-//! The menu bar (`menu_bar.rs`, RC-080-18) runs the palette's rows by their names.
+//! The menu bar (`menu_bar.rs`, RC-080-18) runs the palette's rows by their names. The colour
+//! themes are rows too, one per theme and mode (RC-100-55, `themes.rs`).
 
 pub mod menu_bar;
 pub mod reach;
+pub mod themes;
 mod view;
 
 use iced::widget::{Id, operation};
@@ -79,6 +81,8 @@ pub struct Entry {
     /// either.
     pub chords: String,
     pub action: Action,
+    /// The row of a theme a mode draws with, marked (RC-100-55).
+    pub current: bool,
 }
 
 /// The open palette.
@@ -188,11 +192,17 @@ pub fn entries(keymap: &Keymap, rows: &[ReachRow], network: bool) -> Vec<Entry> 
 fn entry(name: &str, keys: String, action: Action) -> Entry {
     Entry {
         name: name.to_owned(),
-        label: i18n::code_text("keys", name),
+        label: label(name),
         keys,
         chords: String::new(),
         action,
+        current: false,
     }
+}
+
+/// The words of a row's name: its `keys.` key's, or a theme key's (RC-100-55).
+pub fn label(name: &str) -> String {
+    themes::label(name).unwrap_or_else(|| i18n::code_text("keys", name))
 }
 
 impl Palette {
@@ -276,9 +286,11 @@ pub fn key(palette: &mut Palette, chord: &Chord) -> PaletteKey {
 }
 
 impl App {
-    /// Ctrl+Shift+P: the palette opens with every row, its field focused.
+    /// Ctrl+Shift+P: the palette opens with every row - the themes as the window knows them
+    /// now -, its field focused.
     pub(super) fn open_palette(&mut self) -> Vec<Effect> {
-        let entries = entries(&self.keymap, &reach::standard(), self.drive_bar.network);
+        let mut entries = entries(&self.keymap, &reach::standard(), self.drive_bar.network);
+        themes::add_rows(&mut entries, &themes::known());
         self.palette = Some(Palette::new(entries));
         vec![Effect::Task(operation::focus(Id::new(FIELD_ID)))]
     }

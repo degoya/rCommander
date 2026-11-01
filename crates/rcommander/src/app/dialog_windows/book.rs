@@ -45,6 +45,9 @@ pub struct DialogWindows {
     /// The setting `appearance.dialog_windows`, as read: the dialogs open in windows of their
     /// own.
     pub own: bool,
+    /// Whether a closed dialog's window can be hidden for its next opening
+    /// ([`DialogWindow::reused`]): not on Wayland (`platform::dialog_window::hides`).
+    pub hides: bool,
     /// The window that has the keyboard, as the system last said; `None` while unknown.
     focused: Option<window::Id>,
     /// The file operation's question the main window showed when last looked at.
@@ -67,6 +70,7 @@ impl DialogWindows {
             menu_bar: MenuBar::default(),
             queue_own: false,
             own: false,
+            hides: crate::platform::dialog_window::hides(),
             focused: None,
             asked: None,
             parked: Vec::new(),

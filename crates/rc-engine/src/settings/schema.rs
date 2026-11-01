@@ -6,8 +6,7 @@
 //! both are protected like every `mcp.*` key. The rows of one area are in `schema/<area>.rs`
 //! (fonts, layout, keys, delete, drive_line, transfers, windows, exchange, mouse, checksum, sort,
 //! viewer, mcp, plugins, colours, archive, quick_search, ftp, sftp, update, language, macos,
-//! themes); how a
-//! value is checked against its row is `schema/check.rs`.
+//! themes, wsl_themes); how a value is checked against its row is `schema/check.rs`.
 
 pub(super) mod archive;
 pub(super) mod backup;
@@ -41,6 +40,7 @@ pub(super) mod update;
 mod vault;
 pub(super) mod viewer;
 mod windows;
+pub(super) mod wsl_themes;
 
 pub use archive::ARCHIVE_ENTER_KEY;
 pub use check::parse_associations;
@@ -190,6 +190,10 @@ pub enum SettingKind {
     Theme {
         default: &'static str,
     },
+    /// The themes of the WSL distributions: `Distro<TAB>light<TAB>dark` per line (RC-100-56).
+    WslThemes {
+        default: &'static str,
+    },
 }
 
 /// One setting.
@@ -247,6 +251,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     themes::THEME_LIGHT,
     themes::THEME_DARK,
     themes::CONNECTION_THEMES,
+    wsl_themes::WSL_THEMES,
     SettingSpec {
         key: FKEY_BAR_KEY,
         page: SettingPage::Appearance,

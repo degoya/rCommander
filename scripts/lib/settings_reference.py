@@ -66,6 +66,7 @@ KINDS = {
     "Source": "An `https://` folder serving the update manifests; empty for the official releases",
     "Proxy": "Empty for the system's proxy, `direct`, or `http(s)://host:port` without a login",
     "Theme": "The id of a colour theme, built in (such as `fluent-dark`, `nord-light`) or the person's own; one of the other mode or none at all draws with Fluent",
+    "WslThemes": "Lines, one per WSL distribution: its name, a tab, a light theme's id and a dark theme's id after another tab, either empty for the window's",
 }
 
 PLUGINS_NOTE = """

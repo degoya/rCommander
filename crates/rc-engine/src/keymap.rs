@@ -17,11 +17,13 @@
 //! with the person's deviations from it (RC-100-21): `overrides.rs` keeps them as the setting
 //! `keys.overrides`, `edit.rs` applies them and makes the Shortcuts tab's edits. A key whose
 //! character the layout decides can be bound by where it sits, `Ctrl+[Semicolon]` (RC-100-48,
-//! `physical.rs`).
+//! `physical.rs`). A key the person adds for a colour theme is a row of no standard name,
+//! `theme:<mode>:<id>` (RC-100-55, `theme_keys.rs`).
 
 mod edit;
 mod overrides;
 mod physical;
+mod theme_keys;
 
 use std::{fmt, str::FromStr};
 
@@ -31,6 +33,7 @@ use serde_json::{Value, json};
 pub use self::edit::{KeymapRow, Lock, Refusal};
 pub use self::overrides::{MAX_OVERRIDE_TEXT, MAX_OVERRIDES, Override, Overrides};
 pub use self::physical::{PHYSICAL_KEYS, physical_code};
+pub use self::theme_keys::{MAX_THEME_KEY_ID, THEME_KEY_PREFIX, theme_key, theme_key_name};
 use crate::{Command, PanelView};
 
 /// The standard bindings: Total Commander 11's, plus the key right of L (Ctrl+O-umlaut on a

@@ -46,6 +46,9 @@ pub use schema::viewer::{
 pub use schema::viewer::{
     TEXT_ZOOM_KEEP_KEY, TEXT_ZOOM_KEY, VIEWER_MAX_FONT_SIZE, VIEWER_MIN_FONT_SIZE,
 };
+pub use schema::wsl_themes::{
+    MAX_WSL_THEMES, WSL_THEMES_KEY, WslTheme, parse_wsl_themes, write_wsl_themes, wsl_theme,
+};
 pub use schema::{ALTERNATE_ROWS_KEY, EDITOR_KEY, FKEY_BAR_KEY, MKDIR_PREFILL_KEY, VIEWER_KEY};
 pub use schema::{
     ARCHIVE_ENTER_KEY, Choice, FILE_ICONS_KEY, FOLLOW_PANEL_KEY, INTEGRATION_KEY, LEFT_START_KEY,
@@ -275,6 +278,10 @@ impl Engine {
                 key: key.to_owned(),
                 reason,
             })?;
+        // Only themes this system offers, each of its mode (RC-100-56).
+        if spec.key == WSL_THEMES_KEY {
+            self.check_wsl_themes(&value).await?;
+        }
         let db = self.db()?;
         let number = value
             .as_u64()

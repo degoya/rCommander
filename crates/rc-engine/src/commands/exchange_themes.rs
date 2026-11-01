@@ -4,7 +4,9 @@
 //! rule, a known token and `#rrggbb` each) and matches it by its id: new when the id is not here,
 //! there already with the same name and colours, else changed. A theme whose name another own
 //! theme has here comes in with a number after the name; a theme whose id is no own one's is not
-//! imported. The themes are written before the settings that name them.
+//! imported. The themes are written before the settings that name them. A theme a connection or
+//! a WSL distribution names that is neither here nor in the file is left out with a hint
+//! (RC-100-51, RC-100-56).
 
 use rc_db::Db;
 
@@ -15,8 +17,52 @@ use super::{
 use crate::{
     Engine, EngineError,
     exchange::{ExchangePart, ExchangeRow, ExportedTheme, RowStatus},
-    settings::themes::{Theme, ThemeAccent, clean_name, clean_tokens, is_own_id, unique_name},
+    settings::{
+        parse_wsl_themes,
+        themes::{
+            Theme, ThemeAccent, ThemesState, clean_name, clean_tokens, is_own_id, unique_name,
+        },
+        write_wsl_themes,
+    },
 };
+
+/// Whether the theme `id` of the light or the `dark` mode is here or among the file's
+/// (`incoming`, the themes a dry run has not written yet).
+pub(super) fn known_theme(
+    here: &ThemesState,
+    incoming: &[ExportedTheme],
+    id: &str,
+    dark: bool,
+) -> bool {
+    here.theme(id).is_some_and(|theme| theme.dark == dark)
+        || incoming
+            .iter()
+            .any(|theme| theme.id == id && theme.dark == dark && is_own_id(id))
+}
+
+/// `text`, an `appearance.wsl_themes` its row has checked, without a theme that is not
+/// [`known_theme`] for its mode, and whether one was left out: the setting comes in without it,
+/// with a hint (RC-100-56).
+pub(super) fn fit_wsl_themes(
+    text: &str,
+    here: &ThemesState,
+    incoming: &[ExportedTheme],
+) -> (String, bool) {
+    let mut rows = parse_wsl_themes(text).unwrap_or_default();
+    let mut dropped = false;
+    for row in &mut rows {
+        for (slot, dark) in [(&mut row.light, false), (&mut row.dark, true)] {
+            if slot
+                .as_deref()
+                .is_some_and(|id| !known_theme(here, incoming, id, dark))
+            {
+                *slot = None;
+                dropped = true;
+            }
+        }
+    }
+    (write_wsl_themes(&rows), dropped)
+}
 
 /// Every own theme, for an export with the settings.
 pub(super) async fn export_themes(db: &Db) -> Vec<ExportedTheme> {

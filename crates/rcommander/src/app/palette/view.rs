@@ -1,5 +1,6 @@
 //! Drawing the command palette: a card at the window's top over the dimmed window, its field and
-//! a page of rows around the chosen one, each with its name and its keys.
+//! a page of rows around the chosen one, each with its name and its keys - and the mark of a
+//! theme a mode draws with.
 
 use iced::{
     Element, Length,
@@ -34,11 +35,12 @@ pub fn overlay<'a>(palette: &'a Palette, tokens: &'static Tokens) -> Element<'a,
             continue;
         };
         let chosen = at == palette.selected;
-        let content = row![
-            line(entry.label.as_str()).width(Length::Fill),
-            line(entry.keys.as_str()).color(tokens.text_secondary),
-        ]
-        .spacing(12);
+        let mut content = row![line(entry.label.as_str()).width(Length::Fill)].spacing(12);
+        // The themes the modes draw with (RC-100-55).
+        if entry.current {
+            content = content.push(line(t!("palette.theme.current")));
+        }
+        let content = content.push(line(entry.keys.as_str()).color(tokens.text_secondary));
         let cell = container(content)
             .padding([4, 8])
             .width(Length::Fill)

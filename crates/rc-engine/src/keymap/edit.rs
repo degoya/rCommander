@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Binding, Chord, KeyContext, Keymap, Override, Overrides};
+use super::{Binding, Chord, KeyContext, Keymap, Override, Overrides, theme_keys::theme_binding};
 use crate::Command;
 
 /// Why the window keeps a chord for itself: no row runs on it but its own.
@@ -87,7 +87,8 @@ impl Keymap {
     }
 
     /// The standard keymap with `overrides` applied in their order, and the deviations that no
-    /// longer fit - a name the standard does not have, an unbinding of a chord it does not bind.
+    /// longer fit - a name the standard does not have (and no theme key's), an unbinding of a
+    /// chord it does not bind.
     #[must_use]
     pub fn with_overrides(overrides: &Overrides) -> (Self, Vec<Override>) {
         let mut keymap = Self::shared_standard().clone();
@@ -129,12 +130,14 @@ impl Keymap {
             })
     }
 
-    /// `chord` runs the standard binding `name` from now on, beside its other keys; whatever
-    /// ran on it before no longer does, and a reservation of it ends.
+    /// `chord` runs the standard binding `name` from now on - or the theme key `name` names
+    /// (RC-100-55) -, beside its other keys; whatever ran on it before no longer does, and a
+    /// reservation of it ends.
     ///
     /// # Errors
     ///
-    /// The chord is the window's, or the standard has no binding `name`.
+    /// The chord is the window's, or the standard has no binding `name` and it names no theme
+    /// key.
     pub fn assign(&mut self, chord: Chord, name: &str) -> Result<(), Refusal> {
         if let Some(lock) = Self::locked(&chord) {
             return Err(Refusal::Locked(lock));
@@ -142,12 +145,15 @@ impl Keymap {
         let template = Self::shared_standard()
             .bindings
             .iter()
-            .find(|binding| binding.name == name)
-            .ok_or(Refusal::UnknownName)?;
-        self.place(Binding {
-            chord,
-            ..template.clone()
-        });
+            .find(|binding| binding.name == name);
+        let binding = match template {
+            Some(template) => Binding {
+                chord,
+                ..template.clone()
+            },
+            None => theme_binding(chord, name).ok_or(Refusal::UnknownName)?,
+        };
+        self.place(binding);
         Ok(())
     }
 
@@ -164,7 +170,8 @@ impl Keymap {
         Ok(())
     }
 
-    /// `name` with the keys the standard gives it, taken back from the rows that hold them now.
+    /// `name` with the keys the standard gives it, taken back from the rows that hold them now;
+    /// a theme key, which the standard does not have, goes.
     pub fn reset(&mut self, name: &str) {
         self.bindings.retain(|binding| binding.name != name);
         let standard = Self::shared_standard();
@@ -229,7 +236,8 @@ impl Keymap {
     }
 
     /// Every row, by name in the standard's order: each binding and window key of the name, or
-    /// one row without keys when they were all taken away.
+    /// one row without keys when they were all taken away; the theme keys after them, which
+    /// have no row once their keys are gone.
     #[must_use]
     pub fn rows(&self) -> Vec<KeymapRow> {
         let standard = Self::shared_standard();

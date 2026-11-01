@@ -205,10 +205,19 @@ impl Shooter {
                 self.perform(effects)
             }
             Step::Wait(wait) => return Ok((Task::none(), *wait)),
-            Step::Open(Opening::Settings) => self
-                .app
-                .update(Message::Settings(SettingsMessage::Open))
-                .map(Shot::App),
+            Step::Open(Opening::Settings { page, tab }) => {
+                let open = match page {
+                    Some(page) => SettingsMessage::OpenPage(*page),
+                    None => SettingsMessage::Open,
+                };
+                let mut tasks = vec![self.app.update(Message::Settings(open)).map(Shot::App)];
+                // After the page, which opens on its first tab (RC-100-55).
+                if let Some(tab) = tab {
+                    let turn = Message::Settings(SettingsMessage::Tab(*tab));
+                    tasks.push(self.app.update(turn).map(Shot::App));
+                }
+                Task::batch(tasks)
+            }
             Step::Close(capture) => {
                 let id = self
                     .window_of(*capture)

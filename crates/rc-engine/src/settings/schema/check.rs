@@ -30,7 +30,8 @@ impl SettingSpec {
             | SettingKind::ColourRules { default }
             | SettingKind::Source { default }
             | SettingKind::Proxy { default }
-            | SettingKind::Theme { default } => Value::from(default),
+            | SettingKind::Theme { default }
+            | SettingKind::WslThemes { default } => Value::from(default),
         }
     }
 
@@ -159,6 +160,21 @@ impl SettingSpec {
                     })?;
                 Ok(Value::from(super::write_colour_rules(&rules)))
             }
+            // Written as the list writes it; the themes it names are checked on the way in.
+            SettingKind::WslThemes { .. } => {
+                let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
+                let rows = (text.len() <= MAX_TEXT)
+                    .then(|| super::wsl_themes::parse_wsl_themes(text))
+                    .flatten()
+                    .ok_or_else(|| {
+                        format!(
+                            "expected at most {} lines, a WSL distribution's name, a tab, a light \
+                             theme's id and a dark theme's id after another tab, either empty",
+                            super::wsl_themes::MAX_WSL_THEMES
+                        )
+                    })?;
+                Ok(Value::from(super::wsl_themes::write_wsl_themes(&rows)))
+            }
             SettingKind::Source { .. } => {
                 let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
                 if text.is_empty() {
@@ -216,6 +232,7 @@ impl SettingSpec {
             SettingKind::Source { .. } => "source",
             SettingKind::Proxy { .. } => "proxy",
             SettingKind::Theme { .. } => "theme",
+            SettingKind::WslThemes { .. } => "wsl_themes",
         }
     }
 }

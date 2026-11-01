@@ -51,6 +51,7 @@ expect_true "a key by place reads as on a German and a US keyboard" 'grep -qF "|
 expect_true "a reserved key" 'grep -qF "| Ctrl+Shift+Alt+F11 | a later job (script test) |" "$PAGE"'
 expect_true "a command through a dialog" 'grep -qF "| \`hotlist.open\` | An entry of the hotlist (Ctrl+D) (\`hotlist.list\`) |" "$PAGE"'
 expect_true "a palette command" 'grep -qF "| \`vault.lock\` | Command palette: *Lock the vault* |" "$PAGE"'
+expect_true "palette rows from a list" 'grep -qF "| \`theme.select\` | Command palette: a row per theme of each mode" "$PAGE"'
 expect_true "a TC key left free" 'grep -qF "| Ctrl+F7 | Unsorted | Not planned yet (later) |" "$PAGE"'
 expect_true "the dialogs' keys follow" 'grep -qF "### Lister (F3) and Quick View (Ctrl+Q)" "$PAGE"'
 expect_true "the leading comment is dropped" '! grep -qF "<!--" "$PAGE"'

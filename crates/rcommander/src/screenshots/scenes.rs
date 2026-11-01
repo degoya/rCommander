@@ -8,12 +8,15 @@
 //!                 "steps": [ { "key": "Ctrl+F" },
 //!                            { "command": { "command": "panel.navigate",
 //!                                           "params": { "path": "Documents" } } },
-//!                            { "wait_ms": 300 }, { "open": "settings" }, { "close": "lister" },
+//!                            { "wait_ms": 300 }, { "open": "settings" },
+//!                            { "open": "settings", "page": "appearance", "tab": "themes" },
+//!                            { "close": "lister" },
 //!                            { "mcp_question": { "tool": "ops_copy", "class": "write" } } ] } ] }
 //! ```
 //!
 //! `{demo}` in a command's strings and a question's values stands for the demo folder, so a
-//! scene names its files wherever the folder lies.
+//! scene names its files wherever the folder lies. An `open` step may name the settings' page and
+//! tab to open on (RC-100-55, `opening.rs`).
 //!
 //! A `command` step runs as its key would (`App::run_bound`) and may only read or write - no
 //! command that deletes, overwrites, runs a program or decides about trust. A `key` step goes
@@ -26,6 +29,9 @@ use anyhow::{Context, Result, bail, ensure};
 use rc_engine::{Chord, Command, CommandClass, McpArgument};
 use serde::Deserialize;
 use serde_json::Value;
+
+pub use super::opening::Opening;
+use super::opening::{self, RawOpening};
 
 /// The largest scene file read.
 pub const MAX_FILE_BYTES: u64 = 256 * 1024;
@@ -96,13 +102,6 @@ pub enum Capture {
     Lister,
 }
 
-/// A dialog a step opens that no command opens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Opening {
-    Settings,
-}
-
 #[derive(Debug, Clone)]
 pub enum Step {
     /// A key press, as the keymap spells it.
@@ -151,8 +150,9 @@ struct RawScene {
     name: String,
     #[serde(default)]
     theme: Option<Look>,
+    /// Read one by one: an `open` step's `page` and `tab` stand beside it.
     #[serde(default)]
-    steps: Vec<RawStep>,
+    steps: Vec<Value>,
     #[serde(default)]
     settle_ms: Option<u64>,
     #[serde(default)]
@@ -166,7 +166,7 @@ enum RawStep {
     /// Read as JSON first, so a parameter the command does not know is found.
     Command(Value),
     WaitMs(u64),
-    Open(Opening),
+    Open(RawOpening),
     Close(Capture),
     McpQuestion(RawAsk),
 }
@@ -306,7 +306,15 @@ fn check_scene(scene: RawScene, demo: &str) -> Result<Scene> {
     })
 }
 
-fn check_step(step: RawStep, demo: &str) -> Result<Step> {
+fn check_step(mut step: Value, demo: &str) -> Result<Step> {
+    // The settings' page and tab beside `open` (RC-100-55); anywhere else they are unknown.
+    let (page, tab) = match &mut step {
+        Value::Object(fields) if fields.contains_key("open") => {
+            (fields.remove("page"), fields.remove("tab"))
+        }
+        _ => (None, None),
+    };
+    let step: RawStep = serde_json::from_value(step).context("the step does not parse")?;
     Ok(match step {
         RawStep::Key(keys) => Step::Key(
             keys.parse()
@@ -320,7 +328,7 @@ fn check_step(step: RawStep, demo: &str) -> Result<Step> {
             ensure!(wait <= MAX_WAIT_MS, "wait_ms {wait} is over {MAX_WAIT_MS}");
             Step::Wait(Duration::from_millis(wait))
         }
-        RawStep::Open(opening) => Step::Open(opening),
+        RawStep::Open(raw) => Step::Open(opening::check(raw, page.as_ref(), tab.as_ref())?),
         RawStep::Close(Capture::Main) => bail!("the main window is not closed by a step"),
         RawStep::Close(capture) => Step::Close(capture),
         RawStep::McpQuestion(ask) => Step::Ask(check_ask(ask, demo)?),

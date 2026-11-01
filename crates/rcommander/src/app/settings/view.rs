@@ -322,6 +322,7 @@ fn setting_row<'a>(
         // the themes and RC-100-43's colours are the Themes tab's (`themes_page.rs`).
         SettingKind::Colour { .. }
         | SettingKind::Theme { .. }
+        | SettingKind::WslThemes { .. }
         | SettingKind::Extensions { .. }
         | SettingKind::Associations { .. }
         | SettingKind::Source { .. }

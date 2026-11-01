@@ -334,6 +334,7 @@ async fn a_new_question_brings_its_window_to_the_front() {
 #[tokio::test]
 async fn a_small_dialog_window_is_hidden_and_taken_back() {
     let (_root, mut harness, _main) = app(true).await;
+    harness.app.dialog_windows.hides = true;
     assert!(DialogWindow::NewItem.reused() && !DialogWindow::Progress.reused());
     harness.press("F7").await;
     let _ = harness.app.sync_dialog_windows();
@@ -374,11 +375,52 @@ async fn a_small_dialog_window_is_hidden_and_taken_back() {
     );
 }
 
+/// Where a window cannot be hidden (Wayland), a small dialog's window closes with its dialog and
+/// the next opening makes a new one.
+#[tokio::test]
+async fn a_small_dialog_window_closes_where_none_hides() {
+    let (_root, mut harness, _main) = app(true).await;
+    harness.app.dialog_windows.hides = false;
+    harness.press("F7").await;
+    let _ = harness.app.sync_dialog_windows();
+    let id = harness
+        .app
+        .dialog_windows
+        .id_of(DialogWindow::NewItem)
+        .expect("being made");
+    let since = Instant::now();
+    for message in [
+        DialogWindowMsg::Ready {
+            id,
+            since,
+            reused: false,
+        },
+        DialogWindowMsg::Shown {
+            id,
+            since,
+            reused: false,
+        },
+    ] {
+        harness.send(Message::DialogWindow(message)).await;
+    }
+    harness.press("Escape").await;
+    assert_eq!(closing(&harness), [id]);
+    let _ = harness.app.sync_dialog_windows();
+    harness.press("F7").await;
+    let _ = harness.app.sync_dialog_windows();
+    assert_ne!(
+        harness.app.dialog_windows.id_of(DialogWindow::NewItem),
+        Some(id),
+        "a new window, none taken back"
+    );
+}
+
 /// A dialog that closes before its window is ready lets the window go unshown: it never locked
 /// the main window.
 #[tokio::test]
 async fn a_window_whose_dialog_closed_goes_unshown() {
     let (_root, mut harness, _main) = app(true).await;
+    harness.app.dialog_windows.hides = true;
     harness.press("F8").await;
     let _ = harness.app.sync_dialog_windows();
     let id = harness

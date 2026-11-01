@@ -1,10 +1,13 @@
 use std::path::PathBuf;
 
 use rc_db::connections::{ConnectionId, ConnectionThemes};
-use rc_engine::settings::themes::{BUILTIN_THEMES, Theme, ThemesState};
+use rc_engine::settings::{
+    parse_wsl_themes,
+    themes::{BUILTIN_THEMES, Theme, ThemesState},
+};
 use rc_vfs::{BackendId, VfsPath};
 
-use super::{Assigned, connection_of, of_connection, of_path, set_assigned};
+use super::{Assigned, connection_of, distro_of, of_connection, of_distro, of_path, set_assigned};
 use crate::theme::{
     terminal_palette,
     themes::{set_state, tokens_of},
@@ -105,5 +108,76 @@ fn a_panel_and_a_terminal_take_their_connection_s_look_per_mode() {
         std::ptr::eq(of_path(&server(1), false), tokens(false)),
         "the switch off draws every panel in the window's theme"
     );
+    set_assigned(Assigned::default());
+}
+
+fn share(text: &str) -> VfsPath {
+    VfsPath::local(text)
+}
+
+#[test]
+fn a_wsl_share_is_its_distribution_s_in_either_form() {
+    for path in [
+        r"\\wsl.localhost\Ubuntu\home\me",
+        r"\\wsl$\Ubuntu\home",
+        r"\\?\UNC\wsl.localhost\Ubuntu",
+        "//wsl.localhost/Ubuntu/etc",
+    ] {
+        assert_eq!(distro_of(&share(path)).as_deref(), Some("Ubuntu"), "{path}");
+    }
+    assert_eq!(distro_of(&share(r"\\server\share\x")), None);
+    assert_eq!(distro_of(&share("/home/me")), None);
+    assert_eq!(distro_of(&server(1)), None, "a server is no distribution");
+}
+
+/// RC-100-56: a panel on a distribution's share and its WSL terminal take its theme per mode;
+/// another distribution, a deleted theme, one of the other mode and the switch off draw with the
+/// window's.
+#[test]
+fn a_distribution_s_panel_and_terminal_take_its_look_per_mode() {
+    set_state(&builtins());
+    // Debian names a dark theme for the light mode, Kali one the window does not know (deleted).
+    let distros = parse_wsl_themes(
+        "Ubuntu\tnord-light\tsolarized-dark\nDebian\tnord-dark\nKali\town-gone\town-gone",
+    )
+    .expect("valid");
+    set_assigned(Assigned::of(true, Vec::new()).with_distros(distros.clone()));
+    let nord = tokens_of("nord-light", false).expect("nord");
+    let solarized = tokens_of("solarized-dark", true).expect("solarized");
+    for form in [r"\\wsl.localhost\Ubuntu\home", r"\\wsl$\ubuntu\home"] {
+        assert!(std::ptr::eq(of_path(&share(form), false), nord), "{form}");
+        assert!(
+            std::ptr::eq(of_path(&share(form), true), solarized),
+            "{form}"
+        );
+    }
+    assert!(std::ptr::eq(of_distro(Some("UBUNTU"), true), solarized));
+    assert_eq!(
+        terminal_palette(of_distro(Some("Ubuntu"), true)).background,
+        terminal_palette(solarized).background,
+        "a WSL terminal draws with its distribution's palette"
+    );
+    for dark in [false, true] {
+        let window = tokens(dark);
+        for distro in ["Debian", "Kali", "Arch"] {
+            assert!(
+                std::ptr::eq(of_distro(Some(distro), dark), window),
+                "{distro}: the other mode, a deleted theme, or none"
+            );
+        }
+        assert!(std::ptr::eq(of_distro(None, dark), window), "a local shell");
+        assert!(std::ptr::eq(of_path(&share(r"C:\Users"), dark), window));
+    }
+
+    set_assigned(Assigned::of(false, Vec::new()).with_distros(distros));
+    for dark in [false, true] {
+        assert!(
+            std::ptr::eq(
+                of_path(&share(r"\\wsl.localhost\Ubuntu"), dark),
+                tokens(dark)
+            ),
+            "the switch off draws every panel in the window's theme"
+        );
+    }
     set_assigned(Assigned::default());
 }

@@ -154,6 +154,8 @@ def reach_text(row: dict, names: dict) -> str:
     """How the keyboard reaches a command without a key, as a table cell."""
     if row.get("palette"):
         return f"Command palette: *{cell(label(names, row['command']))}*"
+    if "listed" in row:
+        return f"Command palette: {cell(row['listed'])}"
     if "via" in row:
         target = row["via"]
         if target.startswith("window:"):
@@ -222,9 +224,11 @@ def render(root: Path) -> str:
     for row in sorted(reach, key=lambda row: order[row["command"]]):
         page += f"| `{row['command']}` | {reach_text(row, names)} | {cell(summaries[row['command']])} |\n"
     bound = len({row["command"] for row in keymap if "command" in row})
-    counts = {kind: sum(1 for row in reach if kind in row) for kind in ("palette", "via", "asked", "shown", "omitted")}
+    counts = {
+        kind: sum(1 for row in reach if kind in row) for kind in ("palette", "listed", "via", "asked", "shown", "omitted")
+    }
     page += (
-        f"\n{len(specs)} commands: {bound} with a key, {counts['palette']} in the command palette, "
+        f"\n{len(specs)} commands: {bound} with a key, {counts['palette'] + counts['listed']} in the command palette, "
         f"{counts['via']} in a dialog, {counts['asked']} asked by the window, {counts['shown']} shown "
         f"by it, {counts['omitted']} without a way in, each for the reason it gives.\n"
     )

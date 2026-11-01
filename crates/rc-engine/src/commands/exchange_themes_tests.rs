@@ -98,3 +98,48 @@ async fn a_bad_theme_is_refused_and_a_taken_name_numbered() {
         .expect("there");
     assert_eq!(stored.name, "Night (2)");
 }
+
+/// RC-100-56: the WSL distributions' themes come in with the settings; a theme that is neither
+/// here nor in the file is left out with a hint, one the file brings counts in a dry run.
+#[tokio::test]
+async fn a_distribution_s_missing_theme_is_left_out_with_a_hint() {
+    use crate::{exchange::ExportedSetting, settings::WSL_THEMES_KEY};
+
+    let (_root, engine) = test_support::engine_with_db(&[]).await;
+    let setting = ExportedSetting {
+        setting: WSL_THEMES_KEY.to_owned(),
+        value: serde_json::Value::from(
+            "Ubuntu\tnord-light\town-aaaa0003\nDebian\town-gone\tnord-dark",
+        ),
+    };
+    let night = ExportedTheme {
+        id: "own-aaaa0003".to_owned(),
+        name: "Night".to_owned(),
+        dark: true,
+        accent: "system".to_owned(),
+        tokens: BTreeMap::new(),
+    };
+    let dry = engine
+        .exchange_settings(std::slice::from_ref(&setting), &[night], None, true)
+        .await
+        .expect("dry run");
+    assert_eq!(dry[0].warning.as_deref(), Some("theme_missing"));
+    assert!(dry[0].selected, "only a hint: the row stays chosen");
+    assert_eq!(
+        dry[0].new.as_deref(),
+        Some("Ubuntu\tnord-light\town-aaaa0003\nDebian\t\tnord-dark"),
+        "the file's own theme counts, the missing one is left out"
+    );
+
+    let written = engine
+        .exchange_settings(std::slice::from_ref(&setting), &[], None, false)
+        .await
+        .expect("import");
+    assert_eq!(written[0].status, RowStatus::Updated);
+    let stored = crate::settings::stored_setting(engine.db().expect("db"), WSL_THEMES_KEY).await;
+    assert_eq!(
+        stored.as_ref().and_then(serde_json::Value::as_str),
+        Some("Ubuntu\tnord-light\t\nDebian\t\tnord-dark"),
+        "without the file's theme written, its id is left out too"
+    );
+}

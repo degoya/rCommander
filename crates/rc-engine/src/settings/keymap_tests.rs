@@ -153,8 +153,8 @@ async fn a_stale_deviation_is_listed_and_left_out() {
     assert!(!rows.iter().any(|row| row.keys == "Ctrl+K"));
 }
 
-/// The deviations go with the settings of an export; an import writes them only when ticked,
-/// as every protected setting.
+/// The deviations go with the settings of an export - a key for a colour theme among them
+/// (RC-100-55) -; an import writes them only when ticked, as every protected setting.
 #[tokio::test]
 async fn the_deviations_travel_with_an_export() {
     let from = tempfile::tempdir().expect("dir");
@@ -162,7 +162,7 @@ async fn the_deviations_travel_with_an_export() {
     rows_of(
         engine
             .dispatch(Command::SetKeymap {
-                overrides: "F5= Ctrl+K=copy".into(),
+                overrides: THEME_KEYS.into(),
             })
             .await,
     );
@@ -182,7 +182,7 @@ async fn the_deviations_travel_with_an_export() {
     });
     engine.dispatch(export).await.expect("exported");
     let text = std::fs::read_to_string(&path).expect("written");
-    assert!(text.contains("F5= Ctrl+K=copy"), "{text}");
+    assert!(text.contains(THEME_KEYS), "{text}");
 
     let to = tempfile::tempdir().expect("dir");
     let target = engine_in(to.path()).await;
@@ -210,12 +210,19 @@ async fn the_deviations_travel_with_an_export() {
     assert_eq!(target.keymap().await, Keymap::standard());
     let ticked = Some(vec![format!("setting:{KEYMAP_KEY}")]);
     target.dispatch(import(ticked)).await.expect("imported");
+    let keymap = target.keymap().await;
     assert_eq!(
-        target
-            .keymap()
-            .await
-            .key_of("copy")
-            .map(ToString::to_string),
+        keymap.key_of("copy").map(ToString::to_string),
         Some("Ctrl+K".to_owned())
     );
+    assert_eq!(
+        keymap.lookup(&chord("Ctrl+Shift+1"), PanelView::Files),
+        Some(&Command::SelectTheme {
+            mode: crate::settings::themes::ThemeMode::Dark,
+            id: "nord-dark".to_owned(),
+        })
+    );
 }
+
+/// The deviations of the export test: a key moved, and a key for the dark Nord theme.
+const THEME_KEYS: &str = "F5= Ctrl+K=copy Ctrl+Shift+1=theme:dark:nord-dark";

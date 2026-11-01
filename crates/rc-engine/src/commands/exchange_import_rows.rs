@@ -5,20 +5,25 @@
 //! share (`rc_vfs::network_path`) wait for the person's tick. A host key is parsed again and its fingerprint computed here, never taken from the
 //! file; a certificate's fingerprint must read as one. A key or a certificate that differs from
 //! the one trusted for its host is a conflict with a warning: replaced only when the person
-//! ticks it, never silently.
+//! ticks it, never silently. A theme the WSL distributions' setting names that is neither here
+//! nor in the file is left out of it with a hint (RC-100-56); the row stays chosen as it was.
 
 use std::collections::HashSet;
 
 use rc_db::{HASHED_PREFIX, KnownHostSource, NewKnownHost, NewTrustedCertificate};
 use rc_remote::hostkey::{OfferedKey, normalize_host};
 
-use super::exchange_import::{choose, shown, written};
+use super::{
+    exchange_import::{choose, shown, written},
+    exchange_themes::fit_wsl_themes,
+};
 use crate::{
     Engine, EngineError, EngineEvent,
     exchange::{
-        ExchangePart, ExchangeRow, ExportedCertificate, ExportedHostKey, ExportedSetting, RowStatus,
+        ExchangePart, ExchangeRow, ExportedCertificate, ExportedHostKey, ExportedSetting,
+        ExportedTheme, RowStatus,
     },
-    settings::{SettingKind, is_protected, setting, stored_setting},
+    settings::{SettingKind, WSL_THEMES_KEY, is_protected, setting, stored_setting},
 };
 
 /// A row of `part` named `name`, new until compared.
@@ -71,10 +76,12 @@ fn certificate_fingerprint(text: &str) -> bool {
 }
 
 impl Engine {
-    /// The settings against the schema and the values in force.
+    /// The settings against the schema and the values in force; `incoming` the file's themes a
+    /// dry run has not written.
     pub(super) async fn exchange_settings(
         &self,
         settings: &[ExportedSetting],
+        incoming: &[ExportedTheme],
         only: Option<&[String]>,
         dry_run: bool,
     ) -> Result<Vec<ExchangeRow>, EngineError> {
@@ -93,7 +100,7 @@ impl Engine {
                 rows.push(row);
                 continue;
             };
-            let value = match spec.check(&entry.value) {
+            let mut value = match spec.check(&entry.value) {
                 Ok(value) if seen.insert(spec.key) => value,
                 Ok(_) => {
                     row.status = refused("exchange_file_invalid");
@@ -106,6 +113,14 @@ impl Engine {
                     continue;
                 }
             };
+            let mut unthemed = false;
+            if spec.key == WSL_THEMES_KEY {
+                let here = crate::settings::themes::load(db).await;
+                let text = value.as_str().unwrap_or_default();
+                let (fitted, dropped) = fit_wsl_themes(text, &here, incoming);
+                (value, unthemed) = (serde_json::Value::from(fitted), dropped);
+                row.new = Some(shown(&value));
+            }
             let current = stored_setting(db, spec.key).await;
             if current.as_ref() == Some(&value) {
                 row.status = RowStatus::Exists;
@@ -126,6 +141,10 @@ impl Engine {
                 row.warning = Some("network_location".to_owned());
             }
             choose(&mut row, only);
+            // Only a hint: the setting comes in, without the theme.
+            if unthemed && row.warning.is_none() {
+                row.warning = Some("theme_missing".to_owned());
+            }
             if !dry_run && row.selected {
                 let stored = self.set_protected_setting(spec.key, &value).await;
                 row.status = written(stored.map(|_| ()), RowStatus::Updated);

@@ -13,8 +13,9 @@ Rust.
 - A small SSH connection manager: servers, keys, credentials and login scripts, stored
   encrypted behind an optional master password.
 - Copying local to remote and remote to remote over SFTP and FTP/FTPS; multi-rename.
-- Colour themes for the whole window and the terminal, built in or your own, and a theme per
-  connection so each server's panel stands out.
+- Colour themes for the whole window and the terminal, built in or your own, switched from the
+  command palette or a key, and a theme per connection or WSL distribution so each server's
+  panel and terminal stand out.
 - Every action is also available to AI agents through a built-in MCP server.
 - In English, German, French and Spanish.
 

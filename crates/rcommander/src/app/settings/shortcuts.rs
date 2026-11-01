@@ -15,9 +15,16 @@
 //! being recorded every key is the recording's - Escape cancels it - and nothing else of the
 //! window sees it ([`App::shortcut_recording`]); while the question is open Enter takes the key
 //! and Escape keeps it where it is.
+//!
+//! "Add key for a theme..." adds a key that chooses a colour theme (RC-100-55, `theme.rs`); its
+//! row is named by the theme, and marked when the theme was deleted since.
+
+mod theme;
 
 use rc_engine::{Chord, Keymap, KeymapRow, Lock, Overrides, Refusal, settings::KEYMAP_KEY};
 
+use self::theme::ThemePick;
+pub use self::theme::{ThemeKeyMsg, ThemeOption, options as theme_options};
 use super::{
     Page, SettingsMessage, Tab,
     draft::{Draft, Field},
@@ -25,7 +32,7 @@ use super::{
 };
 use crate::{
     app::{App, Effect, Message},
-    i18n::{self, t},
+    i18n::t,
 };
 
 /// What a recorded key does to the selected row.
@@ -62,6 +69,8 @@ pub struct ShortcutsPage {
     /// The next key pressed is the selected row's.
     pub recording: Option<Recording>,
     pub asking: Option<Conflict>,
+    /// "Add key for a theme..." is open (RC-100-55).
+    pub adding: Option<ThemePick>,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +85,8 @@ pub enum ShortcutsMsg {
     Replace,
     /// The question's no, or Escape while recording.
     KeepIt,
+    /// "Add key for a theme..." (RC-100-55).
+    Theme(ThemeKeyMsg),
 }
 
 pub fn page_message(message: ShortcutsMsg) -> Message {
@@ -111,9 +122,9 @@ pub fn shown(keymap: &Keymap, search: &str) -> Vec<KeymapRow> {
         .collect()
 }
 
-/// The action's name as the palette shows it.
+/// The action's name as the palette shows it - a theme key's by its theme (RC-100-55).
 pub fn label(name: &str) -> String {
-    i18n::code_text("keys", name)
+    crate::app::palette::label(name)
 }
 
 /// Why the window keeps a key.
@@ -154,6 +165,9 @@ impl App {
 
     /// A message of the tab.
     pub(super) fn shortcuts_message(&mut self, message: ShortcutsMsg) -> Vec<Effect> {
+        if let ShortcutsMsg::Theme(message) = message {
+            return self.theme_key_message(message);
+        }
         let Some(dialog) = self.settings.as_mut() else {
             return Vec::new();
         };
@@ -168,6 +182,7 @@ impl App {
                 page.selected = Some(selected);
                 page.recording = None;
                 page.asking = None;
+                page.adding = None;
             }
             ShortcutsMsg::Record(recording) => {
                 if page.selected.is_some() && page.asking.is_none() {
@@ -200,6 +215,7 @@ impl App {
                 draft.edit(KEYMAP_KEY, Field::Text(String::new()));
                 page.selected = None;
                 page.asking = None;
+                page.adding = None;
             }
             ShortcutsMsg::Replace => {
                 let asked = page.asking.take();
@@ -218,6 +234,7 @@ impl App {
                 page.asking = None;
                 page.recording = None;
             }
+            ShortcutsMsg::Theme(_) => {}
         }
         Vec::new()
     }
@@ -288,6 +305,15 @@ impl App {
                 "Enter" => Some(self.shortcuts_message(ShortcutsMsg::Replace)),
                 "Escape" => Some(self.shortcuts_message(ShortcutsMsg::KeepIt)),
                 _ => Some(Vec::new()),
+            };
+        }
+        if dialog.shortcuts.adding.is_some() {
+            let theme = ShortcutsMsg::Theme;
+            return match key {
+                "Enter" => Some(self.shortcuts_message(theme(ThemeKeyMsg::Record))),
+                "Escape" => Some(self.shortcuts_message(theme(ThemeKeyMsg::Cancel))),
+                "ArrowUp" | "ArrowDown" | "Delete" => Some(Vec::new()),
+                _ => None,
             };
         }
         let step: isize = match key {

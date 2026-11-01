@@ -31,8 +31,9 @@ pub enum Tab {
     Lists,
     /// Appearance: the Lister's own rows.
     Viewer,
-    /// Appearance: the colour themes of both modes and the colours by file type (RC-100-50,
-    /// RC-100-43); drawn by `themes_page.rs`, not row by row.
+    /// Appearance: the colour themes of both modes, the WSL distributions' themes and the
+    /// colours by file type (RC-100-50, RC-100-56, RC-100-43); drawn by `themes_page.rs`, not
+    /// row by row.
     Themes,
     /// Keyboard: the page's schema rows - F10, the access keys, the menus' keys.
     Keys,
@@ -99,6 +100,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "appearance.colours.dark.marked",
             "appearance.colours.dark.accent",
             "appearance.colour_rules",
+            "appearance.wsl_themes",
         ],
     ),
     (

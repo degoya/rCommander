@@ -53,6 +53,7 @@ fn the_repository_scenes_parse_and_each_has_an_alt_text() {
         "compare",
         "synchronize",
         "settings",
+        "settings-themes",
         "mcp-question",
         "archive-in-panel",
     ] {
@@ -112,7 +113,13 @@ fn every_step_kind_parses_with_its_defaults() {
         }
     ));
     assert!(matches!(wait, Step::Wait(wait) if *wait == Duration::from_millis(300)));
-    assert!(matches!(open, Step::Open(Opening::Settings)));
+    assert!(matches!(
+        open,
+        Step::Open(Opening::Settings {
+            page: None,
+            tab: None
+        })
+    ));
     assert!(matches!(close, Step::Close(Capture::Lister)));
     let Step::Ask(ask) = ask else {
         panic!("a question: {ask:?}");
@@ -121,6 +128,37 @@ fn every_step_kind_parses_with_its_defaults() {
     assert_eq!(ask.class, CommandClass::Write);
     assert_eq!(ask.arguments[0].value, "C:\\Demo\\Downloads");
     assert!(ask.session);
+}
+
+/// RC-100-55: an `open` step names the settings' page and tab; they stand beside `open` only, and
+/// one the settings do not have ends the run.
+#[test]
+fn the_settings_open_on_a_page_and_a_tab() {
+    let text = one(json!([{ "open": "settings", "page": "appearance", "tab": "themes" }]));
+    let plan = parse(&text, DEMO).expect("plan");
+    assert!(matches!(
+        plan.scenes[0].steps.as_slice(),
+        [Step::Open(Opening::Settings {
+            page: Some(crate::app::settings::Page::Appearance),
+            tab: Some(crate::app::settings::Tab::Themes),
+        })]
+    ));
+    refused(
+        &one(json!([{ "open": "settings", "page": "colours" }])),
+        "no page 'colours'",
+    );
+    refused(
+        &one(json!([{ "open": "settings", "page": "appearance", "tab": "palette" }])),
+        "no tab 'palette'",
+    );
+    refused(
+        &one(json!([{ "open": "settings", "page": "appearance", "colour": "red" }])),
+        "does not parse",
+    );
+    refused(
+        &one(json!([{ "key": "F5", "page": "appearance" }])),
+        "does not parse",
+    );
 }
 
 #[test]

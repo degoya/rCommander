@@ -9,11 +9,11 @@
 //! The text is read as untrusted input - it comes back with an import (`config.import`): at
 //! most [`MAX_OVERRIDES`] words and [`MAX_OVERRIDE_TEXT`] characters, every chord one a chord
 //! can name and none the window keeps for itself ([`Keymap::locked`]), every name an i18n key
-//! part, no chord twice.
+//! part or a theme key's (`theme:<mode>:<id>`, RC-100-55), no chord twice.
 
 use std::fmt;
 
-use super::{Chord, Keymap, KeymapError, is_name};
+use super::{Chord, Keymap, KeymapError, is_name, theme_key};
 
 /// The most deviations the setting holds.
 pub const MAX_OVERRIDES: usize = 256;
@@ -23,7 +23,8 @@ pub const MAX_OVERRIDE_TEXT: usize = 8192;
 /// One deviation from the standard keymap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Override {
-    /// `chord` runs the standard binding named `name`.
+    /// `chord` runs the standard binding named `name`, or the theme key `name` names
+    /// (`theme_keys.rs`).
     Bind { chord: Chord, name: String },
     /// `chord` runs nothing, though the standard binds it.
     Unbind { chord: Chord },
@@ -81,7 +82,7 @@ impl Overrides {
             }
             let row = match name {
                 "" => Override::Unbind { chord },
-                name if is_name(name) => Override::Bind {
+                name if is_name(name) || theme_key(name).is_some() => Override::Bind {
                     chord,
                     name: name.to_owned(),
                 },

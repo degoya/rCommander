@@ -3,11 +3,10 @@
 
 use std::collections::HashMap;
 
+use super::super::exchange_themes::known_theme;
 use crate::{
     Connection, ConnectionDraft, ConnectionPatch, FolderId, FolderNode, LoginScriptInfo,
-    ScriptSecretRef, Step,
-    exchange::ExportedTheme,
-    settings::themes::{ThemesState, is_own_id},
+    ScriptSecretRef, Step, exchange::ExportedTheme, settings::themes::ThemesState,
 };
 
 /// A name as the tree compares it: trimmed, ASCII lower case.
@@ -81,12 +80,7 @@ pub(super) fn fit_themes(
     here: &ThemesState,
     incoming: &[ExportedTheme],
 ) -> (ConnectionDraft, bool) {
-    let known = |id: &str, dark: bool| {
-        here.theme(id).is_some_and(|theme| theme.dark == dark)
-            || incoming
-                .iter()
-                .any(|theme| theme.id == id && theme.dark == dark && is_own_id(id))
-    };
+    let known = |id: &str, dark: bool| known_theme(here, incoming, id, dark);
     let mut fitted = draft.clone();
     let mut dropped = false;
     for (slot, dark) in [

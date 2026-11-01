@@ -115,6 +115,15 @@ impl Engine {
             .and_then(|entry| entry.remote.as_ref().map(|remote| remote.connection))
     }
 
+    /// The WSL distribution a terminal session's shell runs in; `None` for a local or SSH shell,
+    /// a WSL shell of WSL's default when its name was not known, and a session that is gone
+    /// (RC-100-56: its colours are the distribution's theme's).
+    #[must_use]
+    pub fn terminal_distro(&self, terminal: TermId) -> Option<String> {
+        let session = self.terminal_session(terminal)?;
+        session.wsl_distro()
+    }
+
     /// `terminal.open`: a local or WSL shell in `cwd` (resolved against the panel's folder), or
     /// in the panel's folder. The panel shows it at once, in place of its files or of the session
     /// it showed; an MCP client's terminal appears where the person looks.

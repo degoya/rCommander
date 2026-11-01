@@ -152,3 +152,36 @@ fn only_the_reasoned_exceptions_have_no_way_in() {
     omitted.sort_unstable();
     assert_eq!(omitted, WITHOUT_A_WAY_IN);
 }
+
+/// RC-100-55: the palette's rows from a list are a kind of their own - `theme.select`, a row per
+/// theme and mode -, held to a command the palette makes such rows for.
+#[test]
+fn a_listed_row_names_a_command_the_palette_lists() {
+    let rows = standard();
+    let listed: Vec<&str> = rows
+        .iter()
+        .filter(|row| matches!(row.reach, Reach::Listed(_)))
+        .map(|row| row.command.as_str())
+        .collect();
+    assert_eq!(listed, super::super::themes::LISTED);
+    let mut rows = standard();
+    let row = rows
+        .iter_mut()
+        .find(|row| row.command == "hotlist.open")
+        .expect("a row");
+    row.reach = Reach::Listed("a row per hotlist entry".into());
+    assert_eq!(
+        problems_of(&rows),
+        ["hotlist.open: the palette makes no rows from a list for it"]
+    );
+    assert!(
+        parse(r#"[{ "command": "theme.select", "listed": "rows", "palette": true }]"#).is_err()
+    );
+    assert_eq!(
+        parse(r#"[{ "command": "theme.select", "listed": "a row per theme" }]"#),
+        Ok(vec![ReachRow {
+            command: "theme.select".into(),
+            reach: Reach::Listed("a row per theme".into()),
+        }])
+    );
+}

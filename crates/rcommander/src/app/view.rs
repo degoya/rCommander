@@ -147,15 +147,19 @@ impl App {
             .into()
     }
 
-    /// The look of `side`'s panel: the theme of the connection whose SSH terminal it shows, or
-    /// of the server it stands on; the window's on this machine (RC-100-51).
+    /// The look of `side`'s panel: the theme of the connection or the WSL distribution whose
+    /// terminal it shows, else of the server or the distribution's share it stands on; the
+    /// window's on this machine (RC-100-51, RC-100-56).
     pub(super) fn panel_tokens(&self, side: PanelId) -> &'static Tokens {
-        let connection = self
-            .shown_terminal(side)
-            .and_then(|terminal| self.engine.terminal_connection(terminal))
-            .map(|connection| connection.0)
-            .or_else(|| theme::themes::connection_of(&self.pane(side).state.path));
-        theme::themes::of_connection(connection, self.dark)
+        if let Some(terminal) = self.shown_terminal(side) {
+            if let Some(connection) = self.engine.terminal_connection(terminal) {
+                return theme::themes::of_connection(Some(connection.0), self.dark);
+            }
+            if let Some(distro) = self.engine.terminal_distro(terminal) {
+                return theme::themes::of_distro(Some(&distro), self.dark);
+            }
+        }
+        theme::themes::of_path(&self.pane(side).state.path, self.dark)
     }
 
     fn panel(&self, side: PanelId, tokens: &'static Tokens) -> Element<'_, Message> {

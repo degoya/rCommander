@@ -157,3 +157,42 @@ async fn the_form_s_save_checks_the_themes_too() {
     };
     assert_eq!(connection.theme_light.as_deref(), Some("classic-light"));
 }
+
+async fn set_wsl(engine: &Engine, text: &str) -> Result<Outcome, EngineError> {
+    engine
+        .dispatch(Command::SetSetting {
+            key: crate::settings::WSL_THEMES_KEY.into(),
+            value: serde_json::Value::from(text),
+        })
+        .await
+}
+
+/// RC-100-56: `settings.set` takes the distributions' themes of their modes and refuses an
+/// unknown one, one of the other mode and a text that is no list.
+#[tokio::test]
+async fn the_distributions_themes_are_checked_like_a_connection_s() {
+    let (_root, engine) = engine().await;
+    let db = engine.db().expect("db").clone();
+    set_wsl(
+        &engine,
+        "Ubuntu\tnord-light\tsolarized-dark\nDebian\t\tclassic-dark",
+    )
+    .await
+    .expect("taken");
+    let stored = crate::settings::stored_setting(&db, crate::settings::WSL_THEMES_KEY).await;
+    assert_eq!(
+        stored.as_ref().and_then(serde_json::Value::as_str),
+        Some("Ubuntu\tnord-light\tsolarized-dark\nDebian\t\tclassic-dark")
+    );
+    let wrong = set_wsl(&engine, "Ubuntu\tnord-dark\t")
+        .await
+        .expect_err("a dark theme for the light mode");
+    assert_eq!(wrong.code(), "theme_wrong_mode");
+    let unknown = set_wsl(&engine, "Ubuntu\t\town-missing")
+        .await
+        .expect_err("unknown");
+    assert_eq!(unknown.code(), "theme_unknown");
+    let shape = set_wsl(&engine, "Ubuntu").await.expect_err("no list");
+    assert_eq!(shape.code(), "setting_invalid");
+    set_wsl(&engine, "").await.expect("cleared");
+}

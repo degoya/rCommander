@@ -2,7 +2,9 @@
 //! `reach.json` beside this file: one row per command, which the command palette and the
 //! keyboard reference (`scripts/keyboard-reference.sh`) both read.
 //!
-//! A row says one of: `palette` - the command palette runs it without parameters; `via` - it is
+//! A row says one of: `palette` - the command palette runs it without parameters; `listed` - the
+//! palette has a row per item of a list for it, each with its parameters (`theme.select`, a row
+//! per theme and mode, RC-100-55, `themes.rs`), and says which; `via` - it is
 //! reached in what another command opens (`"via": "connections.manager"`, with `how`), or in a
 //! place of the window (`"via": "window:settings"`: a window key of the keymap, or one of
 //! `SURFACES`); `asked` - a question the window opens by itself runs it; `shown` - it is a
@@ -30,7 +32,12 @@ pub const SURFACES: &[&str] = &["settings", "database", "cmdline"];
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reach {
     Palette,
-    Via { target: String, how: String },
+    /// The palette's rows from a list, and what they are.
+    Listed(String),
+    Via {
+        target: String,
+        how: String,
+    },
     Asked(String),
     Shown(String),
     Omitted(String),
@@ -49,6 +56,8 @@ struct RawRow {
     command: String,
     #[serde(default)]
     palette: bool,
+    #[serde(default)]
+    listed: Option<String>,
     #[serde(default)]
     via: Option<String>,
     #[serde(default)]
@@ -71,20 +80,21 @@ pub fn parse(text: &str) -> Result<Vec<ReachRow>, String> {
     let raw: Vec<RawRow> = serde_json::from_str(text).map_err(|error| error.to_string())?;
     raw.into_iter()
         .map(|row| {
-            let reach = match (
-                row.palette,
-                row.via,
-                row.how,
-                row.asked,
-                row.shown,
-                row.omitted,
-            ) {
-                (true, None, None, None, None, None) => Reach::Palette,
-                (false, Some(target), Some(how), None, None, None) => Reach::Via { target, how },
-                (false, None, None, Some(text), None, None) => Reach::Asked(text),
-                (false, None, None, None, Some(text), None) => Reach::Shown(text),
-                (false, None, None, None, None, Some(text)) => Reach::Omitted(text),
-                _ => return Err(format!("{}: say one way it is reached", row.command)),
+            let mut said = Vec::new();
+            if row.palette {
+                said.push(Reach::Palette);
+            }
+            said.extend(row.listed.map(Reach::Listed));
+            match (row.via, row.how) {
+                (Some(target), Some(how)) => said.push(Reach::Via { target, how }),
+                (None, None) => {}
+                _ => return Err(format!("{}: a via needs its how", row.command)),
+            }
+            said.extend(row.asked.map(Reach::Asked));
+            said.extend(row.shown.map(Reach::Shown));
+            said.extend(row.omitted.map(Reach::Omitted));
+            let Ok([reach]) = <[Reach; 1]>::try_from(said) else {
+                return Err(format!("{}: say one way it is reached", row.command));
             };
             Ok(ReachRow {
                 command: row.command,
@@ -108,8 +118,8 @@ pub fn palette_command(id: &str) -> Option<Command> {
 
 /// What is wrong with `rows` for the registry's `ids` and `keymap`, one line each: a command
 /// without a key and without a row, a row for a command with a key or for no command, a row
-/// twice, a palette row that does not build its command, a `via` that leads nowhere reachable,
-/// a reason too short to be one.
+/// twice, a palette row that does not build its command, a listed row of a command the palette
+/// makes no list for, a `via` that leads nowhere reachable, a reason too short to be one.
 #[cfg(test)]
 pub fn problems(ids: &[&str], keymap: &Keymap, rows: &[ReachRow]) -> Vec<String> {
     let bound: HashSet<&str> = keymap
@@ -135,7 +145,13 @@ pub fn problems(ids: &[&str], keymap: &Keymap, rows: &[ReachRow]) -> Vec<String>
                     "{id}: the palette cannot run it without parameters"
                 ));
             }
+            Reach::Listed(_) if !super::themes::LISTED.contains(&id) => {
+                problems.push(format!(
+                    "{id}: the palette makes no rows from a list for it"
+                ));
+            }
             Reach::Via { how, .. }
+            | Reach::Listed(how)
             | Reach::Asked(how)
             | Reach::Shown(how)
             | Reach::Omitted(how)
@@ -182,7 +198,7 @@ fn reachable(
     rows.iter()
         .filter(|row| row.command == target)
         .any(|row| match &row.reach {
-            Reach::Palette => true,
+            Reach::Palette | Reach::Listed(_) => true,
             Reach::Via { target, .. } => reachable(target, keymap, rows, bound, depth + 1),
             Reach::Asked(_) | Reach::Shown(_) | Reach::Omitted(_) => false,
         })

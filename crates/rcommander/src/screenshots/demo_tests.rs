@@ -3,7 +3,9 @@ use std::{fs, path::Path};
 use rc_db::Db;
 use rc_engine::{Command, Engine, Outcome, VfsPath};
 
-use super::{ARCHIVE, CONNECTIONS, FILES, add_connections, claim, tar, write_tree};
+use super::{
+    ARCHIVE, CONNECTIONS, FILES, THEME, add_connections, add_theme, claim, tar, write_tree,
+};
 
 #[test]
 fn a_missing_or_empty_folder_is_claimed() {
@@ -111,4 +113,30 @@ async fn the_demo_connections_are_stored() {
     let mut wanted: Vec<&str> = CONNECTIONS.iter().map(|(name, ..)| *name).collect();
     wanted.sort_unstable();
     assert_eq!(names, wanted);
+}
+
+/// RC-100-55: the run's database has an own dark theme beside the built-in ones, which the
+/// `settings-themes` scene shows.
+#[tokio::test]
+async fn the_demo_theme_is_stored() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let engine = Engine::headless(VfsPath::local(temp.path()))
+        .await
+        .expect("engine");
+    assert!(engine.attach_db(Db::open_in_memory().await.expect("db")));
+    add_theme(&engine).await.expect("stored");
+    let Ok(Outcome::Themes(outcome)) = engine.dispatch(Command::ListThemes {}).await else {
+        panic!("the themes");
+    };
+    let own: Vec<_> = outcome
+        .themes
+        .iter()
+        .filter(|theme| !theme.builtin)
+        .collect();
+    let [evening] = own.as_slice() else {
+        panic!("one own theme: {own:?}");
+    };
+    assert_eq!(evening.name, THEME.0);
+    assert_eq!(evening.mode, rc_engine::settings::themes::ThemeMode::Dark);
+    assert!(outcome.themes.iter().any(|theme| theme.builtin));
 }

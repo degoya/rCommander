@@ -1,6 +1,6 @@
-//! The demo data of `--screenshots`: a folder tree of made-up files, an archive among them, and
-//! connections to `example.com` hosts (RFC 2606) without a secret - nothing of the person's own,
-//! and nothing a picture could leak.
+//! The demo data of `--screenshots`: a folder tree of made-up files, an archive among them,
+//! connections to `example.com` hosts (RFC 2606) without a secret and an own colour theme -
+//! nothing of the person's own, and nothing a picture could leak.
 //!
 //! The tree is made in a folder of its own that did not exist or was empty, and is removed
 //! with it at the end; a folder with anything in it is never touched.
@@ -14,7 +14,8 @@ use std::{
 
 use anyhow::{Context, Result, ensure};
 use rc_engine::{
-    AuthMethod, Command, ConnectionDraft, ConnectionKind, Engine, SaveConnectionRequest, SaveFields,
+    AuthMethod, Command, ConnectionDraft, ConnectionKind, Engine, SaveConnectionRequest,
+    SaveFields, settings::themes::ThemeDraft,
 };
 
 /// The files of the tree, by path below its root, with their text. The folders come from the
@@ -254,6 +255,30 @@ pub async fn add_connections(engine: &Engine) -> Result<()> {
             .map_err(|error| anyhow::anyhow!("the demo connection '{name}': {}", error.code()))?;
     }
     Ok(())
+}
+
+/// The own theme of the demo (RC-100-55): a dark one of the fixed colours with an accent of its
+/// own, so the Themes tab lists an own theme beside the built-in ones.
+pub const THEME: (&str, &str) = ("Evening", "#5e81ac");
+
+/// Stores [`THEME`] in the run's own database.
+///
+/// # Errors
+///
+/// The engine refuses it.
+pub async fn add_theme(engine: &Engine) -> Result<()> {
+    let (name, accent) = THEME;
+    let theme = ThemeDraft {
+        name: name.to_owned(),
+        dark: true,
+        accent: accent.to_owned(),
+        ..ThemeDraft::default()
+    };
+    engine
+        .dispatch(Command::SaveTheme { theme })
+        .await
+        .map(drop)
+        .map_err(|error| anyhow::anyhow!("the demo theme '{name}': {}", error.code()))
 }
 
 #[cfg(test)]

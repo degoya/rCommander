@@ -1,7 +1,8 @@
 //! Drawing the Themes tab (RC-100-50): the theme of each mode, the list of themes with a tile of
 //! each one's colours, the buttons, the file, the question of an import's name and the last note,
-//! then the colours by file type. While a theme is edited the editor takes the tab
-//! (`editor_view.rs`). Every control is a stop of the dialog's focus ring.
+//! then the themes of the WSL distributions on Windows (`wsl.rs`, RC-100-56) and the colours by
+//! file type. While a theme is edited the editor takes the tab (`editor_view.rs`). Every control
+//! is a stop of the dialog's focus ring.
 
 use std::fmt;
 
@@ -15,7 +16,7 @@ use rc_engine::settings::{
 };
 
 use super::{
-    ConflictChoice, ThemesMsg, ThemesPage, actions::shown_name, editor_view, page_message,
+    ConflictChoice, ThemesMsg, ThemesPage, actions::shown_name, editor_view, page_message, wsl,
 };
 use crate::{
     app::{
@@ -313,7 +314,7 @@ fn conflict(page: &ThemesPage) -> Option<Element<'_, Message>> {
 }
 
 /// The Themes tab: the editor while a theme is edited, else the modes, the list, the buttons, the
-/// file, the question, the note and the colours by file type.
+/// file, the question, the note, the WSL distributions' themes and the colours by file type.
 pub fn view<'a>(
     page: &'a ThemesPage,
     draft: &'a Draft,
@@ -351,6 +352,9 @@ pub fn view<'a>(
             tokens.text_secondary
         };
         body = body.push(label(note.as_str()).color(colour));
+    }
+    if wsl::SHOWN {
+        body = body.push(wsl::section(&page.distros, state, draft, tokens));
     }
     body.push(
         column![

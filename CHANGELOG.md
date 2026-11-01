@@ -5,6 +5,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-01
+
+### Added
+
+- **Theme per WSL distribution** (RC-100-56): `appearance.wsl_themes` gives each WSL distribution
+  a light and a dark theme (`Distro<TAB>light<TAB>dark` per line, checked for known themes of the
+  right mode). A panel on `\\wsl.localhost\<distro>` or `\\wsl$\<distro>`, its tab and a WSL
+  terminal of the distribution draw with it, and open terminals recolour on a change; the Themes
+  tab has a section "WSL distributions" on Windows. `appearance.connection_themes` switches the
+  distributions' themes too; an import leaves out a theme the target has not, with a hint.
+- **A colour theme from the command palette and by a key** (RC-100-55): the palette has a row per
+  theme and mode, "Theme (dark): Nord", made from the themes the window knows each time it opens,
+  the chosen ones marked; the Shortcuts tab's "Add key for a theme..." records a key that runs
+  `theme.select { mode, id }`, a row of its own (`theme:<mode>:<id>` in `keys.overrides`, so it
+  travels with the settings export) changed, removed and reset like any other; a key whose theme
+  was deleted stays, is marked and answers `theme_unknown`. `reach.json` has a kind `listed` for
+  palette rows from a list. A screenshot step opens the settings on a page and tab
+  (`"page": "appearance", "tab": "themes"`), and the scene `settings-themes` shows the Themes tab
+  with an own demo theme.
+
+### Fixed
+
+- **Release notes in the update offer** (RC-100-05): `scripts/release-publish.sh` passes the
+  version's section of `RELEASE-NOTES.md` to `rc-pack update manifest build`, so the manifest
+  `release.yml` publishes carries notes and the Updates page shows what a new version brings;
+  until now only manifests signed locally with `scripts/sign-update.sh` had them.
+- **Homebrew channel test on Linux** (RC-100-52): the local tap of `package-channels.yml` holds
+  only the kind under test, so `brew test` no longer resolves the formula's name to the cask and
+  refuses it from an untrusted tap.
+- **Empty dialog windows on Wayland** (RC-080-23): the file operations' dialog windows (copy,
+  move, new folder, ...) were hidden for their next opening, which winit ignores on Wayland, so
+  the closed dialog's window stayed on screen without content (Hyprland, GNOME). Under Wayland
+  (`WAYLAND_DISPLAY` or `WAYLAND_SOCKET` set) they are closed instead
+  (`platform::dialog_window::hides`); Windows, macOS and X11 keep reusing them.
+
+### Changed
+
+- **Dependencies** (semver-compatible, `cargo update`, Dependabot #3): among them tokio 1.54.1,
+  rmcp 3.8.0, aws-lc-rs 1.19.0, suppaftp 12.2.1, muda 0.21.2, uuid 1.29.0 and the icu 2.4
+  crates; `cargo deny check` passes. suppaftp 12.2's `resume_transfer` only arms the offset for
+  its own data commands, so `rc-remote` now sends `REST` itself (`ftp::connection::rest`) and a
+  resumed FTP download still starts at its offset.
+
 ## [0.13.0] - 2026-10-31
 
 ### Added

@@ -161,7 +161,8 @@ pub use import::ssh_config_apply::{
 };
 pub use keymap::{
     Binding, Chord, KeyContext, Keymap, KeymapError, KeymapRow, Lock, MAX_OVERRIDE_TEXT,
-    MAX_OVERRIDES, Override, Overrides, PHYSICAL_KEYS, Refusal, Reserved, WindowKey, physical_code,
+    MAX_OVERRIDES, MAX_THEME_KEY_ID, Override, Overrides, PHYSICAL_KEYS, Refusal, Reserved,
+    THEME_KEY_PREFIX, WindowKey, physical_code, theme_key, theme_key_name,
 };
 pub use login_scripts::{
     LoginScript, LoginScriptDeletion, LoginScriptDraft, LoginScriptError, LoginScriptId,

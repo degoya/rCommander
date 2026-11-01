@@ -1,23 +1,26 @@
 //! Drawing the Shortcuts tab: the help line, the search, the table of keys - one stop of the
-//! focus ring -, the recording's prompt or the question before a key moves, and the tab's
-//! buttons.
+//! focus ring -, the recording's prompt, the question before a key moves or the panel of "Add key
+//! for a theme..." (RC-100-55), and the tab's buttons.
 
 use iced::{
     Alignment, Element, Length,
-    widget::{Column, column, container, mouse_area, row, scrollable, text_input},
+    widget::{Column, column, container, mouse_area, pick_list, row, scrollable, text_input},
 };
 use rc_engine::{KeyContext, KeymapRow};
 
 use super::{
     draft::Draft,
     shortcuts::{
-        Recording, Selected, ShortcutsMsg, ShortcutsPage, keymap_of, label, lock_reason,
-        page_message, row_of, shown,
+        Recording, Selected, ShortcutsMsg, ShortcutsPage, ThemeKeyMsg, ThemeOption, keymap_of,
+        label, lock_reason, page_message, row_of, shown, theme_options,
     },
     view::hint,
 };
 use crate::{
-    app::Message,
+    app::{
+        Message,
+        palette::themes::{self, ThemeRow},
+    },
     i18n::t,
     theme::{self, Tokens, fit, focus, icon::Icon, layout},
 };
@@ -32,6 +35,7 @@ pub fn view<'a>(
 ) -> Element<'a, Message> {
     let keymap = keymap_of(draft);
     let rows = shown(&keymap, &page.search);
+    let known = themes::known();
     let find = t!("settings.shortcuts.find");
     let search = text_input(t!("settings.shortcuts.search"), &page.search)
         .on_input(|search| page_message(ShortcutsMsg::Search(search)))
@@ -63,7 +67,7 @@ pub fn view<'a>(
             scrollable(Column::with_children(
                 rows.iter()
                     .enumerate()
-                    .map(|(index, row)| key_row(page, row, index, tokens)),
+                    .map(|(index, row)| key_row(page, row, index, &known, tokens)),
             ))
             .height(Length::Fill),
             "settings.shortcuts.keys",
@@ -84,18 +88,26 @@ pub fn view<'a>(
     ]
     .spacing(8)
     .height(Length::Fill);
-    if let (Some(_), Some(row)) = (page.recording, selected) {
-        let prompt = t!("settings.shortcuts.recording", name = label(&row.name));
+    // By the selected name: a new theme key has no row before its first key (RC-100-55).
+    let name = page
+        .selected
+        .as_ref()
+        .map(|selected| selected.name.as_str());
+    if let (Some(_), Some(name)) = (page.recording, name) {
+        let prompt = t!("settings.shortcuts.recording", name = label(name));
         body = body.push(fit::prose(prompt).color(tokens.accent));
     }
-    if let (Some(conflict), Some(row)) = (&page.asking, selected) {
+    if let (Some(conflict), Some(name)) = (&page.asking, name) {
         body = body.push(question(
             &crate::keymap::label(&conflict.chord),
             &conflict.holder,
-            &row.name,
+            name,
         ));
     }
-    body.push(buttons(page, selected)).into()
+    if let Some(adding) = &page.adding {
+        body = body.push(theme_panel(adding.name.as_deref(), &known, tokens));
+    }
+    body.push(buttons(page, selected, !known.is_empty())).into()
 }
 
 /// One row: the action, its key - the reason in a tooltip when the window keeps it -, where it
@@ -104,6 +116,7 @@ fn key_row<'a>(
     page: &ShortcutsPage,
     row: &KeymapRow,
     index: usize,
+    known: &[ThemeRow],
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let this = Selected {
@@ -122,14 +135,18 @@ fn key_row<'a>(
         KeyContext::Files => t!("settings.shortcuts.when.files"),
         KeyContext::Always => t!("settings.shortcuts.when.always"),
     };
+    // A theme key whose theme was deleted since (RC-100-55).
+    let gone = themes::missing(&row.name, known);
     let mark = match (row.locked, row.changed) {
         (Some(_), _) => t!("settings.shortcuts.locked"),
+        (None, _) if gone => t!("settings.shortcuts.theme_missing"),
         (None, true) => t!("settings.shortcuts.changed"),
         (None, false) => "",
     };
     let mark_cell = fit::cell(mark, mark_share, row.locked.is_some(), tokens);
+    let words = themes::label_in(&row.name, known).unwrap_or_else(|| label(&row.name));
     let cells = vec![
-        fit::cell(label(&row.name), action, false, tokens),
+        fit::cell(words, action, false, tokens),
         key_cell,
         fit::cell(when, when_share, true, tokens),
         mark_cell,
@@ -171,10 +188,55 @@ fn question<'a>(key: &str, holder: &str, name: &str) -> Element<'a, Message> {
     )
 }
 
-/// The selected row's buttons, then "Reset all"; they wait while a key is recorded or the
-/// question is open. A row the window keeps gets no other key and keeps its own.
-fn buttons<'a>(page: &ShortcutsPage, selected: Option<&KeymapRow>) -> Element<'a, Message> {
-    let idle = page.recording.is_none() && page.asking.is_none();
+/// "Add key for a theme...": the theme to choose, then "Record key" or "Cancel".
+fn theme_panel<'a>(
+    chosen: Option<&str>,
+    known: &[ThemeRow],
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    let options = theme_options(known);
+    let selected = options
+        .iter()
+        .find(|option| Some(option.name.as_str()) == chosen)
+        .cloned();
+    let pick = |option: ThemeOption| page_message(ShortcutsMsg::Theme(ThemeKeyMsg::Pick(option)));
+    let caption = t!("settings.shortcuts.theme");
+    let moves = focus::moves(&options, selected.as_ref(), &pick);
+    let list = pick_list(options, selected, pick)
+        .text_size(theme::TEXT_SIZE)
+        .width(Length::Fill);
+    let list = layout::keyed(focus::Stop::pick(list, caption, moves), caption);
+    let theme_message = |message| Some(page_message(ShortcutsMsg::Theme(message)));
+    column![
+        fit::prose(t!("settings.shortcuts.theme.help")).color(tokens.text_secondary),
+        row![layout::caption(caption, None), list]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        row![
+            layout::secondary_button(
+                t!("settings.shortcuts.theme.record"),
+                chosen.and_then(|_| theme_message(ThemeKeyMsg::Record)),
+            ),
+            layout::secondary_button(
+                t!("settings.shortcuts.theme.cancel"),
+                theme_message(ThemeKeyMsg::Cancel),
+            ),
+        ]
+        .spacing(layout::BUTTON_SPACING),
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// The selected row's buttons, then "Add key for a theme..." while there are themes, and "Reset
+/// all"; they wait while a key is recorded, the question or the theme's panel is open. A row the
+/// window keeps gets no other key and keeps its own.
+fn buttons<'a>(
+    page: &ShortcutsPage,
+    selected: Option<&KeymapRow>,
+    any_theme: bool,
+) -> Element<'a, Message> {
+    let idle = page.recording.is_none() && page.asking.is_none() && page.adding.is_none();
     let row_of_action = selected.filter(|row| idle && row.command.is_some());
     let free = row_of_action.filter(|row| row.locked.is_none());
     let on = |row: Option<&KeymapRow>, message: ShortcutsMsg| row.map(|_| page_message(message));
@@ -200,6 +262,10 @@ fn buttons<'a>(page: &ShortcutsPage, selected: Option<&KeymapRow>) -> Element<'a
             layout::secondary_button(
                 t!("settings.shortcuts.reset"),
                 on(row_of_action, ShortcutsMsg::Reset),
+            ),
+            layout::secondary_button(
+                t!("settings.shortcuts.add_theme"),
+                (idle && any_theme).then(|| page_message(ShortcutsMsg::Theme(ThemeKeyMsg::Open))),
             ),
             layout::secondary_button(
                 t!("settings.shortcuts.reset_all"),

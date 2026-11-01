@@ -163,7 +163,7 @@ zeroize = "1.9"
 ed25519-dalek = { version = "3", features = ["pem", "pkcs8"] }
 # The test components of rc-plugin-host's `test-support` feature (RC-100-09): the versions its
 # tests already build them with, which Wasmtime 49 brings.
-wat = "~1.258.3"
+wat = "~1.262.0"
 wit-component = "0.258.3"
 wit-parser = "0.258.3"
 # The guest side of a plugin (RC-100-12): the bundled plugins' `src/guest.rs` on wasm32 only, never

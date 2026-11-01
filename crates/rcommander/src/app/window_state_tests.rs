@@ -99,3 +99,14 @@ async fn a_damaged_setting_opens_the_default_window() {
         .expect("stored");
     assert_eq!(load(&db).await, None);
 }
+
+/// On Linux the main window carries its class, `rcommander` (RC-100-70).
+#[cfg(target_os = "linux")]
+#[test]
+fn the_main_window_carries_its_class() {
+    let settings = Geometry::default().window_settings();
+    assert_eq!(
+        settings.platform_specific.application_id,
+        crate::platform::window_class::MAIN
+    );
+}

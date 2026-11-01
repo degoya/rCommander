@@ -76,6 +76,7 @@ fn network_drive(letter: &str, remote: Option<&str>) -> Drive {
         space: None,
         folder: Vec::new(),
         favourite: false,
+        folder_buttons: Vec::new(),
         remote: remote.map(str::to_owned),
     }
 }

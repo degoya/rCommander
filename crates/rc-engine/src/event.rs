@@ -162,6 +162,11 @@ pub enum EngineEvent {
     Update,
     /// A download of an update came this far.
     UpdateProgress { received: u64, total: u64 },
+    /// The workspaces changed (RC-100-68): one was saved, renamed, moved or deleted, or another
+    /// became the active one (`workspaces.apply`); `workspaces.list` has them.
+    WorkspacesChanged,
+    /// The workspaces' window is wanted (`workspaces.manager`, Ctrl+Shift+W); the window opens it.
+    WorkspaceManager,
 }
 
 /// What about a panel changed.

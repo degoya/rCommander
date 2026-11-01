@@ -1,11 +1,15 @@
 use rc_engine::{Command, Outcome};
 
-use super::{AboutMsg, AboutTab, facts, shown, version_line, window_title};
-use crate::app::{
-    Message,
-    harness::Harness,
-    palette::PaletteMsg,
-    settings::{Page, SettingsMessage},
+use super::{AboutMsg, AboutTab, facts, link_messages, shown, version_line, window_title};
+use crate::{
+    app::{
+        Effect, Message,
+        harness::Harness,
+        palette::PaletteMsg,
+        settings::{Page, SettingsMessage},
+        viewer::links,
+    },
+    i18n::t,
 };
 
 /// `app.about` answers MCP what the page shows.
@@ -116,4 +120,68 @@ async fn ctrl_tab_turns_the_tabs() {
     assert_eq!(tab(&harness), AboutTab::About, "round");
     harness.press("Ctrl+Shift+Tab").await;
     assert_eq!(tab(&harness), AboutTab::Licenses);
+}
+
+/// A click on a published address opens it; the button beside it copies it (RC-100-64).
+#[test]
+fn a_click_opens_an_address_and_its_button_copies_it() {
+    let url = "https://example.com/rcommander";
+    let [click, button] = link_messages(url);
+    assert!(
+        matches!(click, AboutMsg::OpenLink(ref sent) if sent == url),
+        "{click:?}"
+    );
+    assert!(
+        matches!(button, AboutMsg::CopyLink(ref sent) if sent == url),
+        "{button:?}"
+    );
+}
+
+/// Every address the page shows as published passes the gate a click goes through.
+#[test]
+fn every_published_address_opens() {
+    for link in shown().links {
+        if let (Some(url), true) = (link.url, link.published) {
+            assert!(links::opens(&url), "{url} would not open");
+        }
+    }
+}
+
+/// An address the gate lets through goes to the system on a blocking task, and the page keeps
+/// quiet when the system took it.
+#[tokio::test]
+async fn an_allowed_address_is_handed_to_the_system() {
+    let (_root, mut harness) = Harness::temp_with_db().await;
+    harness
+        .send(Message::Settings(SettingsMessage::OpenPage(Page::About)))
+        .await;
+    harness.app.settings.as_mut().expect("open").note = None;
+    let url = "https://example.com/about-open".to_owned();
+    let effects = harness.app.about_message(AboutMsg::OpenLink(url.clone()));
+    assert!(matches!(effects.as_slice(), [Effect::Task(_)]), "one task");
+    assert!(links::open(url.clone()).await, "the task's future opens it");
+    let effects = harness.app.about_message(AboutMsg::LinkOpened(url, true));
+    assert!(effects.is_empty());
+    assert!(harness.app.settings.as_ref().expect("open").note.is_none());
+}
+
+/// Refused by the gate or by the system: the address is copied and the note says so.
+#[tokio::test]
+async fn an_address_that_does_not_open_is_copied_with_a_note() {
+    let (_root, mut harness) = Harness::temp_with_db().await;
+    harness
+        .send(Message::Settings(SettingsMessage::OpenPage(Page::About)))
+        .await;
+    for message in [
+        AboutMsg::OpenLink("file:///etc/passwd".to_owned()),
+        AboutMsg::LinkOpened("https://example.com/refused".to_owned(), false),
+    ] {
+        harness.app.settings.as_mut().expect("open").note = None;
+        let effects = harness.app.about_message(message);
+        assert!(matches!(effects.as_slice(), [Effect::Task(_)]), "the copy");
+        let dialog = harness.app.settings.as_ref().expect("open");
+        let (note, error) = dialog.note.as_ref().expect("a note");
+        assert!(error);
+        assert_eq!(note, t!("settings.about.link_not_opened"));
+    }
 }

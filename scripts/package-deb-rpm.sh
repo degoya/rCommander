@@ -3,10 +3,10 @@
 # Builds the deb and the rpm package of one Linux architecture from its release tarball
 # (RC-100-54), with nfpm and packaging/linux/nfpm.yaml.in: exactly the tarball's program, plugins
 # and VERSION.txt, installed - the program in /usr/lib/rcommander, the command linked into
-# /usr/bin, a menu entry (packaging/linux/rcommander.desktop) with the app icon in the hicolor
-# theme (the SVG and its renderings at 48, 64, 128, 256 and 512 px), and an install-kind marker
-# (`deb`, `rpm`) that tells the update check apt or dnf updates it. The version is the one
-# VERSION.txt names. Adapted from rDownloader's scripts/package-deb-rpm.sh (RD-180-05) at commit
+# /usr/bin, a menu entry (packaging/linux/rcommander.desktop) and the dialog windows' hidden entry
+# (rcommander-popup.desktop, RC-100-70) with the app icon in the hicolor theme (the SVG and its
+# renderings at 48, 64, 128, 256 and 512 px), and an install-kind marker (`deb`, `rpm`) that tells
+# the update check apt or dnf updates it. The version is the one VERSION.txt names. Adapted from rDownloader's scripts/package-deb-rpm.sh (RD-180-05) at commit
 # 8c30caac8.
 #
 # Usage:

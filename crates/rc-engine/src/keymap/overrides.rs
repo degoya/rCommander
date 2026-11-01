@@ -13,7 +13,7 @@
 
 use std::fmt;
 
-use super::{Chord, Keymap, KeymapError, is_name, theme_key};
+use super::{Chord, Keymap, KeymapError, is_name, theme_key, workspace_key};
 
 /// The most deviations the setting holds.
 pub const MAX_OVERRIDES: usize = 256;
@@ -23,8 +23,8 @@ pub const MAX_OVERRIDE_TEXT: usize = 8192;
 /// One deviation from the standard keymap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Override {
-    /// `chord` runs the standard binding named `name`, or the theme key `name` names
-    /// (`theme_keys.rs`).
+    /// `chord` runs the standard binding named `name`, or the theme key or workspace key `name`
+    /// names (`theme_keys.rs`, `workspace_keys.rs`).
     Bind { chord: Chord, name: String },
     /// `chord` runs nothing, though the standard binds it.
     Unbind { chord: Chord },
@@ -82,10 +82,15 @@ impl Overrides {
             }
             let row = match name {
                 "" => Override::Unbind { chord },
-                name if is_name(name) || theme_key(name).is_some() => Override::Bind {
-                    chord,
-                    name: name.to_owned(),
-                },
+                name if is_name(name)
+                    || theme_key(name).is_some()
+                    || workspace_key(name).is_some() =>
+                {
+                    Override::Bind {
+                        chord,
+                        name: name.to_owned(),
+                    }
+                }
                 _ => return Err(wrong()),
             };
             rows.push(row);

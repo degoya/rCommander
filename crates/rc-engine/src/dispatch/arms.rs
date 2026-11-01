@@ -51,4 +51,5 @@ pub(super) mod theme;
 pub(super) mod update;
 pub(super) mod vault;
 pub(super) mod viewer;
+pub(super) mod workspaces;
 pub(super) mod wsl;

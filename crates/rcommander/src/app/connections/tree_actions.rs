@@ -1,6 +1,7 @@
 //! What the tree does: new folders and connections, renaming, deleting after a question, moving
-//! by Ctrl+X and Ctrl+V or by dragging, duplicating (Shift+F5, RC-050-15) and the drive-bar
-//! mark. Each is one command; the tree comes back through the engine's event.
+//! by Ctrl+X and Ctrl+V or by dragging (where it drops: `drop.rs`), duplicating (Shift+F5,
+//! RC-050-15) and the drive-bar mark of a connection or a folder. Each is one command; the tree
+//! comes back through the engine's event.
 
 use rc_engine::{
     Command, ConnectionId, ConnectionPatch, CredentialFields, CredentialPatch, FolderId, Outcome,
@@ -9,11 +10,13 @@ use rc_engine::{
 
 use super::{
     ConnectionManager, Focus, NameFor, Pending,
+    drop::{DropAt, Zone},
     form::{Field, Form},
     jobs::Then,
     keys::focus_id,
     run,
     tree::contents,
+    tree_edit::TreeEdit,
     vault::{AfterVault, Ask, Retry},
     view::NAME_FIELD,
 };
@@ -235,6 +238,7 @@ impl ConnectionManager {
     /// A row pressed: the cursor goes there and a drag may start.
     pub(super) fn press(&mut self, item: TreeItem) -> Vec<Effect> {
         self.drag = Some(item);
+        self.edit = TreeEdit::default();
         self.focus = Focus::Tree;
         self.pending = None;
         if self.tree.cursor != Some(item) {
@@ -244,16 +248,16 @@ impl ConnectionManager {
         vec![unfocus()]
     }
 
-    /// Released over a row: a drag from another row drops there.
+    /// Released over a row: a drag from another row drops before, into or after it, as the
+    /// pointer last stood on it (`drop.rs`, RC-100-63); without a move seen, into a folder and
+    /// after anything else.
     pub(super) fn release(&mut self, target: TreeItem) -> Vec<Effect> {
-        let Some(item) = self.drag.take() else {
-            return Vec::new();
+        let zone = match self.edit.hover {
+            Some(DropAt::Row(on, zone)) if on == target => zone,
+            _ if matches!(target, TreeItem::Folder(_)) => Zone::Into,
+            _ => Zone::After,
         };
-        if item == target {
-            return Vec::new();
-        }
-        let folder = self.tree.target_folder(Some(target));
-        self.move_into(item, folder)
+        self.drop_at(DropAt::Row(target, zone))
     }
 
     /// Enter or a double click: a folder opens or closes, an SSH server opens in the active
@@ -270,13 +274,17 @@ impl ConnectionManager {
         Vec::new()
     }
 
-    /// Space: the connection at the cursor is listed in the drive bar, or no longer.
+    /// Space: the connection at the cursor is listed in the drive bar, or no longer; a folder
+    /// is a button there, or no longer (RC-100-63).
     pub(super) fn toggle_favourite(&mut self) -> Vec<Effect> {
-        let Some(TreeItem::Connection(id)) = self.tree.current() else {
-            return Vec::new();
-        };
-        let favourite = !self.is_favourite(id);
-        vec![run(Then::Drives, Command::SetFavourite { id, favourite })]
+        match self.tree.current() {
+            Some(TreeItem::Connection(id)) => {
+                let favourite = !self.is_favourite(id);
+                vec![run(Then::Drives, Command::SetFavourite { id, favourite })]
+            }
+            Some(TreeItem::Folder(id)) => self.toggle_folder_favourite(id),
+            _ => Vec::new(),
+        }
     }
 }
 

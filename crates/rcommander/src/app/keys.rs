@@ -135,6 +135,10 @@ impl App {
                 self.open_quick_connect();
                 return Vec::new();
             }
+            // Ctrl+Shift+W: the workspaces window is the window's (RC-100-68); a workspace's
+            // own key applies it with its notes for the status bar.
+            Command::WorkspaceManager {} => return self.open_workspaces(),
+            Command::ApplyWorkspace { id } => return self.apply_workspace_now(id),
             _ => {}
         }
         let Some(command) = self.pane_mut(active).through_parent_row(command) else {

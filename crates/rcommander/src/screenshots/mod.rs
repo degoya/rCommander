@@ -7,7 +7,8 @@
 //! nothing of the last run is restored. Each scene of the file (`scenes.rs`) switches the look,
 //! runs its steps - keys, commands, a dialog opened - waits for the window to draw, and saves
 //! `iced::window::screenshot` as `<dir>/<scene>.png` (`out.rs`); then the window closes, the
-//! demo tree and the profile go, and `<dir>/screenshots.json` says what was taken or why not.
+//! demo tree and the profile go, and `<dir>/screenshots.json` says what was taken or why not -
+//! and which scenes were skipped on this machine (a scene naming `{wsl}` without WSL, RC-100-56).
 //! There is no MCP tool for it: a picture of the real window could show a secret.
 //!
 //! The module is a child of `app::startup` (declared there) so that it starts the window through
@@ -16,6 +17,7 @@
 mod demo;
 mod opening;
 mod out;
+mod places;
 mod scenes;
 mod shooter;
 
@@ -101,6 +103,7 @@ fn run(scenes: &Path, out: &Path, demo_root: Option<&Path>) -> Result<()> {
             ok,
             error: report.error.clone(),
             shots: report.shots,
+            skipped: report.skipped,
         },
     );
     match report.error {
@@ -109,7 +112,8 @@ fn run(scenes: &Path, out: &Path, demo_root: Option<&Path>) -> Result<()> {
     }
 }
 
-fn read_plan(path: &Path, demo: &Path) -> Result<Plan> {
+/// The scene file's text, of at most [`scenes::MAX_FILE_BYTES`].
+fn read_scenes(path: &Path) -> Result<String> {
     let meta = fs::metadata(path).with_context(|| format!("{} cannot be read", path.display()))?;
     if !meta.is_file() || meta.len() > scenes::MAX_FILE_BYTES {
         bail!(
@@ -118,10 +122,23 @@ fn read_plan(path: &Path, demo: &Path) -> Result<Plan> {
             scenes::MAX_FILE_BYTES
         );
     }
-    let text =
-        fs::read_to_string(path).with_context(|| format!("{} cannot be read", path.display()))?;
-    scenes::parse(&text, &demo.display().to_string())
-        .with_context(|| format!("in {}", path.display()))
+    fs::read_to_string(path).with_context(|| format!("{} cannot be read", path.display()))
+}
+
+/// The distribution `{wsl}` stands for, as the drive bar lists them (`wsl.list_distros`);
+/// `None` where there is none or the list cannot be read.
+async fn wsl_distro(engine: &Engine) -> Option<String> {
+    match engine.dispatch(Command::ListWslDistros).await {
+        Ok(Outcome::WslDistros { distros }) => places::pick(&distros).map(str::to_owned),
+        Ok(_) => None,
+        Err(error) => {
+            eprintln!(
+                "rcommander --screenshots: the WSL distributions cannot be read: {}",
+                error.code()
+            );
+            None
+        }
+    }
 }
 
 /// The run between the output folder and the manifest: the profile and the demo folder made,
@@ -141,12 +158,23 @@ fn shoot(
             Scratch(root, false)
         }
     };
-    let plan = read_plan(scenes, &demo.0)?;
+    let text = read_scenes(scenes)?;
     demo::write_tree(&demo.0)?;
     let runtime = tokio::runtime::Runtime::new().context("no runtime starts")?;
     let shown = runtime
-        .block_on(prepare(&plan, &profile.0, &demo.0))
-        .and_then(|setup| {
+        .block_on(prepare(scenes, &text, &profile.0, &demo.0))
+        .and_then(|(setup, plan)| {
+            for skipped in &plan.skipped {
+                eprintln!(
+                    "rcommander --screenshots: scene '{}' skipped: {}",
+                    skipped.name, skipped.reason
+                );
+            }
+            report
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .skipped
+                .clone_from(&plan.skipped);
             shooter::show(setup, plan, out.clone(), Arc::clone(report))
                 .map_err(|error| anyhow!("the window does not run: {error}"))
         });
@@ -159,8 +187,9 @@ fn shoot(
 }
 
 /// The database, the engine on the demo tree and the window's start, as `startup::prepare`
-/// makes them for a real run.
-async fn prepare(plan: &Plan, profile: &Path, demo: &Path) -> Result<Setup> {
+/// makes them for a real run; then the scenes of `text` (read from `file`), checked once the
+/// engine has said which WSL distribution `{wsl}` stands for.
+async fn prepare(file: &Path, text: &str, profile: &Path, demo: &Path) -> Result<(Setup, Plan)> {
     let db = Db::open(profile.join("rcommander.db"))
         .await
         .map_err(|error| anyhow!("the throwaway database does not open: {error}"))?;
@@ -190,13 +219,16 @@ async fn prepare(plan: &Plan, profile: &Path, demo: &Path) -> Result<Setup> {
     demo::add_connections(&engine).await?;
     demo::add_theme(&engine).await?;
     let keymap = engine.keymap().await;
+    let wsl = wsl_distro(&engine).await;
+    let plan = scenes::parse(text, &demo.display().to_string(), wsl.as_deref())
+        .with_context(|| format!("in {}", file.display()))?;
     let geometry = Geometry {
         width: plan.width as f32,
         height: plan.height as f32,
         position: None,
         maximized: false,
     };
-    Ok(Setup {
+    let setup = Setup {
         keymap,
         engine,
         db: Some(db),
@@ -209,7 +241,9 @@ async fn prepare(plan: &Plan, profile: &Path, demo: &Path) -> Result<Setup> {
         masks: Vec::new(),
         info: None,
         dialogs: Vec::new(),
-    })
+        workspace: None,
+    };
+    Ok((setup, plan))
 }
 
 /// A fresh folder for the throwaway profile under the temporary folder.

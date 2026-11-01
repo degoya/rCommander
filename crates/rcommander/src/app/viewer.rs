@@ -23,7 +23,7 @@ mod draw;
 mod find;
 mod keys;
 mod last_page;
-mod links;
+pub(in crate::app) mod links;
 mod lister;
 mod load;
 mod markdown;

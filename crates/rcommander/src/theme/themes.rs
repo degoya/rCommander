@@ -11,10 +11,12 @@
 //! (`app/settings/themes_page/editor.rs`).
 //!
 //! While the editor is open its theme is the preview: [`tokens`](super::tokens) draws its mode
-//! with it, the main window included; Cancel takes it away and the chosen look is back.
+//! with it, the main window included; Cancel takes it away and the chosen look is back. The
+//! active workspace's theme of a mode comes before the chosen one (RC-100-68, `workspace.rs`).
 
 mod connections;
 mod slots;
+mod workspace;
 
 use std::sync::{
     Mutex, PoisonError, RwLock,
@@ -106,14 +108,30 @@ pub fn set_state(state: &ThemesState) {
         chosen_ids: themes.map(|theme| theme.map(|theme| theme.id)),
     };
     *DRAWN.write().unwrap_or_else(PoisonError::into_inner) = Some(drawn);
+    // An active workspace's theme may have changed with them (RC-100-68).
+    workspace::resolve(tokens_of);
+}
+
+/// The active workspace's themes from now on, light first, by id (RC-100-68): their looks come
+/// before the chosen themes'; whether they changed.
+pub fn set_workspace_themes(themes: [Option<String>; 2]) -> bool {
+    let changed = workspace::set_themes(themes);
+    if changed {
+        workspace::resolve(tokens_of);
+    }
+    changed
 }
 
 /// The look the window draws the light or the dark mode with: the editor's preview of that mode,
-/// else the chosen theme's; `None` before the themes are read.
+/// else the active workspace's theme of it (RC-100-68), else the chosen theme's; `None` before
+/// the themes are read.
 pub fn current(dark: bool) -> Option<&'static Tokens> {
     let preview = PREVIEW.read().unwrap_or_else(PoisonError::into_inner)[usize::from(dark)];
     if let Some((_, preview)) = preview {
         return Some(preview);
+    }
+    if let Some(tokens) = workspace::look(dark) {
+        return Some(tokens);
     }
     DRAWN
         .read()

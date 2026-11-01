@@ -12,6 +12,8 @@ use iced::{
 use rc_db::Db;
 use serde::{Deserialize, Serialize};
 
+use crate::platform::window_class;
+
 /// The settings key.
 pub const GEOMETRY_KEY: &str = "window.geometry";
 
@@ -64,9 +66,10 @@ impl Geometry {
         })
     }
 
-    /// The window's settings for this geometry; centred when there is no position.
+    /// The window's settings for this geometry; centred when there is no position, with the
+    /// main window's class (`platform::window_class`).
     pub fn window_settings(self) -> window::Settings {
-        window::Settings {
+        let settings = window::Settings {
             size: Size::new(self.width, self.height),
             position: self.position.map_or(Position::Centered, |(x, y)| {
                 Position::Specific(Point::new(x, y))
@@ -74,7 +77,8 @@ impl Geometry {
             maximized: self.maximized,
             min_size: Some(MIN_SIZE),
             ..window::Settings::default()
-        }
+        };
+        window_class::with_class(settings, window_class::MAIN)
     }
 }
 

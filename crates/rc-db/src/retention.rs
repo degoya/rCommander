@@ -243,6 +243,11 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
         "vault_meta",
         "at most one row: the vault's key-derivation parameters and verifier",
     ),
+    (
+        "workspaces",
+        "one row per workspace a person saved (RC-100-68); a person removes them, an edit \
+         replaces its row",
+    ),
 ];
 
 /// The retained table named `table`.

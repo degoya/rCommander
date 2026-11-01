@@ -1,7 +1,9 @@
 //! Changing a panel's drive (RC-010-05, owner 2026-10-19): a drive the other panel shows opens
 //! at the other panel's folder, as in Total Commander; `d:` in the command line does so even when
 //! the panel is already on that drive (owner 2026-10-26, RC-010-29). On by default; not
-//! protected.
+//! protected. Coming back to the window from another program reads the panels on local drives
+//! again (owner 2026-11-01, RC-100-69): on by default; network drives and shares only with their
+//! own switch, off by default. Neither is protected.
 
 use super::{SettingKind, SettingPage, SettingSpec};
 
@@ -26,6 +28,31 @@ pub(super) const FOLLOW_ON_OWN_DRIVE: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.drives.follow_on_own_drive",
     help: "setting.drives.follow_on_own_drive.help",
+    protected: false,
+    restart: false,
+};
+
+/// Whether coming back from another program reads the panels on local drives again.
+pub const REFRESH_ON_FOCUS_KEY: &str = "panels.refresh_on_focus";
+/// Whether that also reads panels on network drives and shares again.
+pub const REFRESH_ON_FOCUS_NETWORK_KEY: &str = "panels.refresh_on_focus_network";
+
+pub(super) const REFRESH_ON_FOCUS: SettingSpec = SettingSpec {
+    key: REFRESH_ON_FOCUS_KEY,
+    page: SettingPage::Folders,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.panels.refresh_on_focus",
+    help: "setting.panels.refresh_on_focus.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const REFRESH_ON_FOCUS_NETWORK: SettingSpec = SettingSpec {
+    key: REFRESH_ON_FOCUS_NETWORK_KEY,
+    page: SettingPage::Folders,
+    kind: SettingKind::Bool { default: false },
+    label: "setting.panels.refresh_on_focus_network",
+    help: "setting.panels.refresh_on_focus_network.help",
     protected: false,
     restart: false,
 };

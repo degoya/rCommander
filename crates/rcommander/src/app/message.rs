@@ -22,6 +22,7 @@ use super::{
     vault_offer::VaultOfferMsg,
     viewer,
     window_state::WindowChange,
+    workspaces,
 };
 use crate::theme::{
     Tokens,
@@ -150,6 +151,11 @@ pub enum Message {
     AccessKeys(bool),
     /// The self-update: its notice, the Updates page, the background (RC-100-05).
     Update(UpdateMsg),
+    /// The switches of the panels' refresh, read when the app came back from another program
+    /// (`refocus.rs`).
+    Refocus(super::refocus::Switches),
+    /// The workspaces window, its list and the engine's answers (RC-100-68).
+    Workspaces(workspaces::WsMsg),
 }
 
 impl Message {

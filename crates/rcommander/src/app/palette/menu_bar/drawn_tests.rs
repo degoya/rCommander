@@ -104,7 +104,39 @@ fn enter_or_a_letter_takes_an_entry_and_escape_closes() {
     assert_eq!(open.menu, index(&menus, "&File"));
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
+/// The setting's values; anything else is the default, the drawn bar.
+#[test]
+fn the_style_reads_its_values() {
+    assert_eq!(Style::from_value(Some("native")), Style::Native);
+    assert_eq!(Style::from_value(Some("drawn")), Style::Drawn);
+    assert_eq!(Style::from_value(Some("Native")), Style::Drawn, "unknown");
+    assert_eq!(Style::from_value(None), Style::Drawn);
+    assert_eq!(Style::default(), Style::Drawn);
+}
+
+/// Linux always draws the bar, Windows as the setting says, macOS never (RC-100-66).
+#[test]
+fn the_bar_is_drawn_per_system_and_style() {
+    // (system, style, drawn)
+    let table = [
+        (System::Windows, Style::Drawn, true),
+        (System::Windows, Style::Native, false),
+        (System::Other, Style::Drawn, true),
+        (System::Other, Style::Native, true),
+        (System::MacOs, Style::Drawn, false),
+        (System::MacOs, Style::Native, false),
+    ];
+    for (system, style, drawn) in table {
+        assert_eq!(active_on(system, style), drawn, "{system:?} {style:?}");
+    }
+    assert_eq!(active(Style::Drawn), !cfg!(target_os = "macos"));
+    assert_eq!(
+        active(Style::Native),
+        !cfg!(any(windows, target_os = "macos"))
+    );
+}
+
+#[cfg(not(target_os = "macos"))]
 mod drawn {
     use super::*;
     use crate::app::{Message, harness::Harness, palette::PaletteMsg};
@@ -175,6 +207,25 @@ mod drawn {
         harness.send(bar(MenuBarMsg::Title(2))).await;
         harness.press("Escape").await;
         assert_eq!(open(&harness), None);
+    }
+
+    /// The style is kept in the books; where it turns the drawn bar off (Windows, `native`) an
+    /// open menu closes and Alt with a letter opens nothing of it.
+    #[tokio::test]
+    async fn the_style_decides_whether_the_bar_is_drawn() {
+        let (_root, mut harness) = Harness::temp_with_db().await;
+        harness.send(bar(MenuBarMsg::Shown(true))).await;
+        harness.send(bar(MenuBarMsg::Title(0))).await;
+        harness.send(bar(MenuBarMsg::Style(Style::Native))).await;
+        assert_eq!(harness.app.dialog_windows.menu_bar.style, Style::Native);
+        let drawn = active(Style::Native);
+        assert_eq!(harness.app.drawn_bar_shown(), drawn);
+        assert_eq!(harness.app.dialog_windows.menu_bar.open.is_some(), drawn);
+        harness.send(bar(MenuBarMsg::Close)).await;
+        harness.press("Alt+f").await;
+        assert_eq!(harness.app.dialog_windows.menu_bar.open.is_some(), drawn);
+        harness.send(bar(MenuBarMsg::Style(Style::Drawn))).await;
+        assert!(harness.app.drawn_bar_shown());
     }
 
     /// The setting off hides the bar: Alt with a letter opens nothing.

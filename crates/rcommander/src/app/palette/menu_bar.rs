@@ -6,11 +6,12 @@
 //!
 //! The app keeps the bar in step after every update ([`App::sync_menu_bar`], from
 //! `dialog_windows.rs`): attached once the setting `appearance.menu_bar` is read and on, hidden
-//! when it is off, dark with the app's look, greyed out while a dialog is open (a choice that
-//! still arrives then is ignored), and Alt with a letter left to the quick search or a terminal
-//! that wants it; its keys follow a changed keymap (`relabel_menu_bar`, RC-100-21) and a switched
-//! keyboard layout (`follow_layout`, RC-100-48). The popup
-//! menus - the bar's and the Explorer's - follow the look too
+//! when it is off, taken off the window while rCommander draws the bar itself (`drawn.rs`, the
+//! setting `appearance.menu_bar_style`, RC-100-66), dark with the app's look, greyed out while a
+//! dialog is open (a choice that still arrives then is ignored), and Alt with a letter left to
+//! the quick search or a terminal that wants it; its keys follow a changed keymap
+//! (`relabel_menu_bar`, RC-100-21) and a switched keyboard layout (`follow_layout`, RC-100-48).
+//! The popup menus - the bar's and the Explorer's - follow the look too
 //! (`platform::popup_menus`, owner 2026-10-18).
 
 mod drawn;
@@ -23,10 +24,10 @@ use iced::{
 };
 use rc_engine::{
     Keymap, PanelView,
-    settings::{MENU_BAR_KEY, stored_bool},
+    settings::{MENU_BAR_KEY, MENU_BAR_STYLE_KEY, stored_bool, stored_setting},
 };
 
-use self::drawn::OpenMenu;
+use self::drawn::{OpenMenu, Style, active};
 pub use self::spec::MENUS;
 use super::{Entry, PaletteMsg, reach};
 use crate::{
@@ -35,6 +36,7 @@ use crate::{
         cmdline::SearchKeys,
         connections::{ConnMsg, ImportMsg, RdmImportMsg, TcImportMsg},
         settings::{Page, SettingsMessage},
+        workspaces::WsMsg,
     },
     i18n,
     platform::{
@@ -74,6 +76,8 @@ pub enum Dialog {
     RdmImport,
     /// The connection manager's import of an ssh_config (RC-050-06).
     SshConfigImport,
+    /// The workspaces window asking the name of a new workspace of the panels (RC-100-68).
+    SaveWorkspace,
 }
 
 /// The menu bar's messages, through [`PaletteMsg::MenuBar`].
@@ -81,6 +85,8 @@ pub enum Dialog {
 pub enum MenuBarMsg {
     /// The setting `appearance.menu_bar`, read.
     Shown(bool),
+    /// The setting `appearance.menu_bar_style`, read (RC-100-66).
+    Style(Style),
     /// The entry with this id was chosen.
     Chosen(String),
     /// A click on the drawn bar's title of this menu (`drawn.rs`).
@@ -98,12 +104,17 @@ pub enum MenuBarMsg {
 pub struct MenuBar {
     /// The setting `appearance.menu_bar`; `None` until it is read.
     pub shown: Option<bool>,
+    /// The setting `appearance.menu_bar_style`; the default until it is read.
+    pub style: Style,
     /// The menus the drawn bar shows, built when it is shown and after the keymap changed.
     pub menus: Vec<BarMenu>,
     /// The drawn bar's open menu.
     pub open: Option<OpenMenu>,
-    /// The look handed to the platform last; `None` until the bar is attached.
+    /// The look handed to the platform last; `None` until the bar is attached or the drawn bar
+    /// has the keys.
     applied: Option<Look>,
+    /// Whether the system's menu is on the window (attached, shown or hidden).
+    attached: bool,
     /// Whether the popup menus were asked to be dark, last; `None` before the first time.
     popups_dark: Option<bool>,
     /// What the keyboard layout printed on the keys named by place when last looked at.
@@ -117,20 +128,24 @@ impl MenuBar {
         self.popups_dark.replace(dark) != Some(dark)
     }
 
-    /// What to tell the platform for the look `wanted`: attach the bar, change it, or nothing.
+    /// What to tell the platform for the look `wanted`: attach the system's menu, change it,
+    /// take it off for the drawn bar, or nothing.
     fn step(&mut self, wanted: Look) -> Step {
-        match self.applied {
-            None if !wanted.shown => Step::Nothing,
-            None => {
-                self.applied = Some(wanted);
-                Step::Attach
-            }
-            Some(applied) if applied == wanted => Step::Nothing,
-            Some(_) => {
-                self.applied = Some(wanted);
-                Step::Apply
-            }
+        if self.applied == Some(wanted) {
+            return Step::Nothing;
         }
+        let step = match (self.attached, wanted.drawn) {
+            (true, false) => Step::Apply,
+            (true, true) => Step::Detach,
+            (false, false) if wanted.shown => Step::Attach,
+            // Hidden and never told anything: the menu waits until it is shown.
+            (false, false) if self.applied.is_none() => return Step::Nothing,
+            // No menu on the window: only the keys follow the look.
+            (false, _) => Step::Detach,
+        };
+        self.attached = matches!(step, Step::Attach | Step::Apply);
+        self.applied = Some(wanted);
+        step
     }
 }
 
@@ -139,6 +154,8 @@ enum Step {
     Nothing,
     Attach,
     Apply,
+    /// No system menu on the window (one attached is taken off); the keys go to the drawn bar.
+    Detach,
 }
 
 /// The menus as the system shows them: each title and entry its label, an entry's key after a
@@ -156,7 +173,8 @@ pub fn build(keymap: &Keymap, entries: &[Entry]) -> Vec<BarMenu> {
 }
 
 fn items(menu: &Menu, keymap: &Keymap, entries: &[Entry]) -> Vec<BarItem> {
-    let mut items: Vec<BarItem> = Vec::new();
+    // The Workspaces menu starts with the workspaces (RC-100-68).
+    let mut items: Vec<BarItem> = super::workspaces::menu_items(menu.id, keymap);
     for slot in menu.slots {
         let id = match slot {
             Slot::Separator => {
@@ -206,6 +224,12 @@ pub fn slot(id: &str) -> Option<Slot> {
         })
 }
 
+/// The setting `appearance.menu_bar_style` in `db`.
+pub async fn menu_bar_style(db: rc_db::Db) -> Style {
+    let value = stored_setting(&db, MENU_BAR_STYLE_KEY).await;
+    Style::from_value(value.as_ref().and_then(|value| value.as_str()))
+}
+
 /// The choices made in the bar, as messages.
 pub fn subscription() -> Subscription<Message> {
     Subscription::run(chosen)
@@ -216,14 +240,23 @@ fn chosen() -> impl Stream<Item = Message> {
 }
 
 impl App {
-    /// Reads whether the bar shows (shown without a database); at the start and when the setting
-    /// changes.
+    /// Reads whether the bar shows (shown without a database) and its style; at the start and
+    /// when either setting changes.
     pub(in crate::app) fn menu_bar_task(&self) -> Task<Message> {
-        let shown = |shown| Message::Palette(PaletteMsg::MenuBar(MenuBarMsg::Shown(shown)));
+        let message = |message| Message::Palette(PaletteMsg::MenuBar(message));
         let Some(db) = self.db.clone() else {
-            return Task::done(shown(true));
+            return Task::done(message(MenuBarMsg::Shown(true)));
         };
-        Task::perform(async move { stored_bool(&db, MENU_BAR_KEY).await }, shown)
+        let style_db = db.clone();
+        Task::batch([
+            Task::perform(
+                async move { stored_bool(&db, MENU_BAR_KEY).await },
+                move |shown| message(MenuBarMsg::Shown(shown)),
+            ),
+            Task::perform(menu_bar_style(style_db), move |style| {
+                message(MenuBarMsg::Style(style))
+            }),
+        ])
     }
 
     pub(super) fn on_menu_bar(&mut self, message: MenuBarMsg) -> Vec<Effect> {
@@ -235,6 +268,15 @@ impl App {
                 }
                 if self.drawn_bar_shown() {
                     self.rebuild_drawn_menus();
+                }
+                Vec::new()
+            }
+            MenuBarMsg::Style(style) => {
+                self.dialog_windows.menu_bar.style = style;
+                if self.drawn_bar_shown() {
+                    self.rebuild_drawn_menus();
+                } else {
+                    self.dialog_windows.menu_bar.open = None;
                 }
                 Vec::new()
             }
@@ -269,7 +311,11 @@ impl App {
             MenuBarMsg::Chosen(id) => match slot(&id) {
                 Some(Slot::Entry(name)) => self.run_menu_entry(name),
                 Some(Slot::Dialog(_, dialog)) => self.open_menu_dialog(dialog),
-                Some(Slot::Separator) | None => Vec::new(),
+                Some(Slot::Separator) => Vec::new(),
+                // A workspace of the Workspaces menu (RC-100-68).
+                None => super::workspaces::key_id(&id)
+                    .map(|id| self.apply_workspace_now(id))
+                    .unwrap_or_default(),
             },
         }
     }
@@ -300,6 +346,7 @@ impl App {
                 effects.extend(self.apply(connections(ConnMsg::Import(ImportMsg::Open))));
                 effects
             }
+            Dialog::SaveWorkspace => self.apply(Message::Workspaces(WsMsg::SaveCurrentAs)),
         }
     }
 
@@ -322,6 +369,7 @@ impl App {
             dark: self.dark,
             enabled: !self.dialog_open(),
             alt_letters: self.alt_letters_free(),
+            drawn: active(self.dialog_windows.menu_bar.style),
         };
         let bar = match self.dialog_windows.menu_bar.step(wanted) {
             Step::Nothing => Task::none(),
@@ -331,6 +379,7 @@ impl App {
                 platform::attach(main, build(&self.keymap, &entries), wanted).discard()
             }
             Step::Apply => platform::apply(main, wanted).discard(),
+            Step::Detach => platform::detach(main, wanted).discard(),
         };
         Task::batch([popups, bar])
     }
@@ -346,6 +395,19 @@ impl App {
         };
         let entries = super::entries(&self.keymap, &reach::standard(), self.drive_bar.network);
         platform::relabel(main, build(&self.keymap, &entries)).discard()
+    }
+
+    /// The bar's entries again after the workspaces changed (RC-100-68): the drawn bar's menus
+    /// made anew, the system's Workspaces menu filled again.
+    pub(in crate::app) fn refill_menu_bar(&mut self) -> Task<Message> {
+        if self.drawn_bar_shown() {
+            self.rebuild_drawn_menus();
+        }
+        let Some(main) = self.dialog_windows.main() else {
+            return Task::none();
+        };
+        let entries = super::entries(&self.keymap, &reach::standard(), self.drive_bar.network);
+        platform::refill(main, build(&self.keymap, &entries)).discard()
     }
 
     /// The bar's keys again when the keyboard layout changed, so a key named by place shows the

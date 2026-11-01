@@ -29,6 +29,7 @@ pub mod mnemonic;
 pub mod page_tabs;
 mod syntax;
 mod system;
+mod system_fonts;
 pub mod terminal;
 pub mod themes;
 pub mod wheel;
@@ -117,7 +118,8 @@ pub fn system_accent() -> [Color; 2] {
     [accent.light, accent.dark]
 }
 
-/// Takes the setting `appearance.macos_look` for this run and reads the system's accent colour;
+/// Takes the setting `appearance.macos_look` for this run, sets the system's font families on
+/// Linux (`system_fonts.rs`) and reads the system's accent colour;
 /// the start calls it before the window opens, so drawing never touches the registry. Later
 /// calls change nothing.
 pub fn init(mac_look: bool) {
@@ -126,6 +128,9 @@ pub fn init(mac_look: bool) {
     if mac_look {
         mac::fonts();
     }
+    // The system's families instead of cosmic-text's Open Sans (RC-100-71).
+    #[cfg(all(unix, not(target_os = "macos")))]
+    system_fonts::apply();
     tokens(false);
 }
 
@@ -203,7 +208,8 @@ pub fn iced_theme(tokens: &Tokens) -> Theme {
 
 /// The interface font: Segoe UI Variable on Windows 11, the system's sans-serif elsewhere (and
 /// on Windows 10, where the name does not resolve and cosmic-text falls back to Segoe UI) - San
-/// Francisco on macOS with the Mac's look ([`mac_look`]).
+/// Francisco on macOS with the Mac's look ([`mac_look`]), fontconfig's choice on Linux
+/// (`system_fonts.rs`).
 pub const UI_FONT: Font = if cfg!(windows) {
     Font::with_name("Segoe UI Variable")
 } else {

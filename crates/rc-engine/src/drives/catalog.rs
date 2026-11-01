@@ -281,6 +281,7 @@ fn entry(drive: &RawDrive, known: &Known) -> Drive {
         space: details.space,
         folder: Vec::new(),
         favourite: false,
+        folder_buttons: Vec::new(),
         remote: drive.remote.clone(),
     }
 }

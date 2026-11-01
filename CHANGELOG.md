@@ -5,6 +5,100 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-01
+
+### Added
+
+- **Workspaces: engine, database and MCP** (RC-100-68): what both panels show - each panel's
+  tabs with folder, sort, view and lock, the file list or a terminal (local, WSL, SSH), the active
+  panel, the divider, a theme per mode - saved under a name (migration `0022_workspaces.sql`) and
+  called up at once with `workspaces.apply`: by `workspaces.apply_mode` the tabs replace the
+  panel's and locked ones stay (or replace all, or are added), a running terminal of the same kind
+  is reused, a deleted or unreachable server is left out with a note; the applied workspace is
+  active and its theme draws ahead of the window's. `workspaces.capture` saves the panels as they
+  are; `workspaces.on_start` names the workspace the window applies at the start. Ctrl+Shift+W
+  (`workspaces.manager`), a key per workspace (`workspace:<id>`), MCP tools `workspaces_*`.
+- **Workspaces window, palette rows, menu and keys** (RC-100-68, the window's half): Ctrl+Shift+W
+  opens the workspaces window (`app/workspaces/`, `DialogWindow::Workspaces`, a card while
+  `appearance.dialog_windows` is off): the list with a filter (Enter or a double click applies
+  and closes, Insert makes one of the panels as they are, F2 renames, Delete or F8 deletes after a
+  question, Ctrl+Up and Ctrl+Down move it, the active one marked) and the form of the one at the
+  cursor (name, own key, theme of each mode, active panel, split, per panel the tabs with place,
+  path, the panel's folder, order, lock, the active tab, files or a terminal with its kind and
+  start folder); Take current state, Apply, Save, Close. Each workspace is a palette row
+  "Workspace: <name>" and an entry of the new Workspaces menu (with "Save current state as..."
+  and "Manage..."), both rebuilt on `WorkspacesChanged`, the Win32 menu too; the Shortcuts tab has
+  "Add key for a workspace...". The active workspace's theme comes before the window's theme of
+  its mode; what an apply left out goes to the status bar; `workspaces.on_start` is applied once
+  the window runs, and the form's "Call up when rCommander starts" sets it to the workspace at
+  the cursor or empties it.
+
+- **Panels read again on return to the window** (RC-100-69): coming back to rCommander from
+  another program reads each panel with a file list on a local drive or WSL share again
+  (`panel.refresh`: cursor, selection and scroll stay); a switch between rCommander's own windows
+  (focus back within 300 ms, `app/refocus.rs`) reads nothing. Settings on the page Folders:
+  `panels.refresh_on_focus` (on) and `panels.refresh_on_focus_network` (off) for network drives
+  and shares; servers, archives, terminals, flat views and running listings are left alone.
+
+- **Screenshot of a WSL distribution's theme** (RC-100-56): a screenshot scene may name `{wsl}`,
+  the default (else the first) installed WSL distribution as the engine lists it; where there is
+  none the scene is skipped and named in the run's manifest, never faked. The new scene
+  `wsl-theme` shows a panel on the distribution in Solarized dark beside a local one in the
+  window's Fluent dark.
+- **Eight more built-in colour themes** (RC-100-65): Gruvbox, Dracula (its light mode Alucard),
+  Catppuccin (Latte and Mocha), Tokyo Night (its light mode Tokyo Night Light), Everforest,
+  Rosé Pine, Kanagawa and Ayu, each light and dark with its own terminal colours and at WCAG AA
+  contrast; 28 built-in themes in all. The palettes are MIT-licensed and credited in `NOTICE`.
+
+### Changed
+
+- **Connection tree editing and folder stars** (RC-100-63): a toolbar above the connection
+  manager's tree and a context menu (right click, Shift+F10, the context-menu key) rename, move
+  up and down, outdent and indent, star and delete, the menu also makes a connection, a folder
+  or a copy; keys Ctrl+Up/Down, Ctrl+Left/Right, Space on a folder. `sort_order` of
+  `connections.move` and `folders.move` is now the position among the siblings of the same kind,
+  the level numbered densely in one transaction (`rc-db` `connections/order.rs`). Dragging shows
+  an insertion line (upper third before, lower third after, the middle of a folder into it,
+  below the last row the end of the root). Folders get the drive-bar star: `Favourites` gains
+  `folders_shown`/`folders_hidden` (the root level on by default, old JSON reads), new command
+  `connections.set_folder_favourite` (MCP `connections_set_folder_favourite`), `drives.list`
+  gives each server `folder_buttons` and lists them in the tree's order (folders first),
+  `connections.list` names `bar_folders`; a starred subfolder is a drive-bar button of its own
+  that opens its `Folder` pulldown. Supersedes decision 24eb801 (only top-level folders). Icons
+  Indent, Outdent and Star in the icon font.
+- **About links open in the browser** (RC-100-64): a click on a published address on the About
+  page opens it in the default browser (only `http`, `https`, `mailto`, as the Markdown preview's
+  links); a copy button beside it copies it, and when the system refuses to open it the address
+  is copied and a note says so.
+- **Menu bar in the theme's colours on Windows** (RC-100-66): Windows draws the menu bar as Linux
+  does, in the theme's colours (`drawn::active` replaces the constant `DRAWN`). The setting
+  `appearance.menu_bar_style` (`drawn` | `native`, Appearance > Theme and window, Windows only)
+  brings the Win32 menu back; a switch takes the muda menu off or attaches it without a restart,
+  keeping the client size. Alt with a letter goes to the drawn bar; Alt alone opens no system
+  menu (the subclass stops `SC_KEYMENU` but for Alt+Space).
+- **Dependencies**: `zstd` 0.13.4 and `zstd-safe` 7.4.0 (semver-compatible, before the 0.15.0
+  release).
+- **Rust 1.99.1**: `rust-toolchain.toml` pins the 1.99.1 point release (stable since
+  2026-10-13) instead of 1.99.0; `rust-version` stays 1.99.
+
+### Fixed
+
+- **Window classes on Linux** (RC-100-70): the main window carries the Wayland `app_id` and
+  X11 `WM_CLASS` `rcommander`, every dialog window `rcommander-popup`, so Hyprland, Sway and i3
+  can float the dialogs with one rule. The menu entry names `StartupWMClass=rcommander`; the deb
+  and rpm add a hidden `rcommander-popup.desktop` that gives the dialogs the app's icon.
+- **Linux: one interface font** (RC-100-71): the generic sans-serif and monospace families are
+  set at the start to the system's (`fc-match`, else the first installed of Noto Sans, DejaVu
+  Sans, Liberation Sans, Cantarell, Ubuntu, or Noto Sans Mono, DejaVu Sans Mono, Liberation Mono)
+  instead of cosmic-text's Open Sans and Noto Sans Mono; where those were missing, a dialog's
+  semibold title drew in another family than its buttons. Windows and macOS unchanged.
+- **Drive bar pulldowns under their button** (RC-100-62): the drive menu opens right under the
+  button clicked - a bar button, `»`, a folder's button or the drive line's drive - kept inside
+  the window, instead of at a fixed height over the panel; Alt+F1/Alt+F2 keep the old place.
+  `»` lists exactly the items the bar cut off, in its order (a folder as a heading over its
+  servers), a folder's button only its servers (subfolders indented); the network drive actions
+  stay in the full menu. A drive's context menu opens under its button too.
+
 ## [0.14.0] - 2026-11-01
 
 ### Added

@@ -64,17 +64,42 @@ fn every_builtin_passes_the_contrast_check() {
     }
 }
 
-/// Solarized and Nord bring their own terminal colours, which differ from Fluent's.
+/// The palette themes bring their own terminal colours, which differ from Fluent's, in both
+/// modes.
 #[test]
-fn solarized_and_nord_have_their_terminals() {
-    let fluent = look("fluent-dark", DEFAULT_ACCENT.dark).expect("fluent");
-    for id in ["solarized-dark", "nord-dark"] {
-        let tokens = look(id, DEFAULT_ACCENT.dark).expect("a look");
-        assert_ne!(tokens.terminal, fluent.terminal, "{id}");
+fn the_palette_themes_have_their_terminals() {
+    let fluent_light = look("fluent-light", DEFAULT_ACCENT.light).expect("fluent");
+    let fluent_dark = look("fluent-dark", DEFAULT_ACCENT.dark).expect("fluent");
+    for family in [
+        "solarized",
+        "nord",
+        "gruvbox",
+        "dracula",
+        "catppuccin",
+        "tokyo-night",
+        "everforest",
+        "rose-pine",
+        "kanagawa",
+        "ayu",
+    ] {
+        let light = look(&format!("{family}-light"), DEFAULT_ACCENT.light).expect("a look");
+        let dark = look(&format!("{family}-dark"), DEFAULT_ACCENT.dark).expect("a look");
+        assert!(!light.dark && dark.dark, "{family}");
+        assert_ne!(light.terminal, fluent_light.terminal, "{family}");
+        assert_ne!(dark.terminal, fluent_dark.terminal, "{family}");
+        assert!(
+            !follows_system_accent(&format!("{family}-dark")),
+            "{family}"
+        );
     }
     let solarized = look("solarized-dark", DEFAULT_ACCENT.dark).expect("solarized");
     assert_eq!(
         solarized.terminal.background,
         iced::Color::from_rgb8(0x00, 0x2b, 0x36)
+    );
+    let dracula = look("dracula-dark", DEFAULT_ACCENT.dark).expect("dracula");
+    assert_eq!(
+        dracula.terminal.background,
+        iced::Color::from_rgb8(0x28, 0x2a, 0x36)
     );
 }

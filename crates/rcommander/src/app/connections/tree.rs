@@ -200,6 +200,25 @@ impl TreeState {
         }
     }
 
+    /// The folders and connections of the level `parent` (the root for `None`), in their
+    /// order; `None` for a folder that is gone.
+    pub fn level(&self, parent: Option<FolderId>) -> Option<(&[FolderNode], &[Connection])> {
+        match parent {
+            None => Some((
+                self.tree.folders.as_slice(),
+                self.tree.connections.as_slice(),
+            )),
+            Some(id) => self
+                .folder(id)
+                .map(|node| (node.folders.as_slice(), node.connections.as_slice())),
+        }
+    }
+
+    /// Whether the drive bar shows the folder `id` as a button (RC-100-63).
+    pub fn on_bar(&self, id: FolderId) -> bool {
+        self.tree.bar_folders.contains(&id)
+    }
+
     /// The shared credential `id`, in whichever folder.
     pub fn credential(&self, id: CredentialId) -> Option<&Credential> {
         self.credentials()

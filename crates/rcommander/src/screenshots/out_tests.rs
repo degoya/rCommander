@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use super::{MANIFEST, Manifest, OutDir, Taken, write_manifest, write_png};
+use super::{MANIFEST, Manifest, OutDir, Skipped, Taken, write_manifest, write_png};
 
 #[test]
 fn a_relative_folder_is_refused() {
@@ -98,12 +98,40 @@ fn the_manifest_says_what_was_taken() {
             width: 1920,
             height: 1200,
         }],
+        skipped: Vec::new(),
     };
     write_manifest(&path, &manifest).expect("written");
     let read: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
     assert_eq!(read["ok"], true);
     assert!(read.get("error").is_none());
+    assert!(
+        read.get("skipped").is_none(),
+        "nothing skipped, nothing said"
+    );
     assert_eq!(read["shots"][0]["file"], "a.png");
     assert_eq!(read["shots"][0]["width"], 1920);
+}
+
+/// RC-100-56: a scene skipped on this machine is named with its reason.
+#[test]
+fn the_manifest_names_a_skipped_scene() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let out = OutDir::prepare(temp.path()).expect("out");
+    let path = out.manifest().expect("path");
+    let manifest = Manifest {
+        version: "0.0.0",
+        ok: true,
+        error: None,
+        shots: Vec::new(),
+        skipped: vec![Skipped {
+            name: "wsl-theme".to_owned(),
+            reason: "no WSL".to_owned(),
+        }],
+    };
+    write_manifest(&path, &manifest).expect("written");
+    let read: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
+    assert_eq!(read["skipped"][0]["name"], "wsl-theme");
+    assert_eq!(read["skipped"][0]["reason"], "no WSL");
 }

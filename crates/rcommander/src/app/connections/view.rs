@@ -7,10 +7,12 @@
 
 mod form;
 mod import;
+mod menu;
 mod rdm_import;
 mod remote;
 mod sources;
 mod tc_import;
+mod toolbar;
 mod tree;
 mod vault_prompt;
 
@@ -39,6 +41,8 @@ pub const FILTER_FIELD: &str = "rcommander.connections.filter";
 pub const TREE_SCROLL_ID: &str = "rcommander.connections.tree";
 /// The tree as a stop of the focus ring (RC-080-16).
 pub const TREE_STOP_ID: &str = "rcommander.connections.tree_stop";
+/// The tree's side, which its context menu is placed in (RC-100-63).
+pub const TREE_SIDE_ID: &str = "rcommander.connections.tree_side";
 /// The master-password field.
 pub const VAULT_FIELD: &str = "rcommander.connections.vault";
 

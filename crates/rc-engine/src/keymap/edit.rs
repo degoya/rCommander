@@ -10,7 +10,10 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Binding, Chord, KeyContext, Keymap, Override, Overrides, theme_keys::theme_binding};
+use super::{
+    Binding, Chord, KeyContext, Keymap, Override, Overrides, theme_keys::theme_binding,
+    workspace_keys::workspace_binding,
+};
 use crate::Command;
 
 /// Why the window keeps a chord for itself: no row runs on it but its own.
@@ -130,8 +133,8 @@ impl Keymap {
             })
     }
 
-    /// `chord` runs the standard binding `name` from now on - or the theme key `name` names
-    /// (RC-100-55) -, beside its other keys; whatever ran on it before no longer does, and a
+    /// `chord` runs the standard binding `name` from now on - or the theme key (RC-100-55) or
+    /// the workspace key (RC-100-68) `name` names -, beside its other keys; whatever ran on it before no longer does, and a
     /// reservation of it ends.
     ///
     /// # Errors
@@ -151,7 +154,9 @@ impl Keymap {
                 chord,
                 ..template.clone()
             },
-            None => theme_binding(chord, name).ok_or(Refusal::UnknownName)?,
+            None => theme_binding(chord.clone(), name)
+                .or_else(|| workspace_binding(chord, name))
+                .ok_or(Refusal::UnknownName)?,
         };
         self.place(binding);
         Ok(())

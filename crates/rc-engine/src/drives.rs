@@ -127,10 +127,15 @@ pub struct Drive {
     pub volume: Option<String>,
     pub space: Option<DriveSpace>,
     /// A server's folders in the connection tree, from the root down; empty at the root and for
-    /// every other entry. The drive bar shows a folder as a button that opens the menu at its
-    /// servers, every one of them.
+    /// every other entry.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub folder: Vec<String>,
+    /// The folders above a server the drive bar shows as buttons that open the menu at their
+    /// servers, each as the length of its path in [`Drive::folder`], shallowest first: `[1]` for
+    /// the top-level folder alone (the default), `[1, 2]` when its marked subfolder is one too
+    /// (RC-100-63). Empty for every other entry.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folder_buttons: Vec<usize>,
     /// A server the drive bar shows as a button of its own: a connection the manager marks
     /// (RC-050-04; by default those of the tree's root level) or a quick connection. The drive
     /// menu lists every server, marked or not.

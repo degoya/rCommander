@@ -447,16 +447,24 @@ async fn a_server_in_a_folder_carries_its_folders_from_the_root_down() {
             .await
             .expect("lists"),
     );
-    let servers: Vec<(&str, Vec<String>)> = drives
+    let servers: Vec<(&str, Vec<String>, Vec<usize>)> = drives
         .iter()
         .filter(|drive| drive.group == DriveGroup::Servers)
-        .map(|drive| (drive.label.as_str(), drive.folder.clone()))
+        .map(|drive| {
+            let buttons = drive.folder_buttons.clone();
+            (drive.label.as_str(), drive.folder.clone(), buttons)
+        })
         .collect();
+    // The tree's order, a level's folders first (RC-100-63); the top-level folder is a button.
     assert_eq!(
         servers,
         [
-            ("top", Vec::new()),
-            ("deep", vec!["Work".to_owned(), "Staging".to_owned()]),
+            (
+                "deep",
+                vec!["Work".to_owned(), "Staging".to_owned()],
+                vec![1]
+            ),
+            ("top", Vec::new(), Vec::new()),
         ]
     );
 }

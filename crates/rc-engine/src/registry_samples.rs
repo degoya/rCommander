@@ -342,5 +342,6 @@ pub(super) fn one_of_each() -> Vec<Command> {
     .into_iter()
     .chain(super::samples_more::more())
     .chain(crate::tabs::one_of_each())
+    .chain(crate::workspaces::one_of_each())
     .collect()
 }

@@ -11,6 +11,17 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.15.0
+
+- Eight more colour themes, each light and dark: Gruvbox, Dracula, Catppuccin, Tokyo Night, Everforest, Rosé Pine, Kanagawa and Ayu.
+- Coming back from another program reads the local panels again, so a file you just saved appears; the cursor stays where it was.
+- The addresses on the About page open in your browser; a button beside each copies it.
+- On Linux the dialogs use the same font as the main window, and tiling window managers can float them by the window class rcommander-popup.
+- On Windows the menu bar and its menus now take the theme's colours; the Windows menu is still a choice in Settings.
+- The drive bar's menus open right under the button you click, » lists exactly the drives and servers that did not fit, and a folder's button lists only its servers.
+- Workspaces: save what both panels show - tabs, folders, servers, terminals, the divider, even a theme - under a name and bring it back in one step with Ctrl+Shift+W, the command palette, the Workspaces menu or a key of its own; one can open at every start.
+- The connection manager has a toolbar and a right-click menu to rename, move up and down, indent and outdent; entries keep the order you give them, dragging shows where they land, and any folder can get its own drive bar button.
+
 ## 0.14.0
 
 - Give each WSL distribution its own light and dark theme: a panel on it, its tab and its terminal take those colours, so you see at a glance where you are.

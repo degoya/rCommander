@@ -11,12 +11,14 @@
 //! the function keys and the keyboard reference say the same. The palette itself is a window
 //! key, not a registry command: there is nothing in it for MCP, which calls the commands directly.
 //! The menu bar (`menu_bar.rs`, RC-080-18) runs the palette's rows by their names. The colour
-//! themes are rows too, one per theme and mode (RC-100-55, `themes.rs`).
+//! themes are rows too, one per theme and mode (RC-100-55, `themes.rs`), and so are the
+//! workspaces, one each (RC-100-68, `workspaces.rs`).
 
 pub mod menu_bar;
 pub mod reach;
 pub mod themes;
 mod view;
+pub mod workspaces;
 
 use iced::widget::{Id, operation};
 use rc_engine::{Chord, Command, Keymap};
@@ -200,9 +202,12 @@ fn entry(name: &str, keys: String, action: Action) -> Entry {
     }
 }
 
-/// The words of a row's name: its `keys.` key's, or a theme key's (RC-100-55).
+/// The words of a row's name: its `keys.` key's, or a theme key's (RC-100-55), or a workspace
+/// key's (RC-100-68).
 pub fn label(name: &str) -> String {
-    themes::label(name).unwrap_or_else(|| i18n::code_text("keys", name))
+    themes::label(name)
+        .or_else(|| workspaces::label(name))
+        .unwrap_or_else(|| i18n::code_text("keys", name))
 }
 
 impl Palette {
@@ -291,6 +296,7 @@ impl App {
     pub(super) fn open_palette(&mut self) -> Vec<Effect> {
         let mut entries = entries(&self.keymap, &reach::standard(), self.drive_bar.network);
         themes::add_rows(&mut entries, &themes::known());
+        workspaces::add_rows(&mut entries, &workspaces::rows());
         self.palette = Some(Palette::new(entries));
         vec![Effect::Task(operation::focus(Id::new(FIELD_ID)))]
     }
@@ -343,7 +349,11 @@ impl App {
         self.palette = None;
         match action {
             Action::Press(chord) => self.on_key(chord, false),
-            Action::Run(command) => vec![Effect::Dispatch(self.active, vec![*command])],
+            // A workspace's row applies it with its notes for the status bar (RC-100-68).
+            Action::Run(command) => match *command {
+                Command::ApplyWorkspace { id } => self.apply_workspace_now(id),
+                command => vec![Effect::Dispatch(self.active, vec![command])],
+            },
             Action::Bound(command) => self.run_bound(*command),
             Action::Open(Surface::Settings) => self.apply(Message::Settings(SettingsMessage::Open)),
             Action::Open(Surface::Database) => self.apply(Message::Database(DatabaseMsg::Open)),

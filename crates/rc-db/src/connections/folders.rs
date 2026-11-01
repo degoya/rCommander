@@ -9,7 +9,9 @@ use crate::{
     connections::{
         Connection, ConnectionError, ConnectionFolder, ConnectionTree, Credential, FolderDeletion,
         FolderId, FolderNode, MAX_DEPTH, TreeResult, connection_from_row, credentials,
-        folder_from_row, select_connections, select_folders, validate, write_error,
+        folder_from_row,
+        order::{self, Kind},
+        select_connections, select_folders, validate, write_error,
     },
 };
 
@@ -116,8 +118,10 @@ impl Db {
         Ok(folder)
     }
 
-    /// Moves a folder, with everything in it, into `parent` (the root when `None`): at
-    /// `sort_order`, or after the parent's last folder.
+    /// Moves a folder, with everything in it, into `parent` (the root when `None`): to the
+    /// position `sort_order` among the parent's folders (0 is the first; past the last is the
+    /// end), or after the last one for `None`. Both levels are numbered densely again
+    /// (RC-100-63); moving within its own parent reorders it.
     ///
     /// # Errors
     ///
@@ -141,20 +145,23 @@ impl Db {
             return Err(ConnectionError::FolderTooDeep { max: MAX_DEPTH });
         }
         require_free_name(&mut tx, parent, &current.name, Some(id)).await?;
-        let sort_order = match sort_order {
-            Some(order) => order,
-            None => next_sort_order(&mut tx, parent).await?,
-        };
         sqlx::query(
-            "UPDATE connection_folders SET parent_id = ?, sort_order = ?, \
+            "UPDATE connection_folders SET parent_id = ?, \
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
         )
         .bind(parent.map(|parent| parent.0))
-        .bind(sort_order)
         .bind(id.0)
         .execute(&mut *tx)
         .await
         .map_err(|error| write_error(error, &current.name))?;
+        order::place(
+            &mut tx,
+            Kind::Folders,
+            id.0,
+            (current.parent_id, parent),
+            sort_order,
+        )
+        .await?;
         let folder = fetch(&mut tx, id).await?;
         tx.commit().await?;
         Ok(folder)
@@ -353,6 +360,7 @@ pub(crate) fn build_tree(
         connections: children.connections.remove(&None).unwrap_or_default(),
         credentials: children.credentials.remove(&None).unwrap_or_default(),
         last_used: None,
+        bar_folders: Vec::new(),
     }
 }
 

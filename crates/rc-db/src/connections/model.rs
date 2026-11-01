@@ -363,6 +363,10 @@ pub struct ConnectionTree {
     /// (RC-050-15); the engine fills it in, the database's tree leaves it `None`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_used: Option<ConnectionId>,
+    /// The folders the drive bar shows as buttons of their own, in the tree's order
+    /// (RC-100-63); the engine fills it in, the database's tree leaves it empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bar_folders: Vec<FolderId>,
 }
 
 /// A folder with what it holds, in display order.

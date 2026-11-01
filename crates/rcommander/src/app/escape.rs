@@ -50,6 +50,7 @@ impl App {
             || self.archive.is_some()
             || self.checksum_has_keys()
             || (manager && self.connections.is_some())
+            || (self.workspaces.is_some() && self.has_keys(DialogWindow::Workspaces))
             || self.ssh_exec_has_keys()
             || self.login_scripts_have_keys()
             || self.multi_rename.is_some()

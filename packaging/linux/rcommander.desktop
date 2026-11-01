@@ -16,5 +16,6 @@ Exec=rcommander
 Icon=rcommander
 Terminal=false
 StartupNotify=true
+StartupWMClass=rcommander
 Categories=System;FileTools;FileManager;
 Keywords=files;file manager;commander;ssh;sftp;ftp;terminal;

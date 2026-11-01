@@ -43,6 +43,7 @@ mod terminal;
 mod theme;
 mod update;
 mod vault;
+mod workspaces;
 mod wsl;
 
 use std::future::Future;

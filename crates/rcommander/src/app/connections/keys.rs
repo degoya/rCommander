@@ -11,9 +11,11 @@
 //! has them while it is the stop: arrows, Home and End, PageUp and PageDown move the cursor, Left
 //! and Right close and open a folder, Enter opens a folder or shows a server in the active panel,
 //! Shift+Enter opens a terminal on an SSH server and Ctrl+Enter connects to it (owner, 2026-10-27:
-//! no walking to the buttons under the form), F2 renames, F7 makes a folder, F8 or Delete deletes after a question, Insert starts a
-//! new connection, Shift+F5 duplicates one, Space marks a connection for the drive bar, Ctrl+X
-//! and Ctrl+V move. A text
+//! no walking to the buttons under the form), F2 renames, F7 makes a folder, F8 or Delete deletes
+//! after a question, Insert starts a new connection, Shift+F5 duplicates one, Space marks a
+//! connection or a folder for the drive bar, Ctrl+X and Ctrl+V move, Ctrl+Up and Ctrl+Down move
+//! up and down, Ctrl+Left and Ctrl+Right outdent and indent, Shift+F10 and the context-menu key
+//! open the tree's menu, whose keys come first while it is open (RC-100-63). A text
 //! field of the form types, a choice changes with Left, Right or Space; Enter saves. On a button
 //! Enter and Space press it. Escape closes the dialog from every stop (RC-080-15); a question in
 //! the tree, the master-password prompt and an import page take it first. In the
@@ -25,6 +27,7 @@ use rc_engine::{AuthMethod, Chord, ConnectionKind, CredentialId, DefaultView, Tr
 
 use super::{
     ConnMsg, ConnectionManager, Pending,
+    arrange::Arrange,
     form::{Field, Form, theme_choices},
     tree_actions::unfocus,
     view::{FILTER_FIELD, TREE_SCROLL_ID, TREE_STOP_ID},
@@ -99,6 +102,12 @@ impl ConnectionManager {
                 return Vec::new();
             }
             None => {}
+        }
+        // The tree's open menu (`tree_menu.rs`) takes its keys; any other closes it.
+        if self.edit.menu.is_some()
+            && let Some(effects) = self.menu_key(chord)
+        {
+            return effects;
         }
         // An access key moved the ring to the stop it pressed or gave the keyboard.
         if captured && self.access_key(chord) {
@@ -192,6 +201,11 @@ impl ConnectionManager {
                 let to = self.tree.jump(true);
                 moved(self, to)
             }
+            ("ArrowUp", true, false, false) => self.arrange(Arrange::Up),
+            ("ArrowDown", true, false, false) => self.arrange(Arrange::Down),
+            ("ArrowLeft", true, false, false) => self.arrange(Arrange::Outdent),
+            ("ArrowRight", true, false, false) => self.arrange(Arrange::Indent),
+            ("F10", false, true, false) | ("ContextMenu", false, false, false) => self.open_menu(),
             ("ArrowLeft", false, false, false) => self.left(),
             ("ArrowRight", false, false, false) => {
                 if let Some(TreeItem::Folder(id)) = self.tree.current() {

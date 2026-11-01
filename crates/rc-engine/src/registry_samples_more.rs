@@ -244,6 +244,10 @@ pub(super) fn more() -> Vec<Command> {
             id: ConnectionId(1),
             favourite: true,
         },
+        Command::SetFolderFavourite {
+            id: crate::FolderId(1),
+            favourite: false,
+        },
         Command::ContextMenu { panel: None },
         Command::ChecksumDialog {
             panel: None,

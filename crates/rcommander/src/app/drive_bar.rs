@@ -13,15 +13,21 @@
 //! (`actions.rs`, `network.rs`, RC-010-16). In the drive menu Shift+F10 and the context-menu key
 //! open the context menu of the drive under the cursor (RC-080-16).
 //!
+//! A menu opened by a click stands under the button clicked (`place.rs`, RC-100-62) and lists
+//! what that button holds: the drive line's every entry, `»` the items the bar had no room for,
+//! a folder's button its servers (`menu::Scope`).
+//!
 //! The list is read off the job queue, so a slow drive never holds a key press: on start, every
 //! few seconds (new drives appear), and when the engine announces a change.
 
 pub mod actions;
 mod line;
 mod menu;
+mod menu_view;
 pub mod network;
 mod network_view;
 mod overflow;
+mod place;
 mod view;
 
 use std::{
@@ -30,7 +36,8 @@ use std::{
 };
 
 use iced::{
-    Subscription, Task,
+    Rectangle, Subscription, Task,
+    advanced::widget::Id,
     futures::{Stream, stream},
 };
 use rc_db::Db;
@@ -43,8 +50,9 @@ pub(super) use self::view::{above_panel, above_panels, with_menu};
 use self::{
     actions::{DriveAction, DriveContext, context_actions, menu_actions},
     line::{LineSettings, LineStep},
-    menu::{DriveMenu, MenuAction},
+    menu::{DriveMenu, MenuAction, Scope},
     network::{NetworkDialog, NetworkMsg},
+    place::{Anchor, Button},
 };
 use super::{App, Effect, Message, scroll};
 
@@ -106,8 +114,13 @@ pub enum DriveMessage {
     Pick(PanelId, String),
     /// The drive line was clicked: the panel's drive menu opens.
     OpenMenu(PanelId),
-    /// A folder of the connection tree was clicked: the menu opens at its servers.
-    OpenFolder(PanelId, String),
+    /// A folder of the connection tree was clicked, by its path from the root: its servers open
+    /// in the menu.
+    OpenFolder(PanelId, Vec<String>),
+    /// `»` was clicked on a bar that shows this many of its items: the others open in the menu.
+    OpenOverflow(PanelId, usize),
+    /// The bounds of the button a menu was opened from, if it is still drawn.
+    Anchored(Option<Rectangle>),
     /// A click beside the open menu.
     CloseMenu,
     /// The button at the bar's end: one bar or one per panel.
@@ -136,6 +149,8 @@ pub struct DriveBar {
     pub menu: Option<DriveMenu>,
     /// The open context menu of a drive.
     pub context: Option<DriveContext>,
+    /// Where the open drive menu or context menu stands.
+    pub anchor: Anchor,
     /// The open network drive dialog.
     pub dialog: Option<NetworkDialog>,
     /// What the drive lines show (`panels.drive_line_*`).
@@ -166,6 +181,7 @@ impl Default for DriveBar {
             layout: DriveBarLayout::default(),
             menu: None,
             context: None,
+            anchor: Anchor::default(),
             dialog: None,
             line: LineSettings::default(),
             listing: false,
@@ -192,8 +208,10 @@ impl App {
                     self.drive_bar.drives = drives;
                 }
                 if let Some(menu) = &mut self.drive_bar.menu {
-                    menu.actions = menu_actions(&self.drive_bar.drives, self.drive_bar.network);
-                    menu.clamp(self.drive_bar.drives.len());
+                    if menu.scope == Scope::All {
+                        menu.actions = menu_actions(&self.drive_bar.drives, self.drive_bar.network);
+                    }
+                    menu.clamp(&self.drive_bar.drives);
                 }
                 if std::mem::take(&mut self.drive_bar.again) {
                     return self.list_drives();
@@ -203,27 +221,29 @@ impl App {
                 self.drive_bar.menu = None;
                 return self.pick_drive(panel, &id);
             }
-            DriveMessage::OpenMenu(panel) => return self.open_drive_menu(panel),
-            DriveMessage::OpenFolder(panel, name) => {
-                let cursor = self
-                    .drive_bar
-                    .drives
-                    .iter()
-                    .position(|drive| drive.folder.first() == Some(&name))
-                    .unwrap_or(0);
-                let actions = menu_actions(&self.drive_bar.drives, self.drive_bar.network);
-                self.drive_bar.menu = Some(DriveMenu {
-                    panel,
-                    cursor,
-                    actions,
-                });
-                return self.menu_in_view();
+            DriveMessage::OpenMenu(panel) => {
+                let button = place::id(panel, Button::Line);
+                return self.open_drive_menu(panel, Scope::All, Some(button));
+            }
+            DriveMessage::OpenFolder(panel, path) => {
+                let button = place::id(panel, Button::Folder(&path));
+                return self.open_drive_menu(panel, Scope::Folder(path), Some(button));
+            }
+            DriveMessage::OpenOverflow(panel, shown) => {
+                let button = place::id(panel, Button::More);
+                return self.open_drive_menu(panel, Scope::Overflow(shown), Some(button));
+            }
+            DriveMessage::Anchored(bounds) => {
+                // An answer for a menu closed or opened by the keyboard meanwhile is left alone.
+                if self.drive_bar.anchor == Anchor::Measuring {
+                    self.drive_bar.anchor = bounds.map_or(Anchor::Fixed, Anchor::Under);
+                }
             }
             DriveMessage::CloseMenu => {
                 self.drive_bar.menu = None;
                 self.drive_bar.context = None;
             }
-            DriveMessage::Context(panel, id) => self.open_drive_context(panel, &id),
+            DriveMessage::Context(panel, id) => return self.open_drive_context(panel, &id),
             DriveMessage::Run(panel, action, drive) => {
                 return self.run_drive_action(panel, action, drive);
             }
@@ -245,7 +265,7 @@ impl App {
     /// An event of [`concerns`]: the menu opens, or the drives are read again.
     pub(super) fn on_drive_event(&mut self, event: EngineEvent) -> Vec<Effect> {
         if let EngineEvent::DriveMenu { panel } = event {
-            return self.open_drive_menu(panel);
+            return self.open_drive_menu(panel, Scope::All, None);
         }
         self.list_drives()
     }
@@ -267,11 +287,8 @@ impl App {
                 self.pick_drive(panel, &id)
             }
             MenuAction::Run(action) => self.run_drive_action(panel, action, None),
-            MenuAction::Switch(other) => self.open_drive_menu(other),
-            MenuAction::Context(id) => {
-                self.open_drive_context(panel, &id);
-                Vec::new()
-            }
+            MenuAction::Switch(other) => self.open_drive_menu(other, Scope::All, None),
+            MenuAction::Context(id) => self.open_drive_context(panel, &id),
         }
     }
 
@@ -280,19 +297,39 @@ impl App {
         drive_of(&self.drive_bar.drives, &self.pane(panel).state.path)
     }
 
-    fn open_drive_menu(&mut self, panel: PanelId) -> Vec<Effect> {
+    /// The menu of `panel` listing `scope`, under `button` of the panel's bar or drive line, or
+    /// where it always stood when opened by the keyboard (no button).
+    fn open_drive_menu(&mut self, panel: PanelId, scope: Scope, button: Option<Id>) -> Vec<Effect> {
         let current = self.current_drive(panel).map(|drive| drive.id.clone());
-        let actions = menu_actions(&self.drive_bar.drives, self.drive_bar.network);
-        self.drive_bar.menu = Some(
-            DriveMenu::new(panel, &self.drive_bar.drives, current.as_deref()).with_actions(actions),
-        );
-        self.menu_in_view()
+        let mut menu = DriveMenu::scoped(panel, scope, &self.drive_bar.drives, current.as_deref());
+        // The network drive actions are the full menu's, as in Total Commander's.
+        if menu.scope == Scope::All {
+            menu = menu.with_actions(menu_actions(&self.drive_bar.drives, self.drive_bar.network));
+        }
+        // One menu at a time: a drive's context menu still open closes (Alt+F1 over it).
+        self.drive_bar.context = None;
+        self.drive_bar.menu = Some(menu);
+        let mut effects = self.menu_in_view();
+        effects.extend(self.anchor_at(button));
+        effects
     }
 
-    /// The context menu of the drive `id`, when it offers anything, in place of the drive menu;
-    /// a drive without one (a WSL distribution, a server) leaves both as they are, as a Win32
-    /// menu entry without a context menu does.
-    fn open_drive_context(&mut self, panel: PanelId, id: &str) {
+    /// The open menus stand under the button `button`, measured now, or without one where they
+    /// always stood.
+    fn anchor_at(&mut self, button: Option<Id>) -> Option<Effect> {
+        let Some(button) = button else {
+            self.drive_bar.anchor = Anchor::Fixed;
+            return None;
+        };
+        self.drive_bar.anchor = Anchor::Measuring;
+        Some(Effect::Task(place::measure(button)))
+    }
+
+    /// The context menu of the drive `id`, when it offers anything, in place of the drive menu
+    /// and where it stood; from a bar button under that button. A drive without one (a WSL
+    /// distribution, a server) leaves both as they are, as a Win32 menu entry without a context
+    /// menu does.
+    fn open_drive_context(&mut self, panel: PanelId, id: &str) -> Vec<Effect> {
         let actions = self
             .drive_bar
             .drives
@@ -301,15 +338,20 @@ impl App {
             .map(|drive| context_actions(drive, self.drive_bar.network))
             .unwrap_or_default();
         if actions.is_empty() {
-            return;
+            return Vec::new();
         }
-        self.drive_bar.menu = None;
+        let from_menu = self.drive_bar.menu.take().is_some();
         self.drive_bar.context = Some(DriveContext {
             panel,
             drive: id.to_owned(),
             actions,
             cursor: 0,
         });
+        if from_menu {
+            return Vec::new();
+        }
+        let button = place::id(panel, Button::Drive(id));
+        self.anchor_at(Some(button)).into_iter().collect()
     }
 
     /// The open menu scrolled so its cursor is in view (a long list of servers after an
@@ -318,7 +360,7 @@ impl App {
         let Some(menu) = &self.drive_bar.menu else {
             return Vec::new();
         };
-        let (line, lines) = menu::cursor_line(&self.drive_bar.drives, &menu.actions, menu.cursor);
+        let (line, lines) = menu::cursor_line(&self.drive_bar.drives, menu);
         vec![scroll::keep_in_view(MENU_SCROLL_ID, line, lines)]
     }
 

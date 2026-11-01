@@ -6,40 +6,36 @@
 //! Symbol and Segoe UI Emoji on Windows), so no icon files ship. A folder of the connection tree
 //! is one button that opens the menu at its servers; in the menu its servers stand under its
 //! name. A network drive is named by the folder it is mapped to; a right click on a drive opens
-//! its context menu, which `network_view.rs` draws with the network drive dialogs.
+//! its context menu, which `network_view.rs` draws with the network drive dialogs. The open menu
+//! is `menu_view.rs`'s; each button a menu opens from carries the id it is measured by
+//! (`place.rs`).
 
 use iced::{
-    Alignment, Background, Border, Element, Length, Padding, Shadow, Vector,
+    Alignment, Background, Border, Element, Length, Shadow, Vector,
     mouse::Interaction,
     widget::{
-        Row, Space, column, container, mouse_area, responsive, row, scrollable, stack, text,
+        Row, Space, container, mouse_area, responsive, row, text,
         tooltip::{self, Tooltip},
     },
 };
 use rc_engine::{Drive, DriveGroup, DriveKind, DriveState, PanelId};
 
 use super::{
-    DriveBarLayout, DriveMenu, DriveMessage, MENU_SCROLL_ID, line,
-    menu::{MenuLine, lines},
-    network_view, overflow,
+    DriveBarLayout, DriveMessage, line, menu_view, network_view,
+    overflow::{self, BarItem},
+    place::{self, Button},
 };
 use crate::{
     app::{App, Message},
     i18n::t,
-    theme::{self, Tokens, fit},
+    theme::{self, Tokens},
 };
 
-/// Where the open menu starts below the window's top: under the bar and the drive line.
-pub(super) const MENU_TOP: f32 = 70.0;
-const MENU_WIDTH: f32 = 360.0;
-const MENU_MAX_HEIGHT: f32 = 440.0;
 pub(super) const SMALL: f32 = 12.0;
 /// The space between two groups of the bar (drives, WSL, servers).
 const GROUP_GAP: f32 = 10.0;
 /// A connection-tree folder's button: its symbol and the arrow of its menu (the drive line's too).
 const FOLDER: &str = "\u{1f4c1}";
-/// How far a server in a folder of the menu stands in from the folder's heading.
-const FOLDER_INDENT: f32 = 16.0;
 pub(super) const FOLDER_ARROW: &str = "\u{25be}";
 /// The overflow button of a bar too narrow for its drives.
 const MORE: &str = "\u{bb}";
@@ -76,37 +72,8 @@ pub(in crate::app) fn with_menu<'a>(
     base: Element<'a, Message>,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
-    let base = menu_layer(app, base, tokens);
+    let base = menu_view::menu_layer(app, base, tokens);
     network_view::with_network(app, base, tokens)
-}
-
-fn menu_layer<'a>(
-    app: &'a App,
-    base: Element<'a, Message>,
-    tokens: &'static Tokens,
-) -> Element<'a, Message> {
-    let Some(menu) = &app.drive_bar.menu else {
-        return base;
-    };
-    let card = container(menu_card(app, menu, tokens)).width(Length::FillPortion(1));
-    let beside = Space::new().width(Length::FillPortion(1));
-    let placed = match menu.panel {
-        PanelId::Left => row![card, beside],
-        PanelId::Right => row![beside, card],
-    };
-    let layer = mouse_area(
-        container(placed)
-            .padding(iced::Padding {
-                top: MENU_TOP,
-                right: 16.0,
-                bottom: 16.0,
-                left: 16.0,
-            })
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .on_press(Message::Drive(DriveMessage::CloseMenu));
-    stack![base, layer].into()
 }
 
 /// A bar of drive buttons acting on `panel`, or on the active panel when shared: as many as fit
@@ -114,17 +81,19 @@ fn menu_layer<'a>(
 /// unseen). The right-most bar ends with the layout button.
 fn bar<'a>(app: &'a App, panel: Option<PanelId>, tokens: &'static Tokens) -> Element<'a, Message> {
     let target = panel.unwrap_or(app.active);
+    let drives = &app.drive_bar.drives;
     let buttons = responsive(move |size| {
-        let items = bar_items(app, target, tokens);
-        let widths: Vec<f32> = items.iter().map(|(_, width)| *width).collect();
-        let more = overflow::button_width(&[MORE], SMALL);
-        let shown = overflow::visible_count(&widths, size.width, more);
-        let hidden = shown < items.len();
-        let mut line = Row::with_children(items.into_iter().take(shown).map(|(item, _)| item))
+        let items = overflow::bar_items(drives);
+        let shown = shown(drives, &items, size.width);
+        let current = app.current_drive(target);
+        let buttons = items[..shown]
+            .iter()
+            .map(|item| bar_button(drives, *item, current, target, tokens));
+        let mut line = Row::with_children(buttons)
             .spacing(overflow::SPACING)
             .align_y(Alignment::Center);
-        if hidden {
-            line = line.push(more_button(target, tokens));
+        if shown < items.len() {
+            line = line.push(more_button(target, shown, tokens));
         }
         container(line).width(Length::Fill).clip(true).into()
     })
@@ -136,56 +105,57 @@ fn bar<'a>(app: &'a App, panel: Option<PanelId>, tokens: &'static Tokens) -> Ele
     line.into()
 }
 
-/// The bar's buttons with their estimated widths, a gap between two groups.
-fn bar_items<'a>(
-    app: &'a App,
-    target: PanelId,
-    tokens: &'static Tokens,
-) -> Vec<(Element<'a, Message>, f32)> {
-    let current = app.current_drive(target);
-    let mut items: Vec<(Element<'a, Message>, f32)> = Vec::new();
-    let mut group = None;
-    // The top-level folders drawn so far: each is one button, whatever it holds.
-    let mut folders: Vec<&str> = Vec::new();
-    for drive in &app.drive_bar.drives {
-        // A server is a button of its own when marked; its folder's button reaches it anyway.
-        let own = drive.group != DriveGroup::Servers || drive.favourite;
-        let folder = drive
-            .folder
-            .first()
-            .map(String::as_str)
-            .filter(|top| !folders.contains(top));
-        if !own && folder.is_none() {
-            continue;
-        }
-        if group.is_some_and(|group| group != drive.group) {
-            items.push((Space::new().width(GROUP_GAP).into(), GROUP_GAP));
-        }
-        group = Some(drive.group);
-        if let Some(top) = folder {
-            folders.push(top);
-            let inside = current
-                .is_some_and(|current| current.folder.first().map(String::as_str) == Some(top));
-            let width = overflow::button_width(&[FOLDER, top, FOLDER_ARROW], SMALL);
-            items.push((folder_button(top, target, inside, tokens), width));
-        }
-        if own {
-            let shown = current.is_some_and(|current| current.id == drive.id);
-            let width =
-                overflow::button_width(&[kind_symbol(drive.kind), short_label(drive)], SMALL);
-            items.push((drive_button(drive, target, shown, tokens), width));
-        }
-    }
-    items
+/// How many of the bar's `items` fit `width`, the rest behind `»`.
+fn shown(drives: &[Drive], items: &[BarItem<'_>], width: f32) -> usize {
+    let widths: Vec<f32> = items.iter().map(|item| item_width(drives, *item)).collect();
+    let more = overflow::button_width(&[MORE], SMALL);
+    overflow::visible_count(&widths, width, more)
 }
 
-/// `»`: the drives that do not fit, in the drive menu.
-fn more_button<'a>(target: PanelId, tokens: &'static Tokens) -> Element<'a, Message> {
+/// The estimated width of one of the bar's items.
+fn item_width(drives: &[Drive], item: BarItem<'_>) -> f32 {
+    match item {
+        BarItem::Gap => GROUP_GAP,
+        BarItem::Folder(path) => {
+            overflow::button_width(&[FOLDER, folder_name(path), FOLDER_ARROW], SMALL)
+        }
+        BarItem::Drive(index) => {
+            let drive = &drives[index];
+            overflow::button_width(&[kind_symbol(drive.kind), short_label(drive)], SMALL)
+        }
+    }
+}
+
+/// One of the bar's items for `target`, whose drive is `current`.
+fn bar_button<'a>(
+    drives: &'a [Drive],
+    item: BarItem<'a>,
+    current: Option<&Drive>,
+    target: PanelId,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    match item {
+        BarItem::Gap => Space::new().width(GROUP_GAP).into(),
+        BarItem::Folder(path) => {
+            let inside = current.is_some_and(|current| current.folder.starts_with(path));
+            folder_button(path, target, inside, tokens)
+        }
+        BarItem::Drive(index) => {
+            let drive = &drives[index];
+            let shown = current.is_some_and(|current| current.id == drive.id);
+            drive_button(drive, target, shown, tokens)
+        }
+    }
+}
+
+/// `»`: the items that do not fit, all `shown` before them, in a menu of their own.
+fn more_button<'a>(target: PanelId, shown: usize, tokens: &'static Tokens) -> Element<'a, Message> {
     let face = container(small(MORE))
+        .id(place::id(target, Button::More))
         .padding([2, 7])
         .style(move |_| button_style(tokens, false));
     let button = mouse_area(face)
-        .on_press(Message::Drive(DriveMessage::OpenMenu(target)))
+        .on_press(Message::Drive(DriveMessage::OpenOverflow(target, shown)))
         .interaction(Interaction::Pointer);
     with_tooltip(button.into(), t!("drives.more").to_owned(), tokens)
 }
@@ -201,6 +171,7 @@ fn drive_button<'a>(
             .spacing(4)
             .align_y(Alignment::Center),
     )
+    .id(place::id(target, Button::Drive(&drive.id)))
     .padding([2, 7])
     .style(move |_| button_style(tokens, current));
     let button = mouse_area(face)
@@ -213,26 +184,34 @@ fn drive_button<'a>(
     with_tooltip(button.into(), tooltip_text(drive), tokens)
 }
 
-/// A folder of the connection tree: opens the menu at its servers.
+/// The name a folder's button shows: the folder's own, its last on the path.
+fn folder_name(path: &[String]) -> &str {
+    path.last().map_or("", String::as_str)
+}
+
+/// A folder of the connection tree, by its path: opens its servers in a menu under it. The
+/// tooltip names the whole path.
 fn folder_button<'a>(
-    name: &'a str,
+    path: &'a [String],
     target: PanelId,
     current: bool,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let face = container(
-        row![small(FOLDER), small(name), small(FOLDER_ARROW)]
+        row![small(FOLDER), small(folder_name(path)), small(FOLDER_ARROW)]
             .spacing(4)
             .align_y(Alignment::Center),
     )
+    .id(place::id(target, Button::Folder(path)))
     .padding([2, 7])
     .style(move |_| button_style(tokens, current));
     let button = mouse_area(face)
         .on_press(Message::Drive(DriveMessage::OpenFolder(
             target,
-            name.to_owned(),
+            path.to_vec(),
         )))
         .interaction(Interaction::Pointer);
+    let name = path.join(" / ");
     with_tooltip(button.into(), t!("drives.folder", name = name), tokens)
 }
 
@@ -248,94 +227,6 @@ fn layout_button<'a>(layout: DriveBarLayout, tokens: &'static Tokens) -> Element
         .on_press(Message::Drive(DriveMessage::ToggleLayout))
         .interaction(Interaction::Pointer);
     with_tooltip(button.into(), hint.to_owned(), tokens)
-}
-
-fn menu_card<'a>(app: &'a App, menu: &DriveMenu, tokens: &'static Tokens) -> Element<'a, Message> {
-    let drives = &app.drive_bar.drives;
-    let mut items: Vec<Element<'a, Message>> = lines(drives, &menu.actions)
-        .into_iter()
-        .map(|line| match line {
-            MenuLine::Group(group) => group_header(group, tokens),
-            MenuLine::Folder(folder) => folder_header(folder, tokens),
-            MenuLine::Entry(index) => {
-                menu_row(&drives[index], menu.panel, index == menu.cursor, tokens)
-            }
-            MenuLine::Actions => {
-                container(small(t!("drives.group_network")).color(tokens.text_secondary))
-                    .padding([4, 8])
-                    .into()
-            }
-            MenuLine::Action(index, action) => {
-                network_view::action_row(action, menu.panel, None, index == menu.cursor, tokens)
-            }
-        })
-        .collect();
-    if items.is_empty() {
-        items.push(
-            container(small(t!("drives.menu_empty")).color(tokens.text_secondary))
-                .padding([6, 10])
-                .into(),
-        );
-    }
-    container(scrollable(column(items).padding(4)).id(MENU_SCROLL_ID))
-        .width(MENU_WIDTH)
-        .max_height(MENU_MAX_HEIGHT)
-        .style(move |_| card_style(tokens))
-        .into()
-}
-
-fn group_header<'a>(group: DriveGroup, tokens: &'static Tokens) -> Element<'a, Message> {
-    let title = match group {
-        DriveGroup::Drives => t!("drives.group_drives"),
-        DriveGroup::Wsl => t!("drives.group_wsl"),
-        DriveGroup::Servers => t!("drives.group_servers"),
-    };
-    container(small(title).color(tokens.text_secondary))
-        .padding([4, 8])
-        .into()
-}
-
-/// A folder's servers in the menu stand indented under its path (`Work / Staging`), which lines
-/// up with the group headings.
-fn folder_header<'a>(folder: &[String], tokens: &'static Tokens) -> Element<'a, Message> {
-    let title = format!("\u{1f4c1} {}", folder.join(" / "));
-    container(small(title).color(tokens.text_secondary))
-        .padding([4, 8])
-        .into()
-}
-
-fn menu_row<'a>(
-    drive: &'a Drive,
-    panel: PanelId,
-    cursor: bool,
-    tokens: &'static Tokens,
-) -> Element<'a, Message> {
-    let line = row![
-        fit::line(kind_symbol(drive.kind)).width(22),
-        fit::line(display_name(drive)).width(Length::Fill),
-        fit::line(line_text(drive)).color(tokens.text_secondary),
-    ]
-    .spacing(6)
-    .padding(Padding::from([0, 8]).left(if drive.folder.is_empty() {
-        8.0
-    } else {
-        8.0 + FOLDER_INDENT
-    }))
-    .align_y(Alignment::Center);
-    let face = container(line)
-        .height(theme::ROW_HEIGHT)
-        .width(Length::Fill)
-        .align_y(Alignment::Center)
-        .clip(true)
-        .style(move |_| theme::row(tokens, cursor, true, false));
-    mouse_area(face)
-        .on_press(Message::Drive(DriveMessage::Pick(panel, drive.id.clone())))
-        .on_right_press(Message::Drive(DriveMessage::Context(
-            panel,
-            drive.id.clone(),
-        )))
-        .interaction(Interaction::Pointer)
-        .into()
 }
 
 pub(super) fn with_tooltip<'a>(

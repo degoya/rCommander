@@ -94,12 +94,14 @@ impl Engine {
         self.publish(EngineEvent::ConnectionTree { item, change });
     }
 
-    /// `connections.list`: the whole tree, with the connection used last.
+    /// `connections.list`: the whole tree, with the connection used last and the folders the
+    /// drive bar shows.
     pub(crate) async fn list_connections(&self) -> Result<Outcome, EngineError> {
         let db = self.db()?;
         let mut tree = db.connection_tree().await?;
         // A value that does not read is no reason to fail the list.
         tree.last_used = db.get(LAST_USED_KEY).await.ok().flatten();
+        tree.bar_folders = self.favourites().await.bar_folders(&tree);
         Ok(Outcome::ConnectionTree { tree })
     }
 

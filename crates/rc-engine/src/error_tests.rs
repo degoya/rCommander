@@ -235,6 +235,7 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::Rename(_)
             | EngineError::Tabs(_)
             | EngineError::Update(_)
+            | EngineError::Workspace(_)
             | EngineError::RenameBusy
             | EngineError::RenameNoChanges
             | EngineError::RenameNothingToUndo

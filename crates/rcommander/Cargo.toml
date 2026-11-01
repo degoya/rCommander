@@ -33,6 +33,8 @@ rc-mcp = { path = "../rc-mcp" }
 # `rcommander plugin new|package|verify|keygen|conformance` (RC-100-12): the packager, the verifier
 # and the conformance run.
 rc-plugin-host = { path = "../rc-plugin-host" }
+# `fc-match` for the system's font families on Linux, without a console window (RC-100-71).
+rc-process = { path = "../rc-process" }
 rc-term = { path = "../rc-term" }
 rc-term-widget = { path = "../rc-term-widget" }
 # The hidden `apply-update` and the recovery before the window opens (RC-100-06).

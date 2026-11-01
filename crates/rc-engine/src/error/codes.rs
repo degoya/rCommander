@@ -32,8 +32,9 @@ macro_rules! codes {
             /// [`rc_remote::SftpError::ALL_CODES`], a certificate decision's one of
             /// [`crate::CertificateError::ALL_CODES`], a network drive's one of
             /// [`crate::NetworkDriveError::ALL_CODES`], a plugin command's one of
-            /// [`crate::PluginAdminError::ALL_CODES`] and a secret source's one of
-            /// [`crate::SecretSourceError::ALL_CODES`].
+            /// [`crate::PluginAdminError::ALL_CODES`], a secret source's one of
+            /// [`crate::SecretSourceError::ALL_CODES`] and a workspace's one of
+            /// [`crate::WorkspaceError::ALL_CODES`].
             pub const ALL_CODES: &[&str] = &[$($code,)*];
 
             /// The stable code.
@@ -164,5 +165,6 @@ codes! {
         EngineError::Plugin(error) => error.code(),
         EngineError::SecretSource(error) => error.code(),
         EngineError::Update(error) => error.code(),
+        EngineError::Workspace(error) => error.code(),
     }
 }

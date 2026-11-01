@@ -1,19 +1,33 @@
-//! The built-in themes' colours (RC-100-50): Fluent (WinUI's light and dark sets, `light.rs`,
-//! `dark.rs`), Mac (macOS only, `mac.rs`, RC-100-49), Classic (Total Commander's white list with a
-//! blue cursor, and Norton Commander's blue panels for the dark mode), High contrast, Solarized
-//! and Nord - each light and dark, each with its terminal colours. The engine names them
+//! The built-in themes' colours (RC-100-50, RC-100-65): Fluent (WinUI's light and dark sets,
+//! `light.rs`, `dark.rs`), Mac (macOS only, `mac.rs`, RC-100-49), Classic (Total Commander's white
+//! list with a blue cursor, and Norton Commander's blue panels for the dark mode), High contrast,
+//! Solarized, Nord, Gruvbox, Dracula, Catppuccin, Tokyo Night, Everforest, Rose Pine, Kanagawa and
+//! Ayu - each light and dark, each with its terminal colours. The engine names them
 //! (`rc_engine::settings::themes::BUILTIN_THEMES`); `builtin_tests.rs` holds the two lists and
 //! every look to WCAG AA's 4.5:1 for its text.
 //!
-//! Solarized (Ethan Schoonover, <https://ethanschoonover.com/solarized/>) and Nord (Arctic Ice
-//! Studio, <https://www.nordtheme.com/>) are MIT-licensed palettes, credited in `NOTICE`; their
-//! terminal colours are the palettes' own, their syntax colours lightened (on dark) or darkened
-//! (on light) where the original falls below 4.5:1 on the theme's surface.
+//! The palettes from Solarized on are MIT-licensed, each credited in `NOTICE` and in its file's
+//! comment: Solarized (Ethan Schoonover, <https://ethanschoonover.com/solarized/>), Nord (Arctic
+//! Ice Studio, <https://www.nordtheme.com/>), Gruvbox (Pavel Pertsev,
+//! <https://github.com/morhetz/gruvbox>), Dracula and its light Alucard
+//! (<https://draculatheme.com/>), Catppuccin Latte and Mocha (<https://catppuccin.com/>), Tokyo
+//! Night and Tokyo Night Light (Enkia, <https://github.com/tokyo-night/tokyo-night-vscode-theme>),
+//! Everforest, Rose Pine, Kanagawa and Ayu. Their terminal colours are the palettes' own where
+//! they ship them, their syntax colours lightened (on dark) or darkened (on light) where the
+//! original falls below 4.5:1 on the theme's surface.
 
+mod ayu;
+mod catppuccin;
 mod classic;
+mod dracula;
+mod everforest;
+mod gruvbox;
 mod high_contrast;
+mod kanagawa;
 mod nord;
+mod rose_pine;
 mod solarized;
+mod tokyo_night;
 
 use iced::Color;
 
@@ -94,6 +108,22 @@ pub fn look(id: &str, accent: Color) -> Option<Tokens> {
         "solarized-dark" => solarized::DARK.tokens(),
         "nord-light" => nord::LIGHT.tokens(),
         "nord-dark" => nord::DARK.tokens(),
+        "gruvbox-light" => gruvbox::LIGHT.tokens(),
+        "gruvbox-dark" => gruvbox::DARK.tokens(),
+        "dracula-light" => dracula::LIGHT.tokens(),
+        "dracula-dark" => dracula::DARK.tokens(),
+        "catppuccin-light" => catppuccin::LIGHT.tokens(),
+        "catppuccin-dark" => catppuccin::DARK.tokens(),
+        "tokyo-night-light" => tokyo_night::LIGHT.tokens(),
+        "tokyo-night-dark" => tokyo_night::DARK.tokens(),
+        "everforest-light" => everforest::LIGHT.tokens(),
+        "everforest-dark" => everforest::DARK.tokens(),
+        "rose-pine-light" => rose_pine::LIGHT.tokens(),
+        "rose-pine-dark" => rose_pine::DARK.tokens(),
+        "kanagawa-light" => kanagawa::LIGHT.tokens(),
+        "kanagawa-dark" => kanagawa::DARK.tokens(),
+        "ayu-light" => ayu::LIGHT.tokens(),
+        "ayu-dark" => ayu::DARK.tokens(),
         _ => return None,
     })
 }
@@ -116,6 +146,14 @@ pub fn name(id: &str) -> Option<&'static str> {
         "high-contrast-light" | "high-contrast-dark" => t!("theme.builtin.high_contrast"),
         "solarized-light" | "solarized-dark" => t!("theme.builtin.solarized"),
         "nord-light" | "nord-dark" => t!("theme.builtin.nord"),
+        "gruvbox-light" | "gruvbox-dark" => t!("theme.builtin.gruvbox"),
+        "dracula-light" | "dracula-dark" => t!("theme.builtin.dracula"),
+        "catppuccin-light" | "catppuccin-dark" => t!("theme.builtin.catppuccin"),
+        "tokyo-night-light" | "tokyo-night-dark" => t!("theme.builtin.tokyo_night"),
+        "everforest-light" | "everforest-dark" => t!("theme.builtin.everforest"),
+        "rose-pine-light" | "rose-pine-dark" => t!("theme.builtin.rose_pine"),
+        "kanagawa-light" | "kanagawa-dark" => t!("theme.builtin.kanagawa"),
+        "ayu-light" | "ayu-dark" => t!("theme.builtin.ayu"),
         _ => return None,
     })
 }

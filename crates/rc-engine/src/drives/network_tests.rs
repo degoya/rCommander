@@ -13,6 +13,7 @@ fn drive(id: &str, group: DriveGroup) -> Drive {
         space: None,
         folder: Vec::new(),
         favourite: false,
+        folder_buttons: Vec::new(),
         remote: None,
     }
 }

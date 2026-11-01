@@ -1,14 +1,15 @@
 //! Drawing a drive's context menu and the network drive dialogs (RC-010-16).
 //!
-//! The context menu is a card where the drive menu opens, over the panel it was opened for,
-//! titled with the drive; a click beside it closes it. A dialog is a small card over the dimmed
+//! The context menu is a card titled with the drive: under the drive's button when a right click
+//! on the bar opened it, else where the drive menu it replaces stood (`place.rs`, RC-100-62); a
+//! click beside it closes it. A dialog is a small card over the dimmed
 //! window that takes every click (`theme::layout`), or a window of its own (RC-080-23,
 //! `dialog_windows.rs`).
 
 use iced::{
-    Alignment, Element, Length,
+    Alignment, Element, Length, Size,
     mouse::Interaction,
-    widget::{Space, column, container, mouse_area, pick_list, row, stack, text_input},
+    widget::{column, container, mouse_area, pick_list, row, stack, text_input},
 };
 use rc_engine::PanelId;
 
@@ -16,7 +17,8 @@ use super::{
     DriveMessage,
     actions::{DriveAction, DriveContext},
     network::{MapForm, NetworkDialog, NetworkForm, NetworkMsg, Phase, REMOTE_FIELD, UnmapForm},
-    view::{MENU_TOP, card_style, display_name},
+    place::{self, Anchor},
+    view::{card_style, display_name},
 };
 use crate::{
     app::{App, Message, dialog_windows::DialogWindow},
@@ -46,8 +48,13 @@ pub(super) fn with_network<'a>(
         let layer = Message::overlay(title(dialog), card, layout::SMALL_DIALOG_WIDTH, tokens);
         return stack![base, layer].into();
     }
-    match &app.drive_bar.context {
-        Some(context) => stack![base, context_layer(app, context, tokens)].into(),
+    match app
+        .drive_bar
+        .context
+        .as_ref()
+        .and_then(|context| context_layer(app, context, tokens))
+    {
+        Some(layer) => stack![base, layer].into(),
         None => base,
     }
 }
@@ -102,10 +109,34 @@ fn action_symbol(action: DriveAction) -> &'static str {
     }
 }
 
-/// The context menu on its panel's side, under the drive bar.
+/// The context menu where its anchor says; nothing while its button is measured.
 fn context_layer<'a>(
     app: &'a App,
     context: &'a DriveContext,
+    tokens: &'static Tokens,
+) -> Option<Element<'a, Message>> {
+    match app.drive_bar.anchor {
+        Anchor::Measuring => None,
+        Anchor::Under(button) => {
+            // The title and the actions, one line each.
+            let height = place::card_height(context.actions.len() + 1, f32::INFINITY);
+            let size = Size::new(CONTEXT_WIDTH, height);
+            Some(place::layer(button, size, move |at| {
+                context_card(app, context, at.width, tokens)
+            }))
+        }
+        Anchor::Fixed => Some(place::fixed(
+            context.panel,
+            context_card(app, context, CONTEXT_WIDTH, tokens),
+        )),
+    }
+}
+
+/// The context menu's card, `width` wide: the drive's name, then its actions.
+fn context_card<'a>(
+    app: &'a App,
+    context: &'a DriveContext,
+    width: f32,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let title = app
@@ -128,30 +159,10 @@ fn context_layer<'a>(
             tokens,
         )
     }));
-    let card = container(column(items).padding(4))
-        .width(CONTEXT_WIDTH)
-        .style(move |_| card_style(tokens));
-    let beside = Space::new().width(Length::FillPortion(1));
-    let card = container(card).width(Length::FillPortion(1));
-    let placed = match context.panel {
-        PanelId::Left => row![card, beside],
-        PanelId::Right => row![beside, card],
-    };
-    // focus-ring: pointer only (the layer that closes the menu)
-    mouse_area(
-        container(placed)
-            .padding(iced::Padding {
-                top: MENU_TOP,
-                right: 16.0,
-                bottom: 16.0,
-                left: 16.0,
-            })
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .on_press(Message::Drive(DriveMessage::CloseMenu))
-    .on_right_press(Message::Drive(DriveMessage::CloseMenu))
-    .into()
+    container(column(items).padding(4))
+        .width(width)
+        .style(move |_| card_style(tokens))
+        .into()
 }
 
 fn map_card<'a>(form: &'a MapForm, tokens: &'static Tokens) -> Element<'a, Message> {

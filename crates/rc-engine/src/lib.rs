@@ -67,7 +67,8 @@
 //! column's folder counts run in the background per panel (`commands/dir_count.rs`).
 //! FTPS certificates the system roots do not vouch for wait for a person too (`certs.rs`,
 //! RC-070-02): the trusted ones live in the database, `certificates.answer` and
-//! `certificates.remove` are the window's alone.
+//! `certificates.remove` are the window's alone. Workspaces ([`workspaces`], RC-100-68) save what
+//! both panels show under a name; `workspaces.apply` makes the panels show one again.
 
 pub mod about;
 mod archives;
@@ -115,6 +116,7 @@ mod transfers;
 pub mod unpacked;
 mod updates;
 pub mod viewer;
+pub mod workspaces;
 
 use std::{
     collections::BTreeMap,
@@ -128,10 +130,6 @@ use rc_vault::Vault;
 use rc_vfs::{BackendId, IoCancel, LocalFs, TimeoutFs, Timeouts, Vfs, WslCatalog};
 use tokio::sync::broadcast;
 
-pub use archives::{ArchiveInfo, archive_file, shown_path};
-pub use certs::{
-    CertificateAnswer, CertificateError, CertificateQuestion, CertificateQuestionKind,
-};
 pub use commands::file_ops::{ExternalProgram, FileDialog};
 pub use commands::filter::QuickFilter;
 pub use commands::terminal::TerminalInfo;
@@ -141,7 +139,6 @@ pub use commands::{
     RenamePreset, SSH_SHELL, SSH_TERM, SavedList, SearchHandle, Unloadable, cd_command,
     shell_quote,
 };
-pub use comments::{DESCRIPTION_FILE, MAX_COMMENT};
 pub use connections::{
     AuthMethod, Connection, ConnectionDraft, ConnectionError, ConnectionFolder, ConnectionId,
     ConnectionKind, ConnectionPatch, ConnectionTree, DefaultView, FolderDeletion, FolderId,
@@ -155,7 +152,6 @@ pub use error::EngineError;
 pub use event::{EngineEvent, PanelChange, TerminalChange};
 pub use flat::{FlatSource, FlatView, MAX_FLAT_ENTRIES};
 pub use hostkeys::{HostKeyAnswer, HostKeyQuestion, HostKeyQuestionKind};
-pub use hotlist::HotlistEntry;
 pub use import::ssh_config_apply::{
     SshConfigHost, SshConfigReport, SshConfigSkip, SshConfigWarning,
 };
@@ -289,6 +285,8 @@ struct Inner {
     search_pages: Mutex<commands::search::SearchPages>,
     /// The self-update: its state, the download, the hand-over (RC-100-05 ... RC-100-07).
     updates: updates::UpdateDesk,
+    /// The workspace applied last and the turn of an apply (RC-100-68).
+    workspaces: workspaces::WorkspaceDesk,
 }
 
 struct State {
@@ -401,6 +399,7 @@ impl Engine {
                 plugins: OnceLock::new(),
                 search_pages: Mutex::default(),
                 updates: updates::UpdateDesk::default(),
+                workspaces: workspaces::WorkspaceDesk::default(),
             }),
         };
         engine.install_transfer_hooks();

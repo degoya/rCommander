@@ -10,5 +10,6 @@
   "terminal": "The right panel showing a terminal in place of its files: a shell started in the website backup folder of the demo project, the left panel still listing the website files",
   "lister": "Lister, the viewer over the main window, showing the website project's README.md: its headings, the build steps and the table of files",
   "settings": "The settings window on its first page, the list of pages on the left and the options of the page on the right",
-  "settings-themes": "The Themes tab of the settings' Appearance page in the dark look: the colour themes of the light and the dark mode - the built-in ones such as Fluent, Classic, Solarized and Nord, and an own dark theme named Evening - with the theme each mode draws with"
+  "settings-themes": "The Themes tab of the settings' Appearance page in the dark look: the colour themes of the light and the dark mode - the built-in ones such as Fluent, Classic, Solarized and Nord, and an own dark theme named Evening - with the theme each mode draws with",
+  "wsl-theme": "A WSL distribution in a theme of its own: the right panel on the Linux distribution's /usr folder, its list, header and tabs in the Solarized dark theme the distribution is given, beside the left panel on the demo folder in the window's Fluent dark look"
 }

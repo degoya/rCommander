@@ -1,24 +1,31 @@
-//! The left side: the filter, the tree's rows with the cursor, the name field of a new or
-//! renamed node, the delete question, and the tree's buttons. A row is one line of a fixed
-//! height: the name is cut at its column's end, the host in the middle (the whole value in a
-//! tooltip), and a list too narrow for both shows the names alone.
+//! The left side: the filter, the toolbar (`toolbar.rs`, RC-100-63), the tree's rows with the
+//! cursor, the name field of a new or renamed node, the delete question, and the tree's buttons;
+//! the context menu over it (`menu.rs`). A row is one line of a fixed height: the name is cut at
+//! its column's end, the host in the middle (the whole value in a tooltip), and a list too narrow
+//! for both shows the names alone. While a drag runs, a line shows where the node would go, or
+//! the folder it would go into is highlighted (`drop.rs`).
 
 use iced::{
-    Alignment, Element, Length,
-    widget::{Column, Space, button, column, container, mouse_area, responsive, row, scrollable},
+    Alignment, Background, Element, Length, Padding,
+    widget::{
+        Column, Space, button, column, container, mouse_area, responsive, row, scrollable, stack,
+    },
 };
 use rc_engine::TreeItem;
 
 use super::{
-    FILTER_FIELD, NAME_FIELD, TREE_SCROLL_ID, TREE_STOP_ID, cut, field, hint, label, path_cell,
-    wrap,
+    FILTER_FIELD, NAME_FIELD, TREE_SCROLL_ID, TREE_SIDE_ID, TREE_STOP_ID, cut, field, hint, label,
+    menu, path_cell, toolbar, wrap,
 };
 use crate::{
     app::{
         Message,
         connections::{
-            ConnMsg, ConnectionManager, Focus, NameFor, Pending, RdmImportMsg, import::ImportMsg,
+            ConnMsg, ConnectionManager, Focus, NameFor, Pending, RdmImportMsg,
+            drop::{DropAt, Zone},
+            import::ImportMsg,
             tree::Row,
+            tree_edit::TreeMsg,
         },
     },
     i18n::t,
@@ -27,6 +34,8 @@ use crate::{
 
 /// Pixels a level of the tree indents.
 const INDENT: f32 = 16.0;
+/// The insertion line's thickness.
+const LINE: f32 = 2.0;
 /// Below this width the list shows the names without the hosts.
 const HOST_MIN_WIDTH: f32 = 360.0;
 
@@ -41,7 +50,7 @@ pub(super) fn side<'a>(
     // The list's width decides whether the hosts fit beside the names.
     let list = responsive(move |size| {
         let rows = rows_view(manager, size.width >= HOST_MIN_WIDTH, tokens);
-        container(
+        let framed = container(
             scrollable(rows)
                 .id(TREE_SCROLL_ID)
                 .width(Length::Fill)
@@ -49,12 +58,15 @@ pub(super) fn side<'a>(
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(move |_| theme::panel(tokens, active))
-        .into()
+        .style(move |_| theme::panel(tokens, active));
+        // A drag that leaves the list ends without a drop (RC-100-63).
+        mouse_area(framed)
+            .on_exit(wrap(ConnMsg::Tree(TreeMsg::Leave)))
+            .into()
     });
     // The tree is one stop of the ring; the manager moves its cursor (`keys.rs`).
     let list = focus::Stop::choice(list, TREE_STOP_ID, None, None).id(TREE_STOP_ID);
-    let mut side = column![filter, Element::from(list)].spacing(8);
+    let mut side = column![filter, toolbar::bar(manager, tokens), Element::from(list)].spacing(8);
     if let Some(Pending::Delete {
         item,
         folders,
@@ -77,9 +89,14 @@ pub(super) fn side<'a>(
     .spacing(6)
     .wrap()
     .vertical_spacing(6);
-    side.push(buttons)
-        .push(hint(t!("connections.keys"), tokens))
-        .into()
+    let side = side
+        .push(buttons)
+        .push(hint(t!("connections.keys"), tokens));
+    let side = container(side)
+        .id(TREE_SIDE_ID)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    menu::over(manager, side.into(), tokens)
 }
 
 /// The buttons under the tree: their texts and messages; a new shared credential only while
@@ -169,7 +186,50 @@ fn rows_view<'a>(
     {
         list = list.push(name_field(text, 0));
     }
-    list.into()
+    list.push(end_zone(manager, tokens)).into()
+}
+
+/// The room under the last row: a drag released there goes to the end of the root, and the
+/// insertion line shows at its top while it would.
+fn end_zone<'a>(manager: &'a ConnectionManager, tokens: &'static Tokens) -> Element<'a, Message> {
+    let here = manager.drag.is_some() && manager.edit.hover == Some(DropAt::End);
+    let room = container(insertion_line(here, 0.0, true, tokens))
+        .width(Length::Fill)
+        .height(theme::ROW_HEIGHT * 3.0);
+    let mut area = mouse_area(room).on_release(wrap(ConnMsg::Tree(TreeMsg::DropEnd)));
+    if manager.drag.is_some() {
+        area = area.on_move(|_| wrap(ConnMsg::Tree(TreeMsg::HoverEnd)));
+    }
+    area.into()
+}
+
+/// The line a drop would insert at, `indent` pixels in, at the top (`top`) or the bottom of a
+/// row; nothing when not `shown`.
+fn insertion_line<'a>(
+    shown: bool,
+    indent: f32,
+    top: bool,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    if !shown {
+        return Space::new().into();
+    }
+    let line = container(Space::new().width(Length::Fill).height(LINE))
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(Background::Color(tokens.accent)),
+            ..container::Style::default()
+        });
+    let above = if top { 0.0 } else { theme::ROW_HEIGHT - LINE };
+    container(line)
+        .padding(Padding {
+            top: above,
+            left: indent,
+            ..Padding::ZERO
+        })
+        .width(Length::Fill)
+        .height(theme::ROW_HEIGHT)
+        .into()
 }
 
 /// One row: indent, folder sign, star or a credential's diamond, name and host (a credential's
@@ -200,6 +260,13 @@ fn row_view<'a>(
         TreeItem::Credential(_) => "\u{25C6}",
     };
     let cut_out = manager.clipboard == Some(item);
+    let dragging = manager.drag.is_some();
+    let hover = match manager.edit.hover {
+        Some(DropAt::Row(on, zone)) if dragging && on == item => Some(zone),
+        _ => None,
+    };
+    // The folder a drop would go into shows as the cursor does.
+    let cursor = cursor || hover == Some(Zone::Into);
     let font = if matches!(item, TreeItem::Folder(_)) {
         theme::UI_FONT_STRONG
     } else {
@@ -209,10 +276,16 @@ fn row_view<'a>(
     let mut line = row![
         Space::new().width(INDENT * tree_row.depth as f32),
         label(sign).width(16).color(tokens.accent),
-        name,
     ]
     .spacing(4)
     .align_y(Alignment::Center);
+    // A folder the drive bar shows as a button carries the star too (RC-100-63).
+    if let TreeItem::Folder(id) = item
+        && manager.tree.on_bar(id)
+    {
+        line = line.push(label("\u{2605}").color(tokens.accent));
+    }
+    let mut line = line.push(name);
     if hosts {
         line = line.push(path_cell(tree_row.detail, 2, true, tokens));
     }
@@ -223,11 +296,22 @@ fn row_view<'a>(
         .align_y(Alignment::Center)
         .clip(true)
         .style(move |_| theme::striped_row(tokens, cursor, active, cut_out, alternate));
-    mouse_area(shown)
+    let indent = INDENT * tree_row.depth as f32;
+    let marked = insertion_line(
+        matches!(hover, Some(Zone::Before | Zone::After)),
+        indent,
+        hover == Some(Zone::Before),
+        tokens,
+    );
+    let mut area = mouse_area(stack![shown, marked])
         .on_press(wrap(ConnMsg::Press(item)))
         .on_release(wrap(ConnMsg::Release(item)))
         .on_double_click(wrap(ConnMsg::Activate(item)))
-        .into()
+        .on_right_press(wrap(ConnMsg::Tree(TreeMsg::Context(item))));
+    if dragging {
+        area = area.on_move(move |point| wrap(ConnMsg::Tree(TreeMsg::Hover(item, point.y))));
+    }
+    area.into()
 }
 
 /// The field a new or changed name is typed into; Enter takes it, Escape drops it.

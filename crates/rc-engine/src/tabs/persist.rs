@@ -184,7 +184,7 @@ impl Engine {
     }
 
     /// Panel `panel` takes `set` as its tabs and shows its active tab.
-    pub(super) async fn show_tab_set(
+    pub(crate) async fn show_tab_set(
         &self,
         panel: PanelId,
         set: TabSet,

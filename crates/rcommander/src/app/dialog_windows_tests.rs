@@ -77,3 +77,15 @@ async fn a_dialog_windows_moves_leave_the_main_windows_place() {
         Some((1800.0, 300.0))
     );
 }
+
+/// On Linux every dialog window carries the popup class, `rcommander-popup` (RC-100-70).
+#[cfg(target_os = "linux")]
+#[test]
+fn a_dialog_window_carries_the_popup_class() {
+    let geometry = crate::app::window_state::Geometry::default();
+    let settings = super::dialog_settings(DialogWindow::Settings, geometry);
+    assert_eq!(
+        settings.platform_specific.application_id,
+        crate::platform::window_class::POPUP
+    );
+}

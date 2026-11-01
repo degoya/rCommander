@@ -61,6 +61,7 @@ mod theme;
 mod update;
 mod vault;
 mod viewer;
+mod workspaces;
 mod wsl;
 
 pub use backup::BackupToRequest;
@@ -85,6 +86,7 @@ pub use search::SearchRequest;
 pub use secrets::ImportKeyRequest;
 pub use ssh_exec::SshExecRequest;
 pub use vocabulary::{CommandClass, CommandSpec, CursorStep, CursorTarget};
+pub use workspaces::{CreateWorkspaceRequest, UpdateWorkspaceRequest};
 
 /// Every command group, once and in the order of [`COMMANDS`] (RC-080-48): a module of
 /// `registry/` each (its `COMMANDS` table and its `commands!` list of [`Command`] variants), of
@@ -139,6 +141,7 @@ macro_rules! command_groups {
             app,
             update,
             theme,
+            workspaces,
         ] }
     };
 }

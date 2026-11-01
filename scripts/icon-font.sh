@@ -43,6 +43,9 @@ GLYPHS=(
     beaker_20_regular            # Test
     arrow_up_20_regular          # Move up
     arrow_down_20_regular        # Move down
+    text_indent_increase_ltr_20_regular # Indent
+    text_indent_decrease_ltr_20_regular # Outdent
+    star_20_regular              # Star: the drive bar's mark
 )
 
 if [[ $# -gt 0 ]]; then

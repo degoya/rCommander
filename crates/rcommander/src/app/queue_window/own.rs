@@ -17,13 +17,16 @@ use crate::app::{App, Effect, Message, dialog_windows::DialogWindow, field_walk}
 
 impl App {
     /// The queue's share of every message before any dialog's: the focus moving between the
-    /// windows, a changed `queue.window_own`, and the keys while its own window has the keyboard.
+    /// windows (and the app's return from another program, `refocus.rs`), a changed
+    /// `queue.window_own`, and the keys while its own window has the keyboard.
     pub(in crate::app) fn queue_window_first(&mut self, message: &Message) -> Option<Vec<Effect>> {
         match message {
             Message::Queue(QueueMsg::Focused(id, focused)) => {
                 self.dialog_windows.focus(*id, *focused);
-                Some(Vec::new())
+                // The app's return from another program reads the panels again (RC-100-69).
+                Some(self.refocused(*id, *focused))
             }
+            Message::Refocus(switches) => Some(self.refresh_on_return(*switches)),
             Message::Engine(EngineEvent::SettingChanged { key }) if key == QUEUE_WINDOW_OWN_KEY => {
                 Some(vec![Effect::Task(self.queue_own_task())])
             }

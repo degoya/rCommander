@@ -10,6 +10,11 @@
 //! the bar may not take is stopped at `SC_KEYMENU`, wherever it came from. Every other message
 //! goes on to winit unchanged. F10 is not the menu's key here (RC-080-17).
 //!
+//! While the app draws the bar (`appearance.menu_bar_style` `drawn`, RC-100-66) muda's menu is
+//! taken off the window ([`detach`]) and the subclass stays alone: Alt and its letters reach
+//! winit and the drawn bar, and `SC_KEYMENU` is stopped but for Alt+Space, so Alt alone does not
+//! open the window's system menu ([`AltKeys::key_menu_passes`]).
+//!
 //! The same subclass makes muda's dark bar opaque: muda answers `WM_UAHDRAWMENU` and
 //! `WM_UAHDRAWMENUITEM` with GDI's `FillRect` and `DrawTextW`, which leave every pixel's alpha at
 //! 0. Where Windows composes the frame with that alpha (the owner's newest Windows 11) the dark
@@ -94,6 +99,10 @@ thread_local! {
     static KEYS: RefCell<AltKeys> = RefCell::new(AltKeys::default());
     /// Whether muda's dark drawing goes through the opaque buffer now ([`BarPaint::opaque`]).
     static OPAQUE: Cell<bool> = const { Cell::new(false) };
+    /// Whether `BufferedPaintInit` ran on this thread.
+    static BUFFERED: Cell<bool> = const { Cell::new(false) };
+    /// Whether [`alt_keys`] is on the main window.
+    static SUBCLASSED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Attaches `menu` to the live main `window` with `look` and opens it with Alt and the menus'
@@ -113,22 +122,64 @@ pub fn attach(window: &dyn window::Window, menu: &Menu, look: Look, letters: Vec
         return false;
     }
     OPAQUE.set(paint.opaque(look.dark));
-    if !paint.subclass() {
-        return true;
-    }
-    KEYS.with_borrow_mut(|keys| {
-        keys.letters = letters;
-        keys.active = look.shown && look.enabled;
-        keys.letters_free = look.alt_letters;
-    });
-    // SAFETY: no arguments; buffered painting on this thread, for the process's life. A failure
-    // leaves `BeginBufferedPaint` slower, not wrong.
-    unsafe { BufferedPaintInit() };
-    // SAFETY: the live window of this thread; the procedure reads only this thread's `KEYS` and
-    // `OPAQUE` and removes itself when the window is destroyed. A failure leaves the bar without
-    // Alt and drawn as muda draws it.
-    unsafe { SetWindowSubclass(hwnd, Some(alt_keys), SUBCLASS_ID, 0) };
+    KEYS.with_borrow_mut(|keys| keys.letters = letters);
+    follow(look);
+    subclass(hwnd);
     true
+}
+
+/// Takes `menu`, when it is attached, off the live main `window` without changing the client
+/// area's size (muda removes its own subclass with it), and gives Alt to the bar the app draws:
+/// the subclass stays or is put on, so Alt alone opens no system menu (RC-100-66).
+pub fn detach(window: &dyn window::Window, menu: Option<&Menu>, look: Look) {
+    let Some(handle) = crate::native_window::hwnd_of(window) else {
+        return;
+    };
+    let hwnd = hwnd(handle);
+    if let Some(menu) = menu {
+        keep_client(hwnd, || {
+            // SAFETY: the live main window `menu` is attached to, on its thread.
+            unsafe { menu.remove_for_hwnd(handle.get()) }.is_ok()
+        });
+    }
+    OPAQUE.set(false);
+    follow(look);
+    if !SUBCLASSED.get() {
+        subclass(hwnd);
+    }
+}
+
+/// What Alt does for `look`.
+fn follow(look: Look) {
+    KEYS.with_borrow_mut(|keys| {
+        keys.active = look.native() && look.enabled;
+        keys.letters_free = look.alt_letters;
+        keys.drawn = look.drawn;
+    });
+}
+
+/// Puts [`alt_keys`] on the window - on top again when it was there before muda's, a menu
+/// attached after [`detach`], since it wraps muda's dark drawing ([`opaque`]). Not with
+/// `RC_MENU_BAR_THEME=nosubclass`.
+fn subclass(hwnd: HWND) {
+    if !BarPaint::get().subclass() {
+        return;
+    }
+    if !BUFFERED.replace(true) {
+        // SAFETY: no arguments; buffered painting on this thread, for the process's life. A
+        // failure leaves `BeginBufferedPaint` slower, not wrong.
+        unsafe { BufferedPaintInit() };
+    }
+    // SAFETY: the live window of this thread; comctl32 allows taking a subclass off while it
+    // runs. The procedure reads only this thread's `KEYS` and `OPAQUE` and removes itself when
+    // the window is destroyed. A failure leaves the window without Alt's handling and the bar
+    // drawn as muda draws it.
+    unsafe {
+        if SUBCLASSED.get() {
+            RemoveWindowSubclass(hwnd, Some(alt_keys), SUBCLASS_ID);
+        }
+        SUBCLASSED.set(SetWindowSubclass(hwnd, Some(alt_keys), SUBCLASS_ID, 0) != FALSE);
+    }
 }
 
 /// Brings `menu`, attached to the live main `window`, from the look `from` to `to`.
@@ -137,11 +188,11 @@ pub fn apply(window: &dyn window::Window, menu: &Menu, from: Look, to: Look) {
         return;
     };
     let hwnd = hwnd(handle);
-    if from.shown != to.shown {
+    if from.native() != to.native() {
         keep_client(hwnd, || {
             // SAFETY: the live main window `menu` is attached to, on its thread.
             let changed = unsafe {
-                if to.shown {
+                if to.native() {
                     menu.show_for_hwnd(handle.get())
                 } else {
                     menu.hide_for_hwnd(handle.get())
@@ -156,10 +207,7 @@ pub fn apply(window: &dyn window::Window, menu: &Menu, from: Look, to: Look) {
         // SAFETY: as above. A look that cannot be set leaves the bar as it was.
         let _ = unsafe { menu.set_theme_for_hwnd(handle.get(), theme(paint, to.dark)) };
     }
-    KEYS.with_borrow_mut(|keys| {
-        keys.active = to.shown && to.enabled;
-        keys.letters_free = to.alt_letters;
-    });
+    follow(to);
 }
 
 /// The bar's look for the app's: muda draws it dark itself (`WM_UAHDRAWMENU`) unless `paint`
@@ -267,14 +315,18 @@ unsafe extern "system" fn alt_keys(
         }
         // A menu opened by its letter, also the one Windows opens by itself (owner 2026-10-25:
         // Alt+V in a terminal opened View though the letters were the terminal's): only a
-        // letter the bar may take gets through, so Alt+V reaches the shell or Claude Code.
-        WM_SYSCOMMAND if wparam & 0xFFF0 == SC_KEYMENU as WPARAM && lparam != 0 => {
+        // letter the bar may take gets through, so Alt+V reaches the shell or Claude Code. While
+        // the app draws the bar, Alt alone is stopped too (RC-100-66).
+        WM_SYSCOMMAND if wparam & 0xFFF0 == SC_KEYMENU as WPARAM => {
             let ctrl = held(VK_CONTROL);
-            let allowed = u32::try_from(lparam)
-                .ok()
-                .and_then(char::from_u32)
-                .is_some_and(|typed| KEYS.with_borrow(|keys| keys.letter(typed, ctrl).is_some()));
-            if !allowed {
+            let passes = KEYS.with_borrow(|keys| match lparam {
+                0 => keys.key_menu_passes(None, ctrl),
+                _ => u32::try_from(lparam)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .is_some_and(|typed| keys.key_menu_passes(Some(typed), ctrl)),
+            });
+            if !passes {
                 return 0;
             }
         }
@@ -284,6 +336,7 @@ unsafe extern "system" fn alt_keys(
         WM_NCDESTROY => {
             // SAFETY: the window is being destroyed; a subclass removes itself then.
             unsafe { RemoveWindowSubclass(hwnd, Some(alt_keys), SUBCLASS_ID) };
+            SUBCLASSED.set(false);
         }
         _ => {}
     }

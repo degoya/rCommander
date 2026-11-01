@@ -198,7 +198,8 @@ async fn a_move_changes_the_folder_and_appends() {
         .move_connection(web.id, None, Some(-5))
         .await
         .expect("back to the root, first");
-    assert_eq!((placed.folder_id, placed.sort_order), (None, -5));
+    // A position before the first is the first (RC-100-63).
+    assert_eq!((placed.folder_id, placed.sort_order), (None, 0));
 }
 
 #[tokio::test]

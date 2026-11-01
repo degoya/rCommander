@@ -25,6 +25,9 @@ impl App {
             }
             EngineEvent::Terminal { terminal, change } => self.terminal_changed(terminal, change),
             EngineEvent::HotlistChanged => self.hotlist_changed(),
+            // A workspace changed or was applied: the list is read again (RC-100-68).
+            EngineEvent::WorkspacesChanged => vec![Effect::Task(self.workspaces_task())],
+            EngineEvent::WorkspaceManager => self.open_workspaces(),
             EngineEvent::MaximizeTerminal { panel } => self.toggle_maximized(panel),
             EngineEvent::PasteImage { terminal } => self.paste_image(terminal),
             // A long listing broke off after it was shown: the panel keeps what arrived.

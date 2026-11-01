@@ -5,9 +5,8 @@
 //! The manager keeps no data of its own: the tree, the drive bar's marks, the vault's state and
 //! the login scripts are the engine's, read through commands (`jobs.rs`) and read again when
 //! the engine announces a change - so a connection an agent creates over MCP appears at once.
-//! The keyboard does everything (`keys.rs`): arrows, Enter, F2 rename, F7 new folder, F8 or
-//! Delete delete, Insert new connection, Ctrl+X and Ctrl+V move, Space marks for the drive bar,
-//! Tab into the form; the mouse adds clicks and dragging in the tree (`tree_actions.rs`).
+//! The keyboard does everything (`keys.rs`), and the toolbar and context menu show it
+//! (`tree_edit.rs`, RC-100-63); the mouse adds clicks and dragging (`drop.rs`).
 //! Secrets are typed into fields that never show a stored value; the master password is asked
 //! only when one is about to be stored (`vault.rs`). The ssh_config import of RC-050-06 is a
 //! page of the dialog (`import.rs`), as is the import from Remote Desktop Manager (`rdm_import.rs`,
@@ -15,7 +14,9 @@
 //! RC-050-10). Shared credentials (RC-050-12) are rows of the tree with a form of their own
 //! (`credentials.rs`), offered while the setting `vault.shared_credentials` is on.
 
+mod arrange;
 mod credentials;
+mod drop;
 mod follow;
 mod form;
 mod import;
@@ -31,6 +32,10 @@ mod start;
 mod tc_import;
 mod tree;
 mod tree_actions;
+mod tree_edit;
+#[cfg(test)]
+mod tree_fixture;
+mod tree_menu;
 mod vault;
 mod view;
 
@@ -100,6 +105,8 @@ pub struct ConnectionManager {
     pub clipboard: Option<TreeItem>,
     /// Pressed in the tree and not yet released.
     pub drag: Option<TreeItem>,
+    /// Where a drag would drop, and the tree's context menu (RC-100-63).
+    pub edit: tree_edit::TreeEdit,
     /// The connections the drive bar lists.
     pub favourites: Vec<ConnectionId>,
     /// The trusted FTPS certificates, shown under an FTPS connection's form (RC-070-02).
@@ -201,6 +208,8 @@ pub enum ConnMsg {
     Source(SourceMsg),
     /// After Tab: the id of the stop of the focus ring that has the keyboard (RC-080-16).
     Focused(Option<iced::widget::Id>),
+    /// The tree's toolbar, its context menu and the dragging (RC-100-63).
+    Tree(tree_edit::TreeMsg),
 }
 
 /// Whether the manager takes `event`; the drive bar may take it as well.
@@ -383,6 +392,7 @@ impl ConnectionManager {
                 self.focus = Focus::Filter;
                 Vec::new()
             }
+            ConnMsg::Tree(message) => self.on_tree(message),
             ConnMsg::Press(item) => self.press(item),
             ConnMsg::Release(item) => self.release(item),
             ConnMsg::Activate(item) => self.activate(item),

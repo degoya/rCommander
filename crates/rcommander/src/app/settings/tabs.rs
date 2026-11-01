@@ -7,7 +7,7 @@
 //! menu's "Plugins..." opens its page on the first tab, a package's preview turns to it.
 
 use iced::Element;
-use rc_engine::settings::{SettingKind, SettingSpec};
+use rc_engine::settings::{MENU_BAR_STYLE_KEY, SettingKind, SettingSpec};
 
 use super::{Page, SettingsMessage, wrap};
 use crate::{
@@ -61,6 +61,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "appearance.theme",
             "appearance.connection_themes",
             "appearance.menu_bar",
+            "appearance.menu_bar_style",
             "appearance.macos_look",
             "appearance.function_key_bar",
             "appearance.dialog_windows",
@@ -228,6 +229,16 @@ pub fn shows(tab: Option<Tab>, spec: &SettingSpec) -> bool {
         Some(Tab::Installed | Tab::Shortcuts) => false,
         Some(tab) => appearance_tab(spec.key) == tab,
     }
+}
+
+/// Whether the schema row `key` is drawn on this system: the menu bar's style only on Windows,
+/// the one system where it chooses anything (RC-100-66).
+pub fn here(key: &str) -> bool {
+    here_on(key, cfg!(windows))
+}
+
+fn here_on(key: &str, windows: bool) -> bool {
+    key != MENU_BAR_STYLE_KEY || windows
 }
 
 /// The Appearance tab of the row `key`; a row no group names stands on the first, so none is

@@ -55,6 +55,13 @@ person moves a key.
 marked; `theme_select` chooses the light or the dark mode's theme by its id. Editing, importing and
 exporting a theme are for the person in rCommander only.
 
+`workspaces_list` reads the workspaces - what both panels show, saved under a name: each panel's
+tabs, the file list or a terminal, the active panel, the divider, a theme per mode - and
+`workspaces_get` one of them. `workspaces_create`, `workspaces_capture` (what the panels show now),
+`workspaces_update`, `workspaces_rename`, `workspaces_move` and `workspaces_delete` keep them;
+`workspaces_apply` makes the panels show one and may start shells, so it is confirmed like
+`terminal_open`.
+
 `db_backup` backs rCommander's database up into its backup folder under a generated name; it takes
 no path, and restoring a backup is for the person in rCommander only.
 
@@ -102,7 +109,7 @@ needs a confirmation code like deleting.
 `drives_list` reads the drive bar (drives with kind, state, volume and free space, then WSL
 distributions and saved servers); `panel_change_drive` shows a drive in a panel, in the directory
 the panel last showed on it; `connections_set_favourite` chooses which connections the drive bar
-lists as servers.
+lists as servers, `connections_set_folder_favourite` which folders are buttons for their servers.
 
 A panel shows its files or one of its terminals: `terminal_open` shows the new terminal in its
 panel, `terminal_show` shows another, `show_files` turns the panel back to its files while the shell

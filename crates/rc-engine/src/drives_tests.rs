@@ -16,6 +16,7 @@ fn drive(id: &str, group: DriveGroup, label: &str, root: Option<&str>) -> Drive 
         space: None,
         folder: Vec::new(),
         favourite: false,
+        folder_buttons: Vec::new(),
         remote: None,
     }
 }

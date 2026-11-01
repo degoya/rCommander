@@ -6,7 +6,9 @@ use iced::{
 };
 use rc_engine::about::{About, AboutLink, AboutLinkKind};
 
-use super::{AboutMsg, AboutPage, AboutTab, TABS, about_message, facts, licenses, logo, shown};
+use super::{
+    AboutMsg, AboutPage, AboutTab, TABS, about_message, facts, licenses, link_messages, logo, shown,
+};
 use crate::{
     app::{
         Message,
@@ -121,8 +123,8 @@ fn fact<'a>(name: &'static str, value: String, tokens: &'static Tokens) -> Eleme
     .into()
 }
 
-/// An address: a published one is copied with a click; one not published yet is its text with
-/// the mark, or the mark alone while the address is not decided.
+/// An address: a published one opens with a click and has a copy button beside it; one not
+/// published yet is its text with the mark, or the mark alone while the address is not decided.
 fn address<'a>(link: AboutLink, tokens: &'static Tokens) -> Element<'a, Message> {
     let name = match link.kind {
         AboutLinkKind::Source => t!("settings.about.link.source"),
@@ -131,12 +133,27 @@ fn address<'a>(link: AboutLink, tokens: &'static Tokens) -> Element<'a, Message>
     };
     let value: Element<'a, Message> = match (link.url, link.published) {
         (Some(url), true) => {
-            let copy = about_message(AboutMsg::CopyLink(url.clone()));
+            let [open, copy] = link_messages(&url).map(about_message);
             let link = button(label(url.clone()).color(tokens.accent))
                 .padding(0)
                 .style(button::text)
-                .on_press(copy.clone());
-            focus::button(link, &url, Some(copy))
+                .on_press(open.clone());
+            row![
+                theme::fit::tip(
+                    focus::button(link, &url, Some(open)),
+                    t!("settings.about.open_link").to_owned(),
+                    tokens,
+                ),
+                layout::glyph_button(
+                    Icon::Copy,
+                    t!("settings.about.copy_link"),
+                    Some(copy),
+                    tokens
+                ),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+            .into()
         }
         (Some(url), false) => column![
             label(url).wrapping(text::Wrapping::Glyph),

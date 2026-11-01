@@ -81,6 +81,7 @@ pub enum DialogWindowMsg {
 use super::{
     App, Effect, Message, connections, mcp_confirm, settings, ssh_exec,
     window_state::{Geometry, WindowChange},
+    workspaces,
 };
 use crate::{
     platform,
@@ -128,6 +129,14 @@ impl App {
                 self.connections
                     .as_ref()
                     .map(|manager| connections::layer(manager, tokens)),
+            );
+        }
+        // The workspaces window as a card while it has no window of its own (RC-100-68).
+        if !self.main_locked() && !self.windowed(DialogWindow::Workspaces) {
+            layers.extend(
+                self.workspaces
+                    .as_ref()
+                    .map(|window| workspaces::layer(window, self.workspaces_shown(), tokens)),
             );
         }
         layers
@@ -324,6 +333,10 @@ impl App {
         if kind.file_ops() {
             return self.file_ops_focus(kind);
         }
+        // A name asked for by "Save current state as..." before the filter (RC-100-68).
+        if kind == DialogWindow::Workspaces {
+            return self.workspaces_focus();
+        }
         first_field(kind).map_or_else(Task::none, |field| operation::focus(Id::new(field)))
     }
 
@@ -421,12 +434,13 @@ pub async fn load(db: &Db) -> Vec<(DialogWindow, Geometry)> {
 }
 
 /// The window of `kind` at `geometry`: the app's icon, invisible until it is placed and owned
-/// (`platform::dialog_window::show`), closed by the app, not by iced.
+/// (`platform::dialog_window::show`), closed by the app, not by iced; the dialogs' window class
+/// (`platform::window_class`).
 fn dialog_settings(kind: DialogWindow, geometry: Geometry) -> window::Settings {
     let position = geometry.position.map_or(Position::Centered, |(x, y)| {
         Position::Specific(Point::new(x, y))
     });
-    without_drop(window::Settings {
+    let settings = without_drop(window::Settings {
         size: Size::new(geometry.width, geometry.height),
         position,
         maximized: geometry.maximized,
@@ -435,7 +449,8 @@ fn dialog_settings(kind: DialogWindow, geometry: Geometry) -> window::Settings {
         icon: settings::window_icon(),
         exit_on_close_request: false,
         ..window::Settings::default()
-    })
+    });
+    platform::window_class::with_class(settings, platform::window_class::POPUP)
 }
 
 /// Files dropped on a dialog's window go nowhere: only the main window takes them.

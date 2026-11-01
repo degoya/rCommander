@@ -43,3 +43,11 @@ pub enum DbError {
     #[error("the vault's master password was changed since this key was derived")]
     VaultChanged,
 }
+
+impl DbError {
+    /// Whether a write failed on a unique constraint: a name another row has.
+    #[must_use]
+    pub fn is_unique_violation(&self) -> bool {
+        matches!(self, Self::Sqlx(sqlx::Error::Database(error)) if error.is_unique_violation())
+    }
+}

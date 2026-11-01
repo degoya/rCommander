@@ -42,12 +42,30 @@ async fn the_list_offers_the_builtin_themes_with_fluent_chosen() {
         "high-contrast-light",
         "solarized-dark",
         "nord-light",
+        "gruvbox-light",
+        "gruvbox-dark",
+        "dracula-light",
+        "dracula-dark",
+        "catppuccin-light",
+        "catppuccin-dark",
+        "tokyo-night-light",
+        "tokyo-night-dark",
+        "everforest-light",
+        "everforest-dark",
+        "rose-pine-light",
+        "rose-pine-dark",
+        "kanagawa-light",
+        "kanagawa-dark",
+        "ayu-light",
+        "ayu-dark",
     ] {
         let row = list.themes.iter().find(|theme| theme.id == id);
         assert!(row.is_some_and(|row| row.builtin), "{id}");
     }
     let mac = list.themes.iter().any(|theme| theme.id.starts_with("mac-"));
     assert_eq!(mac, cfg!(target_os = "macos"));
+    let builtins = list.themes.iter().filter(|theme| theme.builtin).count();
+    assert_eq!(builtins, if mac { 28 } else { 26 });
 }
 
 /// `theme.select` over `Engine::dispatch`: the setting changes and is announced; a theme of the

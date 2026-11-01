@@ -22,6 +22,18 @@ use super::{
 use crate::theme::{self, Tokens};
 
 impl App {
+    /// The main window's title, fixed as Total Commander's (owner, 2026-10-18): name, version
+    /// and author; the panels show the path. A dialog's window has the dialog's.
+    pub(in crate::app) fn title(&self, id: iced::window::Id) -> String {
+        self.window_title(id)
+    }
+
+    /// The look of every window: the window's theme of the mode - an active workspace's first
+    /// (RC-100-68, `theme::themes`).
+    pub(in crate::app) fn theme(&self, _window: iced::window::Id) -> Option<iced::Theme> {
+        Some(theme::iced_theme(theme::tokens(self.dark)))
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         let tokens = theme::tokens(self.dark);
         // The maximized panel takes the area of both; the other is hidden, not closed.

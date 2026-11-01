@@ -91,7 +91,10 @@ The drive menu lists every drive, also those behind the drive bar's `»`.
 | Enter | Open a folder |
 | F2 / F7 / Insert | Rename / new folder / new connection |
 | F8, Del | Delete, after a question |
-| Space | Show the connection in the drive bar, or not |
+| Space | Show the connection in the drive bar, or not; a folder as a button there, or not |
+| Ctrl+Up / Ctrl+Down | Move a connection or folder up / down among its kind |
+| Ctrl+Left / Ctrl+Right | Outdent into the folder's folder / indent into the folder above |
+| Shift+F10, context-menu key | The tree's menu: the toolbar's actions, new connection, new folder, duplicate |
 | Ctrl+X / Ctrl+V | Move a connection or folder |
 | Tab / Shift+Tab | Into the form and through its fields; Shift+Tab from the tree reaches the filter |
 | Enter / Esc (in the form) | Save / back to the tree |

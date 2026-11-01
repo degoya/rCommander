@@ -1,12 +1,15 @@
-//! The menu bar rCommander draws itself where no system menu is attached - Linux (RC-080-33): the menus of [`super::build`] as a row of titles above the
-//! drive bar, an open menu as a card under its title (`view.rs`). A choice is the same
-//! [`MenuBarMsg::Chosen`] the Win32 menu sends, so it runs what the palette runs.
+//! The menu bar rCommander draws itself (RC-080-33, on Windows RC-100-66): the menus of
+//! [`super::build`] as a row of titles above the drive bar, an open menu as a card under its
+//! title (`view.rs`), in the theme's colours. A choice is the same [`MenuBarMsg::Chosen`] the
+//! Win32 menu sends, so it runs what the palette runs. Linux always draws it, Windows unless the
+//! setting `appearance.menu_bar_style` asks for the Win32 menu, macOS never ([`active`]).
 //!
 //! It follows the setting `appearance.menu_bar` and is greyed out while a dialog is open, as the
 //! Win32 bar is. The keyboard is a Win32 menu's: Alt with a title's letter opens its menu (unless
 //! the quick search or a terminal wants Alt with letters); open, the arrows walk the entries and
 //! the menus, Enter or an entry's letter takes it, Escape closes. Alt alone does nothing - no
-//! chord names it.
+//! chord names it; on Windows the window's subclass keeps it from opening the system menu
+//! (`platform/windows/menu_bar.rs`). F10 is not the bar's key (RC-080-17).
 
 use rc_engine::Chord;
 
@@ -17,9 +20,61 @@ use crate::{
     theme::mnemonic::Label,
 };
 
-/// Whether rCommander draws the bar: on Linux; Windows attaches a Win32 menu, macOS puts the
-/// menus into the system's menu bar.
-pub const DRAWN: bool = cfg!(not(any(windows, target_os = "macos")));
+/// The setting `appearance.menu_bar_style`: which bar Windows shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Style {
+    /// The bar rCommander draws in the theme's colours; the default.
+    #[default]
+    Drawn,
+    /// The Win32 menu, through muda.
+    Native,
+}
+
+impl Style {
+    /// The setting's value; unknown or missing is the default.
+    pub fn from_value(value: Option<&str>) -> Self {
+        match value {
+            Some("native") => Self::Native,
+            _ => Self::Drawn,
+        }
+    }
+}
+
+/// The system a bar is shown on, for [`active_on`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum System {
+    Windows,
+    MacOs,
+    /// Linux and the other Unixes: no system menu the window uses.
+    Other,
+}
+
+impl System {
+    /// The system this build runs on.
+    pub const CURRENT: Self = if cfg!(windows) {
+        Self::Windows
+    } else if cfg!(target_os = "macos") {
+        Self::MacOs
+    } else {
+        Self::Other
+    };
+}
+
+/// Whether rCommander draws the bar for the setting `style` here.
+pub fn active(style: Style) -> bool {
+    active_on(System::CURRENT, style)
+}
+
+/// Whether rCommander draws the bar on `system` for the setting `style`: Linux always (the window
+/// has no GTK menu), Windows as the setting says, macOS never - its menus are the system's menu
+/// bar.
+pub fn active_on(system: System, style: Style) -> bool {
+    match system {
+        System::Windows => style == Style::Drawn,
+        System::MacOs => false,
+        System::Other => true,
+    }
+}
 
 /// The open menu: its index among the menus, and the entry the keyboard or the pointer is on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,7 +200,8 @@ impl App {
 
     /// Whether the drawn bar shows.
     pub(in crate::app) fn drawn_bar_shown(&self) -> bool {
-        DRAWN && self.dialog_windows.menu_bar.shown == Some(true)
+        let bar = &self.dialog_windows.menu_bar;
+        active(bar.style) && bar.shown == Some(true)
     }
 
     /// Whether the drawn bar takes `chord`: while a menu is open every key, else Alt with a

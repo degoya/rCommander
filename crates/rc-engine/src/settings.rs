@@ -26,11 +26,14 @@ pub use schema::LANGUAGE_KEY;
 pub use schema::archive::DECODER_MEMORY_KEY;
 pub use schema::backup::BACKUP_KEEP_KEY;
 pub use schema::checksum::CHECKSUM_ENTER_KEY;
-pub use schema::drives::{FOLLOW_ON_OWN_DRIVE_KEY, FOLLOW_OTHER_PANEL_KEY};
+pub use schema::drives::{
+    FOLLOW_ON_OWN_DRIVE_KEY, FOLLOW_OTHER_PANEL_KEY, REFRESH_ON_FOCUS_KEY,
+    REFRESH_ON_FOCUS_NETWORK_KEY,
+};
 pub use schema::ftp::FTP_RESOLVE_LINKS_KEY;
 pub use schema::layout::{
-    DATE_WIDTH_KEY, EXT_WIDTH_KEY, MENU_BAR_KEY, OWNER_COLUMN_KEY, OWNER_WIDTH_KEY,
-    PACKED_WIDTH_KEY, PANEL_SPLIT_KEY, RIGHTS_WIDTH_KEY, SIZE_WIDTH_KEY,
+    DATE_WIDTH_KEY, EXT_WIDTH_KEY, MENU_BAR_KEY, MENU_BAR_STYLE_KEY, OWNER_COLUMN_KEY,
+    OWNER_WIDTH_KEY, PACKED_WIDTH_KEY, PANEL_SPLIT_KEY, RIGHTS_WIDTH_KEY, SIZE_WIDTH_KEY,
 };
 pub use schema::login_scripts::WARN_SECRET_PROMPT_KEY;
 pub use schema::sftp::SFTP_CASE_KEY;
@@ -281,6 +284,10 @@ impl Engine {
         // Only themes this system offers, each of its mode (RC-100-56).
         if spec.key == WSL_THEMES_KEY {
             self.check_wsl_themes(&value).await?;
+        }
+        // Only a workspace there is (RC-100-68).
+        if spec.key == crate::workspaces::ON_START_KEY {
+            self.check_start_workspace(&value).await?;
         }
         let db = self.db()?;
         let number = value

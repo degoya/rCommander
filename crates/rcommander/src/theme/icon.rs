@@ -65,12 +65,18 @@ pub enum Icon {
     MoveUp,
     /// Move down (`arrow_down`).
     MoveDown,
+    /// Indent: into the folder above (`text_indent_increase_ltr`, RC-100-63).
+    Indent,
+    /// Outdent: out of its folder (`text_indent_decrease_ltr`).
+    Outdent,
+    /// The drive bar's mark (`star`).
+    Star,
 }
 
 impl Icon {
     /// Every icon, in the order of `scripts/icon-font.sh` (the font test holds the two together).
     #[cfg(test)]
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 25] = [
         Self::Add,
         Self::Confirm,
         Self::Copy,
@@ -93,6 +99,9 @@ impl Icon {
         Self::Test,
         Self::MoveUp,
         Self::MoveDown,
+        Self::Indent,
+        Self::Outdent,
+        Self::Star,
     ];
 
     /// The icon's character in [`FONT`]: the upstream code point the script prints.
@@ -120,6 +129,9 @@ impl Icon {
             Self::Test => '\u{F1D7}',
             Self::MoveUp => '\u{F19B}',
             Self::MoveDown => '\u{F148}',
+            Self::Indent => '\u{ED2D}',
+            Self::Outdent => '\u{ED23}',
+            Self::Star => '\u{F70F}',
         }
     }
 }

@@ -301,6 +301,7 @@ impl Engine {
                 space: None,
                 folder: Vec::new(),
                 favourite: true,
+                folder_buttons: Vec::new(),
                 remote: None,
             })
             .collect()

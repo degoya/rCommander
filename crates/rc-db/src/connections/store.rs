@@ -7,7 +7,11 @@ use crate::{
     connections::{
         Connection, ConnectionDraft, ConnectionError, ConnectionId, ConnectionPatch, EndpointRule,
         FolderId, FtpDataMode, FtpEncoding, TreeResult, connection_from_row,
-        endpoint::guard_endpoint, folders::require_folder, select_connections, validate::Fields,
+        endpoint::guard_endpoint,
+        folders::require_folder,
+        order::{self, Kind},
+        select_connections,
+        validate::Fields,
         write_error,
     },
 };
@@ -103,8 +107,10 @@ impl Db {
         Ok(connection)
     }
 
-    /// Moves a connection into `folder` (the root when `None`): at `sort_order`, or after the
-    /// folder's last connection. Moving within its own folder reorders it.
+    /// Moves a connection into `folder` (the root when `None`): to the position `sort_order`
+    /// among the folder's connections (0 is the first; past the last is the end), or after the
+    /// last one for `None`. Both levels are numbered densely again (RC-100-63); moving within
+    /// its own folder reorders it.
     ///
     /// # Errors
     ///
@@ -122,23 +128,38 @@ impl Db {
             require_folder(&mut tx, folder).await?;
         }
         require_free_name(&mut tx, folder, &current.name, Some(id)).await?;
-        let sort_order = match sort_order {
-            Some(order) => order,
-            None => next_sort_order(&mut tx, folder).await?,
-        };
         sqlx::query(
-            "UPDATE connections SET folder_id = ?, sort_order = ?, \
+            "UPDATE connections SET folder_id = ?, \
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
         )
         .bind(folder.map(|folder| folder.0))
-        .bind(sort_order)
         .bind(id.0)
         .execute(&mut *tx)
         .await
         .map_err(|error| write_error(error, &current.name))?;
+        order::place(
+            &mut tx,
+            Kind::Connections,
+            id.0,
+            (current.folder_id, folder),
+            sort_order,
+        )
+        .await?;
         let connection = fetch(&mut tx, id).await?;
         tx.commit().await?;
         Ok(connection)
+    }
+
+    /// The position of the connection `id` among its folder's connections, as the tree lists
+    /// them: what [`Db::move_connection`] takes to put another one there.
+    ///
+    /// # Errors
+    ///
+    /// [`ConnectionError::ConnectionNotFound`], or the read fails.
+    pub async fn connection_position(&self, id: ConnectionId) -> TreeResult<i64> {
+        let mut writer = self.writer().await;
+        fetch(&mut writer, id).await?;
+        order::position(&mut writer, Kind::Connections, id.0).await
     }
 
     /// Deletes a connection.

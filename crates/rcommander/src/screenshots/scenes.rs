@@ -15,8 +15,9 @@
 //! ```
 //!
 //! `{demo}` in a command's strings and a question's values stands for the demo folder, so a
-//! scene names its files wherever the folder lies. An `open` step may name the settings' page and
-//! tab to open on (RC-100-55, `opening.rs`).
+//! scene names its files wherever the folder lies; `{wsl}` stands for an installed WSL
+//! distribution, and a scene naming it is skipped where there is none (RC-100-56, `places.rs`).
+//! An `open` step may name the settings' page and tab to open on (RC-100-55, `opening.rs`).
 //!
 //! A `command` step runs as its key would (`App::run_bound`) and may only read or write - no
 //! command that deletes, overwrites, runs a program or decides about trust. A `key` step goes
@@ -31,7 +32,11 @@ use serde::Deserialize;
 use serde_json::Value;
 
 pub use super::opening::Opening;
-use super::opening::{self, RawOpening};
+use super::{
+    opening::{self, RawOpening},
+    out::Skipped,
+    places::{self, Places, WSL},
+};
 
 /// The largest scene file read.
 pub const MAX_FILE_BYTES: u64 = 256 * 1024;
@@ -68,6 +73,8 @@ pub struct Plan {
     /// How long the window gets to open and list before the first scene.
     pub startup: Duration,
     pub scenes: Vec<Scene>,
+    /// The scenes checked but not shot here, with the reason.
+    pub skipped: Vec<Skipped>,
 }
 
 /// One picture: the steps that set it up, then the shot.
@@ -189,15 +196,17 @@ struct RawArgument {
     value: String,
 }
 
-/// The placeholder for the demo folder.
-pub const DEMO: &str = "{demo}";
+/// Why a scene naming [`WSL`] is not shot.
+pub const NO_WSL: &str = "it names {wsl}, and no WSL distribution is installed here";
 
-/// Reads and checks a scene file's text; `demo` replaces [`DEMO`].
+/// Reads and checks a scene file's text; `demo` replaces `{demo}` and `wsl`, the name of a WSL
+/// distribution, `{wsl}`. Without a distribution a scene naming `{wsl}` is checked like any
+/// other, then skipped.
 ///
 /// # Errors
 ///
 /// The text is no scene file of version 1, or a scene breaks a rule above.
-pub fn parse(text: &str, demo: &str) -> Result<Plan> {
+pub fn parse(text: &str, demo: &str, wsl: Option<&str>) -> Result<Plan> {
     let raw: RawFile = serde_json::from_str(text).context("the scene file does not parse")?;
     ensure!(
         raw.version == 1,
@@ -225,21 +234,34 @@ pub fn parse(text: &str, demo: &str) -> Result<Plan> {
         raw.scenes.len() <= MAX_SCENES,
         "the scene file has more than {MAX_SCENES} scenes"
     );
+    let places = Places { demo, wsl };
     let mut scenes: Vec<Scene> = Vec::with_capacity(raw.scenes.len());
+    let mut skipped: Vec<Skipped> = Vec::new();
     for scene in raw.scenes {
         check_name(&scene.name)?;
         ensure!(
-            scenes.iter().all(|known| known.name != scene.name),
+            scenes.iter().all(|known| known.name != scene.name)
+                && skipped.iter().all(|known| known.name != scene.name),
             "the scene name '{}' is used twice",
             scene.name
         );
-        scenes.push(check_scene(scene, demo)?);
+        let needs_wsl = scene.steps.iter().any(|step| places::mentions(step, WSL));
+        let scene = check_scene(scene, &places)?;
+        if needs_wsl && wsl.is_none() {
+            skipped.push(Skipped {
+                name: scene.name,
+                reason: NO_WSL.to_owned(),
+            });
+        } else {
+            scenes.push(scene);
+        }
     }
     Ok(Plan {
         width,
         height,
         startup: Duration::from_millis(startup),
         scenes,
+        skipped,
     })
 }
 
@@ -278,7 +300,7 @@ fn is_device(name: &str) -> bool {
         && (b'1'..=b'9').contains(&bytes[3])
 }
 
-fn check_scene(scene: RawScene, demo: &str) -> Result<Scene> {
+fn check_scene(scene: RawScene, places: &Places<'_>) -> Result<Scene> {
     let name = scene.name;
     ensure!(
         scene.steps.len() <= MAX_STEPS,
@@ -294,7 +316,7 @@ fn check_scene(scene: RawScene, demo: &str) -> Result<Scene> {
         .into_iter()
         .enumerate()
         .map(|(index, step)| {
-            check_step(step, demo).with_context(|| format!("scene '{name}', step {}", index + 1))
+            check_step(step, places).with_context(|| format!("scene '{name}', step {}", index + 1))
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(Scene {
@@ -306,7 +328,7 @@ fn check_scene(scene: RawScene, demo: &str) -> Result<Scene> {
     })
 }
 
-fn check_step(mut step: Value, demo: &str) -> Result<Step> {
+fn check_step(mut step: Value, places: &Places<'_>) -> Result<Step> {
     // The settings' page and tab beside `open` (RC-100-55); anywhere else they are unknown.
     let (page, tab) = match &mut step {
         Value::Object(fields) if fields.contains_key("open") => {
@@ -321,7 +343,7 @@ fn check_step(mut step: Value, demo: &str) -> Result<Step> {
                 .map_err(|error| anyhow::anyhow!("the key '{keys}' does not parse: {error}"))?,
         ),
         RawStep::Command(mut value) => {
-            place_demo(&mut value, demo);
+            places.place(&mut value);
             Step::Command(Box::new(check_command(value)?))
         }
         RawStep::WaitMs(wait) => {
@@ -331,7 +353,7 @@ fn check_step(mut step: Value, demo: &str) -> Result<Step> {
         RawStep::Open(raw) => Step::Open(opening::check(raw, page.as_ref(), tab.as_ref())?),
         RawStep::Close(Capture::Main) => bail!("the main window is not closed by a step"),
         RawStep::Close(capture) => Step::Close(capture),
-        RawStep::McpQuestion(ask) => Step::Ask(check_ask(ask, demo)?),
+        RawStep::McpQuestion(ask) => Step::Ask(check_ask(ask, places)?),
     })
 }
 
@@ -370,19 +392,7 @@ fn check_command(value: Value) -> Result<Command> {
     Ok(command)
 }
 
-/// [`DEMO`] in every string of `value` replaced by `demo`.
-fn place_demo(value: &mut Value, demo: &str) {
-    match value {
-        Value::String(text) if text.contains(DEMO) => *text = text.replace(DEMO, demo),
-        Value::Array(items) => items.iter_mut().for_each(|item| place_demo(item, demo)),
-        Value::Object(fields) => fields
-            .values_mut()
-            .for_each(|field| place_demo(field, demo)),
-        _ => {}
-    }
-}
-
-fn check_ask(ask: RawAsk, demo: &str) -> Result<Ask> {
+fn check_ask(ask: RawAsk, places: &Places<'_>) -> Result<Ask> {
     let tool_ok = !ask.tool.is_empty()
         && ask.tool.len() <= MAX_NAME
         && ask
@@ -411,7 +421,7 @@ fn check_ask(ask: RawAsk, demo: &str) -> Result<Ask> {
         );
         arguments.push(McpArgument {
             name: argument.name,
-            value: argument.value.replace(DEMO, demo),
+            value: places.fill(&argument.value),
         });
     }
     Ok(Ask {

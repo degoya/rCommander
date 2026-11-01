@@ -38,6 +38,9 @@ use crate::tabs::requests::{
 use crate::{ExternalProgram, FileDialog};
 // The colour themes (RC-100-50) keep their model with the settings.
 use crate::settings::themes::{ThemeDraft, ThemeMode};
+// The workspaces (RC-100-68).
+use super::{CreateWorkspaceRequest, UpdateWorkspaceRequest};
+use crate::workspaces::WorkspaceId;
 
 /// Builds [`Command`] and [`Command::id`]: hands the variants gathered so far to the next group's
 /// list, and with the last group writes the enum.

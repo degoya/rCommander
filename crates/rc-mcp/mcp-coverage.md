@@ -95,6 +95,7 @@ asks by.
 | `mcp.revoke` | gui_only | omitted: GUI only: human decision | Take back every MCP call a person allowed for a session: the next one asks again |
 | `connections.manager` | read | omitted: opens a dialog in the window; the connections_ tools do what it offers | Open the connection manager in the window |
 | `connections.set_favourite` | write | `connections_set_favourite` | Show a connection among the servers of the drive bar, or take it away |
+| `connections.set_folder_favourite` | write | `connections_set_folder_favourite` | Show a folder of the connection tree as a button of the drive bar, or take it away |
 | `ops.answer` | destructive | omitted: MCP jobs carry their answers as presets (on_conflict, on_error) and never ask | Answer the question a job waits on: a conflict or a failing file |
 | `ops.cancel` | write | `ops_cancel` | Cancel a job; the file being written is removed |
 | `ops.copy` | write (destructive when on_conflict overwrites) | `ops_copy` | Copy files and directories into a directory, as a queued job |
@@ -243,5 +244,15 @@ asks by.
 | `theme.list` | read | `theme_list` | The colour themes: id, name, mode (light or dark), built in or own, and whether it is the mode's theme |
 | `theme.save` | gui_only | omitted: GUI only: human decision | Save an own colour theme from the Themes tab's editor or import; never over a built-in one |
 | `theme.select` | write | `theme_select` | Choose the colour theme of the light or the dark mode; the window draws with it at once |
+| `workspaces.apply` | exec | `workspaces_apply` | Make both panels show a workspace: its tabs, the file list or a terminal (a shell may start), the active panel, the divider |
+| `workspaces.capture` | write | `workspaces_capture` | Save what both panels show now as a new workspace, or over the panels of a stored one |
+| `workspaces.create` | write | `workspaces_create` | Save a new workspace: a name, what each panel shows, a theme for each mode |
+| `workspaces.delete` | destructive | `workspaces_delete` | Delete a workspace |
+| `workspaces.get` | read | `workspaces_get` | One workspace: its name, what each panel shows, its themes, whether it is active |
+| `workspaces.list` | read | `workspaces_list` | The workspaces in their order, the one applied last marked active |
+| `workspaces.manager` | gui_only | omitted: GUI only: human decision | Open the workspaces' window |
+| `workspaces.move` | write | `workspaces_move` | Give a workspace another place in the list |
+| `workspaces.rename` | write | `workspaces_rename` | Give a workspace another name |
+| `workspaces.update` | write | `workspaces_update` | Change a workspace's name, panels or themes |
 
-233 commands: 161 covered, 72 omitted.
+244 commands: 171 covered, 73 omitted.

@@ -8,9 +8,9 @@ use iced::{Task, system, theme::Mode as SystemMode};
 use rc_engine::Keymap;
 use rc_engine::settings::{
     ALTERNATE_ROWS_KEY, DOS_TIGHT_LINES_KEY, KEYMAP_KEY, LIST_FONT_KEY, LIST_FONT_SIZE_KEY,
-    MACOS_CMD_AS_CTRL_KEY, MARK_HIDDEN_KEY, MENU_BAR_KEY, NAME_CUT_KEY, NAME_TIP_DELAY_KEY,
-    TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY, THEME_KEY, VIEWER_FONT_KEY, VIEWER_FONT_SIZE_KEY,
-    stored_bool,
+    MACOS_CMD_AS_CTRL_KEY, MARK_HIDDEN_KEY, MENU_BAR_KEY, MENU_BAR_STYLE_KEY, NAME_CUT_KEY,
+    NAME_TIP_DELAY_KEY, TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY, THEME_KEY, VIEWER_FONT_KEY,
+    VIEWER_FONT_SIZE_KEY, stored_bool,
 };
 
 use super::{SettingsMessage, save, themes_page, wrap};
@@ -31,7 +31,7 @@ impl App {
         if themes_page::concerns(key) {
             return vec![Effect::Task(self.themes_task())];
         }
-        if key == MENU_BAR_KEY {
+        if key == MENU_BAR_KEY || key == MENU_BAR_STYLE_KEY {
             return vec![Effect::Task(self.menu_bar_task())];
         }
         if key == KEYMAP_KEY || key == MACOS_CMD_AS_CTRL_KEY {

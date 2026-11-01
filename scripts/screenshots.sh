@@ -67,7 +67,9 @@ website_dir() { echo "${RC_WEBSITE_DIR:-$(main_checkout)/../rcommander-website}/
 wiki_dir() { echo "${RC_WIKI_DIR:-$(main_checkout)/../rcommander.wiki}/images/screenshots"; }
 
 # The PNGs a manifest lists, one name a line, after checking it: a run that failed, a name that
-# is no plain <scene>.png or a picture missing in <out> fails.
+# is no plain <scene>.png or a picture missing in <out> fails. A scene the run skipped on this
+# machine (one naming {wsl} without WSL) is said on stderr; the website and the wiki keep its
+# picture from before.
 listed_shots() {
     local manifest="$1" out="$2"
     python3 -B -I - "$manifest" "$out" << 'EOF'
@@ -87,6 +89,13 @@ for shot in shots:
     if not os.path.isfile(os.path.join(out, name)):
         sys.exit(f"{name} is listed but missing")
     print(name)
+skipped = data.get("skipped", [])
+if not isinstance(skipped, list):
+    sys.exit("the manifest's skipped scenes are no list")
+for skip in skipped:
+    skip = skip if isinstance(skip, dict) else {}
+    print(f"-- scene {skip.get('name')!r} skipped: {skip.get('reason', 'no reason given')}",
+          file=sys.stderr)
 EOF
 }
 

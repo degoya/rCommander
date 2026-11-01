@@ -80,6 +80,7 @@ async fn an_ftp_location_is_written_with_its_connection_name() {
         space: None,
         folder: Vec::new(),
         favourite: true,
+        folder_buttons: Vec::new(),
         remote: None,
     };
     harness

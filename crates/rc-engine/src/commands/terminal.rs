@@ -149,7 +149,7 @@ impl Engine {
     /// for no shell, a folder in a WSL distribution's share opens that distribution's shell
     /// ([`choose_shell`]). On an SFTP panel's folder it is a shell on that server
     /// (`terminal.open_ssh`, RC-060-03).
-    pub(super) async fn open_terminal_in(
+    pub(crate) async fn open_terminal_in(
         &self,
         id: PanelId,
         start: VfsPath,

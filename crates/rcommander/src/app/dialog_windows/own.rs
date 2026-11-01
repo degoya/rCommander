@@ -82,6 +82,7 @@ impl App {
                 _ => None,
             },
             DialogWindow::Lister(id) => Some(self.lister_input(id, message)),
+            DialogWindow::Workspaces => self.workspaces_intercept(message),
             DialogWindow::Settings
             | DialogWindow::Queue
             | DialogWindow::MultiRename

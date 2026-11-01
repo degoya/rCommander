@@ -50,7 +50,7 @@ use self::draft::{Draft, Field};
 pub use self::host_keys::TrustStoreCall;
 pub use self::plugins::{PluginsCall, PluginsMsg};
 pub use self::save::Stored;
-pub use self::shortcuts::ShortcutsMsg;
+pub use self::shortcuts::{ShortcutsMsg, WorkspaceKeyMsg};
 pub use self::tabs::{Tab, Tabs};
 pub use self::themes_page::ThemesMsg;
 // The themes read before the window opens (`startup.rs`).

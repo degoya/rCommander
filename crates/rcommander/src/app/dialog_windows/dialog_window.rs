@@ -15,7 +15,8 @@ use super::questions::Question;
 /// the network drive dialogs, packing and unpacking, the checksum forms, the hotlist dialog and
 /// "Run command" -, and the file operations' dialogs (stage 2): copy and move (F5, F6, Shift+F5),
 /// a new folder or text file (F7, Shift+F4), delete (F8, Shift+F8), a job's conflict and error
-/// questions and its progress window - and the small questions, one at a time (`questions.rs`).
+/// questions and its progress window - and the small questions, one at a time (`questions.rs`) -
+/// and the workspaces window (RC-100-68).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DialogWindow {
     Settings,
@@ -42,11 +43,13 @@ pub enum DialogWindow {
     JobError,
     Progress,
     Question(Question),
+    /// The workspaces window (RC-100-68).
+    Workspaces,
 }
 
 impl DialogWindow {
     /// Every kept place once: `Lister(0)` stands for every Lister, which share one.
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 33] = [
         Self::Settings,
         Self::Queue,
         Self::Connections,
@@ -79,6 +82,7 @@ impl DialogWindow {
         Self::Question(Question::ArchivePassword),
         Self::Question(Question::LargeFetch),
         Self::Question(Question::SyncConfirm),
+        Self::Workspaces,
     ];
 
     /// Whether the main window takes no input while it is open: the settings, as Total
@@ -113,7 +117,8 @@ impl DialogWindow {
             | Self::Compare
             | Self::Checksum
             | Self::LoginScripts
-            | Self::Lister(_) => false,
+            | Self::Lister(_)
+            | Self::Workspaces => false,
             Self::Question(question) => question.modal(),
         }
     }
@@ -191,6 +196,7 @@ impl DialogWindow {
             Self::JobError => "window.dialog.job_error",
             Self::Progress => "window.dialog.progress",
             Self::Question(question) => question.key(),
+            Self::Workspaces => "window.dialog.workspaces",
         }
     }
 
@@ -221,6 +227,7 @@ impl DialogWindow {
             Self::JobError => Size::new(720.0, 260.0),
             Self::Progress => Size::new(720.0, 280.0),
             Self::Question(question) => question.default_size(),
+            Self::Workspaces => Size::new(1000.0, 680.0),
         }
     }
 
@@ -251,6 +258,7 @@ impl DialogWindow {
             Self::JobError => Size::new(520.0, 220.0),
             Self::Progress => Size::new(520.0, 250.0),
             Self::Question(question) => question.min_size(),
+            Self::Workspaces => Size::new(760.0, 480.0),
         }
     }
 }

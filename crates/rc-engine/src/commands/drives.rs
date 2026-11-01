@@ -1,13 +1,14 @@
 //! `drives.list`, `panel.change_drive` and `panel.drive_menu`: the drive bar and the drive menu.
 //!
 //! The drive bar is the drives of the catalog, then the WSL distributions, then the servers:
-//! every connection of the tree with its folders, marked as a favourite when the drive bar shows
-//! it as a button of its own (the tree's root level unless the connection manager's marks say
-//! otherwise, `favourites.rs`, RC-050-04); a folder is a button that opens the menu at all its
-//! servers. Then the quick connections of this run (Ctrl+N), favourites all. An SSH server opens
-//! over SFTP (RC-060-02), an FTP or FTPS server over FTP (RC-070-03): changing to it connects
-//! and shows the directory last shown there, else the connection's start directory or where the
-//! server's login starts.
+//! every connection of the tree with its folders, in the tree's order (a level's folders before
+//! its connections, RC-100-63), marked as a favourite when the drive bar shows it as a button of
+//! its own (the tree's root level unless the connection manager's marks say otherwise,
+//! `favourites.rs`, RC-050-04), and with the folders above it the drive bar shows as buttons
+//! that open the menu at their servers (the root level's unless marked otherwise). Then the quick
+//! connections of this run (Ctrl+N), favourites all. An SSH server opens over SFTP (RC-060-02),
+//! an FTP or FTPS server over FTP (RC-070-03): changing to it connects and shows the directory
+//! last shown there, else the connection's start directory or where the server's login starts.
 
 use std::path::PathBuf;
 
@@ -173,8 +174,8 @@ impl Engine {
         entries
     }
 
-    /// The connections of the tree, each with its folders and its mark: the root level's first,
-    /// then each folder's in the tree's order; none without a database.
+    /// The connections of the tree, each with its folders and its marks, in the tree's order;
+    /// none without a database.
     async fn server_entries(&self) -> Vec<Drive> {
         let Ok(db) = self.db() else {
             return Vec::new();
@@ -183,13 +184,13 @@ impl Engine {
         match db.connection_tree().await {
             Ok(tree) => {
                 let mut entries = Vec::new();
-                servers_of(
-                    &tree.connections,
-                    &tree.folders,
-                    &[],
-                    &favourites,
-                    &mut entries,
-                );
+                let level = Level {
+                    connections: &tree.connections,
+                    folders: &tree.folders,
+                    folder: &[],
+                    buttons: &[],
+                };
+                servers_of(level, &favourites, &mut entries);
                 entries
             }
             Err(error) => {
@@ -200,15 +201,34 @@ impl Engine {
     }
 }
 
-/// The entries of `connections` in the folder `folder`, then those of `folders` and below.
-fn servers_of(
-    connections: &[Connection],
-    folders: &[FolderNode],
-    folder: &[String],
-    favourites: &Favourites,
-    entries: &mut Vec<Drive>,
-) {
-    entries.extend(connections.iter().map(|connection| Drive {
+/// One level of the tree on the way down: what it holds, its path of folder names and the
+/// lengths of that path's prefixes that are drive-bar buttons.
+struct Level<'a> {
+    connections: &'a [Connection],
+    folders: &'a [FolderNode],
+    folder: &'a [String],
+    buttons: &'a [usize],
+}
+
+/// The entries of a level: those of its folders and below first, then its own connections, as
+/// the connection manager lists them.
+fn servers_of(level: Level<'_>, favourites: &Favourites, entries: &mut Vec<Drive>) {
+    for node in level.folders {
+        let mut inner = level.folder.to_vec();
+        inner.push(node.folder.name.clone());
+        let mut buttons = level.buttons.to_vec();
+        if favourites.contains_folder(&node.folder) {
+            buttons.push(inner.len());
+        }
+        let below = Level {
+            connections: &node.connections,
+            folders: &node.folders,
+            folder: &inner,
+            buttons: &buttons,
+        };
+        servers_of(below, favourites, entries);
+    }
+    entries.extend(level.connections.iter().map(|connection| Drive {
         id: format!("server:{}", connection.id),
         group: DriveGroup::Servers,
         kind: DriveKind::Server,
@@ -221,21 +241,11 @@ fn servers_of(
         state: DriveState::Unknown,
         volume: None,
         space: None,
-        folder: folder.to_vec(),
+        folder: level.folder.to_vec(),
+        folder_buttons: level.buttons.to_vec(),
         favourite: favourites.contains(connection),
         remote: None,
     }));
-    for node in folders {
-        let mut inner = folder.to_vec();
-        inner.push(node.folder.name.clone());
-        servers_of(
-            &node.connections,
-            &node.folders,
-            &inner,
-            favourites,
-            entries,
-        );
-    }
 }
 
 /// How a server's files are reached: SFTP on an SSH connection, FTP on the others.
@@ -263,6 +273,7 @@ fn wsl_entry(distro: WslDistro) -> Drive {
         space: None,
         folder: Vec::new(),
         favourite: false,
+        folder_buttons: Vec::new(),
         remote: None,
     }
 }

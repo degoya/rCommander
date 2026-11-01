@@ -1,5 +1,6 @@
 //! The menus of the menu bar, grouped as Total Commander groups its own (RC-080-18): File, Mark,
-//! Commands, Net, View, Configuration, Help. An entry is a row of the command palette by its name,
+//! Commands, Net, View, Configuration, Workspaces - where Total Commander has its own Start menu,
+//! RC-100-68: the workspaces first (`palette/workspaces.rs`), then its entries below -, Help. An entry is a row of the command palette by its name,
 //! or a dialog without a row; its label is `menubar.<id>`, a menu's `menubar.title.<id>`, each
 //! with one `&` before its mnemonic, and its key the keymap's under the same name. A name the
 //! palette does not offer here (the network drives outside Windows) is left out when the menus
@@ -129,6 +130,13 @@ pub const MENUS: &[Menu] = &[
             Slot::Dialog("import.total_commander", Dialog::TcImport),
             Slot::Dialog("import.remote_desktop_manager", Dialog::RdmImport),
             Slot::Dialog("import.ssh_config", Dialog::SshConfigImport),
+        ],
+    },
+    Menu {
+        id: "workspaces",
+        slots: &[
+            Slot::Dialog("workspaces.save_as", Dialog::SaveWorkspace),
+            Entry("workspaces.manager"),
         ],
     },
     Menu {

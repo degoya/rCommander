@@ -10,7 +10,7 @@ use crate::{
         App, Message, archive_ops,
         checksum::{self, ChecksumWindow},
         connections, database_dialog, drive_bar, file_ops, multi_rename, properties, quick_connect,
-        search, settings, ssh_exec, tabs,
+        search, settings, ssh_exec, tabs, workspaces,
     },
     i18n::t,
     theme::{Tokens, layout},
@@ -77,6 +77,7 @@ impl App {
                 DialogWindow::LoginScripts,
                 own && self.login_scripts.is_some(),
             ),
+            (DialogWindow::Workspaces, own && self.workspaces.is_some()),
         ];
         let open = open
             .into_iter()
@@ -181,6 +182,10 @@ impl App {
             | DialogWindow::JobError
             | DialogWindow::Progress => self.file_ops_body(kind, tokens),
             DialogWindow::Question(question) => return self.question_layers_of(question, tokens),
+            DialogWindow::Workspaces => self
+                .workspaces
+                .as_ref()
+                .map(|window| workspaces::body(window, self.workspaces_shown(), tokens)),
         };
         body.map(|body| layout::window_body(body, tokens))
             .into_iter()
@@ -226,6 +231,7 @@ impl App {
             | DialogWindow::JobError
             | DialogWindow::Progress => self.file_ops_title(kind),
             DialogWindow::Question(question) => return self.question_title(question),
+            DialogWindow::Workspaces => t!("workspaces.title"),
         };
         title.to_owned()
     }
@@ -249,6 +255,7 @@ pub(in crate::app) fn first_field(kind: DialogWindow) -> Option<&'static str> {
         DialogWindow::SshExec => Some(ssh_exec::COMMAND_FIELD),
         DialogWindow::Transfer | DialogWindow::NewItem => Some(file_ops::FIELD_ID),
         DialogWindow::Question(question) => question.first_field(),
+        DialogWindow::Workspaces => Some(workspaces::FILTER_FIELD),
         DialogWindow::Settings
         | DialogWindow::Queue
         | DialogWindow::Search

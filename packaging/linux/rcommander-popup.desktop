@@ -1,0 +1,12 @@
+# The hidden entry of rCommander's dialog windows (RC-100-70): they carry the window class
+# rcommander-popup (Wayland app_id, X11 WM_CLASS) so a tiling compositor can float them with one
+# rule; this entry gives docks and Alt+Tab their icon without a second menu item. Installed beside
+# rcommander.desktop by scripts/package-deb-rpm.sh.
+[Desktop Entry]
+Type=Application
+Name=rCommander
+Exec=rcommander
+Icon=rcommander
+Terminal=false
+NoDisplay=true
+StartupWMClass=rcommander-popup

@@ -24,6 +24,7 @@ use rc_engine::{
 use super::{
     DriveMessage,
     overflow::SPACING,
+    place::{self, Button},
     view::{
         FOLDER_ARROW, SMALL, button_style, kind_symbol, line_text, short_label, small, with_tooltip,
     },
@@ -232,6 +233,7 @@ fn drive_button<'a>(
             .spacing(4)
             .align_y(Alignment::Center),
     )
+    .id(place::id(side, Button::Line))
     .padding([1, 7])
     .style(move |_| button_style(tokens, false));
     mouse_area(face)

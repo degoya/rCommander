@@ -16,6 +16,8 @@ Rust.
 - Colour themes for the whole window and the terminal, built in or your own, switched from the
   command palette or a key, and a theme per connection or WSL distribution so each server's
   panel and terminal stand out.
+- Workspaces: both panels' tabs, servers and terminals saved under a name and brought back in
+  one step.
 - Every action is also available to AI agents through a built-in MCP server.
 - In English, German, French and Spanish.
 

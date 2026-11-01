@@ -4,7 +4,8 @@
 //!
 //! A row says one of: `palette` - the command palette runs it without parameters; `listed` - the
 //! palette has a row per item of a list for it, each with its parameters (`theme.select`, a row
-//! per theme and mode, RC-100-55, `themes.rs`), and says which; `via` - it is
+//! per theme and mode, RC-100-55, `themes.rs`; `workspaces.apply`, a row per workspace,
+//! RC-100-68, `workspaces.rs`), and says which; `via` - it is
 //! reached in what another command opens (`"via": "connections.manager"`, with `how`), or in a
 //! place of the window (`"via": "window:settings"`: a window key of the keymap, or one of
 //! `SURFACES`); `asked` - a question the window opens by itself runs it; `shown` - it is a
@@ -145,7 +146,10 @@ pub fn problems(ids: &[&str], keymap: &Keymap, rows: &[ReachRow]) -> Vec<String>
                     "{id}: the palette cannot run it without parameters"
                 ));
             }
-            Reach::Listed(_) if !super::themes::LISTED.contains(&id) => {
+            Reach::Listed(_)
+                if !super::themes::LISTED.contains(&id)
+                    && !super::workspaces::LISTED.contains(&id) =>
+            {
                 problems.push(format!(
                     "{id}: the palette makes no rows from a list for it"
                 ));

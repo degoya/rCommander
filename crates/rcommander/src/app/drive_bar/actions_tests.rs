@@ -14,6 +14,7 @@ fn drive(id: &str, group: DriveGroup, kind: DriveKind) -> Drive {
         space: None,
         folder: Vec::new(),
         favourite: false,
+        folder_buttons: Vec::new(),
         remote: (kind == DriveKind::Network).then(|| r"\\nas\media".to_owned()),
     }
 }

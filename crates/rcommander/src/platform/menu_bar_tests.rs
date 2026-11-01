@@ -77,6 +77,63 @@ fn alt_with_a_letter_opens_its_menu() {
     );
 }
 
+/// `SC_KEYMENU` goes on to Windows for Alt alone and a letter the bar may take; while the app
+/// draws the bar only for Alt+Space, so Alt alone opens no system menu (RC-100-66).
+#[test]
+fn the_key_menu_passes_by_the_bars_kind() {
+    let mut alt = keys();
+    assert!(
+        alt.key_menu_passes(None, false),
+        "Alt alone highlights the bar"
+    );
+    assert!(alt.key_menu_passes(Some('F'), false));
+    assert!(!alt.key_menu_passes(Some('x'), false), "no menu has it");
+    assert!(!alt.key_menu_passes(Some('f'), true), "Ctrl+Alt");
+
+    alt = AltKeys {
+        active: false,
+        drawn: true,
+        ..keys()
+    };
+    assert!(!alt.key_menu_passes(None, false), "no system menu on Alt");
+    assert!(
+        !alt.key_menu_passes(Some('f'), false),
+        "the drawn bar's letter"
+    );
+    assert!(!alt.key_menu_passes(Some('x'), false));
+    assert!(
+        alt.key_menu_passes(Some(' '), false),
+        "Alt+Space, the system menu"
+    );
+}
+
+/// The system's menu shows while the setting is on and the app does not draw the bar.
+#[test]
+fn the_native_menu_shows_only_when_not_drawn() {
+    let look = Look {
+        shown: true,
+        dark: false,
+        enabled: true,
+        alt_letters: true,
+        drawn: false,
+    };
+    assert!(look.native());
+    assert!(
+        !Look {
+            drawn: true,
+            ..look
+        }
+        .native()
+    );
+    assert!(
+        !Look {
+            shown: false,
+            ..look
+        }
+        .native()
+    );
+}
+
 /// `RC_MENU_BAR_THEME`: unset, empty or unknown is the fix; the other values turn rCommander's
 /// parts off one at a time.
 #[test]

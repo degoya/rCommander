@@ -57,6 +57,8 @@ struct Setup {
     info: Option<String>,
     /// Where each dialog window was left.
     dialogs: Vec<(DialogWindow, Geometry)>,
+    /// The workspace `workspaces.on_start` applies once the window runs (RC-100-68).
+    workspace: Option<rc_engine::WorkspaceId>,
 }
 
 /// Opens the window and runs until it closes.
@@ -100,6 +102,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 async fn prepare() -> Result<Setup, EngineError> {
     let mut notice = None;
     let mut info = None;
+    let mut workspace = None;
     // A restore staged in the last run is swapped in before anything opens the file - only the
     // one whose digest the window's restore stored in the database and that passes its check
     // again (RC-080-09); another file
@@ -172,7 +175,8 @@ async fn prepare() -> Result<Setup, EngineError> {
         engine.attach_db(db.clone());
         // The hidden-files switch of the last run.
         engine.restore_settings().await;
-        // The tabs of the last run (RC-010-03), unless a start folder is forced.
+        // The tabs of the last run (RC-010-03), unless a start folder is forced; then the
+        // workspace to start with, if one is set (RC-100-68).
         if std::env::var_os("RC_START_DIR").is_none() {
             match engine.restore_tabs().await {
                 Ok(relocated) => info = info.or(super::tabs::relocated_note(&relocated)),
@@ -180,6 +184,7 @@ async fn prepare() -> Result<Setup, EngineError> {
                     tracing::warn!(code = error.code(), "the last run's tabs were not restored");
                 }
             }
+            workspace = engine.start_workspace().await;
         }
         // The transfers the last run left in the middle, back in the queue, paused (RC-060-07).
         match engine.restore_transfers().await {
@@ -264,6 +269,7 @@ async fn prepare() -> Result<Setup, EngineError> {
         masks,
         info,
         dialogs,
+        workspace,
     })
 }
 
@@ -384,6 +390,16 @@ impl App {
         let terminal_copy = app.terminal_copy_task();
         // The quick search's settings and the command line's history (RC-010-08).
         let cmdline = super::cmdline::load(app.db.clone());
+        // The workspaces: the palette's rows, the menu, an active one's themes (RC-100-68);
+        // the one to start with applied.
+        let workspaces = app.workspaces_task();
+        let start = setup
+            .workspace
+            .map(|id| app.apply_workspace_now(id))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|effect| app.perform(effect));
+        let start = Task::batch(start.collect::<Vec<_>>());
         // Whether the menu bar shows, read once the main window is open: the bar is attached to
         // it then (RC-080-18).
         let opened = opened.discard().chain(app.menu_bar_task());
@@ -407,6 +423,8 @@ impl App {
                 tabs,
                 terminal_copy,
                 cmdline,
+                workspaces,
+                start,
             ]),
         )
     }

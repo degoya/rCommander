@@ -19,7 +19,7 @@
   { "keys": "Ctrl+F11", "kind": "free", "tc": "show programs only", "why": "file filters are not planned yet (later)" },
   { "keys": "Ctrl+F12", "kind": "free", "tc": "user-defined file filter", "why": "file filters are not planned yet (later)" },
   { "keys": "Ctrl+Shift+A", "kind": "differs", "tc": "list of the open tabs", "why": "while the panel shows its terminal it lists the terminal's sessions instead, and it works from inside a terminal too (RC-080-16)" },
-  { "keys": "Ctrl+Shift+W", "kind": "free", "tc": "close all tabs", "why": "not planned yet (later)" },
+  { "keys": "Ctrl+Shift+W", "kind": "differs", "tc": "close all tabs", "why": "the workspaces window (RC-100-68, owner 2026-11-01): both panels' tabs, views and terminals called up at once; closing all tabs is not planned" },
   { "keys": "Ctrl+Shift+Q", "kind": "differs", "tc": "Quick View window", "why": "the queue window (RC-010-14): Ctrl+Q shows the Quick View in the other panel, and a separate Quick View window is not planned" },
   { "keys": "Alt+F3", "kind": "free", "tc": "alternative viewer", "why": "F3 opens the external viewer when one is set; a second one is not planned yet" },
   { "keys": "Shift+F3", "kind": "free", "tc": "view only the file under the cursor", "why": "not planned yet (later)" },

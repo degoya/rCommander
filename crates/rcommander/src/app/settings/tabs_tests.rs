@@ -1,6 +1,8 @@
 use rc_engine::{SETTINGS, settings::SettingPage};
 
-use super::{APPEARANCE, APPEARANCE_TABS, PLUGINS, Tab, Tabs, appearance_tab, of, shows};
+use super::{
+    APPEARANCE, APPEARANCE_TABS, PLUGINS, Tab, Tabs, appearance_tab, here, here_on, of, shows,
+};
 use crate::app::{
     Message,
     harness::Harness,
@@ -147,4 +149,15 @@ fn the_keyboard_rows_are_under_general_and_the_keys_under_shortcuts() {
     tabs.choose(Tab::Shortcuts);
     assert_eq!(tabs.chosen(Page::Keyboard), Some(Tab::Shortcuts));
     assert_eq!(tabs.chosen(Page::Appearance), Some(Tab::Window), "its own");
+}
+
+/// The menu bar's style is a row on Windows only, beside the menu bar's switch; every other row
+/// everywhere (RC-100-66).
+#[test]
+fn the_menu_bar_style_is_drawn_on_windows_only() {
+    assert_eq!(appearance_tab("appearance.menu_bar_style"), Tab::Window);
+    assert!(here_on("appearance.menu_bar_style", true));
+    assert!(!here_on("appearance.menu_bar_style", false));
+    assert!(here_on("appearance.menu_bar", false));
+    assert_eq!(here("appearance.menu_bar_style"), cfg!(windows));
 }

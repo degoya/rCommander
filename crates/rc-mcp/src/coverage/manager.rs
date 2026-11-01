@@ -11,4 +11,8 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         "connections.set_favourite",
         Coverage::Covered("connections_set_favourite"),
     ),
+    (
+        "connections.set_folder_favourite",
+        Coverage::Covered("connections_set_folder_favourite"),
+    ),
 ];

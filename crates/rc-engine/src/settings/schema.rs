@@ -4,9 +4,7 @@
 //! Only settings the code reads today are here. The MCP token and the per-class policy are not
 //! rows: the token is a secret (shown only to copy), the policy has its own type in `rc-mcp`;
 //! both are protected like every `mcp.*` key. The rows of one area are in `schema/<area>.rs`
-//! (fonts, layout, keys, delete, drive_line, transfers, windows, exchange, mouse, checksum, sort,
-//! viewer, mcp, plugins, colours, archive, quick_search, ftp, sftp, update, language, macos,
-//! themes, wsl_themes); how a value is checked against its row is `schema/check.rs`.
+//! (the modules below); how a value is checked against its row is `schema/check.rs`.
 
 pub(super) mod archive;
 pub(super) mod backup;
@@ -18,6 +16,7 @@ mod delete;
 mod drive_line;
 pub(super) mod drives;
 mod exchange;
+mod folders;
 mod fonts;
 pub(super) mod ftp;
 mod keys;
@@ -40,6 +39,7 @@ pub(super) mod update;
 mod vault;
 pub(super) mod viewer;
 mod windows;
+pub(super) mod workspaces;
 pub(super) mod wsl_themes;
 
 pub use archive::ARCHIVE_ENTER_KEY;
@@ -271,6 +271,7 @@ pub const SETTINGS: &[SettingSpec] = &[
         restart: false,
     },
     layout::MENU_BAR,
+    layout::MENU_BAR_STYLE,
     macos::MACOS_LOOK,
     fonts::LIST_FONT,
     fonts::LIST_FONT_SIZE,
@@ -298,24 +299,10 @@ pub const SETTINGS: &[SettingSpec] = &[
     layout::PANEL_SPLIT,
     drive_line::VOLUME,
     drive_line::BUTTONS,
-    SettingSpec {
-        key: LEFT_START_KEY,
-        page: SettingPage::Folders,
-        kind: SettingKind::Path { default: "" },
-        label: "setting.folders.left_start",
-        help: "setting.folders.left_start.help",
-        protected: false,
-        restart: true,
-    },
-    SettingSpec {
-        key: RIGHT_START_KEY,
-        page: SettingPage::Folders,
-        kind: SettingKind::Path { default: "" },
-        label: "setting.folders.right_start",
-        help: "setting.folders.right_start.help",
-        protected: false,
-        restart: true,
-    },
+    folders::LEFT_START,
+    folders::RIGHT_START,
+    workspaces::APPLY_MODE,
+    workspaces::ON_START,
     quick_search::KEYS,
     quick_search::ANYWHERE,
     quick_search::CASE_SENSITIVE,
@@ -345,6 +332,8 @@ pub const SETTINGS: &[SettingSpec] = &[
     mouse::TAB_DRAG,
     drives::FOLLOW_OTHER_PANEL,
     drives::FOLLOW_ON_OWN_DRIVE,
+    drives::REFRESH_ON_FOCUS,
+    drives::REFRESH_ON_FOCUS_NETWORK,
     sort::SORT_NAMES,
     sort::SORT_NUMBERS,
     SettingSpec {

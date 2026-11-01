@@ -6,6 +6,9 @@ macro_rules! arms {
         $next! { $state, $self, { $($done)*
             Command::ConnectionManager {} => Ok($self.connection_manager()),
             Command::SetFavourite { id, favourite } => $self.set_favourite(id, favourite).await,
+            Command::SetFolderFavourite { id, favourite } => {
+                $self.set_folder_favourite(id, favourite).await
+            }
         } }
     };
 }

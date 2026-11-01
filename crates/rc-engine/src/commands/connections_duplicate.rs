@@ -62,9 +62,10 @@ impl Engine {
                     SaveError::Seal(error) => error,
                 })?
         };
-        // Right under the original: the same place, and the name sorts after it.
+        // Right under the original: the place after it (RC-100-63).
+        let under = db.connection_position(source.id).await? + 1;
         let copy = db
-            .move_connection(copy.id, source.folder_id, Some(source.sort_order))
+            .move_connection(copy.id, source.folder_id, Some(under))
             .await?;
         self.remember_ready(&ready);
         tracing::debug!(connection = %id, copy = %copy.id, secrets = ready.len(), "connection duplicated");

@@ -62,3 +62,19 @@ pub use crate::updates::{
     UpdateStatus, notice_of as update_notice_of,
 };
 pub use rc_update::Offer as UpdateOffer;
+// The engine's own types moved here from `lib.rs`, to keep it under 500 lines.
+pub use crate::archives::{ArchiveInfo, archive_file, shown_path};
+pub use crate::certs::{
+    CertificateAnswer, CertificateError, CertificateQuestion, CertificateQuestionKind,
+};
+pub use crate::comments::{DESCRIPTION_FILE, MAX_COMMENT};
+pub use crate::hotlist::HotlistEntry;
+// The workspaces (RC-100-68).
+pub use crate::keymap::{
+    MAX_WORKSPACE_KEY_DIGITS, WORKSPACE_KEY_PREFIX, workspace_key, workspace_key_name,
+};
+pub use crate::registry::{CreateWorkspaceRequest, UpdateWorkspaceRequest};
+pub use crate::workspaces::{
+    ApplyMode, PanelSpec, TabSpec, TermSpec, Workspace, WorkspaceError, WorkspaceId, WorkspaceSpec,
+    WorkspacesOutcome,
+};

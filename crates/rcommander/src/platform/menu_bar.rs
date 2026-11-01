@@ -1,8 +1,10 @@
 //! The native menu bar (RC-080-18): the menus the app builds (`app/palette/menu_bar.rs`) as a
 //! muda menu on the main window. On Windows it is a Win32 menu (`windows/menu_bar.rs` attaches
-//! it, keeps the client area's size, draws the bar dark and opens it with Alt); elsewhere nothing
-//! is attached yet - macOS gets muda's menu in the system's menu bar later (the plan is in the job
-//! file), Linux would need GTK, which the window does not use.
+//! it, keeps the client area's size, draws the bar dark and opens it with Alt) when the setting
+//! `appearance.menu_bar_style` is `native`; with `drawn` ([`detach`], RC-100-66) the window has
+//! no menu and the app draws the bar, the subclass only keeping Alt from Windows' system menu.
+//! macOS puts muda's menu into the system's menu bar; Linux would need GTK, which the window does
+//! not use, and always draws the bar.
 //!
 //! muda's menu is not `Send`: it is built inside `window::run`, on the event loop's thread, and
 //! kept there for the window's life ([`BAR`]). A choice comes back through muda's event handler,
@@ -20,6 +22,10 @@ use iced::{
 };
 use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+
+mod refill;
+
+pub use self::refill::refill;
 
 /// One menu as the system shows it: its title and its entries, each with its mnemonic's `&`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +56,19 @@ pub struct Look {
     pub enabled: bool,
     /// Whether Alt with a letter opens a menu, or belongs to the quick search or a terminal.
     pub alt_letters: bool,
+    /// rCommander draws the bar (`drawn::active`): no system menu on the window (RC-100-66).
+    pub drawn: bool,
+}
+
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "read by the Win32 half and the tests")
+)]
+impl Look {
+    /// Whether the system's menu shows: the setting on and the bar not drawn by rCommander.
+    pub fn native(self) -> bool {
+        self.shown && !self.drawn
+    }
 }
 
 /// How the dark bar is drawn: the diagnostic switch `RC_MENU_BAR_THEME`, read once at start, so
@@ -180,6 +199,15 @@ pub fn apply(id: window::Id, look: Look) -> Task<()> {
             apply_to(window, &bar.menu, bar.look, look);
             bar.look = look;
         });
+    })
+}
+
+/// Takes the system's menu off the main window `id`, if one is attached, without changing the
+/// client area's size, and leaves Alt to the bar the app draws, with `look` (RC-100-66).
+pub fn detach(id: window::Id, look: Look) -> Task<()> {
+    window::run(id, move |window| {
+        let attached = BAR.take();
+        detach_from(window, attached.as_ref().map(|bar| &bar.menu), look);
     })
 }
 
@@ -375,6 +403,15 @@ fn apply_to(window: &dyn window::Window, menu: &Menu, from: Look, to: Look) {
 #[cfg(not(windows))]
 fn apply_to(_window: &dyn window::Window, _menu: &Menu, _from: Look, _to: Look) {}
 
+#[cfg(windows)]
+fn detach_from(window: &dyn window::Window, menu: Option<&Menu>, look: Look) {
+    super::windows::menu_bar::detach(window, menu, look);
+}
+
+/// Elsewhere no menu is attached while the app draws the bar.
+#[cfg(not(windows))]
+fn detach_from(_window: &dyn window::Window, _menu: Option<&Menu>, _look: Look) {}
+
 /// What Alt does on the main window while the bar is there: pressed and let go alone it
 /// highlights the bar; with a menu's letter it opens that menu. Windows does both in
 /// `DefWindowProc`, which winit never calls for these keys; `windows/menu_bar.rs` feeds the key
@@ -387,8 +424,10 @@ fn apply_to(_window: &dyn window::Window, _menu: &Menu, _from: Look, _to: Look) 
 pub struct AltKeys {
     /// Alt went down alone, without Ctrl or Shift, and no other key or click came since.
     armed: bool,
-    /// The bar is shown and no dialog is open.
+    /// The system's menu is shown and no dialog is open.
     pub active: bool,
+    /// The app draws the bar (RC-100-66): no system menu is on the window, Alt is the app's.
+    pub drawn: bool,
     /// Alt with a letter is the bar's ([`Look::alt_letters`]).
     pub letters_free: bool,
     /// The menus' mnemonics, in lower case.
@@ -425,6 +464,18 @@ impl AltKeys {
         let letter = typed.to_lowercase().next()?;
         let open = self.active && self.letters_free && !ctrl && self.letters.contains(&letter);
         open.then_some(letter)
+    }
+
+    /// Whether a `WM_SYSCOMMAND`/`SC_KEYMENU` goes on to Windows: `typed` the letter it opens a
+    /// menu by, `None` for Alt alone. While the app draws the bar only Alt+Space does, the system
+    /// menu's own key - Alt alone would open the window's system menu, a letter beep. Else Alt
+    /// alone does, and a letter the bar may take (Ctrl held: `ctrl`).
+    pub fn key_menu_passes(&self, typed: Option<char>, ctrl: bool) -> bool {
+        match typed {
+            _ if self.drawn => typed == Some(' '),
+            None => true,
+            Some(typed) => self.letter(typed, ctrl).is_some(),
+        }
     }
 }
 

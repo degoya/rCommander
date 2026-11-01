@@ -51,6 +51,7 @@ mod theme;
 mod update;
 mod vault;
 mod viewer;
+mod workspaces;
 mod wsl;
 
 pub use render::{command_of, render_markdown};

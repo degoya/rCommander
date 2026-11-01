@@ -5,7 +5,7 @@
 #
 #   source "$ROOT/scripts/lib/tool-versions.sh"
 #   echo "$RC_NEXTEST_VERSION"
-#   rc_rust_version "$ROOT"          # 1.99.0
+#   rc_rust_version "$ROOT"          # 1.99.1
 
 # shellcheck disable=SC2034  # read by the scripts that source this file
 RC_NEXTEST_VERSION="0.9.146"

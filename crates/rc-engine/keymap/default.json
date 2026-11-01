@@ -113,5 +113,6 @@
   { "keys": "Ctrl+Shift+F3", "command": "compare.open_diff" },
   { "keys": "Alt+Shift+F2", "command": "sync.open_dialog" },
   { "keys": "Shift+F2", "command": "compare.select_differences" },
-  { "keys": "Ctrl+Shift+Q", "command": "queue.window" }
+  { "keys": "Ctrl+Shift+Q", "command": "queue.window" },
+  { "keys": "Ctrl+Shift+W", "command": "workspaces.manager" }
 ]

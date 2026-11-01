@@ -1,6 +1,7 @@
 //! The books of the dialog windows: which dialog has a window of its own under which id, where
 //! each was last, and which windows to open or close so the open ones are the dialogs the app's
-//! state shows; and those of the main window's menu bar (RC-080-18). No window is touched here.
+//! state shows; and those of the main window's menu bar (RC-080-18) and of the app's return
+//! from another program (RC-100-69). No window is touched here.
 
 use iced::window;
 use rc_engine::JobId;
@@ -8,6 +9,7 @@ use rc_engine::JobId;
 pub use super::dialog_window::DialogWindow;
 use crate::app::{
     palette::menu_bar::MenuBar,
+    refocus::Refocus,
     window_state::{Geometry, WindowChange, WindowState},
 };
 
@@ -50,6 +52,8 @@ pub struct DialogWindows {
     pub hides: bool,
     /// The window that has the keyboard, as the system last said; `None` while unknown.
     focused: Option<window::Id>,
+    /// Whether the app came back from another program, for the panels' refresh (RC-100-69).
+    pub refocus: Refocus,
     /// The file operation's question the main window showed when last looked at.
     asked: Option<JobId>,
     /// The windows hidden since their dialog closed, for its next opening
@@ -72,6 +76,7 @@ impl DialogWindows {
             own: false,
             hides: crate::platform::dialog_window::hides(),
             focused: None,
+            refocus: Refocus::default(),
             asked: None,
             parked: Vec::new(),
             question_owner: None,

@@ -7,15 +7,16 @@
 //! palette: [`THEME_TOKENS`], each `#rrggbb`. A token a theme lacks (an older theme, a new token)
 //! takes the fixed set of its mode. The accent is a colour or the system's ([`ThemeAccent`]).
 //!
-//! The built-in themes ([`BUILTIN_THEMES`]) are code: their ids, names and modes here, their
-//! colours in the window (`crates/rcommander/src/theme/builtin/`); they are neither changed nor
-//! deleted - Duplicate makes an own theme of one. Own themes are rows of `rc_db`'s `themes`
-//! table, checked here on the way in and on the way back. `theme.list` and `theme.select` are
-//! commands (`commands.rs`); the editor, the import and the export of a `.rctheme` file
-//! (`file.rs`) are the window's, through `theme.save` and `theme.delete`. The colours of
-//! RC-100-43 become an own theme at the start (`adopt.rs`).
+//! The built-in themes ([`BUILTIN_THEMES`]) are code: their ids, names and modes in
+//! `builtins.rs`, their colours in the window (`crates/rcommander/src/theme/builtin/`); they are
+//! neither changed nor deleted - Duplicate makes an own theme of one. Own themes are rows of
+//! `rc_db`'s `themes` table, checked here on the way in and on the way back. `theme.list` and
+//! `theme.select` are commands (`commands.rs`); the editor, the import and the export of a
+//! `.rctheme` file (`file.rs`) are the window's, through `theme.save` and `theme.delete`. The
+//! colours of RC-100-43 become an own theme at the start (`adopt.rs`).
 
 mod adopt;
+mod builtins;
 mod commands;
 mod file;
 
@@ -26,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use adopt::{CUSTOM_DARK, CUSTOM_LIGHT, adopt_colours};
+pub use builtins::{BUILTIN_THEMES, BuiltinTheme, builtin};
 pub use file::{
     FILE_EXTENSION, FILE_FORMAT, FILE_VERSION, ImportedTheme, MAX_FILE_BYTES, ThemeFileError,
     parse_file, write_file,
@@ -92,63 +94,6 @@ pub const OWN_PREFIX: &str = "own-";
 /// The theme of each mode while none is chosen.
 pub const DEFAULT_LIGHT: &str = "fluent-light";
 pub const DEFAULT_DARK: &str = "fluent-dark";
-
-/// A built-in theme: its id, its English name (the window shows it translated) and its mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BuiltinTheme {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub dark: bool,
-    /// Offered on macOS only: the Mac's own greys (RC-100-49).
-    pub macos_only: bool,
-}
-
-const fn builtin_row(id: &'static str, name: &'static str, dark: bool) -> BuiltinTheme {
-    BuiltinTheme {
-        id,
-        name,
-        dark,
-        macos_only: false,
-    }
-}
-
-/// The built-in themes, light and dark of each, in the order the window lists them.
-pub const BUILTIN_THEMES: [BuiltinTheme; 12] = [
-    builtin_row(DEFAULT_LIGHT, "Fluent", false),
-    builtin_row(DEFAULT_DARK, "Fluent", true),
-    BuiltinTheme {
-        macos_only: true,
-        ..builtin_row("mac-light", "Mac", false)
-    },
-    BuiltinTheme {
-        macos_only: true,
-        ..builtin_row("mac-dark", "Mac", true)
-    },
-    builtin_row("classic-light", "Classic", false),
-    builtin_row("classic-dark", "Classic", true),
-    builtin_row("high-contrast-light", "High contrast", false),
-    builtin_row("high-contrast-dark", "High contrast", true),
-    builtin_row("solarized-light", "Solarized", false),
-    builtin_row("solarized-dark", "Solarized", true),
-    builtin_row("nord-light", "Nord", false),
-    builtin_row("nord-dark", "Nord", true),
-];
-
-impl BuiltinTheme {
-    /// Whether this system offers it.
-    #[must_use]
-    pub fn available(&self) -> bool {
-        !self.macos_only || cfg!(target_os = "macos")
-    }
-}
-
-/// The built-in theme `id` this system offers.
-#[must_use]
-pub fn builtin(id: &str) -> Option<&'static BuiltinTheme> {
-    BUILTIN_THEMES
-        .iter()
-        .find(|theme| theme.id == id && theme.available())
-}
 
 /// The light or the dark mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -215,7 +215,7 @@ pub(super) fn page_view<'a>(
     if let Some(schema) = schema_page(page) {
         for spec in SETTINGS
             .iter()
-            .filter(|spec| spec.page == schema && tabs::shows(tab, spec))
+            .filter(|spec| spec.page == schema && tabs::shows(tab, spec) && tabs::here(spec.key))
         {
             rows = rows.push(setting_row(spec, draft, tokens));
         }

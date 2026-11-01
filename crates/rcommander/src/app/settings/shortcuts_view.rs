@@ -1,6 +1,7 @@
 //! Drawing the Shortcuts tab: the help line, the search, the table of keys - one stop of the
 //! focus ring -, the recording's prompt, the question before a key moves or the panel of "Add key
-//! for a theme..." (RC-100-55), and the tab's buttons.
+//! for a theme..." (RC-100-55) or "Add key for a workspace..." (RC-100-68), and the tab's
+//! buttons.
 
 use iced::{
     Alignment, Element, Length,
@@ -11,15 +12,19 @@ use rc_engine::{KeyContext, KeymapRow};
 use super::{
     draft::Draft,
     shortcuts::{
-        Recording, Selected, ShortcutsMsg, ShortcutsPage, ThemeKeyMsg, ThemeOption, keymap_of,
-        label, lock_reason, page_message, row_of, shown, theme_options,
+        Recording, Selected, ShortcutsMsg, ShortcutsPage, ThemeKeyMsg, ThemeOption,
+        WorkspaceKeyMsg, WorkspaceOption, keymap_of, label, lock_reason, page_message, row_of,
+        shown, theme_options, workspace_options,
     },
     view::hint,
 };
 use crate::{
     app::{
         Message,
-        palette::themes::{self, ThemeRow},
+        palette::{
+            themes::{self, ThemeRow},
+            workspaces::{self, WorkspaceRow},
+        },
     },
     i18n::t,
     theme::{self, Tokens, fit, focus, icon::Icon, layout},
@@ -36,6 +41,7 @@ pub fn view<'a>(
     let keymap = keymap_of(draft);
     let rows = shown(&keymap, &page.search);
     let known = themes::known();
+    let spaces = workspaces::rows();
     let find = t!("settings.shortcuts.find");
     let search = text_input(t!("settings.shortcuts.search"), &page.search)
         .on_input(|search| page_message(ShortcutsMsg::Search(search)))
@@ -64,11 +70,9 @@ pub fn view<'a>(
     } else {
         // The rows are one stop of the ring; the tab moves the selection with the arrows.
         focus::choice(
-            scrollable(Column::with_children(
-                rows.iter()
-                    .enumerate()
-                    .map(|(index, row)| key_row(page, row, index, &known, tokens)),
-            ))
+            scrollable(Column::with_children(rows.iter().enumerate().map(
+                |(index, row)| key_row(page, row, index, (&known, &spaces), tokens),
+            )))
             .height(Length::Fill),
             "settings.shortcuts.keys",
             None,
@@ -107,7 +111,11 @@ pub fn view<'a>(
     if let Some(adding) = &page.adding {
         body = body.push(theme_panel(adding.name.as_deref(), &known, tokens));
     }
-    body.push(buttons(page, selected, !known.is_empty())).into()
+    if let Some(adding) = &page.adding_workspace {
+        body = body.push(workspace_panel(adding.name.as_deref(), &spaces, tokens));
+    }
+    let any = (!known.is_empty(), !spaces.is_empty());
+    body.push(buttons(page, selected, any)).into()
 }
 
 /// One row: the action, its key - the reason in a tooltip when the window keeps it -, where it
@@ -116,7 +124,7 @@ fn key_row<'a>(
     page: &ShortcutsPage,
     row: &KeymapRow,
     index: usize,
-    known: &[ThemeRow],
+    (known, spaces): (&[ThemeRow], &[WorkspaceRow]),
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let this = Selected {
@@ -137,14 +145,19 @@ fn key_row<'a>(
     };
     // A theme key whose theme was deleted since (RC-100-55).
     let gone = themes::missing(&row.name, known);
+    // A workspace key whose workspace was deleted since (RC-100-68).
+    let gone_workspace = workspaces::missing(&row.name, spaces);
     let mark = match (row.locked, row.changed) {
         (Some(_), _) => t!("settings.shortcuts.locked"),
         (None, _) if gone => t!("settings.shortcuts.theme_missing"),
+        (None, _) if gone_workspace => t!("settings.shortcuts.workspace_missing"),
         (None, true) => t!("settings.shortcuts.changed"),
         (None, false) => "",
     };
     let mark_cell = fit::cell(mark, mark_share, row.locked.is_some(), tokens);
-    let words = themes::label_in(&row.name, known).unwrap_or_else(|| label(&row.name));
+    let words = themes::label_in(&row.name, known)
+        .or_else(|| workspaces::label_in(&row.name, spaces))
+        .unwrap_or_else(|| label(&row.name));
     let cells = vec![
         fit::cell(words, action, false, tokens),
         key_cell,
@@ -228,15 +241,62 @@ fn theme_panel<'a>(
     .into()
 }
 
-/// The selected row's buttons, then "Add key for a theme..." while there are themes, and "Reset
-/// all"; they wait while a key is recorded, the question or the theme's panel is open. A row the
-/// window keeps gets no other key and keeps its own.
+/// "Add key for a workspace...": the workspace to choose, then "Record key" or "Cancel"
+/// (RC-100-68).
+fn workspace_panel<'a>(
+    chosen: Option<&str>,
+    spaces: &[WorkspaceRow],
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    let options = workspace_options(spaces);
+    let selected = options
+        .iter()
+        .find(|option| Some(option.name.as_str()) == chosen)
+        .cloned();
+    let pick = |option: WorkspaceOption| {
+        page_message(ShortcutsMsg::Workspace(WorkspaceKeyMsg::Pick(option)))
+    };
+    let caption = t!("settings.shortcuts.workspace");
+    let moves = focus::moves(&options, selected.as_ref(), &pick);
+    let list = pick_list(options, selected, pick)
+        .text_size(theme::TEXT_SIZE)
+        .width(Length::Fill);
+    let list = layout::keyed(focus::Stop::pick(list, caption, moves), caption);
+    let message = |message| Some(page_message(ShortcutsMsg::Workspace(message)));
+    column![
+        fit::prose(t!("settings.shortcuts.workspace.help")).color(tokens.text_secondary),
+        row![layout::caption(caption, None), list]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        row![
+            layout::secondary_button(
+                t!("settings.shortcuts.workspace.record"),
+                chosen.and_then(|_| message(WorkspaceKeyMsg::Record)),
+            ),
+            layout::secondary_button(
+                t!("settings.shortcuts.workspace.cancel"),
+                message(WorkspaceKeyMsg::Cancel),
+            ),
+        ]
+        .spacing(layout::BUTTON_SPACING),
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// The selected row's buttons, then "Add key for a theme..." while there are themes, "Add key for
+/// a workspace..." while there are workspaces, and "Reset all"; they wait while a key is
+/// recorded, the question or a panel is open. A row the window keeps gets no other key and keeps
+/// its own.
 fn buttons<'a>(
     page: &ShortcutsPage,
     selected: Option<&KeymapRow>,
-    any_theme: bool,
+    (any_theme, any_workspace): (bool, bool),
 ) -> Element<'a, Message> {
-    let idle = page.recording.is_none() && page.asking.is_none() && page.adding.is_none();
+    let idle = page.recording.is_none()
+        && page.asking.is_none()
+        && page.adding.is_none()
+        && page.adding_workspace.is_none();
     let row_of_action = selected.filter(|row| idle && row.command.is_some());
     let free = row_of_action.filter(|row| row.locked.is_none());
     let on = |row: Option<&KeymapRow>, message: ShortcutsMsg| row.map(|_| page_message(message));
@@ -266,6 +326,11 @@ fn buttons<'a>(
             layout::secondary_button(
                 t!("settings.shortcuts.add_theme"),
                 (idle && any_theme).then(|| page_message(ShortcutsMsg::Theme(ThemeKeyMsg::Open))),
+            ),
+            layout::secondary_button(
+                t!("settings.shortcuts.add_workspace"),
+                (idle && any_workspace)
+                    .then(|| { page_message(ShortcutsMsg::Workspace(WorkspaceKeyMsg::Open)) }),
             ),
             layout::secondary_button(
                 t!("settings.shortcuts.reset_all"),

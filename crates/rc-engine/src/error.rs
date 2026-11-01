@@ -439,6 +439,10 @@ pub enum EngineError {
          Call again, and the person is asked about the folder it shows now"
     )]
     PanelChanged { panel: &'static str },
+    /// A workspace or its spec was refused (RC-100-68); keeps the code of its
+    /// [`crate::WorkspaceError`].
+    #[error(transparent)]
+    Workspace(crate::WorkspaceError),
 }
 
 /// The first few mismatches as `from -> to (problem)`.

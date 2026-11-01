@@ -136,6 +136,9 @@ const WITHOUT_A_WAY_IN: &[&str] = &[
     "queue.remove",
     "terminal.send_input",
     "vault.change_password",
+    // RC-100-68: the window makes a workspace of the panels as they are (`workspaces.capture`);
+    // one from a whole spec is for agents over MCP.
+    "workspaces.create",
 ];
 
 /// RC-080-16: no command stays without a way in but the reasoned exceptions above - a new
@@ -163,7 +166,12 @@ fn a_listed_row_names_a_command_the_palette_lists() {
         .filter(|row| matches!(row.reach, Reach::Listed(_)))
         .map(|row| row.command.as_str())
         .collect();
-    assert_eq!(listed, super::super::themes::LISTED);
+    let lists = [
+        super::super::themes::LISTED,
+        super::super::workspaces::LISTED,
+    ]
+    .concat();
+    assert_eq!(listed, lists);
     let mut rows = standard();
     let row = rows
         .iter_mut()

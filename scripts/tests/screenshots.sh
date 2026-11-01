@@ -79,6 +79,15 @@ printf '{"ok":true,"shots":[{"file":"missing.png"}]}' > "$SCRATCH/missing.json"
 run_status listed_shots "$SCRATCH/missing.json" "$OUT"
 expect_status "a missing picture is refused" 1
 expect_output "and named" "missing.png is listed but missing"
+printf '{"ok":true,"shots":[{"file":"a.png"}],"skipped":[{"name":"wsl-theme","reason":"no WSL here"}]}' \
+    > "$SCRATCH/skipped.json"
+run_status listed_shots "$SCRATCH/skipped.json" "$OUT"
+expect_status "a run that skipped a scene is read" 0
+expect_output "and the skipped scene is named with its reason" "scene 'wsl-theme' skipped: no WSL here"
+expect_output "beside the pictures it took" "a.png"
+printf '{"ok":true,"shots":[{"file":"a.png"}],"skipped":"wsl-theme"}' > "$SCRATCH/bad-skipped.json"
+run_status listed_shots "$SCRATCH/bad-skipped.json" "$OUT"
+expect_status "skipped scenes that are no list are refused" 1
 printf '{"ok":true,"shots":[]}' > "$SCRATCH/empty.json"
 run_status listed_shots "$SCRATCH/empty.json" "$OUT"
 expect_status "a run without pictures is refused" 1

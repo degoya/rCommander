@@ -16,7 +16,7 @@ use rc_engine::{Chord, CommandClass, EngineEvent, McpPanelContext, McpQuestion, 
 
 use super::{
     Setup,
-    out::{self, OutDir, Taken},
+    out::{self, OutDir, Skipped, Taken},
     scenes::{Ask, Capture, Look, Opening, Plan, Step},
 };
 use crate::{
@@ -34,10 +34,11 @@ const FIRST_QUESTION: u64 = u64::MAX;
 /// How many selected names a question shows, as the engine's do.
 const SHOWN_ENTRIES: usize = 5;
 
-/// What the run took, and why it stopped early.
+/// What the run took, what it skipped before the window opened, and why it stopped early.
 #[derive(Debug, Default)]
 pub struct Report {
     pub shots: Vec<Taken>,
+    pub skipped: Vec<Skipped>,
     pub error: Option<String>,
 }
 

@@ -2,7 +2,8 @@
 //! only on a click, only as `http`, `https` or `mailto`, and only through the system's handler -
 //! the same `open::that_detached` (`ShellExecuteW` on Windows) that `file.open` hands a file to,
 //! on a blocking thread. Every other scheme (`file:`, `javascript:`, a program's own) never
-//! opens; the status line says so and names the target.
+//! opens; the status line says so and names the target. The About page's published addresses
+//! open through the same gate (RC-100-64).
 
 /// The longest link that opens; a longer one is refused.
 const MAX_URL: usize = 2048;

@@ -59,6 +59,7 @@
   { "command": "mcp.answer", "asked": "the question of an MCP call waiting in the window" },
   { "command": "mcp.revoke", "palette": true },
   { "command": "connections.set_favourite", "via": "connections.manager", "how": "Space on a connection marks it for the drive bar" },
+  { "command": "connections.set_folder_favourite", "via": "connections.manager", "how": "Space on a folder, or its star in the toolbar, marks it for the drive bar" },
   { "command": "ops.answer", "asked": "the question of a running job: a conflict or a failing file" },
   { "command": "ops.cancel", "via": "ops.dialog", "how": "the progress window of a job the dialog started" },
   { "command": "ops.copy", "via": "ops.dialog", "how": "the copy dialog (F5) runs it as ops.copy_to" },
@@ -174,5 +175,14 @@
   { "command": "update.check", "palette": true },
   { "command": "update.download", "via": "window:settings", "how": "the Updates page of the settings: Download" },
   { "command": "update.install", "via": "window:settings", "how": "the Updates page of the settings: Install and restart" },
-  { "command": "update.status", "shown": "the Updates page of the settings and the notice in the status bar show it" }
+  { "command": "update.status", "shown": "the Updates page of the settings and the notice in the status bar show it" },
+  { "command": "workspaces.apply", "listed": "a row per workspace, such as Workspace: Servers - also Enter or a double click in the workspaces window, the menu bar's Workspaces menu, and a key of its own from the Shortcuts tab's Add key for a workspace" },
+  { "command": "workspaces.capture", "via": "workspaces.manager", "how": "Insert or New: a new workspace of the panels as they are, named first; Take current state into the one at the cursor; also the menu's Save current state as" },
+  { "command": "workspaces.create", "omitted": "the window makes a workspace of the panels as they are (workspaces.capture); one from a whole spec is for agents over MCP" },
+  { "command": "workspaces.delete", "via": "workspaces.manager", "how": "Delete or F8 on a workspace, after a question" },
+  { "command": "workspaces.get", "shown": "the workspaces window's form shows the workspace at the cursor" },
+  { "command": "workspaces.list", "shown": "the workspaces window's list, the Workspaces menu and the palette's rows" },
+  { "command": "workspaces.move", "via": "workspaces.manager", "how": "Ctrl+Up and Ctrl+Down, or the arrow buttons, move the workspace at the cursor" },
+  { "command": "workspaces.rename", "via": "workspaces.manager", "how": "F2 or Rename on the workspace at the cursor, the new name typed in the list" },
+  { "command": "workspaces.update", "via": "workspaces.manager", "how": "Save, or Apply with changes, stores the form: name, themes, active panel, split, tabs and terminals" }
 ]

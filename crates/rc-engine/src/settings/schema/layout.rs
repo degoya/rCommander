@@ -1,9 +1,10 @@
 //! The file lists' column widths and the divider between the panels (RC-010-20): dragged in the
 //! window, stored here, shared by both panels. A width is in pixels at the default list font
 //! size; the window scales it with the chosen size (RC-010-17). The owner column is switched on
-//! here too (RC-060-02), and the menu bar off (RC-080-18). None is protected.
+//! here too (RC-060-02), the menu bar off (RC-080-18) and its style (RC-100-66). None is
+//! protected.
 
-use super::{SettingKind, SettingPage, SettingSpec};
+use super::{Choice, SettingKind, SettingPage, SettingSpec};
 
 /// The extension column's width.
 pub const EXT_WIDTH_KEY: &str = "columns.ext_width";
@@ -23,6 +24,9 @@ pub const OWNER_COLUMN_KEY: &str = "columns.owner";
 pub const PANEL_SPLIT_KEY: &str = "panels.split_permille";
 /// Whether the menu bar shows at the window's top (RC-080-18).
 pub const MENU_BAR_KEY: &str = "appearance.menu_bar";
+/// Which menu bar Windows shows (RC-100-66): `drawn`, the bar rCommander draws in the theme's
+/// colours, or `native`, the Win32 menu. Linux always draws the bar, macOS always uses its own.
+pub const MENU_BAR_STYLE_KEY: &str = "appearance.menu_bar_style";
 
 /// The widest a fixed column gets.
 const MAX_WIDTH: i64 = 640;
@@ -121,6 +125,32 @@ pub(super) const MENU_BAR: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.appearance.menu_bar",
     help: "setting.appearance.menu_bar.help",
+    protected: false,
+    restart: false,
+};
+
+const MENU_BAR_STYLES: &[Choice] = &[
+    Choice {
+        value: "drawn",
+        label: "setting.appearance.menu_bar_style.drawn",
+    },
+    Choice {
+        value: "native",
+        label: "setting.appearance.menu_bar_style.native",
+    },
+];
+
+/// Drawn by default: the Win32 menu knows only light and one dark grey, not the themes
+/// (owner 2026-11-01, RC-100-66). Switched without a restart.
+pub(super) const MENU_BAR_STYLE: SettingSpec = SettingSpec {
+    key: MENU_BAR_STYLE_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Choice {
+        choices: MENU_BAR_STYLES,
+        default: "drawn",
+    },
+    label: "setting.appearance.menu_bar_style",
+    help: "setting.appearance.menu_bar_style.help",
     protected: false,
     restart: false,
 };

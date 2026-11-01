@@ -90,6 +90,12 @@ impl App {
         if manager && let Some(effects) = self.connections_intercept(message) {
             return Some(effects);
         }
+        // The workspaces window, as the connection manager (RC-100-68).
+        if self.reaches(DialogWindow::Workspaces, message)
+            && let Some(effects) = self.workspaces_intercept(message)
+        {
+            return Some(effects);
+        }
         if let Some(effects) = self.viewer_intercept(message) {
             return Some(effects);
         }

@@ -2,7 +2,7 @@ use rc_engine::{Command, ConnectionDraft, Outcome};
 use rmcp::{handler::server::wrapper::Parameters, model::CallToolResult};
 use serde_json::Value;
 
-use super::SetFavouriteParams;
+use super::{SetFavouriteParams, SetFolderFavouriteParams};
 use crate::test_support::Fixture;
 
 fn body(result: &CallToolResult) -> Value {
@@ -59,4 +59,65 @@ async fn an_agent_marks_a_server_of_the_drive_bar() {
         .await
         .expect("answer");
     assert_eq!(body(&unknown)["code"], "connection_not_found");
+}
+
+#[tokio::test]
+async fn an_agent_marks_a_folder_of_the_drive_bar() {
+    let built = Fixture::new().build().await;
+    let folder = |parent_id, name: &str| Command::CreateFolder {
+        parent_id,
+        name: name.to_owned(),
+    };
+    let Ok(Outcome::Folder { folder: work }) = built.engine.dispatch(folder(None, "work")).await
+    else {
+        panic!("a folder");
+    };
+    let Ok(Outcome::Folder { folder: staging }) = built
+        .engine
+        .dispatch(folder(Some(work.id), "staging"))
+        .await
+    else {
+        panic!("a folder");
+    };
+    built
+        .engine
+        .dispatch(Command::CreateConnection {
+            folder_id: Some(staging.id),
+            connection: ConnectionDraft::new("deep", "example.org"),
+        })
+        .await
+        .expect("created");
+    let server = built.server();
+
+    let marked = server
+        .connections_set_folder_favourite(Parameters(SetFolderFavouriteParams {
+            id: staging.id.0,
+            favourite: true,
+        }))
+        .await
+        .expect("answer");
+    let answer = body(&marked);
+    assert_eq!(answer["kind"], "drives", "{answer}");
+    let deep = answer["drives"]
+        .as_array()
+        .expect("drives")
+        .iter()
+        .find(|drive| drive["label"] == "deep")
+        .cloned()
+        .expect("deep");
+    // The top-level folder by default, and the marked subfolder.
+    assert_eq!(
+        deep["folder_buttons"],
+        serde_json::json!([1, 2]),
+        "{answer}"
+    );
+
+    let unknown = server
+        .connections_set_folder_favourite(Parameters(SetFolderFavouriteParams {
+            id: 99,
+            favourite: true,
+        }))
+        .await
+        .expect("answer");
+    assert_eq!(body(&unknown)["code"], "folder_not_found");
 }

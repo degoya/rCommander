@@ -20,7 +20,8 @@
 //! quick connection (Ctrl+N) is `quick_connect.rs`, the "Run command" dialog of an SSH connection
 //! `ssh_exec.rs`; the checksum, split and combine dialogs are `checksum/`; the multi-rename dialog
 //! (Ctrl+M) is `multi_rename.rs`; drag and drop and files on the clipboard are `drag.rs`;
-//! "Browse..." beside the path fields is `browse.rs`.
+//! "Browse..." beside the path fields is `browse.rs`; the workspaces window (Ctrl+Shift+W,
+//! RC-100-68) is `workspaces.rs`.
 
 mod archive_ops;
 mod archive_view;
@@ -62,6 +63,7 @@ mod properties;
 mod queue_window;
 mod quick_connect;
 mod quit;
+mod refocus;
 mod resize;
 mod scroll;
 mod search;
@@ -83,10 +85,11 @@ mod vault_offer;
 mod view;
 mod viewer;
 mod window_state;
+mod workspaces;
 
 use std::sync::{Arc, Mutex};
 
-use iced::{Task, Theme, window};
+use iced::{Task, window};
 use rc_db::Db;
 use rc_engine::{Command, Engine, EngineEvent, Keymap, PanelId};
 use tokio::sync::mpsc;
@@ -200,6 +203,8 @@ pub struct App {
     dialog_windows: dialog_windows::DialogWindows,
     /// What F10 does and the question before quitting (RC-080-17).
     quit: quit::Quit,
+    /// The workspaces window, while it is open (RC-100-68).
+    workspaces: Option<workspaces::WorkspaceWindow>,
 }
 
 impl App {
@@ -261,6 +266,7 @@ impl App {
             resize: resize::Resize::default(),
             dialog_windows: dialog_windows::DialogWindows::default(),
             quit: quit::Quit::default(),
+            workspaces: None,
         }
     }
 
@@ -275,16 +281,6 @@ impl App {
 
     fn pane_mut(&mut self, panel: PanelId) -> &mut Pane {
         &mut self.panes[panel.index()]
-    }
-
-    /// The main window's title, fixed as Total Commander's (owner, 2026-10-18): name, version
-    /// and author; the panels show the path. A dialog's window has the dialog's.
-    fn title(&self, id: window::Id) -> String {
-        self.window_title(id)
-    }
-
-    fn theme(&self, _window: window::Id) -> Option<Theme> {
-        Some(theme::iced_theme(theme::tokens(self.dark)))
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -473,9 +469,10 @@ impl App {
             Message::Queue(message) => return self.on_queue(message),
             Message::Browse(message) => return self.on_browse(message),
             Message::Resize(message) => return self.on_resize(message),
+            Message::Workspaces(message) => return self.on_workspaces(message),
             // The intercept closes the editor; without one open there is nothing to close. The
-            // self-update's messages are its intercept's (`update_ui.rs`).
-            Message::CloseLoginScripts | Message::Update(_) => {}
+            // self-update's messages are its intercept's (`update_ui.rs`), `Refocus` the queue's.
+            Message::CloseLoginScripts | Message::Update(_) | Message::Refocus(_) => {}
             Message::QuickConnect(message) => return self.on_quick_connect(message),
             Message::SshExec(message) => return self.on_ssh_exec(message),
             Message::CertTrust(message) => return self.on_cert_trust(message),

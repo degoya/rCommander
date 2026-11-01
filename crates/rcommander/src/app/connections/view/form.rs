@@ -40,6 +40,9 @@ pub(super) fn side<'a>(
         return vault_prompt(prompt, tokens);
     }
     let Some(form) = &manager.form else {
+        if let Some(rc_engine::TreeItem::Folder(id)) = manager.tree.current() {
+            return super::toolbar::folder_pane(manager, id, tokens);
+        }
         return container(hint(t!("connections.choose"), tokens))
             .padding(8)
             .into();

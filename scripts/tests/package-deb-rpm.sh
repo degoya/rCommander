@@ -3,9 +3,10 @@
 # scripts/package-deb-rpm.sh --render-only against a fake release tarball (RC-100-54): the nfpm
 # configs of both formats name the tarball's version and nfpm's architecture, put the program,
 # its plugins, VERSION.txt and the install-kind marker into /usr/lib/rcommander with the
-# /usr/bin link, ship the menu entry and the hicolor icons from 48 to 512 px and the SVG, and keep
-# no placeholder; the marker names its format; a tarball named for another version, a test name
-# or a missing program is refused. nfpm itself runs in release.yml and packages-repo.yml.
+# /usr/bin link, ship the menu entry and the dialogs' hidden entry with their window classes
+# (RC-100-70) and the hicolor icons from 48 to 512 px and the SVG, and keep no placeholder; the
+# marker names its format; a tarball named for another version, a test name or a missing program
+# is refused. nfpm itself runs in release.yml and packages-repo.yml.
 #
 #   scripts/tests/package-deb-rpm.sh
 # shellcheck disable=SC2016  # the conditions are single-quoted on purpose: expect_true evaluates them
@@ -53,6 +54,8 @@ expect "the program, its plugins, VERSION.txt, the marker and the link" \
 expect "the link points at the program" "/usr/lib/rcommander/rcommander" \
     "$(config "$deb" '[e["src"] for e in c["contents"] if e["dst"] == "/usr/bin/rcommander"][0]')"
 expect "the menu entry" "1" "$(config "$deb" 'sum(e["dst"] == "/usr/share/applications/rcommander.desktop" for e in c["contents"])')"
+expect "the dialogs' hidden entry" "1" "$(config "$deb" 'sum(e["dst"] == "/usr/share/applications/rcommander-popup.desktop" for e in c["contents"])')"
+expect "the rpm carries it too" "1" "$(config "$rpm" 'sum(e["dst"] == "/usr/share/applications/rcommander-popup.desktop" for e in c["contents"])')"
 expect "the hicolor icons" \
     "128x128 256x256 48x48 512x512 64x64 scalable" \
     "$(config "$deb" '" ".join(sorted(e["dst"].split("/")[5] for e in c["contents"] if "/hicolor/" in e["dst"]))')"
@@ -61,6 +64,13 @@ expect "the rpm's glibc floor" "glibc >= 2.39" "$(config "$rpm" 'c["overrides"][
 expect_true "the menu entry exists" '[[ -f "$ROOT/packaging/linux/rcommander.desktop" ]]'
 expect "the menu entry starts the command with the icon" "Exec=rcommander Icon=rcommander" \
     "$(grep -E '^(Exec|Icon)=' "$ROOT/packaging/linux/rcommander.desktop" | tr '\n' ' ' | sed 's/ $//')"
+expect "the menu entry names the main window's class" "StartupWMClass=rcommander" \
+    "$(grep -E '^StartupWMClass=' "$ROOT/packaging/linux/rcommander.desktop")"
+popup="$ROOT/packaging/linux/rcommander-popup.desktop"
+expect_true "the dialogs' entry exists" '[[ -f "$popup" ]]'
+expect "the dialogs' entry is hidden, with the icon and the popup class" \
+    "Icon=rcommander NoDisplay=true StartupWMClass=rcommander-popup" \
+    "$(grep -E '^(Icon|NoDisplay|StartupWMClass)=' "$popup" | tr '\n' ' ' | sed 's/ $//')"
 
 run_status render "$(tarball 1.6.0 arm64)" "$SCRATCH/arm" --rpm
 expect_status "an arm64 tarball, the rpm only" 0

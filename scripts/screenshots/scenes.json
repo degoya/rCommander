@@ -126,6 +126,20 @@
         { "key": "Escape" },
         { "open": "settings", "page": "appearance", "tab": "themes" }
       ]
+    },
+    {
+      "name": "wsl-theme",
+      "theme": "dark",
+      "settle_ms": 2000,
+      "steps": [
+        { "close": "settings" },
+        { "command": { "command": "settings.set", "params": { "key": "appearance.connection_themes", "value": true } } },
+        { "command": { "command": "settings.set", "params": { "key": "appearance.wsl_themes", "value": "{wsl}\tsolarized-light\tsolarized-dark" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
+        { "command": { "command": "panel.set_cursor", "params": { "panel": "left", "target": "Documents" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "\\\\wsl.localhost\\{wsl}\\usr" } } },
+        { "command": { "command": "panel.switch_active", "params": { "panel": "left" } } }
+      ]
     }
   ]
 }

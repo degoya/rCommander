@@ -7,19 +7,24 @@
 //! *Licences* shows rCommander's own licence and every crate the binary links with its licence,
 //! from the list `scripts/licenses.sh` generates ([`licenses`]), with a filter and a count per
 //! licence. An address the repository does not publish yet is text marked "not yet published",
-//! never a link; a published one is copied with a click (nothing here starts a browser).
+//! never a link. A published one opens in the default browser with a click (RC-100-64, which
+//! reverses RC-010-19's copy-only links): through the Markdown preview's
+//! [`links::open`](crate::app::viewer::links::open) - only `http`, `https` or `mailto`, its length
+//! capped, `open::that_detached` on a blocking thread. The copy button beside it puts the address
+//! on the clipboard; when the system refuses to open it, the address is copied and a note says so.
 
 mod licenses;
 mod logo;
 mod view;
 
+use iced::Task;
 use rc_engine::about::{About, NAME, VERSION, author};
 
 pub use self::logo::window_icon;
 pub(super) use self::view::view;
 use super::{SettingsMessage, wrap};
 use crate::{
-    app::{App, Effect, Message},
+    app::{App, Effect, Message, viewer::links},
     i18n::t,
     theme::page_tabs,
 };
@@ -75,6 +80,18 @@ pub enum AboutMsg {
     CopyVersion,
     /// A published address, to the clipboard.
     CopyLink(String),
+    /// A published address, to the default browser.
+    OpenLink(String),
+    /// Whether the system took the address [`AboutMsg::OpenLink`] handed it.
+    LinkOpened(String, bool),
+}
+
+/// What a published address sends: a click opens it, its copy button copies it.
+fn link_messages(url: &str) -> [AboutMsg; 2] {
+    [
+        AboutMsg::OpenLink(url.to_owned()),
+        AboutMsg::CopyLink(url.to_owned()),
+    ]
 }
 
 fn about_message(message: AboutMsg) -> Message {
@@ -151,6 +168,18 @@ impl App {
             }
             AboutMsg::CopyLink(url) => {
                 dialog.note = Some((t!("settings.about.link_copied").to_owned(), false));
+                url
+            }
+            AboutMsg::OpenLink(url) if links::opens(&url) => {
+                let opening = links::open(url.clone());
+                return vec![Effect::Task(Task::perform(opening, move |opened| {
+                    about_message(AboutMsg::LinkOpened(url.clone(), opened))
+                }))];
+            }
+            AboutMsg::LinkOpened(_, true) => return Vec::new(),
+            // Refused before or by the system: the address is copied instead.
+            AboutMsg::OpenLink(url) | AboutMsg::LinkOpened(url, false) => {
+                dialog.note = Some((t!("settings.about.link_not_opened").to_owned(), true));
                 url
             }
         };

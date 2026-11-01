@@ -186,7 +186,8 @@ pub(crate) struct MoveParams {
     /// The folder id to move it into; the root when omitted.
     #[serde(default)]
     pub folder_id: Option<i64>,
-    /// Its place among the folder's connections (smaller first); after the last when omitted.
+    /// Its position among the folder's connections: 0 is the first, past the last is the last;
+    /// after the last when omitted. The folder's connections are numbered 0, 1, 2, ... again.
     #[serde(default)]
     pub sort_order: Option<i64>,
 }
@@ -221,7 +222,8 @@ pub(crate) struct FolderMoveParams {
     /// The new parent folder's id; the root when omitted.
     #[serde(default)]
     pub parent_id: Option<i64>,
-    /// Its place among the parent's folders (smaller first); after the last when omitted.
+    /// Its position among the parent's folders: 0 is the first, past the last is the last;
+    /// after the last when omitted. The parent's folders are numbered 0, 1, 2, ... again.
     #[serde(default)]
     pub sort_order: Option<i64>,
 }
@@ -284,7 +286,7 @@ impl RcMcpServer {
 #[tool_router(router = connections_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase: whether a secret of that kind is stored, key: a private key stored in the vault as {type, fingerprint, comment, stored: true}, or null, and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, key and connections (how many use it). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key or passphrase itself."
+        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase: whether a secret of that kind is stored, key: a private key stored in the vault as {type, fingerprint, comment, stored: true}, or null, and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, key and connections (how many use it). bar_folders: the ids of the folders the drive bar shows as buttons (connections_set_folder_favourite). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key or passphrase itself."
     )]
     pub(crate) async fn connections_list(&self) -> ToolResult {
         let engine = &self.context.engine;
@@ -381,7 +383,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Move a connection into a folder (the root when folder_id is omitted), after its last connection or at sort_order. Errors: connection_not_found, folder_not_found, name_taken."
+        description = "Move a connection into a folder (the root when folder_id is omitted), after its last connection or to the position sort_order among its connections (0 is the first); moving it within its own folder reorders it. Errors: connection_not_found, folder_not_found, name_taken."
     )]
     pub(crate) async fn connections_move(
         &self,
@@ -437,7 +439,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Move a connection folder with everything inside into another folder (the root when parent_id is omitted). Never into itself or one of its subfolders (folder_cycle). Errors: folder_not_found, folder_cycle, folder_too_deep, name_taken, text_too_long."
+        description = "Move a connection folder with everything inside into another folder (the root when parent_id is omitted), after its last folder or to the position sort_order among its folders (0 is the first); moving it within its own parent reorders it. Never into itself or one of its subfolders (folder_cycle). Errors: folder_not_found, folder_cycle, folder_too_deep, name_taken, text_too_long."
     )]
     pub(crate) async fn connections_folder_move(
         &self,

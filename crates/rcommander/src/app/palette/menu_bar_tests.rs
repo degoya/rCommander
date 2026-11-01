@@ -192,6 +192,7 @@ fn the_books_attach_once_and_then_follow_the_look() {
         dark: false,
         enabled: true,
         alt_letters: true,
+        drawn: false,
     };
     let mut bar = MenuBar::default();
     let hidden = Look {
@@ -208,6 +209,69 @@ fn the_books_attach_once_and_then_follow_the_look() {
     assert_eq!(bar.step(Look { dark: true, ..look }), Step::Apply);
     assert_eq!(bar.step(hidden), Step::Apply);
     assert_eq!(bar.step(hidden), Step::Nothing);
+}
+
+/// The style switched to the drawn bar takes the system's menu off, and back attaches it again;
+/// a drawn bar from the start attaches nothing and only hands the keys on (RC-100-66).
+#[test]
+fn the_books_detach_for_the_drawn_bar_and_attach_again() {
+    let native = Look {
+        shown: true,
+        dark: false,
+        enabled: true,
+        alt_letters: true,
+        drawn: false,
+    };
+    let drawn = Look {
+        drawn: true,
+        ..native
+    };
+    let mut bar = MenuBar::default();
+    assert_eq!(bar.step(drawn), Step::Detach, "the keys, no menu");
+    assert_eq!(bar.step(drawn), Step::Nothing);
+    assert_eq!(
+        bar.step(Look {
+            dark: true,
+            ..drawn
+        }),
+        Step::Detach
+    );
+    assert_eq!(bar.step(native), Step::Attach);
+    assert_eq!(
+        bar.step(Look {
+            enabled: false,
+            ..native
+        }),
+        Step::Apply
+    );
+    assert_eq!(bar.step(drawn), Step::Detach, "taken off");
+    let hidden = Look {
+        shown: false,
+        ..native
+    };
+    assert_eq!(bar.step(hidden), Step::Detach, "no menu to hide: the keys");
+    assert_eq!(bar.step(native), Step::Attach, "built and attached again");
+    assert_eq!(bar.step(hidden), Step::Apply, "hidden, still attached");
+    assert_eq!(bar.step(drawn), Step::Detach);
+}
+
+/// The setting `appearance.menu_bar_style` as stored, the drawn bar by default.
+#[tokio::test]
+async fn the_style_is_read_from_the_database() {
+    let db = rc_db::Db::open_in_memory().await.expect("db");
+    assert_eq!(menu_bar_style(db.clone()).await, Style::Drawn);
+    db.set(rc_engine::settings::MENU_BAR_STYLE_KEY, "native")
+        .await
+        .expect("stored");
+    assert_eq!(menu_bar_style(db.clone()).await, Style::Native);
+    db.set(rc_engine::settings::MENU_BAR_STYLE_KEY, "sideways")
+        .await
+        .expect("stored");
+    assert_eq!(
+        menu_bar_style(db).await,
+        Style::Drawn,
+        "unknown: the default"
+    );
 }
 
 /// The popup menus are told the look the first time and at each change, also with the bar hidden.

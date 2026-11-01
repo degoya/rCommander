@@ -166,6 +166,7 @@ impl RcMcpServer {
             + Self::app_router()
             + Self::update_router()
             + Self::theme_router()
+            + Self::workspaces_router()
     }
 
     /// The names of every tool, sorted: what the coverage test holds the table against.

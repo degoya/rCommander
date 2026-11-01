@@ -98,8 +98,8 @@ jobs:
             desktop-file-utils python3-yaml
       - name: Install nfpm
         run: scripts/release-channels.sh install-nfpm
-      - name: The menu entry is valid
-        run: desktop-file-validate packaging/linux/rcommander.desktop
+      - name: The menu entries are valid
+        run: desktop-file-validate packaging/linux/rcommander.desktop packaging/linux/rcommander-popup.desktop
       - name: Test the scripts
         run: |
           scripts/tests/package-deb-rpm.sh

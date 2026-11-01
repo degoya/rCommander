@@ -115,6 +115,13 @@ pub struct Taken {
     pub height: u32,
 }
 
+/// A scene checked but not shot on this machine, and why (RC-100-56: `{wsl}` without WSL).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Skipped {
+    pub name: String,
+    pub reason: String,
+}
+
 /// The run's outcome, written once at its end.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Manifest {
@@ -123,6 +130,8 @@ pub struct Manifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub shots: Vec<Taken>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<Skipped>,
 }
 
 /// Writes `manifest` to `path`.

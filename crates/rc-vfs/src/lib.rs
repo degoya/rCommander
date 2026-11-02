@@ -13,11 +13,14 @@
 //! system in memory for the tests of crates that work against [`Vfs`]; `testing` (the same
 //! feature) has what such tests wrap a backend with. [`TimeoutFs`] holds any
 //! backend to a time limit and lets its waiting calls be stopped: a share that does not answer
-//! never holds the caller (RC-080-04).
+//! never holds the caller (RC-080-04). A portable device (a phone over MTP) is
+//! [`BackendId::Device`] on Windows, a gvfs folder on the local backend on Linux ([`device`],
+//! RC-100-61).
 
 mod archive;
 #[cfg(any(test, feature = "conformance"))]
 pub mod conformance;
+mod device;
 mod entry;
 mod error;
 mod local;
@@ -39,6 +42,7 @@ pub use archive::{
     ArchiveEntryInfo, ArchiveFormat, ArchiveFs, ArchiveItem, ArchiveLimits, ArchivePassword,
     ArchiveSettings, Compression, UnsafeName, detect_format, detect_format_within,
 };
+pub use device::{DeviceFs, DeviceHub, PortableDevice, system_hub};
 pub use entry::{
     Attributes, Capabilities, Entry, EntryKind, Owner, SetAttributes, TargetKind, WindowsFlags,
     unix_seconds, unix_time,
@@ -90,6 +94,12 @@ pub enum BackendId {
     Sftp {
         /// The connection's id in `rcommander.db`.
         connection_id: i64,
+    },
+    /// A portable device (MTP) through Windows Portable Devices: `/` is the device, its storages
+    /// the top folders ([`DeviceFs`], RC-100-61).
+    Device {
+        /// The device's WPD id.
+        device: String,
     },
 }
 

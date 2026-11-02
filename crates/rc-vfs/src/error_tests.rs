@@ -91,7 +91,8 @@ fn one_of_each() -> Vec<VfsError> {
             path: path.clone(),
             seconds: 20,
         },
-        VfsError::Cancelled { path },
+        VfsError::Cancelled { path: path.clone() },
+        VfsError::DeviceUnavailable { path },
     ];
     for sample in &samples {
         match sample {
@@ -111,7 +112,8 @@ fn one_of_each() -> Vec<VfsError> {
             | VfsError::PasswordWrong { .. }
             | VfsError::SymlinkPrivilege { .. }
             | VfsError::TimedOut { .. }
-            | VfsError::Cancelled { .. } => {}
+            | VfsError::Cancelled { .. }
+            | VfsError::DeviceUnavailable { .. } => {}
         }
     }
     samples
@@ -144,4 +146,12 @@ fn a_timeout_and_a_cancel_keep_their_codes_through_a_stream() {
         seconds: 20,
     };
     assert_eq!(shown.to_string(), "/share: no answer within 20 s");
+}
+
+/// A device that went away mid-transfer keeps its code through a stream (RC-100-61).
+#[test]
+fn an_unavailable_device_keeps_its_code_through_a_stream() {
+    let gone = VfsError::DeviceUnavailable { path: "/x".into() }.into_io();
+    assert_eq!(gone.kind(), io::ErrorKind::NotConnected);
+    assert_eq!(VfsError::from_io(gone, "/y").code(), "device_unavailable");
 }

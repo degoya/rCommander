@@ -9,7 +9,8 @@ A two-panel file manager in the tradition of Total Commander and Double Commande
 Rust.
 
 - Two panels with tabs; each panel shows either the file list or a terminal.
-- WSL distributions and SSH servers in the drive bar, next to the local drives.
+- WSL distributions, SSH servers and phones or cameras on USB (MTP, Windows and Linux) in the
+  drive bar, next to the local drives.
 - A small SSH connection manager: servers, keys, credentials and login scripts, stored
   encrypted behind an optional master password.
 - Copying local to remote and remote to remote over SFTP and FTP/FTPS; multi-rename.

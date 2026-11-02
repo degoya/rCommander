@@ -6,7 +6,8 @@
 # Copied from rDownloader's scripts/winget-supersede.sh (RD-1280-03) at commit 8c30caac8.
 #
 # Closed is a pull request that is open, authored by the account `gh` is signed in as (the
-# WINGET_TOKEN's), titled exactly `New version: degoya.rCommander version X`, with X older than
+# WINGET_TOKEN's), titled exactly `Add version: degoya.rCommander version X` (komac's title; older
+# komac wrote `New version:`, also taken), with X older than
 # the version just submitted - never one of another author, never a merged one, never one for the
 # same or a newer version (a re-run's duplicate stays for a human). Each gets the comment
 # "Superseded by #<new>". The new pull request's number comes from komac's log, else from the
@@ -22,7 +23,14 @@ set -euo pipefail
 
 REPO="${RC_WINGET_REPO:-microsoft/winget-pkgs}"
 IDENTIFIER="degoya.rCommander"
-TITLE_PREFIX="New version: ${IDENTIFIER} version "
+# The version from a title komac gives a pull request, `Add version: ...` or `New version: ...`.
+TITLE_SUFFIX=" version: ${IDENTIFIER} version "
+title_version() {
+    case "$1" in
+        "Add${TITLE_SUFFIX}"* | "New${TITLE_SUFFIX}"*) printf '%s' "${1#*"${TITLE_SUFFIX}"}" ;;
+        *) return 1 ;;
+    esac
+}
 
 [[ $# -ge 1 && $# -le 2 && "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || {
     echo "usage: scripts/winget-supersede.sh <version> [<komac log>]" >&2
@@ -61,8 +69,11 @@ if [[ -n "$log" && -f "$log" ]]; then
     new="$(grep -oE "${REPO}/pull/[0-9]+" "$log" | tail -n 1 | sed 's#.*/##' || true)"
 fi
 if [[ -z "$new" ]]; then
-    new="$(awk -F '\t' -v me="$me" -v title="${TITLE_PREFIX}${version}" \
-        '$2 == me && $3 == title { print $1 }' <<< "$open" | sort -n | tail -n 1)"
+    new="$(while IFS=$'\t' read -r number author title; do
+        if [[ "$author" == "$me" && "$(title_version "$title")" == "$version" ]]; then
+            echo "$number"
+        fi
+    done <<< "$open" | sort -n | tail -n 1)"
 fi
 if [[ -z "$new" ]]; then
     warn "no open pull request for ${IDENTIFIER} ${version} in ${REPO}; no older one is closed"
@@ -72,8 +83,7 @@ fi
 closed=0
 while IFS=$'\t' read -r number author title; do
     [[ -n "$number" && "$number" != "$new" && "$author" == "$me" ]] || continue
-    [[ "$title" == "${TITLE_PREFIX}"* ]] || continue
-    old="${title#"${TITLE_PREFIX}"}"
+    old="$(title_version "$title")" || continue
     [[ "$old" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || continue
     older "$old" "$version" || continue
     if gh pr close "$number" --repo "$REPO" --comment "Superseded by #${new}" > /dev/null; then

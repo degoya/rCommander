@@ -1,5 +1,20 @@
 # Changes
 
+## 0.1.3
+
+The limit against SVG bombs counts what the renderer really builds. An SVG embedded as a `data:`
+picture now counts against it each time it is drawn, an id defined twice is taken at its first
+element, and a reference with spaces around `#id` is followed. Any of these let a small file make
+the renderer build billions of elements before. Markers count once for every vertex they are
+drawn on, patterns once for every shape painted with them, nested ones included, and the canvases
+patterns are drawn into have a limit of their own; a ring of markers or patterns that refer to
+each other is refused.
+
+## 0.1.2
+
+Drawn with resvg 0.49: an SVG that names its link both as `href` and `xlink:href` follows
+`href`, as SVG 2 asks. An SVG embedded as a `data:` picture still draws no picture of its own.
+
 ## 0.1.1
 
 Built against plugin contract 0.3.0; nothing else changed.

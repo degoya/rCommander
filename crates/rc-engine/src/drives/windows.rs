@@ -10,7 +10,10 @@
 use std::{
     io,
     path::{Path, PathBuf},
+    sync::Arc,
 };
+
+use rc_vfs::DeviceHub;
 
 use winsafe::{self as w, co};
 
@@ -79,6 +82,11 @@ impl DriveSource for System {
 
     fn restore_network(&self, letter: char) -> Result<(), u32> {
         wnet::restore(letter)
+    }
+
+    /// The phones and cameras of Windows Portable Devices, RC-100-61.
+    fn device_hub(&self) -> Arc<dyn DeviceHub> {
+        rc_vfs::system_hub()
     }
 }
 

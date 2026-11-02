@@ -149,10 +149,10 @@ pub(super) fn keys_of(keymap: &Keymap, name: &str) -> String {
 }
 
 /// The name in brackets after the drive: a network drive's folder or the volume name, a
-/// server's or a distribution's name; none for a drive without one.
+/// server's, a distribution's or a device's name; none for a drive without one.
 pub(super) fn volume_name(drive: &Drive) -> Option<&str> {
     match drive.group {
-        DriveGroup::Wsl | DriveGroup::Servers => Some(drive.label.as_str()),
+        DriveGroup::Wsl | DriveGroup::Servers | DriveGroup::Devices => Some(drive.label.as_str()),
         DriveGroup::Drives => drive.remote.as_deref().or(drive.volume.as_deref()),
     }
     .filter(|name| !name.is_empty())

@@ -26,7 +26,9 @@ use std::{
 use russh::{
     Channel, ChannelId, MethodKind, MethodSet, Sig,
     keys::{PrivateKey, PublicKey},
-    server::{self, Auth, ChannelOpenHandle, Msg, Response, Session},
+    server::{
+        self, Auth, ChannelOpenHandle, Msg, PublicKeyOffer, Response, Session, VerifiedPublicKey,
+    },
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 
@@ -286,13 +288,17 @@ impl server::Handler for Handler {
     async fn auth_publickey_offered(
         &mut self,
         _user: &str,
-        key: &PublicKey,
+        offer: PublicKeyOffer<'_>,
     ) -> Result<Auth, Self::Error> {
-        Ok(self.authorized(key))
+        Ok(self.authorized(offer.public_key))
     }
 
-    async fn auth_publickey(&mut self, _user: &str, key: &PublicKey) -> Result<Auth, Self::Error> {
-        Ok(self.authorized(key))
+    async fn auth_publickey(
+        &mut self,
+        _user: &str,
+        key: VerifiedPublicKey<'_>,
+    ) -> Result<Auth, Self::Error> {
+        Ok(self.authorized(key.public_key))
     }
 
     async fn auth_keyboard_interactive<'a>(

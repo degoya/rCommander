@@ -252,6 +252,7 @@ pub(super) fn kind_symbol(kind: DriveKind) -> &'static str {
         DriveKind::Unknown => "\u{25ab}",
         DriveKind::Wsl => "\u{1f427}",
         DriveKind::Server => "\u{1f5a5}",
+        DriveKind::Device => "\u{1f4f1}",
     }
 }
 

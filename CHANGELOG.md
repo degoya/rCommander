@@ -5,6 +5,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-02
+
+### Added
+
+- **Phones, tablets and cameras as drives** (RC-100-61): a device on USB over MTP shows in the
+  drive bar under its own name with a phone symbol, in a group "Devices", and appears or goes
+  without a restart. Its storages are its top folders; files are read, copied and moved both ways
+  through the queue, deleted, and folders created - what the device says it cannot do is refused
+  before it is asked. A locked phone, or one not set to "File transfer", says so
+  (`device_unavailable`) instead of showing an empty folder. Windows through WPD (`rc-vfs`
+  `device`, `BackendId::Device`, a file written onto the device spooled to a temporary file and
+  sent whole), Linux through gvfs (`gio mount`, the mount folder on the local backend); macOS
+  lists none. Setting `drives.portable_devices` (on). MCP: `drives_list` lists the devices,
+  `panel_change_drive` opens one; no new command.
+
+### Changed
+
+- **aes 0.9.4**: the semver-compatible update before 0.17.0 (`cargo update`, transitive through
+  zip's `aes-crypto`).
+- **rc-ops integration tests in one binary** (RC-080-49): the 31 test files in
+  `crates/rc-ops/tests/` are modules of one test binary, `tests/ops/` (`main.rs`, `support`
+  declared once); `memory_profile.rs` stays its own binary, since it measures the peak memory
+  of the whole process. A run links two rc-ops test binaries instead of 32; a test's name is
+  now `<module>::<test>` in `--test ops`.
+- **winget manifests on schema 1.28.0**: `packaging/winget/*.yaml.in` move from `ManifestVersion`
+  1.12.0 to 1.28.0 (schema header and field); the rendered manifests validate against the
+  published 1.28.0 JSON schemas.
+- **russh 0.65 and alacritty_terminal 0.26** (RC-100-58): `russh` 0.63.3 to 0.65.0 in `rc-remote`
+  and `rc-term` - the client API rCommander uses is unchanged (host-key check, password, key,
+  agent, keyboard-interactive); an agent that fails to sign now leaves the login free for the
+  next key or method instead of stalling it. Only the in-process test server follows the new
+  `auth_publickey*` signatures. `alacritty_terminal` 0.25.1 to 0.26.0 (`ChildExit` carries an
+  `ExitStatus`, which neither `rc-term` nor `rc-term-widget` reads); `signal-hook` 0.4 comes with it.
+- **sevenz-rust2 0.24 and lzma-rust2 0.25** (RC-100-59): `sevenz-rust2` 0.23.0 to 0.24.2 (it
+  rejects many malformed headers and blocks with an error instead of a panic or an abort, and
+  writes the empty-file bit vectors whole), `lzma-rust2` 0.21.0 to 0.25.0 (tar.xz; `XzReader`
+  rejects unaligned stream padding and retries an interrupted read between streams). The 7z reader in `rc-vfs` keeps the archive whole, since
+  `BlockDecoder` now walks the folders and empty files inside a solid block itself; the
+  decoder-memory, size, ratio and path checks are unchanged. `sevenz-rust2` brings its own
+  `lzma-rust2` 0.23, a second copy until it moves to 0.25.
+- **base64 0.23, resvg 0.49, roxmltree 0.21** (RC-100-60): the direct dependencies move, no
+  call changes for base64. The RDM import names every
+  roxmltree parsing option (no DTD, the node limit, no entity resolver). The SVG viewer plugin
+  0.1.2: its `<use>` budget follows `href` before `xlink:href`, as usvg 0.49 now does, and
+  matches the namespace itself, since roxmltree 0.21's `attribute()` matches local names. An SVG
+  inside a `data:` URL still draws no image of its own, which usvg 0.49 would otherwise allow.
+  rustybuzz leaves the tree, and with it the RUSTSEC-2026-0206 exception. pulldown-cmark stays
+  at 0.12, iced's version: the preview finds raw HTML with the parser iced renders with.
+
+### Fixed
+
+- **SVG viewer: the `<use>` budget counts what usvg builds** (RC-100-76): three gaps let a
+  small file make the renderer build billions of elements. An SVG embedded as a `data:` picture
+  now takes its expanded elements from what the document left, each time usvg reads it. An id
+  defined twice counts at its first element, as usvg maps it, and a reference is read as
+  `svgtypes` reads it, with spaces around `#id`. SVG viewer plugin 0.1.3.
+- **SVG viewer: markers and patterns count against the budget** (RC-100-77): usvg draws a
+  marker's content at every vertex of a shape (arcs cut into many curves) and copies a pattern's
+  content for every shape painted with it, so nested markers or patterns multiplied a few
+  kilobytes into billions of elements. The budget counts both as usvg instantiates them -
+  attributes, style sheets and `style` attributes, inherited and through `<use>` - and refuses a
+  ring of markers or patterns. The canvases resvg draws pattern tiles into are limited to 16 Mi
+  pixels per picture together.
+- **Live SFTP suites open the vault at its release floor**: `scripts/live-tests.sh sftp` builds
+  with the `release-test` profile, where the vault refuses KDF parameters below `KdfParams::MIN`;
+  the suites asked for 64 KiB, so every live test failed with `Vault(BadParameters)` before it
+  reached the server. Found verifying RC-100-58; 26 live tests pass again.
+- **winget: superseded pull requests are closed again** (RC-100-53): `scripts/winget-supersede.sh`
+  looked for komac's former title `New version: ...`; komac now writes `Add version: ...`, so no
+  older pull request was found or closed, without a warning. Both titles are taken.
+- **`scripts/tests/sign-update.sh` with a built `rc-pack`** (RC-100-04): the test signed with a
+  throw-away key, which `rc-pack` refuses since the build embeds the real update root; it failed
+  whenever `target/` held an `rc-pack`. The stand-in now drives the script's runs, and a real
+  `rc-pack` checks that a key other than the root stops the run without a manifest.
+
 ## [0.16.1] - 2026-11-02
 
 ### Fixed

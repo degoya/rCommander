@@ -103,6 +103,7 @@ fn menu_card<'a>(
 fn group_header<'a>(group: DriveGroup, tokens: &'static Tokens) -> Element<'a, Message> {
     let title = match group {
         DriveGroup::Drives => t!("drives.group_drives"),
+        DriveGroup::Devices => t!("drives.group_devices"),
         DriveGroup::Wsl => t!("drives.group_wsl"),
         DriveGroup::Servers => t!("drives.group_servers"),
     };

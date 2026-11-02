@@ -13,7 +13,9 @@
 //! - **Bounded work.** A file and an inflated `.svgz` are at most [`MAX_SVG_BYTES`]; a document
 //!   nested deeper than [`depth::MAX_DEPTH`] is refused before it is parsed, one whose `<use>`
 //!   references would expand beyond [`budget::MAX_EXPANDED_ELEMENTS`] elements before usvg
-//!   builds it. What is left ends at the host's time, fuel and memory limits,
+//!   builds it - markers counted per vertex and patterns per painted shape - and the SVGs
+//!   embedded as `data:` pictures take their share of the same budget each time usvg reads one.
+//!   The tiles resvg draws patterns into are at most [`pixels::MAX_PATTERN_PIXELS`] together. What is left ends at the host's time, fuel and memory limits,
 //!   as a notice.
 //! - **The source is the XML viewer's.** [`Viewer::text`] and [`Viewer::tokens`] are those of
 //!   `rc-plugin-xml-viewer` (RC-100-15) over the file's bytes, inflated for `.svgz`: the same
@@ -26,10 +28,14 @@
 
 pub mod budget;
 pub mod depth;
+mod expand;
 #[cfg(target_arch = "wasm32")]
 mod guest;
 pub mod load;
+pub mod pixels;
+mod refs;
 pub mod render;
+mod segments;
 pub mod settings;
 
 #[cfg(test)]

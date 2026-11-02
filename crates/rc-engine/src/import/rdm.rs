@@ -171,9 +171,12 @@ pub fn parse(bytes: &[u8]) -> Result<RdmExport, RdmError> {
     if !text.trim_start().starts_with('<') {
         return Err(RdmError::Encrypted);
     }
+    // Every field spelled out, so a new one of roxmltree's breaks the build instead of defaulting:
+    // no DTD, no node beyond the limit, no external entity resolved.
     let options = ParsingOptions {
         allow_dtd: false,
         nodes_limit: MAX_NODES,
+        entity_resolver: None,
     };
     let document = Document::parse_with_options(&text, options).map_err(|error| {
         let line = match error {

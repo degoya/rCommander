@@ -276,18 +276,22 @@ impl Engine {
 ///
 /// Inside an archive a path with a root but no drive (`/docs`, `\`) starts at the archive's
 /// root, `..` at that root leaves the archive into the folder holding it, and a path with a
-/// drive or a share (`C:\data`) names a place outside the archive. On a server (SFTP, FTP) a
-/// path with a drive or a share is a local one too: F5 from a server panel into `D:\` or
-/// `\\nas\share` copies to this machine, never to a server path of that name.
+/// drive or a share (`C:\data`) names a place outside the archive. On a server (SFTP, FTP) or
+/// a portable device a path with a drive or a share is a local one too: F5 from a server panel
+/// into `D:\` or `\\nas\share` copies to this machine, never to a server path of that name.
 pub(crate) fn resolve_path(current: &VfsPath, target: &str) -> VfsPath {
     let target = Path::new(target);
     let names_a_drive = matches!(target.components().next(), Some(Component::Prefix(_)));
     let base = match &current.backend {
         BackendId::Archive { outer, .. } if names_a_drive => outermost(outer),
-        BackendId::Sftp { .. } | BackendId::Ftp { .. } if names_a_drive => VfsPath {
-            backend: BackendId::Local,
-            path: PathBuf::new(),
-        },
+        BackendId::Sftp { .. } | BackendId::Ftp { .. } | BackendId::Device { .. }
+            if names_a_drive =>
+        {
+            VfsPath {
+                backend: BackendId::Local,
+                path: PathBuf::new(),
+            }
+        }
         _ => current.clone(),
     };
     let joined = if target.is_absolute() {

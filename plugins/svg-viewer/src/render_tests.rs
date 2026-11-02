@@ -202,6 +202,92 @@ fn an_svg_in_a_data_url_nested_too_deep_is_not_parsed() {
 }
 
 #[test]
+fn an_svg_in_a_data_url_draws_no_image_of_its_own() {
+    let image = |inner: &[u8]| {
+        let href = data_url("image/svg+xml", inner);
+        let body = format!(r#"<image href="{href}" width="100" height="100"/>"#);
+        draw(&svg(100, 100, &body), small())
+    };
+    let picture = data_url("image/png", &png(2, 2, RED));
+    let with_picture = svg(
+        10,
+        10,
+        &format!(r#"<image href="{picture}" width="10" height="10"/>"#),
+    );
+    let with_rect = svg(10, 10, r#"<rect width="10" height="10" fill="red"/>"#);
+    // The nested SVG is drawn, its own `data:` picture is not.
+    assert!(painted(&image(&with_rect)) > 0);
+    assert_eq!(painted(&image(&with_picture)), 0);
+}
+
+#[test]
+fn embedded_svgs_together_beyond_the_budget_end_with_too_complex() {
+    // One embedded SVG of 68 020 elements, drawn through 16 `<use>`: usvg reads it 16 times,
+    // 1 088 320 elements in all - beyond the budget, though the document itself counts 35.
+    let inner = data_url("image/svg+xml", use_bomb(4, 10).as_bytes());
+    let uses = r##"<use href="#i"/>"##.repeat(16);
+    let body =
+        format!(r#"<defs><image id="i" href="{inner}" width="10" height="10"/></defs>{uses}"#);
+    let outer = svg(10, 10, &body);
+    assert_eq!(
+        code_of(render(&outer, small())).as_deref(),
+        Some(code::TOO_COMPLEX)
+    );
+    // An embedded use bomb alone is refused before usvg builds it.
+    let bomb = data_url("image/svg+xml", use_bomb(10, 10).as_bytes());
+    let body = format!(r#"<image href="{bomb}" width="10" height="10"/>"#);
+    assert_eq!(
+        code_of(render(&svg(10, 10, &body), small())).as_deref(),
+        Some(code::TOO_COMPLEX)
+    );
+}
+
+#[test]
+fn a_few_markers_and_a_pattern_are_drawn() {
+    let body = r##"<defs>
+            <marker id="arrow" markerWidth="4" markerHeight="4" refX="2" refY="2">
+                <circle cx="2" cy="2" r="2" fill="red"/>
+            </marker>
+            <pattern id="dots" width="4" height="4" patternUnits="userSpaceOnUse">
+                <rect width="2" height="2" fill="red"/>
+            </pattern>
+        </defs>
+        <rect width="50" height="50" fill="url(#dots)"/>
+        <polyline points="60,10 80,30 60,50" fill="none" stroke="red"
+            marker-start="url(#arrow)" marker-mid="url(#arrow)" marker-end="url(#arrow)"/>"##;
+    assert!(painted(&draw(&svg(100, 100, body), small())) > 0);
+}
+
+#[test]
+fn a_marker_on_every_vertex_beyond_the_budget_ends_with_too_complex() {
+    let points = (0..1100)
+        .map(|x| format!("{x},0"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let body = format!(
+        r##"<marker id="m">{}</marker><polyline points="{points}" marker-mid="url(#m)"/>"##,
+        "<rect/>".repeat(1000)
+    );
+    assert_eq!(
+        code_of(render(&svg(10, 10, &body), small())).as_deref(),
+        Some(code::TOO_COMPLEX)
+    );
+}
+
+#[test]
+fn a_pattern_tile_beyond_the_pixel_budget_ends_with_too_complex() {
+    // A 100 x 100 tile in a 10 x 10 picture drawn 512 pixels wide: 5 120 x 5 120 pixels.
+    let body = r##"<pattern id="p" width="100" height="100" patternUnits="userSpaceOnUse">
+            <rect width="1" height="1"/>
+        </pattern>
+        <rect width="10" height="10" fill="url(#p)"/>"##;
+    assert_eq!(
+        code_of(render(&svg(10, 10, body), small())).as_deref(),
+        Some(code::TOO_COMPLEX)
+    );
+}
+
+#[test]
 fn a_use_bomb_ends_with_too_complex() {
     assert_eq!(
         code_of(render(use_bomb(10, 10).as_bytes(), small())).as_deref(),

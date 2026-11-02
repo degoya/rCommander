@@ -1,5 +1,5 @@
-//! The drive bar's entries: drives, WSL distributions, servers (RC-010-05); network drives
-//! mapped and disconnected (RC-010-16).
+//! The drive bar's entries: drives, portable devices (RC-100-61), WSL distributions, servers
+//! (RC-010-05); network drives mapped and disconnected (RC-010-16).
 
 use super::{CommandClass, CommandSpec};
 
@@ -8,7 +8,7 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "drives.list",
         class: CommandClass::Read,
-        summary: "The drive bar: drives with kind, volume and free space, WSL distributions, servers",
+        summary: "The drive bar: drives with kind, volume and free space, portable devices, WSL distributions, servers",
     },
     CommandSpec {
         id: "drives.map_network",

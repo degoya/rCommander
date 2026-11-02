@@ -1,0 +1,233 @@
+//! A device in memory for the tests: objects by id under storages, what a real one answers by
+//! id, and switches for what it cannot do, for being unplugged and for counting its listings.
+
+use std::{
+    collections::BTreeMap,
+    io::Read,
+    sync::{
+        Arc, Mutex, MutexGuard, PoisonError,
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    },
+    time::{Duration, SystemTime},
+};
+
+use super::{Abilities, DeviceError, DeviceResult, Object, Session, Sink};
+
+/// Bytes a storage of the fake device has free.
+pub(crate) const FREE: u64 = 1 << 30;
+
+#[derive(Clone)]
+struct Node {
+    parent: Option<String>,
+    name: String,
+    folder: bool,
+    data: Vec<u8>,
+}
+
+/// The fake device. Its storages are `s1`, `s2`, ...; every other object is numbered too.
+pub(crate) struct FakeDevice {
+    nodes: Mutex<BTreeMap<String, Node>>,
+    next: AtomicUsize,
+    abilities: Abilities,
+    /// Answers `Unavailable` to everything while set: unplugged, or locked.
+    pub(crate) gone: AtomicBool,
+    /// How many times a folder (or the storages) was listed.
+    pub(crate) listings: AtomicUsize,
+    /// Milliseconds every call waits before it answers: a device that hangs.
+    pub(crate) stall: AtomicU64,
+}
+
+impl FakeDevice {
+    /// A device with the storages `storages`, doing what `abilities` says.
+    pub(crate) fn new(storages: &[&str], abilities: Abilities) -> Arc<Self> {
+        let nodes = storages
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let node = Node {
+                    parent: None,
+                    name: (*name).to_owned(),
+                    folder: true,
+                    data: Vec::new(),
+                };
+                (format!("s{}", index + 1), node)
+            })
+            .collect();
+        Arc::new(Self {
+            nodes: Mutex::new(nodes),
+            next: AtomicUsize::new(1),
+            abilities,
+            gone: AtomicBool::new(false),
+            listings: AtomicUsize::new(0),
+            stall: AtomicU64::new(0),
+        })
+    }
+
+    /// How many objects the device holds, storages included.
+    pub(crate) fn count(&self) -> usize {
+        self.nodes().len()
+    }
+
+    fn nodes(&self) -> MutexGuard<'_, BTreeMap<String, Node>> {
+        self.nodes.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn here(&self) -> DeviceResult<()> {
+        let stall = self.stall.load(Ordering::SeqCst);
+        if stall > 0 {
+            std::thread::sleep(Duration::from_millis(stall));
+        }
+        if self.gone.load(Ordering::SeqCst) {
+            return Err(DeviceError::Unavailable);
+        }
+        Ok(())
+    }
+
+    fn object(id: &str, node: &Node) -> Object {
+        Object {
+            id: id.to_owned(),
+            name: node.name.clone(),
+            folder: node.folder,
+            size: node.data.len() as u64,
+            modified: Some(SystemTime::UNIX_EPOCH),
+        }
+    }
+
+    fn add(&self, parent: &str, name: &str, folder: bool, data: Vec<u8>) -> DeviceResult<Object> {
+        let mut nodes = self.nodes();
+        if !nodes.get(parent).is_some_and(|node| node.folder) {
+            return Err(DeviceError::NotFound);
+        }
+        let id = format!("o{}", self.next.fetch_add(1, Ordering::SeqCst));
+        let node = Node {
+            parent: Some(parent.to_owned()),
+            name: name.to_owned(),
+            folder,
+            data,
+        };
+        let object = Self::object(&id, &node);
+        nodes.insert(id, node);
+        Ok(object)
+    }
+}
+
+impl Session for FakeDevice {
+    fn abilities(&self) -> Abilities {
+        self.abilities
+    }
+
+    fn storages(&self) -> DeviceResult<Vec<Object>> {
+        self.here()?;
+        self.listings.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .nodes()
+            .iter()
+            .filter(|(_, node)| node.parent.is_none())
+            .map(|(id, node)| Self::object(id, node))
+            .collect())
+    }
+
+    fn children(&self, folder: &str) -> DeviceResult<Vec<Object>> {
+        self.here()?;
+        self.listings.fetch_add(1, Ordering::SeqCst);
+        let nodes = self.nodes();
+        if !nodes.get(folder).is_some_and(|node| node.folder) {
+            return Err(DeviceError::NotFound);
+        }
+        Ok(nodes
+            .iter()
+            .filter(|(_, node)| node.parent.as_deref() == Some(folder))
+            .map(|(id, node)| Self::object(id, node))
+            .collect())
+    }
+
+    fn free_space(&self, storage: &str) -> DeviceResult<Option<u64>> {
+        self.here()?;
+        match self.nodes().get(storage) {
+            Some(node) if node.parent.is_none() => Ok(Some(FREE)),
+            _ => Err(DeviceError::NotFound),
+        }
+    }
+
+    fn download(&self, file: &str, mut sink: Sink) -> DeviceResult<()> {
+        self.here()?;
+        let data = match self.nodes().get(file) {
+            Some(node) if !node.folder => node.data.clone(),
+            _ => return Err(DeviceError::NotFound),
+        };
+        // Small chunks, so a reader sees more than one.
+        for chunk in data.chunks(7000) {
+            if !sink(chunk) {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn upload(
+        &self,
+        folder: &str,
+        name: &str,
+        size: u64,
+        mut source: Box<dyn Read + Send>,
+        cancel: Arc<AtomicBool>,
+    ) -> DeviceResult<Object> {
+        self.here()?;
+        let mut data = Vec::new();
+        source.read_to_end(&mut data).map_err(DeviceError::Io)?;
+        if cancel.load(Ordering::SeqCst) {
+            return Err(DeviceError::Cancelled);
+        }
+        if data.len() as u64 != size {
+            return Err(DeviceError::Io(std::io::Error::other(
+                "the upload is not of its stated size",
+            )));
+        }
+        self.add(folder, name, false, data)
+    }
+
+    fn create_folder(&self, parent: &str, name: &str) -> DeviceResult<Object> {
+        self.here()?;
+        self.add(parent, name, true, Vec::new())
+    }
+
+    fn delete(&self, id: &str, recursive: bool) -> DeviceResult<()> {
+        self.here()?;
+        let mut nodes = self.nodes();
+        if !nodes.contains_key(id) {
+            return Err(DeviceError::NotFound);
+        }
+        let has_children = nodes
+            .values()
+            .any(|node| node.parent.as_deref() == Some(id));
+        if has_children && !recursive {
+            return Err(DeviceError::Io(std::io::Error::other("folder not empty")));
+        }
+        let mut doomed = vec![id.to_owned()];
+        let mut index = 0;
+        while let Some(current) = doomed.get(index).cloned() {
+            doomed.extend(
+                nodes
+                    .iter()
+                    .filter(|(_, node)| node.parent.as_deref() == Some(current.as_str()))
+                    .map(|(child, _)| child.clone()),
+            );
+            index += 1;
+        }
+        for gone in doomed {
+            nodes.remove(&gone);
+        }
+        Ok(())
+    }
+
+    fn rename(&self, id: &str, name: &str) -> DeviceResult<()> {
+        self.here()?;
+        match self.nodes().get_mut(id) {
+            Some(node) => {
+                name.clone_into(&mut node.name);
+                Ok(())
+            }
+            None => Err(DeviceError::NotFound),
+        }
+    }
+}

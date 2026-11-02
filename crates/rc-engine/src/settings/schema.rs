@@ -334,6 +334,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     drives::FOLLOW_ON_OWN_DRIVE,
     drives::REFRESH_ON_FOCUS,
     drives::REFRESH_ON_FOCUS_NETWORK,
+    drives::PORTABLE_DEVICES,
     sort::SORT_NAMES,
     sort::SORT_NUMBERS,
     SettingSpec {

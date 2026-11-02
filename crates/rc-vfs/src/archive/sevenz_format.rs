@@ -68,12 +68,11 @@ pub(crate) fn scan(
     Ok(entries)
 }
 
-/// The archive a session reads: only the entries with a stream (see [`streams_only`]), and
-/// where each entry of the full archive is in it.
+/// The archive a session reads, and the block of each of its entries (see [`streams`]).
 struct Streams {
     archive: Archive,
-    /// Per entry of the full archive: its block and its place in `archive`; `None` without a
-    /// stream (an empty file).
+    /// Per entry: its block and its index in `archive`; `None` without a stream (an empty
+    /// file).
     places: Vec<Option<(usize, usize)>>,
 }
 
@@ -132,7 +131,7 @@ fn open(
     sevenz_memory::check_header(&mut reader, limits, path)?;
     let archive = Archive::read(&mut reader, key)
         .map_err(|error| seven_error(error, path, password.is_some()))?;
-    Ok((reader, streams_only(archive)))
+    Ok((reader, streams(archive)))
 }
 
 /// One walk through a block, from its start.
@@ -225,37 +224,25 @@ impl Streams {
     }
 }
 
-/// `BlockDecoder` (sevenz-rust2 0.23) walks `num_unpack_sub_streams` entries from a block's first
-/// file and counts the folders among them (the library gives them a block too), so it stops
-/// short of the block's last streams when a folder lies in between. A copy of the archive that
-/// keeps only the entries with a stream walks exactly the block's streams.
-fn streams_only(mut archive: Archive) -> Streams {
-    let blocks = std::mem::take(&mut archive.stream_map.file_block_index);
-    let files = std::mem::take(&mut archive.files);
-    let mut places = vec![None; files.len()];
-    let mut kept_blocks = Vec::new();
-    let mut kept_files = Vec::new();
-    for (index, file) in files.into_iter().enumerate() {
-        if !file.has_stream {
-            continue;
-        }
-        let block = blocks.get(index).copied().flatten();
-        places[index] = block.map(|block| (block, kept_files.len()));
-        kept_blocks.push(block);
-        kept_files.push(file);
-    }
-    let mut first_seen = vec![false; archive.stream_map.block_first_file_index.len()];
-    for (position, owner) in kept_blocks.iter().enumerate() {
-        if let Some(block) = *owner
-            && let Some(seen) = first_seen.get_mut(block)
-            && !*seen
-        {
-            *seen = true;
-            archive.stream_map.block_first_file_index[block] = position;
-        }
-    }
-    archive.files = kept_files;
-    archive.stream_map.file_block_index = kept_blocks;
+/// The archive as read, with the block of each entry that has a stream. `BlockDecoder`
+/// (sevenz-rust2 0.24.2) walks every entry from a block's first to its last, the folders and
+/// empty files between them included, so the archive is kept whole: its stream map (with the
+/// library's own end of each block) stays true to its entries. (0.23 stopped short of a block's
+/// last streams when a folder lay in between; a filtered copy of the archive worked around it,
+/// and would now break the library's end index.)
+fn streams(archive: Archive) -> Streams {
+    let places = archive
+        .files
+        .iter()
+        .enumerate()
+        .map(|(index, file)| {
+            let block = archive.stream_map.file_block_index.get(index).copied();
+            block
+                .flatten()
+                .filter(|_| file.has_stream)
+                .map(|block| (block, index))
+        })
+        .collect();
     Streams { archive, places }
 }
 

@@ -2,7 +2,7 @@
 # packaging/winget/degoya.rCommander.locale.en-US.yaml.in in @REPOSITORY@ by
 # scripts/package-managers.sh and submitted to microsoft/winget-pkgs by the release workflow:
 # change the template, not this file.
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.28.0.schema.json
 
 PackageIdentifier: degoya.rCommander
 PackageVersion: @VERSION@
@@ -34,4 +34,4 @@ Tags:
 - wsl
 ReleaseNotesUrl: https://github.com/@REPOSITORY@/releases/tag/v@VERSION@
 ManifestType: defaultLocale
-ManifestVersion: 1.12.0
+ManifestVersion: 1.28.0

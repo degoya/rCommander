@@ -21,7 +21,9 @@ use std::{
 use rc_vfs::VfsPath;
 use tokio::sync::{broadcast, mpsc};
 
-use super::{Details, Drive, DriveGroup, DriveKind, DriveSource, DriveState, RawDrive};
+use super::{
+    Details, Drive, DriveGroup, DriveKind, DriveSource, DriveState, RawDrive, devices::DeviceList,
+};
 use crate::EngineEvent;
 
 /// How long an answer of a local drive stays good before a list asks again. Network drives are
@@ -40,6 +42,8 @@ pub(crate) struct DriveCatalog {
     /// The id and root of every entry of the last drive bar (WSL included), for
     /// [`super::drive_key`]; read without waiting on any drive.
     roots: Mutex<Vec<(String, PathBuf)>>,
+    /// The portable devices of the source (RC-100-61).
+    devices: DeviceList,
 }
 
 #[derive(Default)]
@@ -72,6 +76,7 @@ impl DriveCatalog {
         timeout: Duration,
         events: broadcast::Sender<EngineEvent>,
     ) -> Self {
+        let devices = DeviceList::new(source.device_hub(), timeout, events.clone());
         Self {
             source,
             timeout,
@@ -79,6 +84,7 @@ impl DriveCatalog {
             listing: Arc::new(AtomicBool::new(false)),
             events,
             roots: Mutex::new(Vec::new()),
+            devices,
         }
     }
 
@@ -116,6 +122,11 @@ impl DriveCatalog {
         };
         self.ask(vec![drive.clone()]).await;
         entry(&drive, &lock(&self.known)).state
+    }
+
+    /// The portable devices.
+    pub(crate) fn devices(&self) -> &DeviceList {
+        &self.devices
     }
 
     /// Where the drives come from, for mapping and disconnecting a network drive.

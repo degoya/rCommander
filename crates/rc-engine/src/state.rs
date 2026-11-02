@@ -348,7 +348,8 @@ pub enum Outcome {
     FileText(TextWindow),
     /// A window of a file as hex rows.
     FileHex(HexWindow),
-    /// The drive bar's entries: drives, WSL distributions, servers, in this order.
+    /// The drive bar's entries: drives, portable devices, WSL distributions, servers, in this
+    /// order.
     Drives { drives: Vec<Drive> },
     /// Settings with their values: every one, or the one read or changed.
     Settings { settings: Vec<SettingValue> },

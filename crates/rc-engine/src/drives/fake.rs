@@ -1,19 +1,21 @@
 //! A stand-in for the system's drives, for the tests: drives that answer at once, slowly or
 //! not at all, and a count of the questions; network drives mapped, disconnected and connected
-//! again as Windows would, with files open on some.
+//! again as Windows would, with files open on some; portable devices behind a [`FakeHub`].
 
 use std::{
     collections::HashMap,
     io,
     path::{Path, PathBuf},
     sync::{
-        Mutex, PoisonError,
+        Arc, Mutex, PoisonError,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
-use super::{Details, DriveKind, DriveSource, DriveSpace, RawDrive};
+use rc_vfs::{DeviceHub, PortableDevice, Vfs};
+
+use super::{Details, DriveKind, DriveSource, DriveSpace, RawDrive, devices::NoDevices};
 
 #[derive(Default)]
 pub(crate) struct FakeDrives {
@@ -32,6 +34,8 @@ pub(crate) struct FakeDrives {
     list_delay: Option<Duration>,
     /// How often the list was asked.
     listed: AtomicUsize,
+    /// The portable devices; none unless set.
+    devices: Option<Arc<FakeHub>>,
 }
 
 impl FakeDrives {
@@ -74,6 +78,12 @@ impl FakeDrives {
     /// `id` takes `delay` to answer.
     pub(crate) fn slow(mut self, id: &str, delay: Duration) -> Self {
         self.slow.insert(id.to_owned(), delay);
+        self
+    }
+
+    /// The portable devices of `hub`.
+    pub(crate) fn with_devices(mut self, hub: Arc<FakeHub>) -> Self {
+        self.devices = Some(hub);
         self
     }
 
@@ -204,6 +214,37 @@ impl DriveSource for FakeDrives {
         }
         lock(&self.disconnected).retain(|drive| *drive != id);
         Ok(())
+    }
+
+    fn device_hub(&self) -> Arc<dyn DeviceHub> {
+        match &self.devices {
+            Some(hub) => Arc::<FakeHub>::clone(hub),
+            None => Arc::new(NoDevices),
+        }
+    }
+}
+
+/// Portable devices for the tests: each opens as `backend`, a file system of the test's (its
+/// root's backend says which), or on the local backend for a root there (gvfs).
+#[derive(Default)]
+pub(crate) struct FakeHub {
+    pub(crate) devices: Mutex<Vec<PortableDevice>>,
+    pub(crate) backend: Option<Arc<dyn Vfs>>,
+    /// How often a device was opened.
+    pub(crate) opened: AtomicUsize,
+}
+
+impl DeviceHub for FakeHub {
+    fn devices(&self) -> Vec<PortableDevice> {
+        lock(&self.devices).clone()
+    }
+
+    fn open(&self, device: &PortableDevice) -> rc_vfs::Result<Option<Arc<dyn Vfs>>> {
+        self.opened.fetch_add(1, Ordering::SeqCst);
+        if device.root.backend == rc_vfs::BackendId::Local {
+            return Ok(None);
+        }
+        Ok(self.backend.clone())
     }
 }
 

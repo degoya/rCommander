@@ -109,7 +109,7 @@ expect "the release notes of the tag" \
     "ReleaseNotesUrl: https://github.com/degoya/rCommander/releases/tag/v1.6.0" \
     "$(grep '^ReleaseNotesUrl: ' "$winget/degoya.rCommander.locale.en-US.yaml")"
 if python3 -I -c 'import yaml' 2> /dev/null; then
-    expect "the manifests are YAML of one schema version" "1.12.0 1.12.0 1.12.0" \
+    expect "the manifests are YAML of one schema version" "1.28.0 1.28.0 1.28.0" \
         "$(python3 -I -c 'import sys, yaml; print(" ".join(yaml.safe_load(open(f))["ManifestVersion"] for f in sys.argv[1:]))' \
             "$winget"/*.yaml)"
 else

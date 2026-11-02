@@ -2,14 +2,14 @@
 #
 # scripts/sign-update.sh in a scratch repository, without network and with HOME bent into the
 # scratch folder: a missing key, a package of another profile or version and the wrong channel
-# stop the run before a file is written; a good run writes the manifest. With a built rc-pack
-# (RC_PACK, or target/*/rc-pack) the run is real - a throw-away key from `rc-pack keygen`, the
-# round trip verified, `--bump` raising the sequence; without one a stand-in records the call and
-# the round trip is skipped with a notice (this test builds nothing).
+# stop the run before a file is written; a good run writes the manifest. A stand-in rc-pack
+# records the calls. A real one signs only with the update root its build embeds, which no test
+# holds; with one built (RC_PACK, or target/*/rc-pack), a throw-away key from its `keygen` must
+# stop the run before a file is written (this test builds nothing).
 #
 #   scripts/tests/sign-update.sh
 # shellcheck disable=SC2016  # the conditions are single-quoted on purpose: expect_true evaluates them
-# shellcheck disable=SC2034  # before and after are read by the conditions expect_true evaluates
+# shellcheck disable=SC2034  # OUT is read by the conditions expect_true evaluates
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -32,12 +32,9 @@ if [[ -z "$real_pack" ]]; then
         fi
     done
 fi
-if [[ -n "$real_pack" ]]; then
-    PACK="$real_pack"
-else
-    PACK="$SCRATCH/rc-pack-stand-in"
-    # Records the call; `build` writes its --out, the rest succeeds.
-    cat > "$PACK" << 'EOF'
+PACK="$SCRATCH/rc-pack-stand-in"
+# Records the call; `build` writes its --out, the rest succeeds.
+cat > "$PACK" << 'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "$RC_PACK_CALLS"
 out=""
@@ -47,8 +44,7 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -z "$out" ]] || echo '{"stand-in":true}' > "$out"
 EOF
-    chmod +x "$PACK"
-fi
+chmod +x "$PACK"
 export RC_PACK="$PACK" RC_PACK_CALLS="$SCRATCH/calls"
 
 mkdir -p "$TREE/scripts/lib" "$TREE/artifacts/windows" "$KEY_DIR"
@@ -74,10 +70,6 @@ with zipfile.ZipFile(path, "w") as archive:
 EOF
 }
 
-sequence_of() {
-    python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["payload"]["sequence"])' "$1"
-}
-
 no_output() {
     expect_true "$1 writes no file" '[[ ! -e "$TREE/artifacts/update" ]]'
 }
@@ -88,11 +80,7 @@ expect_status "a missing key stops the run" 1
 expect_output "a missing key names where it is looked for" "rcommander-update.key"
 no_output "a missing key"
 
-if [[ -n "$real_pack" ]]; then
-    "$PACK" keygen --role update --output "$KEY_DIR" > /dev/null
-else
-    echo "stand-in key" > "$KEY_DIR/rcommander-update.key"
-fi
+echo "stand-in key" > "$KEY_DIR/rcommander-update.key"
 
 package 1.2.3 release-test
 run_status bash "$TREE/scripts/sign-update.sh" stable
@@ -113,20 +101,24 @@ run_status bash "$TREE/scripts/sign-update.sh" stable
 expect_status "a good package is signed" 0
 expect_true "the manifest is written" '[[ -s "$OUT" ]]'
 
+expect_true "rc-pack is asked to build" 'grep -q "update manifest build --channel stable --version 1.2.3" "$RC_PACK_CALLS"'
+expect_true "the stand-in was asked to verify" 'grep -q "update manifest verify" "$RC_PACK_CALLS"'
+expect_true "no key path but --key reaches rc-pack" '! grep -q "RCOMMANDER" "$RC_PACK_CALLS"'
+
+run_status bash "$TREE/scripts/sign-update.sh" stable --bump
+expect_status "--bump signs the existing manifest again" 0
+expect_true "rc-pack is asked to bump" 'grep -q "update manifest bump $OUT --key" "$RC_PACK_CALLS"'
+
 if [[ -n "$real_pack" ]]; then
-    run_status "$PACK" update manifest verify "$OUT" --public-key "$KEY_DIR/rcommander-update.pub"
-    expect_status "the round trip verifies under the key" 0
-    before="$(sequence_of "$OUT")"
-    sleep 1
-    run_status bash "$TREE/scripts/sign-update.sh" stable --bump
-    expect_status "--bump signs the manifest again" 0
-    after="$(sequence_of "$OUT")"
-    expect_true "--bump raises the sequence" '[[ "$after" -gt "$before" ]]'
+    rm -rf "$TREE/artifacts/update" "$KEY_DIR"
+    mkdir -p "$KEY_DIR"
+    "$real_pack" keygen --role update --output "$KEY_DIR" > /dev/null
+    RC_PACK="$real_pack" run_status bash "$TREE/scripts/sign-update.sh" stable
+    expect_status "a key that is not this build's update root stops the run" 1
+    expect_output "naming the root" "not the update root"
+    expect_true "a foreign key writes no manifest" '[[ ! -e "$OUT" ]]'
 else
-    echo "note: no rc-pack built; the round trip is not run (build it: cargo build -p rc-update --bin rc-pack)"
-    expect_true "rc-pack is asked to build" 'grep -q "update manifest build --channel stable --version 1.2.3" "$RC_PACK_CALLS"'
-    expect_true "the stand-in was asked to verify" 'grep -q "update manifest verify" "$RC_PACK_CALLS"'
-    expect_true "no key path but --key reaches rc-pack" '! grep -q "RCOMMANDER" "$RC_PACK_CALLS"'
+    echo "note: no rc-pack built; the foreign-key refusal is not run (build it: cargo build -p rc-update --bin rc-pack)"
 fi
 
 finish_tests "sign-update"

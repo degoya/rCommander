@@ -17,6 +17,7 @@ mod context_menu;
 mod credentials;
 mod cursor;
 mod database;
+mod devices;
 mod diagnostics;
 mod dir_count;
 mod drives;

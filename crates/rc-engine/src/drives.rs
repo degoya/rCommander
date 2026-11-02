@@ -21,8 +21,12 @@
 //!
 //! A network drive shows the folder it is mapped to (`\\server\share`, Windows'
 //! `WNetGetConnectionW`); mapping one and disconnecting it is `drives/network.rs` (RC-010-16).
+//!
+//! Portable devices - phones over MTP - are a group of their own (`drives/devices.rs`,
+//! RC-100-61), each with its name and the phone symbol.
 
 mod catalog;
+pub(crate) mod devices;
 #[cfg(test)]
 pub(crate) mod fake;
 // The parsing of `/proc/mounts` compiles and is tested everywhere; only Unix reads the file.
@@ -43,7 +47,7 @@ use std::{
     time::Duration,
 };
 
-use rc_vfs::{BackendId, VfsPath};
+use rc_vfs::{BackendId, DeviceHub, VfsPath};
 use serde::{Deserialize, Serialize};
 
 pub(crate) use catalog::DriveCatalog;
@@ -62,6 +66,8 @@ pub const NETWORK_DRIVES: bool = cfg!(windows);
 pub enum DriveGroup {
     /// Drive letters (Windows), the root, the home directory and mount points (elsewhere).
     Drives,
+    /// Portable devices: phones, tablets and cameras over MTP (RC-100-61).
+    Devices,
     /// The installed WSL distributions.
     Wsl,
     /// The saved servers of the connection tree, and the quick connections.
@@ -84,6 +90,8 @@ pub enum DriveKind {
     Wsl,
     /// A saved server connection.
     Server,
+    /// A portable device: a phone, a tablet or a camera over MTP.
+    Device,
 }
 
 /// Bytes on a drive.
@@ -113,7 +121,8 @@ pub enum DriveState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Drive {
     /// What `panel.change_drive` takes: `C:` or `\\server\share` on Windows, the mount point
-    /// elsewhere, `server:<connection id>` for a server.
+    /// elsewhere, `server:<connection id>` for a server, `device:<device id>` for a portable
+    /// device.
     pub id: String,
     pub group: DriveGroup,
     pub kind: DriveKind,
@@ -172,11 +181,14 @@ pub(crate) fn roots_of(drives: &[Drive]) -> Vec<(String, PathBuf)> {
 /// Windows path's drive letter (`C:`) or share (`\\server\share`, in lower case). On Windows
 /// the two agree for every drive the system lists (its root is the letter's or the share's); a
 /// root below a letter is a drive of its own, as on Unix. A location inside an archive lies on
-/// the archive's drive, one over SFTP or FTP on its server's (`server:<connection id>`). `None`
-/// for a path on no drive.
+/// the archive's drive, one over SFTP or FTP on its server's (`server:<connection id>`), one on
+/// a WPD device on the device's (`device:<device id>`). `None` for a path on no drive.
 pub(crate) fn drive_key(path: &VfsPath, roots: &[(String, PathBuf)]) -> Option<String> {
     if let BackendId::Sftp { connection_id } | BackendId::Ftp { connection_id } = path.backend {
         return Some(format!("server:{connection_id}"));
+    }
+    if let BackendId::Device { device } = &path.backend {
+        return Some(devices::drive_id(device));
     }
     let path = local_path(path)?;
     roots
@@ -290,6 +302,11 @@ pub(crate) trait DriveSource: Send + Sync {
     /// is Windows' code.
     fn restore_network(&self, _letter: char) -> Result<(), u32> {
         Err(network::UNSUPPORTED)
+    }
+
+    /// Where the portable devices come from; none by default.
+    fn device_hub(&self) -> Arc<dyn DeviceHub> {
+        Arc::new(devices::NoDevices)
     }
 }
 

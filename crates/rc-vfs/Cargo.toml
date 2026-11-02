@@ -28,6 +28,9 @@ secrecy.workspace = true
 serde.workspace = true
 sevenz-rust2.workspace = true
 tar.workspace = true
+# The file written onto a portable device, spooled until its size is known (`device/write.rs`,
+# RC-100-61): MTP takes a file whole, its size first.
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -45,6 +48,15 @@ winreg.workspace = true
 winsafe = { workspace = true, features = ["kernel", "shell"] }
 # `DeviceIoControl` for a junction (`local/windows/junction.rs`), the one call no safe crate wraps.
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_IO"] }
+# Portable devices over WPD (`device/windows*`, RC-100-61): COM interfaces only, which windows-sys
+# has as raw vtables; the version already in the lock.
+windows = { workspace = true, features = [
+    "Win32_Devices_PortableDevices",
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+] }
 
 [dev-dependencies]
 proptest.workspace = true

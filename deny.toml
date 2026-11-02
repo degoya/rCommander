@@ -43,9 +43,6 @@ ignore = [
   { id = "RUSTSEC-2026-0391", reason = "zstd only (de)compresses rCommander's own plugin compile cache; wasmtime has no release on zstd 0.14" },
   { id = "RUSTSEC-2026-0398", reason = "zstd seekable API is not used; only wasmtime's compile cache, written by rCommander" },
   { id = "RUSTSEC-2026-0403", reason = "zstd only decompresses rCommander's own plugin compile cache; no untrusted frames" },
-  # Unmaintained, no known vulnerability: rustybuzz, through usvg <- resvg in the SVG viewer
-  # plugin (a wasm guest, sandboxed). Leaves with the resvg release that drops it.
-  { id = "RUSTSEC-2026-0206", reason = "unmaintained shaper of resvg in the sandboxed SVG viewer plugin; no vulnerability" },
 ]
 
 [licenses]

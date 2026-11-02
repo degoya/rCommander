@@ -54,7 +54,7 @@ asks by.
 | `diagnostics.error_log` | read | `diagnostics_error_log` | The stored warn and error lines, newest first, masked; by level or text |
 | `diagnostics.get_retention` | read | `diagnostics_get_retention` | The row and age limits of each growing table, with defaults and bounds |
 | `diagnostics.set_retention` | write (destructive when a limit is lowered below the one in force) | `diagnostics_set_retention` | Change the row or age limit of a growing table, within its bounds |
-| `drives.list` | read | `drives_list` | The drive bar: drives with kind, volume and free space, WSL distributions, servers |
+| `drives.list` | read | `drives_list` | The drive bar: drives with kind, volume and free space, portable devices, WSL distributions, servers |
 | `drives.map_network` | gui_only | omitted: GUI only: human decision | Map a network share to a free drive letter; Windows asks the person for the credentials |
 | `drives.unmap_network` | destructive | `drives_unmap_network` | Disconnect a network drive; with open files only when forced, which may lose unsaved data |
 | `file.combine` | write | `files_combine` | Put split parts (.001 or .crc) back together into a new file, CRC checked |

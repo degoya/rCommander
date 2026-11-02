@@ -242,11 +242,9 @@ pub async fn engine(dir: &Path) -> (Engine, Db) {
         db.clone(),
         VaultOptions {
             clock: Arc::new(ManualClock::new()),
-            kdf: KdfParams {
-                m_cost_kib: 64,
-                t_cost: 1,
-                p_cost: 1,
-            },
+            // The live suites build with `release-test`, where the vault refuses anything below
+            // its release floor; that floor still derives in milliseconds optimised.
+            kdf: KdfParams::MIN,
             failure_delay: Duration::ZERO,
             secret_columns: SECRET_COLUMNS,
         },

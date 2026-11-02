@@ -75,6 +75,10 @@ pub enum VfsError {
     /// The call was stopped while it waited for its answer ([`crate::IoCancel`]).
     #[error("{}: cancelled", path.display())]
     Cancelled { path: PathBuf },
+    /// A portable device that is unplugged, locked, or does not share its files (an Android
+    /// phone not set to "File transfer"), RC-100-61.
+    #[error("{}: the device is not available", path.display())]
+    DeviceUnavailable { path: PathBuf },
 }
 
 impl VfsError {
@@ -98,6 +102,7 @@ impl VfsError {
         "symlink_privilege",
         "drive_timed_out",
         "cancelled",
+        "device_unavailable",
     ];
 
     /// Maps an I/O error on `path` to the variant that names its kind. An I/O error that wraps a
@@ -140,6 +145,7 @@ impl VfsError {
             Self::ArchiveDecoderMemory { .. } => io::ErrorKind::OutOfMemory,
             Self::TimedOut { .. } => io::ErrorKind::TimedOut,
             Self::Cancelled { .. } => io::ErrorKind::Interrupted,
+            Self::DeviceUnavailable { .. } => io::ErrorKind::NotConnected,
             _ => io::ErrorKind::Other,
         };
         io::Error::new(kind, self)
@@ -166,6 +172,7 @@ impl VfsError {
             Self::SymlinkPrivilege { .. } => "symlink_privilege",
             Self::TimedOut { .. } => "drive_timed_out",
             Self::Cancelled { .. } => "cancelled",
+            Self::DeviceUnavailable { .. } => "device_unavailable",
         }
     }
 }

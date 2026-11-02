@@ -5,7 +5,10 @@
 use std::{
     io,
     path::{Path, PathBuf},
+    sync::Arc,
 };
+
+use rc_vfs::DeviceHub;
 
 use super::{Details, DriveKind, DriveSource, RawDrive, mounts, space};
 
@@ -44,6 +47,11 @@ impl DriveSource for System {
             volume: None,
             space: Some(space(root)?),
         })
+    }
+
+    /// The phones and cameras gvfs mounts (Linux; none on macOS), RC-100-61.
+    fn device_hub(&self) -> Arc<dyn DeviceHub> {
+        rc_vfs::system_hub()
     }
 }
 

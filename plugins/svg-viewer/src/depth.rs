@@ -1,10 +1,11 @@
-//! The nesting budget: roxmltree, usvg and resvg each recurse once per level of element nesting,
-//! so a document of 100 000 nested `<g>` - a few hundred kilobytes - overflows the stack, which
-//! in the component is a trap. The nesting is told first by a scan of the bytes that keeps no
-//! state but a counter, and a document deeper than the budget is never parsed.
+//! The nesting budget: usvg and resvg each recurse once per level of element nesting (roxmltree
+//! parses iteratively since 0.21.2), so a document of 100 000 nested `<g>` - a few hundred
+//! kilobytes - overflows the stack, which in the component is a trap. The nesting is told first
+//! by a scan of the bytes that keeps no state but a counter, and a document deeper than the
+//! budget is never parsed.
 
 /// The deepest element nesting a document may have, the root counted. Far beyond what an editor
-/// writes (a few dozen levels), and low enough that the three recursions together stay inside
+/// writes (a few dozen levels), and low enough that the recursions together stay inside
 /// the component's stack.
 pub const MAX_DEPTH: usize = 256;
 

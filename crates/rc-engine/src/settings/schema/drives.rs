@@ -3,7 +3,8 @@
 //! the panel is already on that drive (owner 2026-10-26, RC-010-29). On by default; not
 //! protected. Coming back to the window from another program reads the panels on local drives
 //! again (owner 2026-11-01, RC-100-69): on by default; network drives and shares only with their
-//! own switch, off by default. Neither is protected.
+//! own switch, off by default. Neither is protected. Portable devices (phones over MTP) in the
+//! drive bar (RC-100-61, owner 2026-11-01): on by default; off, the system is not asked for them.
 
 use super::{SettingKind, SettingPage, SettingSpec};
 
@@ -53,6 +54,19 @@ pub(super) const REFRESH_ON_FOCUS_NETWORK: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: false },
     label: "setting.panels.refresh_on_focus_network",
     help: "setting.panels.refresh_on_focus_network.help",
+    protected: false,
+    restart: false,
+};
+
+/// Whether the drive bar lists portable devices (phones, tablets, cameras over MTP).
+pub const PORTABLE_DEVICES_KEY: &str = "drives.portable_devices";
+
+pub(super) const PORTABLE_DEVICES: SettingSpec = SettingSpec {
+    key: PORTABLE_DEVICES_KEY,
+    page: SettingPage::Folders,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.drives.portable_devices",
+    help: "setting.drives.portable_devices.help",
     protected: false,
     restart: false,
 };

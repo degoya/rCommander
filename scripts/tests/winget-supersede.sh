@@ -35,7 +35,7 @@ EOF
 chmod +x "$SCRATCH/bin/gh"
 export PATH="$SCRATCH/bin:$PATH"
 
-title() { printf 'New version: degoya.rCommander version %s' "$1"; }
+title() { printf 'Add version: degoya.rCommander version %s' "$1"; }
 reset() {
     rm -f "$FAKE"/*
     echo degoya > "$FAKE/login"
@@ -49,7 +49,9 @@ reset() {
         printf '451402\tdegoya\t%s\n' "$(title 1.29.0-beta.1)"
         printf '451403\tdegoya\t%s\n' "$(title 1.30.0)"
         printf '449000\tsomeone\t%s\n' "$(title 1.10.0)"
-        printf '449001\tdegoya\tNew version: degoya.OtherTool version 1.0.0\n'
+        printf '449001\tdegoya\tAdd version: degoya.OtherTool version 1.0.0\n'
+        printf '449002\tdegoya\tNew version: degoya.rCommander version 1.8.0\n'
+        printf '449003\tdegoya\tUpdate version: degoya.rCommander version 1.7.0\n'
     } > "$FAKE/open"
 }
 closes() { grep -c '^pr close' "$FAKE/calls" || true; }
@@ -64,7 +66,7 @@ reset
 printf 'Created pull request: https://github.com/microsoft/winget-pkgs/pull/451400\n' > "$SCRATCH/komac.log"
 run_status "$ROOT/scripts/winget-supersede.sh" 1.28.0 "$SCRATCH/komac.log"
 expect_status "a submission with older ones open succeeds" 0
-expect "the four older ones are closed, nothing else" "4" "$(closes)"
+expect "the five older ones are closed, nothing else" "5" "$(closes)"
 for number in 451308 450001 450900; do
     expect_true "#$number, older, is closed" "closed $number"
 done
@@ -78,6 +80,8 @@ expect_true "a pre-release of a newer version stays" "! closed 451402"
 expect_true "a newer version stays" "! closed 451403"
 expect_true "another author's stays" "! closed 449000"
 expect_true "another package's stays" "! closed 449001"
+expect_true "a title from an older komac (New version:) is closed too" "closed 449002"
+expect_true "any other title stays" "! closed 449003"
 expect_true "the list asks for the account's open pull requests" \
     'grep -q "^pr list --repo microsoft/winget-pkgs --author degoya --state open " "$FAKE/calls"'
 

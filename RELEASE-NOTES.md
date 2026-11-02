@@ -11,6 +11,14 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.17.0
+
+- Phones, tablets and cameras on USB appear in the drive bar on Windows and Linux: browse them, copy files both ways, make folders and delete. A setting turns this off.
+- On an Android phone choose File transfer first; a locked phone shows a hint instead of an empty folder.
+- Logging in over SSH no longer stalls when the SSH agent cannot sign with one key; the next key or method is tried.
+- Damaged 7z archives are reported as an error instead of closing the program, and 7z archives you pack keep every name.
+- The SVG viewer counts the work of every reused shape, embedded pictures included, so a crafted SVG can no longer slow it down.
+
 ## 0.16.1
 
 - Security update of the zip library: a crafted zip archive could make the program quit instead of reporting an error.

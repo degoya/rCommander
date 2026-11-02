@@ -1,6 +1,7 @@
 //! `drives.list`, `panel.change_drive` and `panel.drive_menu`: the drive bar and the drive menu.
 //!
-//! The drive bar is the drives of the catalog, then the WSL distributions, then the servers:
+//! The drive bar is the drives of the catalog, then the portable devices (`devices.rs`,
+//! RC-100-61), then the WSL distributions, then the servers:
 //! every connection of the tree with its folders, in the tree's order (a level's folders before
 //! its connections, RC-100-63), marked as a favourite when the drive bar shows it as a button of
 //! its own (the tree's root level unless the connection manager's marks say otherwise,
@@ -63,6 +64,9 @@ impl Engine {
             return Err(EngineError::BackendUnavailable);
         };
         let announce = self.announces_locked_vault();
+        if drive.group == DriveGroup::Devices {
+            root = self.device_start(&drive.id).await?;
+        }
         match root.backend {
             BackendId::Sftp { connection_id } => {
                 root = self
@@ -155,10 +159,11 @@ impl Engine {
         Outcome::Panel(snapshot)
     }
 
-    /// The drives, the WSL distributions and the servers, in this order; their roots are kept
-    /// for the last directory per drive.
+    /// The drives, the portable devices, the WSL distributions and the servers, in this order;
+    /// their roots are kept for the last directory per drive.
     async fn drive_entries(&self, refresh: bool) -> Vec<Drive> {
         let mut entries = self.inner.drives.list(refresh).await;
+        entries.extend(self.device_entries().await);
         let distros = if refresh {
             self.inner.wsl.refresh().await
         } else {

@@ -6,10 +6,11 @@ use std::sync::Arc;
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg::{self, FontResolver, ImageHrefResolver, Options, fontdb};
 
-use crate::budget::{self, MAX_EXPANDED_ELEMENTS};
+use crate::budget::{self, MAX_EXPANDED_ELEMENTS, Remaining, read_as_svg};
 use crate::code;
 use crate::depth::{MAX_DEPTH, depth_within};
 use crate::load::is_gzip;
+use crate::pixels::{MAX_PATTERN_PIXELS, pattern_pixels};
 use crate::settings::Settings;
 use crate::types::{Failure, FailureKind, Sink};
 
@@ -29,26 +30,29 @@ const RASTER_MAGIC: [&[u8]; 4] = [b"\x89PNG", b"\xff\xd8", b"GIF8", b"RIFF"];
 /// What usvg may use: the bundled font for every `font-family`, `data:` images only - an `href`
 /// to a file or a URL resolves to nothing, a gzip stream inside a `data:` URL is not inflated
 /// (usvg would do it without a limit), and an SVG inside one nested beyond [`MAX_DEPTH`] is not
-/// parsed.
+/// parsed. An SVG inside a `data:` URL draws no image of its own: usvg 0.49 would hand it this
+/// resolver again, one nesting inside the next, each with its own recursion on the stack. Each
+/// time usvg reads such an SVG, its expanded elements are taken from `remaining`; one that does
+/// not fit is not read.
 #[must_use]
-pub fn options() -> Options<'static> {
+pub fn options(remaining: Arc<Remaining>) -> Options<'static> {
     let mut fonts = fontdb::Database::new();
     fonts.load_font_data(FONT.to_vec());
     let data_only = ImageHrefResolver::default_data_resolver();
     Options {
         resources_dir: None,
         fontdb: Arc::new(fonts),
-        font_resolver: FontResolver {
-            select_font: Box::new(|_, fonts| fonts.faces().next().map(|face| face.id)),
-            ..FontResolver::default()
-        },
+        font_resolver: bundled_font(),
         image_href_resolver: ImageHrefResolver {
             resolve_data: Box::new(move |mime, data, options| {
                 let raster = RASTER_MAGIC.iter().any(|magic| data.starts_with(magic));
-                if is_gzip(&data) || (!raster && !depth_within(&data, MAX_DEPTH)) {
+                if is_gzip(&data)
+                    || (!raster && !depth_within(&data, MAX_DEPTH))
+                    || (read_as_svg(mime) && !remaining.take_svg(&data))
+                {
                     None
                 } else {
-                    data_only(mime, data, options)
+                    data_only(mime, data, &without_images(Arc::clone(&options.fontdb)))
                 }
             }),
             resolve_string: Box::new(|_, _| None),
@@ -57,35 +61,64 @@ pub fn options() -> Options<'static> {
     }
 }
 
+/// The bundled font for every `font-family`.
+fn bundled_font() -> FontResolver<'static> {
+    FontResolver {
+        select_font: Box::new(|_, fonts| fonts.faces().next().map(|face| face.id)),
+        ..FontResolver::default()
+    }
+}
+
+/// The options of an SVG inside a `data:` URL: the same font, and no image resolved at all, as
+/// usvg 0.45 read one.
+fn without_images(fontdb: Arc<fontdb::Database>) -> Options<'static> {
+    Options {
+        resources_dir: None,
+        fontdb,
+        font_resolver: bundled_font(),
+        image_href_resolver: ImageHrefResolver {
+            resolve_data: Box::new(|_, _, _| None),
+            resolve_string: Box::new(|_, _| None),
+        },
+        ..Options::default()
+    }
+}
+
 /// The picture of `svg` (UTF-8, a leading byte-order mark allowed) at `settings`: `not_svg` for
 /// a document usvg cannot read or one without a size, `too_complex` nested beyond the depth
-/// budget (told before parsing) or beyond the `<use>` budget.
+/// budget (told before parsing), beyond the element budget (`<use>`, markers, patterns and
+/// embedded SVGs) or with pattern tiles beyond [`MAX_PATTERN_PIXELS`].
 pub fn render(svg: &[u8], settings: Settings) -> Result<Pixmap, Failure> {
     let text = std::str::from_utf8(svg).map_err(|_| not_svg())?;
     let text = text.strip_prefix(BOM).unwrap_or(text);
     if !depth_within(text.as_bytes(), MAX_DEPTH) {
         return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
     }
-    let parsing = roxmltree::ParsingOptions {
-        // As usvg itself reads: editors declare entities in a DTD; roxmltree expands them with
-        // its own limits and never fetches one.
-        allow_dtd: true,
-        ..roxmltree::ParsingOptions::default()
-    };
-    let document = roxmltree::Document::parse_with_options(text, parsing).map_err(|_| not_svg())?;
-    if budget::expanded_elements(&document, MAX_EXPANDED_ELEMENTS) > MAX_EXPANDED_ELEMENTS {
+    // As usvg itself reads: editors declare entities in a DTD.
+    let document =
+        roxmltree::Document::parse_with_options(text, budget::parsing()).map_err(|_| not_svg())?;
+    let count = budget::expanded_elements(&document, MAX_EXPANDED_ELEMENTS);
+    if count > MAX_EXPANDED_ELEMENTS {
         return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
     }
-    let tree = usvg::Tree::from_xmltree(&document, &options()).map_err(|_| not_svg())?;
+    let remaining = Arc::new(Remaining::new(MAX_EXPANDED_ELEMENTS - count));
+    let tree = usvg::Tree::from_xmltree(&document, &options(Arc::clone(&remaining)))
+        .map_err(|_| not_svg())?;
     drop(document);
+    if remaining.exceeded() {
+        return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
+    }
     let size = tree.size();
     let (width, height) =
         fit(size.width(), size.height(), settings.size.longest()).ok_or_else(not_svg)?;
+    let scale = Transform::from_scale(width as f32 / size.width(), height as f32 / size.height());
+    if pattern_pixels(&tree, scale, MAX_PATTERN_PIXELS) > MAX_PATTERN_PIXELS {
+        return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
+    }
     let mut pixmap = Pixmap::new(width, height).ok_or_else(not_svg)?;
     if let Some(color) = settings.background.color() {
         pixmap.fill(color);
     }
-    let scale = Transform::from_scale(width as f32 / size.width(), height as f32 / size.height());
     resvg::render(&tree, scale, &mut pixmap.as_mut());
     Ok(pixmap)
 }

@@ -1,6 +1,6 @@
 //! The decoder memory a 7z asks for, checked before sevenz-rust2 decodes anything (RC-080-35).
 //!
-//! sevenz-rust2 0.23 has no memory limit a caller can set (its `MAX_MEM_LIMIT_KB` is
+//! sevenz-rust2 0.24 has no memory limit a caller can set (its `MAX_MEM_LIMIT_KB` is
 //! `usize::MAX / 1024`), and its LZMA reader checks none at all: the dictionary a coder's
 //! properties state is set aside when the first byte is decoded. So the coders are read here
 //! first - those of an encoded header from the raw header bytes, before `Archive::read`

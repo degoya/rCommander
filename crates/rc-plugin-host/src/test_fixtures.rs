@@ -97,7 +97,10 @@ pub(crate) fn members(package: &[u8]) -> Vec<(String, Vec<u8>)> {
     use std::io::Read as _;
 
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(package)).expect("archive");
-    let names: Vec<String> = archive.file_names().map(str::to_owned).collect();
+    let names: Vec<String> = archive
+        .file_names()
+        .map(|name| name.expect("member name").into_owned())
+        .collect();
     names
         .into_iter()
         .map(|name| {

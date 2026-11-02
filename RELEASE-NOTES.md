@@ -11,6 +11,10 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.16.1
+
+- Security update of the zip library: a crafted zip archive could make the program quit instead of reporting an error.
+
 ## 0.16.0
 
 - A Python viewer: .py, .pyw and .pyi files and Python scripts open coloured in the Lister and Quick View, f-strings and decorators included.

@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer"]
 
 [workspace.package]
-version = "0.16.0"
+version = "0.16.1"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.99"
@@ -139,7 +139,7 @@ lzma-rust2 = { version = "0.21", default-features = false, features = ["encoder"
 ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 sevenz-rust2 = { version = "0.23", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd"] }
 tar = { version = "0.4", default-features = false }
-zip = { version = "8", default-features = false, features = ["aes-crypto", "bzip2", "deflate-flate2", "deflate64"] }
+zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate-flate2", "deflate64"] }
 # The registry reads behind WSL detection (rc-vfs, Windows only); already in the tree via
 # embed-resource, and a safe API, so no `unsafe` of our own.
 winreg = "0.56"

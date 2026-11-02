@@ -100,7 +100,11 @@ pub(crate) type PackageParts = (Vec<u8>, Vec<u8>, Option<Vec<u8>>, Vec<(String, 
 /// Reads the members of a `.rcplug`, refusing any other member and any member over its limit.
 pub(crate) fn read_archive<R: Read + Seek>(reader: R) -> Result<PackageParts> {
     let mut archive = zip::ZipArchive::new(reader).context("read .rcplug archive")?;
-    let names: Vec<String> = archive.file_names().map(str::to_owned).collect();
+    let names: Vec<String> = archive
+        .file_names()
+        .map(|name| name.map(std::borrow::Cow::into_owned))
+        .collect::<Result<_, _>>()
+        .context("read .rcplug member names")?;
     let mut languages = Vec::new();
     for name in &names {
         match name.as_str() {

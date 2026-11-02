@@ -623,7 +623,7 @@ dependencies = [
  "arrayvec",
  "cc",
  "cfg-if",
- "constant_time_eq",
+ "constant_time_eq 0.4.2",
  "cpufeatures 0.3.1",
 ]
 
@@ -1065,6 +1065,15 @@ name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
+name = "constant_time_eq"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb6feb175df65d0a3ccd3e73484e940d0ac664e8034f0519fd49a93db3071d9"
+dependencies = [
+ "rustversion",
+]
 
 [[package]]
 name = "core-foundation"
@@ -5169,7 +5178,7 @@ dependencies = [
 
 [[package]]
 name = "rc-checksum"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5189,7 +5198,7 @@ dependencies = [
 
 [[package]]
 name = "rc-db"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "blake3",
  "directories",
@@ -5206,7 +5215,7 @@ dependencies = [
 
 [[package]]
 name = "rc-engine"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5246,7 +5255,7 @@ dependencies = [
 
 [[package]]
 name = "rc-mcp"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -5273,7 +5282,7 @@ dependencies = [
 
 [[package]]
 name = "rc-ops"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5302,7 +5311,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-api"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "rc-plugin-types",
  "serde",
@@ -5342,7 +5351,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-host"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5426,11 +5435,11 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-text"
-version = "0.16.0"
+version = "0.16.1"
 
 [[package]]
 name = "rc-plugin-types"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5462,14 +5471,14 @@ dependencies = [
 
 [[package]]
 name = "rc-process"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "rc-remote"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5503,7 +5512,7 @@ dependencies = [
 
 [[package]]
 name = "rc-rename"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "chrono",
  "regex",
@@ -5514,7 +5523,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "alacritty_terminal",
  "base64 0.22.1",
@@ -5535,7 +5544,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term-widget"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "alacritty_terminal",
  "iced",
@@ -5547,7 +5556,7 @@ dependencies = [
 
 [[package]]
 name = "rc-update"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5575,7 +5584,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vault"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -5593,7 +5602,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vfs"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "async-trait",
  "bzip2",
@@ -5636,7 +5645,7 @@ dependencies = [
 
 [[package]]
 name = "rcommander"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7348,7 +7357,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
  "windows-sys 0.61.2",
@@ -7752,9 +7761,9 @@ dependencies = [
 
 [[package]]
 name = "typed-path"
-version = "0.12.4"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54ec2755506471f54baf5e4bb5499d8e510cc1caf271270e778a736bd2d7336c"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typenum"
@@ -9619,23 +9628,26 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "8.6.0"
+version = "9.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
+checksum = "e408c6cc4699dd017d53dc080cd51c2cea2b5354af57a1479bd265ed42911487"
 dependencies = [
  "aes",
  "bzip2",
- "constant_time_eq",
+ "constant_time_eq 0.6.1",
  "crc32fast",
  "deflate64",
  "flate2",
  "getrandom 0.4.3",
  "hmac",
  "indexmap",
+ "libc",
  "memchr",
+ "nix 0.31.3",
  "pbkdf2",
  "sha1",
  "typed-path",
+ "windows-sys 0.61.2",
  "zeroize",
 ]
 

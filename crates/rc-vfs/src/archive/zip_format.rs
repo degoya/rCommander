@@ -138,13 +138,23 @@ fn describe<R: Read>(
 /// The name: UTF-8 when flagged (or given in a Unicode path field), else the legacy code page.
 fn decode_name<R: Read>(member: &ZipFile<'_, R>, legacy: Option<&'static Encoding>) -> String {
     match legacy {
-        Some(encoding) if !member.get_metadata().is_utf8 => encoding
+        Some(encoding) if !flagged_utf8(member) => encoding
             .decode_without_bom_handling(member.name_raw())
             .0
             .into_owned(),
-        // CP437, which the zip reader decodes itself.
-        _ => member.name().to_owned(),
+        // UTF-8, else CP437, which the zip reader decodes itself.
+        _ => member.name().map_or_else(
+            |_| String::from_utf8_lossy(member.name_raw()).into_owned(),
+            std::borrow::Cow::into_owned,
+        ),
     }
+}
+
+/// Bit 11 of the general purpose flags (language encoding): the name is UTF-8. The reader sets
+/// it too when it took the name from a valid Unicode path extra field.
+fn flagged_utf8<R: Read>(member: &ZipFile<'_, R>) -> bool {
+    const LANGUAGE_ENCODING: u16 = 1 << 11;
+    member.get_metadata().flags.as_u16() & LANGUAGE_ENCODING != 0
 }
 
 /// The modification time: the NTFS or the Unix extra field where present (both UTC), else the

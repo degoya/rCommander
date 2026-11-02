@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-02
+
+### Fixed
+
+- **zip 9 against RUSTSEC-2026-0429** (RC-100-59, part): `zip` 8.6.0 to 9.2.2 - `ZipArchive::extract`
+  aborted the process on a symlink entry with a large declared size. rCommander called it only on
+  an update archive already checked against the signed manifest. `rc-vfs` reads the UTF-8 flag
+  through the general purpose flags, `rc-plugin-host` takes member names as `Result`.
+  `sevenz-rust2` and `lzma-rust2` stay with RC-100-59.
+
 ## [0.16.0] - 2026-11-02
 
 ### Added

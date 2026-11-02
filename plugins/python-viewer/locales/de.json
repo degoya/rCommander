@@ -1,0 +1,7 @@
+{
+  "name": "Python-Viewer",
+  "description": "Zeigt Python-Skripte und Typ-Stubs (.py, .pyw, .pyi) farbig wie ein Editor.",
+  "codes": {
+    "01a19b54-2242-7948-bcb3-b578803a0fcc.setting.encoding": "Kodierung"
+  }
+}

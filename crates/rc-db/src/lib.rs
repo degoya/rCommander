@@ -90,7 +90,8 @@ pub use hotlist::{
 };
 pub use known_hosts::{HASHED_PREFIX, KnownHost, KnownHostSource, KnownHostsImport, NewKnownHost};
 pub use plugins::{
-    NewPluginExecution, PLUGIN_EXECUTIONS_MAX_PAGE, PluginExecution, StoredPlugin, StoredPluginKey,
+    NewPluginExecution, PLUGIN_EXECUTIONS_MAX_PAGE, PluginExecution, PluginExecutionSummary,
+    StoredPlugin, StoredPluginKey,
 };
 pub use rename_log::{LoggedStep, RenameRun};
 pub use restore::{

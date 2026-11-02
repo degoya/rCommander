@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse Python",
+  "description": "Affiche les scripts Python et les fichiers de types (.py, .pyw, .pyi) en couleurs, comme un éditeur.",
+  "codes": {
+    "01a19b54-2242-7948-bcb3-b578803a0fcc.setting.encoding": "Encodage"
+  }
+}

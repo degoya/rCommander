@@ -31,6 +31,7 @@ mod host_keys;
 mod host_keys_view;
 mod mcp_page;
 mod plugins;
+mod plugins_calls;
 mod plugins_view;
 mod save;
 mod saving;
@@ -297,6 +298,10 @@ impl App {
         }
         if let SettingsMessage::Tab(tab) = message {
             self.settings_tabs.choose(tab);
+            // Back from the page's settings, the list follows them (`plugins.recent_calls_shown`).
+            if tab == Tab::Installed {
+                return self.plugins_shown();
+            }
             return Vec::new();
         }
         // Turning a page needs no database (the About page shows none of it, the Host keys page

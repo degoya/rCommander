@@ -208,10 +208,12 @@ mod with_a_shell {
         )
         .await;
         // A share as OSC 9;9 and as OSC 7 (RC-080-10); the line after them shows they were read.
+        // `done` starts a line of its own: typed before the shell's first prompt, the line is
+        // echoed at once and the output follows that prompt on its line (`$ done`).
         type_line(
             &engine,
             terminal,
-            r"printf '\033]9;9;\\\\attacker\\share\007\033]7;file:////attacker/share\007done\n'",
+            r"printf '\033]9;9;\\\\attacker\\share\007\033]7;file:////attacker/share\007\ndone\n'",
         )
         .await;
         shows(&engine, terminal, "done").await;

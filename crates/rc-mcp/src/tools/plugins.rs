@@ -16,7 +16,8 @@ use crate::{
 
 #[derive(Deserialize, schemars::JsonSchema)]
 pub(crate) struct ListParams {
-    /// Only the plugin with this id (a UUIDv7), with its latest calls.
+    /// Only the plugin with this id (a UUIDv7), with the summary of its calls and the latest of
+    /// them.
     #[serde(default)]
     pub id: Option<String>,
 }
@@ -24,7 +25,7 @@ pub(crate) struct ListParams {
 #[tool_router(router = plugins_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "List the installed rCommander plugins: id, name, kind (viewer), the version that runs, every installed version with its state (active, previous, staged, pending, refused and why), enabled, suspended (after repeated failures), bundled, signed, permissions (claimed extensions, outputs, capabilities), signing key id and fingerprint, and the plugin's own settings. With id: that plugin and its latest calls (export, outcome, failure code, duration). plugins_enabled and development_mode are the master switch and whether unsigned packages are accepted. Plugins cannot be installed, enabled, disabled, rolled back, resumed or removed through MCP: a person decides that in the rCommander window. Errors: plugins_unavailable, plugin_not_found."
+        description = "List the installed rCommander plugins: id, name, kind (viewer), the version that runs, every installed version with its state (active, previous, staged, pending, refused and why), enabled, suspended (after repeated failures), bundled, signed, permissions (claimed extensions, outputs, capabilities), signing key id and fingerprint, and the plugin's own settings. With id: that plugin, the summary of its retained calls (calls, failures, last_failure code, mean_duration_ms) and its latest calls (export, outcome, failure code, duration), at most calls_shown of them (the setting plugins.recent_calls_shown; 0 lists none). plugins_enabled and development_mode are the master switch and whether unsigned packages are accepted. Plugins cannot be installed, enabled, disabled, rolled back, resumed or removed through MCP: a person decides that in the rCommander window. Errors: plugins_unavailable, plugin_not_found."
     )]
     pub(crate) async fn plugins_list(
         &self,
@@ -40,11 +41,15 @@ impl RcMcpServer {
                 PluginsOutcome::List {
                     plugins,
                     executions,
+                    summary,
+                    calls_shown,
                     plugins_enabled,
                     development_mode,
                 } => json_result(&serde_json::json!({
                     "plugins": plugins,
                     "executions": executions,
+                    "summary": summary,
+                    "calls_shown": calls_shown,
                     "plugins_enabled": plugins_enabled,
                     "development_mode": development_mode,
                 })),

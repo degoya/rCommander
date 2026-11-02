@@ -125,9 +125,10 @@ pub struct Workspace {
 #[serde(rename_all = "snake_case")]
 pub enum ApplyMode {
     /// The workspace's tabs take the place of the panel's; its locked tabs stay, before them.
-    #[default]
     ReplaceKeepLocked,
-    /// The workspace's tabs take the place of all of the panel's.
+    /// The workspace's tabs take the place of all of the panel's: the panel shows exactly the
+    /// workspace's tabs (the default, owner 2026-11-02, RC-100-72).
+    #[default]
     ReplaceAll,
     /// The workspace's tabs come after the panel's.
     Add,
@@ -138,9 +139,9 @@ impl ApplyMode {
     #[must_use]
     pub fn of_setting(value: &str) -> Self {
         match value {
-            "replace_all" => Self::ReplaceAll,
+            "replace_keep_locked" => Self::ReplaceKeepLocked,
             "add" => Self::Add,
-            _ => Self::ReplaceKeepLocked,
+            _ => Self::ReplaceAll,
         }
     }
 }

@@ -385,3 +385,6 @@ mod with_a_shell {
         }
     }
 }
+
+#[path = "apply_switch_tests.rs"]
+mod switching;

@@ -17,35 +17,54 @@ use rc_plugin_host::{
 };
 
 use super::{PluginAdminError, PluginInfo, PluginsOutcome, listing::setting_key};
-use crate::{Engine, EngineError, EngineEvent, Outcome};
-
-/// How many of a plugin's latest calls `plugins.list` answers with.
-const EXECUTIONS_SHOWN: u32 = 50;
+use crate::{
+    Engine, EngineError, EngineEvent, Outcome,
+    settings::{DEFAULT_RECENT_CALLS_SHOWN, RECENT_CALLS_SHOWN_KEY, stored_setting},
+};
 
 fn answer(outcome: PluginsOutcome) -> Outcome {
     Outcome::Plugins(Box::new(outcome))
 }
 
 impl Engine {
-    /// `plugins.list`: every installed plugin, or the one `id` names with its latest calls.
+    /// `plugins.list`: every installed plugin, or the one `id` names with the summary of its
+    /// calls and the latest `plugins.recent_calls_shown` of them (RC-100-75).
     pub(crate) async fn list_plugins(&self, id: Option<&str>) -> Result<Outcome, EngineError> {
         let state = self.plugin_state().await?;
         let plugins = self.plugin_infos(&state, id).await?;
-        let executions = match id {
+        let calls_shown = self.recent_calls_shown().await?;
+        let (executions, summary) = match id {
             Some(id) if !plugins.is_empty() => {
-                self.db()?.plugin_executions(id, EXECUTIONS_SHOWN).await?
+                let db = self.db()?;
+                let executions = match calls_shown {
+                    0 => Vec::new(),
+                    shown => db.plugin_executions(id, shown).await?,
+                };
+                (executions, Some(db.plugin_execution_summary(id).await?))
             }
             Some(id) => {
                 return Err(PluginAdminError::NotFound { id: id.to_owned() }.into());
             }
-            None => Vec::new(),
+            None => (Vec::new(), None),
         };
         Ok(answer(PluginsOutcome::List {
             plugins,
             executions,
+            summary,
+            calls_shown,
             plugins_enabled: state.plugins_enabled,
             development_mode: state.development_mode,
         }))
+    }
+
+    /// `plugins.recent_calls_shown` as stored, its default otherwise.
+    async fn recent_calls_shown(&self) -> Result<u32, EngineError> {
+        let stored = stored_setting(self.db()?, RECENT_CALLS_SHOWN_KEY).await;
+        Ok(stored
+            .as_ref()
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|shown| u32::try_from(shown).ok())
+            .unwrap_or(DEFAULT_RECENT_CALLS_SHOWN))
     }
 
     /// `plugins.preview`: what the package at `path` is, before anything is installed.
@@ -378,3 +397,7 @@ async fn verify(
         .with_installed_keys(installed.clone());
     Ok(tokio::task::spawn_blocking(move || verifier.verify_bytes(&bytes)).await?)
 }
+
+#[cfg(test)]
+#[path = "commands_tests.rs"]
+mod tests;

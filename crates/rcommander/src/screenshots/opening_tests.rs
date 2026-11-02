@@ -71,3 +71,19 @@ fn every_page_and_tab_has_one_name() {
         assert_eq!(TABS.iter().filter(|(_, known)| *known == tab).count(), 1);
     }
 }
+
+#[test]
+fn the_workspaces_window_opens_without_a_page_or_a_tab() {
+    assert_eq!(
+        check(RawOpening::Workspaces, None, None).expect("the workspaces' window"),
+        Opening::Workspaces
+    );
+    for (page, tab) in [
+        (Some(json!("appearance")), None),
+        (None, Some(json!("themes"))),
+    ] {
+        let error = check(RawOpening::Workspaces, page.as_ref(), tab.as_ref())
+            .expect_err("no pages or tabs");
+        assert!(error.to_string().contains("no pages or tabs"), "{error}");
+    }
+}

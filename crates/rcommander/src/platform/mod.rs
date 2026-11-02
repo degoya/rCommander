@@ -13,6 +13,7 @@ pub mod key_label;
 pub mod menu_bar;
 pub mod popup_menus;
 pub mod shell_menu;
+pub mod taskbar;
 pub mod window_class;
 #[cfg(windows)]
 mod windows;

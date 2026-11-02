@@ -348,7 +348,8 @@ impl App {
                 self.dialog_windows.park(kind, id);
                 Task::none()
             }
-            _ => window::close(id),
+            // A reused window was shown before and may carry the taskbar's relaunch.
+            _ => platform::taskbar::leave(id).chain(window::close(id)),
         }
     }
 

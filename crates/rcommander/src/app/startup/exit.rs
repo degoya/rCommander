@@ -43,6 +43,9 @@ const ICED_LIMIT: Duration = Duration::from_secs(1);
 /// [`RUNTIME_LIMIT`] with a second to spare.
 const FINISH_LIMIT: Duration = Duration::from_secs(4);
 
+/// How long a start that failed waits for its error-log line to be stored (RC-100-67).
+const LOG_SETTLE: Duration = Duration::from_millis(500);
+
 /// What the guard needs to finish without the main thread, set by [`prepare`].
 struct Finish {
     runtime: Handle,
@@ -63,7 +66,8 @@ pub(super) fn prepare(runtime: Handle, server: McpServer) {
     let _ = FINISH.set(Finish { runtime, server });
 }
 
-/// Ends iced, with the guard armed; called once everything the session stores is stored.
+/// Ends iced, with the guard armed; called once everything the session stores is stored. The
+/// windows lose the taskbar's relaunch first.
 pub(in crate::app) fn leave() -> Task<Message> {
     if let Some(finish) = FINISH.get()
         && !ARMED.swap(true, Ordering::SeqCst)
@@ -76,7 +80,8 @@ pub(in crate::app) fn leave() -> Task<Message> {
             tracing::warn!(%error, "the exit guard did not start");
         }
     }
-    iced::exit()
+    // The taskbar's relaunch off every window before iced destroys them (RC-100-67).
+    crate::platform::taskbar::leave_all().chain(iced::exit())
 }
 
 /// Whether the caller finishes: true once, for the main thread or the guard.
@@ -112,6 +117,12 @@ pub(super) fn finish(runtime: &Handle, server: &McpServer) {
     let removed = rc_engine::unpacked::remove_own();
     tracing::debug!(removed, "this run's copies of archive files removed");
     crate::gpu_loss::relaunch_if_wanted();
+}
+
+/// Gives the error log's task on `runtime` [`LOG_SETTLE`] to store the line of a start that
+/// failed, before the process ends and the runtime with it.
+pub(super) fn let_log_settle(runtime: &Handle) {
+    runtime.block_on(tokio::time::sleep(LOG_SETTLE));
 }
 
 /// `future`'s output, or `None` once `limit` has passed: no step of the exit waits longer.

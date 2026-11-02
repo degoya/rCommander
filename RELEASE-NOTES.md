@@ -11,6 +11,15 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.16.0
+
+- A Python viewer: .py, .pyw and .pyi files and Python scripts open coloured in the Lister and Quick View, f-strings and decorators included.
+- On Windows a middle click or Shift+click on the taskbar button opens another rCommander window. A pin made earlier needs unpinning and pinning again once.
+- Switching between workspaces no longer piles up tabs: by default a workspace shows only its own tabs, and a folder already open is never opened twice.
+- The Plugins page sums up a plugin's calls and lists the latest ones behind a click; how many it lists is a setting, 0 hides the list.
+- The drive setting in Settings > Folders now says what it means: any drive letter typed in the command line, d: was only the example.
+- Plugins run on the newest Wasmtime with its security fixes; they are compiled once more at the first start.
+
 ## 0.15.0
 
 - Eight more colour themes, each light and dark: Gruvbox, Dracula, Catppuccin, Tokyo Night, Everforest, Rosé Pine, Kanagawa and Ayu.

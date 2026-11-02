@@ -137,10 +137,13 @@ fn shown<T: Send + 'static>(id: window::Id) -> Task<T> {
 
 /// Closes the dialog window `id` - a `modal` one after the main window `owner` takes input
 /// again, so Windows hands the focus back to it and not to another program. A modeless one never
-/// locked the main window, and unlocking it would free it from a modal one still open.
+/// locked the main window, and unlocking it would free it from a modal one still open. The
+/// taskbar's relaunch comes off it first (RC-100-67).
 #[cfg(windows)]
 pub fn close<T: Send + 'static>(id: window::Id, owner: Option<window::Id>, modal: bool) -> Task<T> {
-    released(owner, modal).chain(window::close(id))
+    super::taskbar::leave(id)
+        .chain(released(owner, modal))
+        .chain(window::close(id))
 }
 
 /// Hides the dialog window `id` for its dialog's next opening (RC-080-23), after the main window

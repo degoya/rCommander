@@ -1,0 +1,7 @@
+{
+  "name": "Python viewer",
+  "description": "Shows Python scripts and type stubs (.py, .pyw, .pyi) coloured like an editor.",
+  "codes": {
+    "01a19b54-2242-7948-bcb3-b578803a0fcc.setting.encoding": "Encoding"
+  }
+}

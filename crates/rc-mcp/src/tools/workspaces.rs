@@ -211,7 +211,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Make both panels show a workspace: its tabs (after the setting workspaces.apply_mode: replace_keep_locked keeps the panels' locked tabs, replace_all, add), the file list or its terminal (a running one of the same kind reused, else a shell started), the active panel and the divider; it becomes the active workspace. Answers skipped: the parts left out as <error code>:<what> - a connection deleted since, a server out of reach, a shell that did not start. Error: workspace_unknown."
+        description = "Make both panels show a workspace: its tabs (after the setting workspaces.apply_mode: replace_all, the default, leaves each panel exactly the workspace's tabs; replace_keep_locked keeps the panels' locked tabs; add puts them after the panels'; a folder a panel shows already is never opened twice), the file list or its terminal (a running one of the same kind reused, else a shell started), the active panel and the divider; it becomes the active workspace. Answers skipped: the parts left out as <error code>:<what> - a connection deleted since, a server out of reach, a shell that did not start. Error: workspace_unknown."
     )]
     pub(crate) async fn workspaces_apply(
         &self,

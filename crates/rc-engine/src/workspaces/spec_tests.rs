@@ -277,5 +277,9 @@ fn the_apply_mode_reads_its_setting() {
         ApplyMode::ReplaceKeepLocked
     );
     assert_eq!(ApplyMode::of_setting("other"), ApplyMode::default());
-    assert_eq!(ApplyMode::default(), ApplyMode::ReplaceKeepLocked);
+    assert_eq!(
+        ApplyMode::default(),
+        ApplyMode::ReplaceAll,
+        "the workspace's tabs only (RC-100-72)"
+    );
 }

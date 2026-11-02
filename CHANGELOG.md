@@ -5,6 +5,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-02
+
+### Added
+
+- **The bundled Python viewer** (RC-100-74): `plugins/python-viewer/` (`rc-plugin-python-viewer`
+  0.1.0) for `.py`, `.pyw` and `.pyi`, and by the magic `#!` a script whose first line names
+  `python` (`probe` declines any other shebang), built as the PowerShell viewer is (one streamed
+  pass, a line index within 16 MiB), output `highlighted` only, nothing granted. Keywords, the
+  soft keywords `match`, `case` and `type` where they head a statement; decorators, the name after
+  `def` and built-in functions as `function`; the name after `class` or `type`, built-in types and
+  exceptions as `type-name`; `True False None` as `literal`; numbers with `_`, `0x`/`0o`/`0b`,
+  exponents and `j`; comments, operators; strings with every prefix (`r u b f t` and their pairs,
+  any case), triple quotes over lines, and f-/t-string fields coloured as code with strings in the
+  same quote, nested f-strings, `{{ }}`, `!r` and format specs, as Python 3.12 reads them. A
+  string its line ends unclosed, or a triple-quoted one the file leaves open, is `invalid`. The
+  setting `encoding` as the PowerShell viewer's; locales en, de, fr, es; native unit tests, the
+  100 MiB case `#[ignore]`d.
+
+### Changed
+
+- **Dependencies current before the release**: `cc` 1.11.0, `crc32fast` 1.5.4, `unicode-script`
+  0.5.9 (semver-compatible; the majors stay with RC-100-58 to RC-100-60).
+- **Plugin toolchain on Wasmtime 50** (RC-100-57): `wasmtime` 49.0.5 to 50.0.1 (with Cranelift
+  0.137), `wit-component`/`wit-parser` 0.258.3 to 0.261.0, `wat` to the 1.261 line Wasmtime 50
+  brings, `wit-bindgen` 0.62 to 0.63 for the bundled plugins and both SDK templates, in one step.
+  The WIT contract `rcommander:plugin@0.3.0` is unchanged; compiled plugins move to the compile
+  cache's `wasmtime-50.0.1` folder, and the next prune drops Wasmtime 49's entries.
+- **The drive setting names any drive letter** (RC-100-73): the name and help of
+  `drives.follow_on_own_drive` and the help of `drives.follow_other_panel` say "a drive letter in
+  the command line (such as d:)" instead of "d:", in English, German, French and Spanish; text
+  only, the keys and the behaviour stay.
+- **A plugin's calls kept short** (RC-100-75): Settings > Plugins shows a plugin's calls as one
+  summary line - how many, how many failed with the newest failure's code, the mean duration,
+  computed by SQL over the retained `plugin_executions` (`Db::plugin_execution_summary`) - above
+  its latest calls, which open on a click (a stop of the focus ring) and are closed by default.
+  New protected setting `plugins.recent_calls_shown` (10, 0-100; 0 leaves the list out, the
+  summary stays): `plugins.list` and MCP `plugins_list` answer with at most that many calls
+  (before: always 50), plus `summary` and `calls_shown`.
+
+### Fixed
+
+- **Switching workspaces no longer piles up tabs** (RC-100-72): `workspaces.capture` keeps a tab's
+  lock, and the old default `replace_keep_locked` kept locked tabs, so one workspace's locked tabs
+  stayed when the next was called up and opened again on the way back. The default of
+  `workspaces.apply_mode` is now `replace_all` (each panel shows exactly the workspace's tabs;
+  `replace_keep_locked` and `add` stay selectable), and in every mode a folder the panel shows
+  already is not opened a second time, so calling workspaces up in turn keeps the tab count.
+- **A middle click on the taskbar button opens another window** (RC-100-67): on Windows a middle
+  click or Shift+click on rCommander's taskbar button, and the program's entry in its jump list,
+  started nothing (0.15.0). The main window and every dialog window now carry an AppUserModelID
+  per installation, the quoted executable as relaunch command and the name rCommander
+  (`platform/taskbar.rs`, `platform/windows/taskbar.rs`), the dialogs in the main window's
+  group. A start whose window does not open writes its reason into the error log instead of
+  ending without a trace.
+
 ## [0.15.0] - 2026-11-01
 
 ### Added

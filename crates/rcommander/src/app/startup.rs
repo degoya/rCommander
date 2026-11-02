@@ -70,7 +70,15 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let runtime = tokio::runtime::Runtime::new()?;
     // The copies of files opened from archives by runs that have ended (RC-030-02).
     runtime.spawn_blocking(rc_engine::unpacked::remove_stale);
-    let setup = runtime.block_on(prepare())?;
+    let setup = match runtime.block_on(prepare()) {
+        Ok(setup) => setup,
+        Err(error) => {
+            // A start that fails ends without a word on screen: its reason into the error log.
+            tracing::error!(code = error.code(), %error, "the window did not start");
+            exit::let_log_settle(runtime.handle());
+            return Err(error.into());
+        }
+    };
     let server = Arc::clone(&setup.server);
     exit::prepare(runtime.handle().clone(), Arc::clone(&server));
     let shown = iced::daemon(
@@ -86,6 +94,12 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     .font(theme::icon::FONT_BYTES)
     .run();
     tracing::debug!("iced ended");
+    // A window that never opened (a second start among them, RC-100-67) ends without a word on
+    // screen: its reason goes into the error log.
+    if let Err(error) = &shown {
+        tracing::error!(%error, "the window did not open");
+        exit::let_log_settle(runtime.handle());
+    }
     if !exit::claim() {
         exit::wait_for_guard();
     }
@@ -400,9 +414,13 @@ impl App {
             .into_iter()
             .map(|effect| app.perform(effect));
         let start = Task::batch(start.collect::<Vec<_>>());
-        // Whether the menu bar shows, read once the main window is open: the bar is attached to
-        // it then (RC-080-18).
-        let opened = opened.discard().chain(app.menu_bar_task());
+        // Once the main window is open: the taskbar button's relaunch, so a middle click starts
+        // one more rCommander (RC-100-67), and whether the menu bar shows - the bar is attached
+        // to the window then (RC-080-18).
+        let opened = opened
+            .discard()
+            .chain(crate::platform::taskbar::join(main))
+            .chain(app.menu_bar_task());
         (
             app,
             Task::batch([

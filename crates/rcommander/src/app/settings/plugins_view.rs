@@ -267,7 +267,7 @@ fn state_of(page: &PluginsPage, plugin: &PluginInfo) -> String {
     state
 }
 
-/// The selected plugin: its buttons, versions, own settings and latest calls.
+/// The selected plugin: its buttons, versions, own settings and its calls (`plugins_calls`).
 fn details<'a>(
     page: &'a PluginsPage,
     plugin: &'a PluginInfo,
@@ -365,23 +365,7 @@ fn details<'a>(
             on(PluginsMsg::SaveSettings).filter(|_| !page.drafts.is_empty()),
         ));
     }
-    column = column.push(label(t!("settings.plugins.log")));
-    if page.executions.is_empty() {
-        column = column.push(hint(t!("settings.plugins.log_empty"), tokens));
-    }
-    for call in &page.executions {
-        let code = call.code.clone().unwrap_or_default();
-        let line = format!(
-            "{}  {} {}  {} {}  {} ms",
-            super::host_keys_view::shown_time(&call.recorded_at),
-            call.plugin_version,
-            call.operation,
-            call.outcome,
-            code,
-            call.duration_ms
-        );
-        column = column.push(hint(line, tokens));
-    }
+    column = column.push(super::plugins_calls::section(page, tokens));
     container(column).padding([6, 0]).into()
 }
 

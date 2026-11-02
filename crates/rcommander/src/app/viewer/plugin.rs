@@ -40,9 +40,11 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct Plugins(Arc<OnceCell<ViewerPlugins>>);
 
-/// Whether a changed setting is one the loaded plugins follow.
+/// Whether a changed setting is one the loaded plugins follow: not the colours (the views'),
+/// nor how many calls the Plugins page lists (RC-100-75).
 pub fn concerns(key: &str) -> bool {
-    key.starts_with("plugins.") && key != rc_engine::settings::VIEWER_TOKEN_COLORS_KEY
+    use rc_engine::settings::{RECENT_CALLS_SHOWN_KEY, VIEWER_TOKEN_COLORS_KEY};
+    key.starts_with("plugins.") && ![VIEWER_TOKEN_COLORS_KEY, RECENT_CALLS_SHOWN_KEY].contains(&key)
 }
 
 /// What a plugin made of a file.

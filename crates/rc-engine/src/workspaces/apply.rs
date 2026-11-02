@@ -3,9 +3,11 @@
 //! First the servers the tabs are on are reached, one after the other, each as the drive bar
 //! reaches it (a locked vault asked for in the window, never over MCP); a connection deleted
 //! since, or a server that does not answer, leaves its tabs out with a note. Then per panel the
-//! tabs, after `workspaces.apply_mode` ([`ApplyMode`]): the workspace's tabs take the place of the
-//! panel's (its locked tabs stay, before them), or of all of them, or come after them; the
-//! workspace's active tab is shown. Then the view (`view.rs`), the active panel and the divider.
+//! tabs, after `workspaces.apply_mode` ([`ApplyMode`]): the workspace's tabs take the place of all
+//! of the panel's (the default, RC-100-72), or of those not locked (they stay, before them), or
+//! come after them; in every mode a folder the panel keeps is not opened a second time
+//! (`merged`), so calling workspaces up in turn never adds tabs. The workspace's active tab is
+//! shown. Then the view (`view.rs`), the active panel and the divider.
 //! Nothing that fails stops the rest: every part left out is a note in the answer, as
 //! `<error code>:<what>`. The workspace is the active one from then on, and
 //! [`EngineEvent::WorkspacesChanged`] says so.
@@ -53,6 +55,28 @@ fn new_tab(tab: &TabSpec, (sort, mode): (SortOrder, ListMode)) -> Tab {
         locked: tab.locked,
         cursor: None,
     }
+}
+
+/// The tabs a panel shows after an apply (RC-100-72): the `kept` tabs, then each of the `wanted`
+/// whose folder is not among them yet - a folder the panel shows already is not opened a second
+/// time, the tab there counts as the workspace's. With the index of the tab that stands for the
+/// workspace's active one, `active` of `wanted`.
+fn merged(kept: Vec<Tab>, wanted: Vec<Tab>, active: usize) -> (Vec<Tab>, usize) {
+    let mut tabs = kept;
+    let mut shown = 0;
+    for (index, tab) in wanted.into_iter().enumerate() {
+        let at = match tabs.iter().position(|open| open.path == tab.path) {
+            Some(at) => at,
+            None => {
+                tabs.push(tab);
+                tabs.len() - 1
+            }
+        };
+        if index == active {
+            shown = at;
+        }
+    }
+    (tabs, shown)
 }
 
 impl Engine {
@@ -181,8 +205,7 @@ impl Engine {
         }
         let target = wanted[active].path.clone();
         let kept = self.kept_tabs(panel, mode);
-        let active = kept.len() + active;
-        let tabs: Vec<Tab> = kept.into_iter().chain(wanted).collect();
+        let (tabs, active) = merged(kept, wanted, active);
         let Some(set) = TabSet::from_tabs(tabs, active) else {
             return;
         };

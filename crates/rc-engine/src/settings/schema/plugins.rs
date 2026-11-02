@@ -20,6 +20,13 @@ pub const VIEWER_TOKEN_COLORS_KEY: &str = "plugins.viewer_token_colors";
 pub const ASSOCIATIONS_KEY: &str = "plugins.associations";
 /// Unsigned packages are accepted, marked as such everywhere.
 pub const DEVELOPMENT_MODE_KEY: &str = "plugins.development_mode";
+/// How many of a plugin's latest calls its details show and `plugins.list` answers with; 0
+/// hides the list (RC-100-75).
+pub const RECENT_CALLS_SHOWN_KEY: &str = "plugins.recent_calls_shown";
+/// `plugins.recent_calls_shown` until a person sets it.
+pub const DEFAULT_RECENT_CALLS_SHOWN: u32 = 10;
+/// The most `plugins.recent_calls_shown` allows.
+pub const MAX_RECENT_CALLS_SHOWN: i64 = 100;
 
 pub(super) const ENABLED: SettingSpec = SettingSpec {
     key: ENABLED_KEY,
@@ -85,6 +92,20 @@ pub(super) const DEVELOPMENT_MODE: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: false },
     label: "setting.plugins.development_mode",
     help: "setting.plugins.development_mode.help",
+    protected: true,
+    restart: false,
+};
+
+pub(super) const RECENT_CALLS_SHOWN: SettingSpec = SettingSpec {
+    key: RECENT_CALLS_SHOWN_KEY,
+    page: SettingPage::Plugins,
+    kind: SettingKind::Int {
+        min: 0,
+        max: MAX_RECENT_CALLS_SHOWN,
+        default: DEFAULT_RECENT_CALLS_SHOWN as i64,
+    },
+    label: "setting.plugins.recent_calls_shown",
+    help: "setting.plugins.recent_calls_shown.help",
     protected: true,
     restart: false,
 };

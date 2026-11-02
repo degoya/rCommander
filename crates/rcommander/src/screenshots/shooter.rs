@@ -219,6 +219,10 @@ impl Shooter {
                 }
                 Task::batch(tasks)
             }
+            Step::Open(Opening::Workspaces) => self
+                .app
+                .update(Message::Engine(EngineEvent::WorkspaceManager))
+                .map(Shot::App),
             Step::Close(capture) => {
                 let id = self
                     .window_of(*capture)

@@ -2,7 +2,7 @@
 //! settings, and the preview of a package before it is installed. Field names stay clear of the
 //! MCP mask's secret names (`key`, `token`, ...), since `plugins_list` answers with them.
 
-use rc_db::PluginExecution;
+use rc_db::{PluginExecution, PluginExecutionSummary};
 use rc_plugin_host::{PackagePreview, Permissions};
 use serde::{Deserialize, Serialize};
 
@@ -75,10 +75,18 @@ pub struct PluginSettingInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum PluginsOutcome {
-    /// `plugins.list`: every plugin by name, or the one asked for with its latest calls.
+    /// `plugins.list`: every plugin by name, or the one asked for with the summary of its calls
+    /// and the latest of them (RC-100-75).
     List {
         plugins: Vec<PluginInfo>,
+        /// The latest calls, newest first: at most `calls_shown`.
         executions: Vec<PluginExecution>,
+        /// What every retained call adds up to; only with an id.
+        #[serde(default)]
+        summary: Option<PluginExecutionSummary>,
+        /// `plugins.recent_calls_shown`: 0 hides the list of calls.
+        #[serde(default)]
+        calls_shown: u32,
         /// The master switch and development mode.
         plugins_enabled: bool,
         development_mode: bool,

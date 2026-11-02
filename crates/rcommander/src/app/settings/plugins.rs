@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use rc_db::PluginExecution;
+use rc_db::{PluginExecution, PluginExecutionSummary};
 use rc_engine::{Command, Engine, KeyStatus, Outcome, PackagePreview, PluginInfo, PluginsOutcome};
 
 use super::{Page, SettingsMessage, Tab, wrap};
@@ -34,6 +34,17 @@ pub struct Preview {
     pub added_permissions: Vec<String>,
 }
 
+/// The selected plugin's calls as `plugins.list` answers them (RC-100-75).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Calls {
+    /// What every retained call adds up to.
+    pub summary: Option<PluginExecutionSummary>,
+    /// The latest calls, newest first: at most `shown`.
+    pub latest: Vec<PluginExecution>,
+    /// `plugins.recent_calls_shown`: 0 leaves the list out.
+    pub shown: u32,
+}
+
 /// What the page keeps while the dialog is open.
 #[derive(Debug, Default)]
 pub struct PluginsPage {
@@ -41,8 +52,10 @@ pub struct PluginsPage {
     pub plugins: Option<Vec<PluginInfo>>,
     /// The plugin whose details - versions, log, settings - are shown.
     pub selected: Option<String>,
-    /// Its latest calls, newest first.
-    pub executions: Vec<PluginExecution>,
+    /// The summary of its calls and the latest of them.
+    pub calls: Calls,
+    /// The latest calls are open; closed again for another plugin (RC-100-75).
+    pub calls_open: bool,
     /// The package path, typed or chosen with "Browse...".
     pub path: String,
     /// The preview of the package at `path`, while it is open.
@@ -93,6 +106,8 @@ pub enum PluginsMsg {
     Setting(String, String),
     /// Store the selected plugin's edited settings.
     SaveSettings,
+    /// Open or close the latest calls.
+    ToggleCalls,
     Answered(Box<PluginsAnswer>),
 }
 
@@ -120,7 +135,7 @@ pub enum PluginsCall {
 /// The listing: plugins, the selected one's calls, the secret sources' states.
 type Listed = (
     Vec<PluginInfo>,
-    Vec<PluginExecution>,
+    Calls,
     Vec<rc_engine::secret_sources::SecretSourceInfo>,
 );
 
@@ -191,12 +206,21 @@ async fn list(engine: &Engine, selected: Option<String>) -> Result<Listed, &'sta
     else {
         return Err("plugin_invalid");
     };
-    let executions = match selected.filter(|id| plugins.iter().any(|plugin| plugin.id == *id)) {
+    let calls = match selected.filter(|id| plugins.iter().any(|plugin| plugin.id == *id)) {
         Some(id) => match dispatch(engine, Command::ListPlugins { id: Some(id) }).await? {
-            PluginsOutcome::List { executions, .. } => executions,
-            _ => Vec::new(),
+            PluginsOutcome::List {
+                executions,
+                summary,
+                calls_shown,
+                ..
+            } => Calls {
+                summary,
+                latest: executions,
+                shown: calls_shown,
+            },
+            _ => Calls::default(),
         },
-        None => Vec::new(),
+        None => Calls::default(),
     };
     // A source that cannot be asked is only not marked.
     let sources = match engine
@@ -211,7 +235,7 @@ async fn list(engine: &Engine, selected: Option<String>) -> Result<Listed, &'sta
         },
         _ => Vec::new(),
     };
-    Ok((plugins, executions, sources))
+    Ok((plugins, calls, sources))
 }
 
 fn call(call: PluginsCall) -> Vec<Effect> {
@@ -278,6 +302,9 @@ impl App {
                 }
             }
             PluginsMsg::Select(id) => {
+                if page.selected.as_deref() != Some(id.as_str()) {
+                    page.calls_open = false;
+                }
                 page.selected = Some(id.clone());
                 page.drafts.clear();
                 page.version = None;
@@ -322,6 +349,7 @@ impl App {
             PluginsMsg::Setting(name, value) => {
                 page.drafts.insert(name, value);
             }
+            PluginsMsg::ToggleCalls => page.calls_open = !page.calls_open,
             PluginsMsg::SaveSettings if !page.busy => {
                 let Some(id) = page.selected_plugin().map(|plugin| plugin.id.clone()) else {
                     return Vec::new();
@@ -337,13 +365,13 @@ impl App {
             | PluginsMsg::Remove
             | PluginsMsg::SaveSettings => {}
             PluginsMsg::Answered(answer) => match *answer {
-                PluginsAnswer::Listed(Ok((plugins, executions, sources))) => {
+                PluginsAnswer::Listed(Ok((plugins, calls, sources))) => {
                     page.sources = sources;
                     page.selected = page
                         .selected
                         .take()
                         .filter(|id| plugins.iter().any(|plugin| plugin.id == *id));
-                    page.executions = executions;
+                    page.calls = calls;
                     page.plugins = Some(plugins);
                 }
                 PluginsAnswer::Previewed(Ok(preview)) => {

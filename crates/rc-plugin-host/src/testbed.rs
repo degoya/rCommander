@@ -261,6 +261,9 @@ fn component_of(core_text: &str, version: &str, world: &str) -> Vec<u8> {
         &resolve,
         world,
         wit_component::StringEncoding::UTF8,
+        // No component-model canonical names: off in the engine, as in `wasm-tools component
+        // embed` (wit-component 0.261, RC-100-57).
+        false,
     )
     .expect("the contract embeds");
     let mut encoder = wit_component::ComponentEncoder::default();

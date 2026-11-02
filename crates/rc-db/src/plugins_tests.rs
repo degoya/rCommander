@@ -130,3 +130,44 @@ fn the_plugin_tables_are_listed_as_kept() {
         );
     }
 }
+
+/// RC-100-75: the summary counts every call, the failures with the newest one's code (its
+/// outcome where it has none), leaves a cancel out of the failures, and rounds the mean.
+#[tokio::test]
+async fn the_execution_summary_counts_calls_failures_and_the_mean_duration() {
+    let db = db().await;
+    assert_eq!(
+        db.plugin_execution_summary(ID).await.expect("empty"),
+        crate::PluginExecutionSummary::default()
+    );
+    let calls = [
+        ("ok", None, 2),
+        ("crash", Some("plugin_crashed"), 10),
+        ("cancelled", Some("plugin_cancelled"), 1),
+        ("timeout", None, 4),
+        ("ok", None, 1),
+    ];
+    for (outcome, code, duration_ms) in calls {
+        db.record_plugin_execution(&NewPluginExecution {
+            outcome: outcome.to_owned(),
+            code: code.map(str::to_owned),
+            duration_ms,
+            ..call("open")
+        })
+        .await
+        .expect("record");
+    }
+    let other = NewPluginExecution {
+        plugin_id: "another".to_owned(),
+        outcome: "failed".to_owned(),
+        ..call("open")
+    };
+    db.record_plugin_execution(&other).await.expect("record");
+
+    let summary = db.plugin_execution_summary(ID).await.expect("summary");
+    assert_eq!(summary.calls, 5);
+    assert_eq!(summary.failures, 2);
+    assert_eq!(summary.last_failure.as_deref(), Some("timeout"));
+    // (2 + 10 + 1 + 4 + 1) / 5 = 3.6
+    assert_eq!(summary.mean_duration_ms, 4);
+}

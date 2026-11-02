@@ -60,6 +60,21 @@ pub struct PluginExecution {
     pub duration_ms: i64,
 }
 
+/// What a plugin's retained calls add up to (RC-100-75), computed by SQL over
+/// `plugin_executions`: one row, however many calls the shared sweep keeps.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, FromRow)]
+pub struct PluginExecutionSummary {
+    /// Every retained call.
+    pub calls: i64,
+    /// The calls that did not succeed: every outcome but `ok` and `cancelled` (a cancel is the
+    /// caller's, not the plugin's).
+    pub failures: i64,
+    /// The newest failure's code, its outcome where it has none.
+    pub last_failure: Option<String>,
+    /// The mean duration, rounded; 0 without a call.
+    pub mean_duration_ms: i64,
+}
+
 /// A call to record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewPluginExecution {
@@ -313,6 +328,29 @@ impl Db {
         .bind(id)
         .bind(i64::from(limit.min(PLUGIN_EXECUTIONS_MAX_PAGE)))
         .fetch_all(self.readers())
+        .await?)
+    }
+
+    /// What the retained calls of plugin `id` add up to: their number, the failures with the
+    /// newest one's code, the mean duration. Read through the index `(plugin_id, id)`.
+    ///
+    /// # Errors
+    ///
+    /// The query fails.
+    pub async fn plugin_execution_summary(&self, id: &str) -> Result<PluginExecutionSummary> {
+        Ok(sqlx::query_as(
+            "SELECT COUNT(*) AS calls, \
+             COALESCE(SUM(outcome NOT IN ('ok', 'cancelled')), 0) AS failures, \
+             (SELECT COALESCE(code, outcome) FROM plugin_executions \
+              WHERE plugin_id = ? AND outcome NOT IN ('ok', 'cancelled') \
+              ORDER BY id DESC LIMIT 1) AS last_failure, \
+             CAST(COALESCE(ROUND(AVG(duration_ms)), 0) AS INTEGER) AS mean_duration_ms \
+             FROM plugin_executions WHERE plugin_id = ?",
+        )
+        // The subquery's id, then the outer one's.
+        .bind(id)
+        .bind(id)
+        .fetch_one(self.readers())
         .await?)
     }
 }

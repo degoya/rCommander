@@ -36,8 +36,9 @@ use crate::{
 };
 
 /// Makes the live `dialog` window, not yet shown, the dialog of the main window `owner`: owned by
-/// it, with its own Alt+Tab and taskbar entry, on a monitor, and - `modal` - the main window
-/// locked while it is open. Without an owner it only gets its entry and its place.
+/// it, with its own Alt+Tab and taskbar entry in the program's group, on a monitor, and -
+/// `modal` - the main window locked while it is open. Without an owner it only gets its entry
+/// and its place.
 pub fn own(dialog: &dyn window::Window, owner: Option<NonZeroIsize>, modal: bool) {
     let Some(dialog) = crate::native_window::hwnd_of(dialog).map(hwnd) else {
         return;
@@ -52,6 +53,8 @@ pub fn own(dialog: &dyn window::Window, owner: Option<NonZeroIsize>, modal: bool
         let style = GetWindowLongPtrW(dialog, GWL_EXSTYLE);
         SetWindowLongPtrW(dialog, GWL_EXSTYLE, style | WS_EX_APPWINDOW as isize);
     }
+    // Its taskbar entry in the main window's group, with the same relaunch (RC-100-67).
+    super::taskbar::join(dialog);
     place(dialog);
     if let Some(owner) = owner.filter(|_| modal) {
         // SAFETY: the live main window; a disabled window takes no input until `release`.

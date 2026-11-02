@@ -59,6 +59,7 @@ fn the_repository_scenes_parse_and_each_has_an_alt_text() {
         "mcp-question",
         "archive-in-panel",
         "wsl-theme",
+        "workspaces",
     ] {
         assert!(names.contains(&wanted), "the scene {wanted} is missing");
     }

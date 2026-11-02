@@ -109,6 +109,24 @@
       ]
     },
     {
+      "name": "workspaces",
+      "theme": "dark",
+      "settle_ms": 1500,
+      "steps": [
+        { "key": "Escape" },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}\\Projects" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}\\Projects\\website" } } },
+        { "command": { "command": "workspaces.capture", "params": { "name": "Website" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}\\Photos" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}\\Downloads" } } },
+        { "command": { "command": "workspaces.capture", "params": { "name": "Sorting photos" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
+        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}\\Documents" } } },
+        { "command": { "command": "workspaces.capture", "params": { "name": "Paperwork" } } },
+        { "open": "workspaces" }
+      ]
+    },
+    {
       "name": "settings",
       "capture": "settings",
       "settle_ms": 1500,

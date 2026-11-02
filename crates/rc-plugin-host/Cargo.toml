@@ -59,7 +59,7 @@ zip.workspace = true
 tempfile.workspace = true
 # The test components (crash, hang, hostile output, undeclared import) are written as WebAssembly
 # text and made into components the way `wasm-tools component new` does, at the versions
-# Wasmtime 49 brings, so the tests need no WebAssembly toolchain and no prebuilt binary.
+# Wasmtime 50 brings, so the tests need no WebAssembly toolchain and no prebuilt binary.
 wat.workspace = true
 wit-component.workspace = true
 wit-parser.workspace = true

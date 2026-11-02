@@ -125,7 +125,8 @@ fn another_wasmtime_release_and_entries_without_owners_go() {
     let root = tempfile::tempdir().expect("tempdir");
     let shared = two_compiled(root.path());
     let modules = root.path().join(WASMTIME_DIRECTORY).join("modules");
-    let older = modules.join("wasmtime-0.0.1");
+    // The directory rCommander 0.15.0 leaves behind, Wasmtime 49's (RC-100-57).
+    let older = modules.join("wasmtime-49.0.5");
     std::fs::create_dir_all(&older).expect("older release");
     std::fs::write(older.join("B".repeat(43)), vec![1_u8; 300]).expect("old entry");
     std::fs::write(older.join(format!("{}.stats", "B".repeat(43))), b"usages").expect("stats");

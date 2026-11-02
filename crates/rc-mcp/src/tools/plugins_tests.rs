@@ -87,6 +87,10 @@ async fn the_list_reaches_mcp_and_nothing_else_does() {
     assert_eq!(plugin["key_fingerprint"], json!(fingerprint));
     assert_eq!(plugin["permissions"]["extensions"], json!(["csv", "tsv"]));
     assert_eq!(listed["executions"], json!([]));
+    // RC-100-75: the summary of no call, and the bound the setting sets.
+    assert_eq!(listed["summary"]["calls"], json!(0));
+    assert_eq!(listed["summary"]["last_failure"], json!(null));
+    assert_eq!(listed["calls_shown"], json!(10));
     let missing = call(&client, "plugins_list", json!({ "id": "nope" })).await;
     assert!(
         missing.to_string().contains("plugin_not_found"),

@@ -49,6 +49,10 @@ fn every_plugins_setting_but_the_colours_reloads_the_plugins() {
         !concerns("plugins.viewer_token_colors"),
         "the colours are the views'"
     );
+    assert!(
+        !concerns("plugins.recent_calls_shown"),
+        "the Plugins page's list"
+    );
     assert!(!concerns("viewer.font_size"));
 }
 

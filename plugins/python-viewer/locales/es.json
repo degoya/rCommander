@@ -1,0 +1,7 @@
+{
+  "name": "Visor de Python",
+  "description": "Muestra scripts de Python y archivos de tipos (.py, .pyw, .pyi) en color, como un editor.",
+  "codes": {
+    "01a19b54-2242-7948-bcb3-b578803a0fcc.setting.encoding": "Codificación"
+  }
+}

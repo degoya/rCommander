@@ -58,8 +58,8 @@ Positiv: `clean_name` (`safety.rs:159`) lehnt `..`, absolute Pfade, Laufwerksbuc
 **H2 – [hoch] Lese-Denylist mit Lücken; Lesen standardmäßig erlaubt**
 - Ort: `crates/rc-mcp/src/guard.rs:33-67, 103-152`; Default `read: Rule::Allowed` in `crates/rc-mcp/src/policy.rs:43`.
 - Nicht erfasst u. a.: `~/.config/gh/hosts.yml`, `~/.npmrc`, `~/.pypirc`, `~/.cargo/credentials.toml`, `~/.config/gcloud/*`, `~/.azure/*`, `~/.vault-token`, `~/.terraform.d/credentials.tfrc.json`, `~/.config/rclone/rclone.conf`, Browser-Profile (`logins.json`/`key4.db`, `Login Data`), Shell-Histories.
-- Szenario: Ein per Prompt-Injection gesteuerter Agent ruft `files_read_text ~/.config/gh/hosts.yml` – keine Rückfrage. Es bleibt nur die namensbasierte Maske (`crates/rc-db/src/redact.rs`). Diese kennt `token` nur als ganzen Namen und `SECRET_PARTS` enthält kein `token` (`redact.rs:58,67`) ⇒ `oauth_token:`/`_authToken=` werden voraussichtlich **nicht** maskiert **[Maskierungsverhalten unverifiziert]**.
-- Fix: Allowlist-Modus („nur unter diesen Wurzeln“) oder `read: ask` außerhalb freigegebener Wurzeln; Denylist deutlich erweitern; `token` in `SECRET_PARTS` aufnehmen.
+- Szenario: Ein per Prompt-Injection gesteuerter Agent ruft `files_read_text ~/.npmrc` oder `~/.vault-token` – keine Rückfrage. Es bleibt nur die namensbasierte Maske (`crates/rc-db/src/redact.rs`). Nachträglich per Testprogramm gegen `rc-db` verifiziert: `oauth_token:` (gh) und `token = …` (cargo) werden maskiert, **`_authToken=…` (npm), nackte Tokens (`ghp_…`, `hvs.…`) und Dateien, deren Inhalt selbst das Geheimnis ist, nicht**.
+- Fix: Allowlist-Modus („nur unter diesen Wurzeln“) oder `read: ask` außerhalb freigegebener Wurzeln; Denylist deutlich erweitern; Maske um zusammengesetzte Namen (`authtoken`) und bekannte Token-Präfixe erweitern. Details und Code-Skizzen: [`AUDIT-FIXES.md`](AUDIT-FIXES.md).
 
 **M1 – [mittel] `ssh_exec`-Freigabe hängt an der Verbindungs-ID, nicht am Ziel**
 - Ort: `crates/rc-mcp/src/policy.rs:361-369` (`exec_target` ⇒ `connection_id=N`), `crates/rc-mcp/src/ask.rs:206-214`, `crates/rc-engine/src/commands/connections.rs:57-91`.

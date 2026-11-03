@@ -183,9 +183,9 @@ fn change_of(params: &SetAttributesParams) -> Result<PropertyChange, CallToolRes
         None => Ok(None),
     };
     let mode = match &params.mode {
-        Some(text) => {
-            Some(parse_mode(text).ok_or_else(|| invalid("mode is octal, 0 to 777 and not writable by everyone (no o+w), such as 644"))?)
-        }
+        Some(text) => Some(parse_mode(text).ok_or_else(|| {
+            invalid("mode is octal, 0 to 777 and not writable by everyone (no o+w), such as 644")
+        })?),
         None => None,
     };
     Ok(PropertyChange {

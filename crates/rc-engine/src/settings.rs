@@ -252,7 +252,8 @@ impl Engine {
         key: &str,
         value: &Value,
     ) -> Result<Outcome, EngineError> {
-        if is_protected(key) || (crate::read_guard::from_mcp() && AGENT_MAY_NOT_SET.contains(&key)) {
+        if is_protected(key) || (crate::read_guard::from_mcp() && AGENT_MAY_NOT_SET.contains(&key))
+        {
             return Err(EngineError::SettingProtected {
                 key: key.to_owned(),
             });

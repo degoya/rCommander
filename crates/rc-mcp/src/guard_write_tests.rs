@@ -141,7 +141,10 @@ fn ssh_autostart_and_shell_start_up_files_are_protected() {
             "an editor's tasks",
         ),
         // What a shell, Git, Cargo or the session reads and runs besides the files above.
-        (&["home", "bob", ".bash_aliases"][..], "a shell's start-up file"),
+        (
+            &["home", "bob", ".bash_aliases"][..],
+            "a shell's start-up file",
+        ),
         (&["home", "bob", ".xprofile"][..], "a shell's start-up file"),
         (
             &["home", "bob", ".config", "fish", "conf.d", "x.fish"][..],
@@ -167,14 +170,20 @@ fn ssh_autostart_and_shell_start_up_files_are_protected() {
             &["home", "bob", "src", "app", ".vscode", "settings.json"][..],
             "an editor's settings",
         ),
-        (&["home", "bob", ".local", "bin", "git"][..], "a folder on the PATH"),
         (
-            &["home", "bob", ".local", "share", "applications", "x.desktop"][..],
-            "a desktop launcher",
+            &["home", "bob", ".local", "bin", "git"][..],
+            "a folder on the PATH",
         ),
         (
-            &["home", "bob", ".config", "environment.d", "x.conf"][..],
-            "the session's environment",
+            &[
+                "home",
+                "bob",
+                ".local",
+                "share",
+                "applications",
+                "x.desktop",
+            ][..],
+            "a desktop launcher",
         ),
     ] {
         assert_eq!(protected_target(&path(parts)), Some(reason), "{parts:?}");

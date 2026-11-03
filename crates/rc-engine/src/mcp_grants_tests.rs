@@ -166,7 +166,10 @@ fn revoking_a_target_drops_it_in_every_session() {
     assert!(!grants.holds("s1", "ssh_exec", Some("connection_id=5"), now));
     assert!(!grants.holds("s2", "ssh_exec", Some("connection_id=5"), now));
     assert!(grants.holds("s1", "ssh_exec", Some("connection_id=6"), now));
-    assert!(!grants.revoke_target("connection_id=5"), "nothing left to drop");
+    assert!(
+        !grants.revoke_target("connection_id=5"),
+        "nothing left to drop"
+    );
 }
 
 /// A grant to run commands on a connection was given for the server it pointed at: once an

@@ -75,8 +75,21 @@ const SECRET_WORDS: &[&str] = &["apikey", "authtoken", "pwd", "token"];
 /// Compared with case; a value counts only from [`MIN_PREFIXED_LEN`] characters of the token
 /// alphabet on, so `npm_config` and `ghp_` in prose stay.
 const TOKEN_PREFIXES: &[&str] = &[
-    "ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "glpat-", "npm_", "xoxa-", "xoxb-",
-    "xoxp-", "xoxr-", "xoxs-", "hvs.", "AKIA",
+    "ghp_",
+    "gho_",
+    "ghu_",
+    "ghs_",
+    "ghr_",
+    "github_pat_",
+    "glpat-",
+    "npm_",
+    "xoxa-",
+    "xoxb-",
+    "xoxp-",
+    "xoxr-",
+    "xoxs-",
+    "hvs.",
+    "AKIA",
 ];
 
 /// The shortest prefixed token [`TOKEN_PREFIXES`] masks, prefix included.
@@ -335,7 +348,9 @@ fn closing_quote(text: &str, quote: char) -> Option<usize> {
 /// The end of a credential of [`TOKEN_PREFIXES`] starting at `start`, or `None`.
 fn prefixed_token(line: &str, start: usize) -> Option<usize> {
     let rest = &line[start..];
-    TOKEN_PREFIXES.iter().find(|prefix| rest.starts_with(**prefix))?;
+    TOKEN_PREFIXES
+        .iter()
+        .find(|prefix| rest.starts_with(**prefix))?;
     let len = rest
         .find(|character: char| !(character.is_ascii_alphanumeric() || "_-.".contains(character)))
         .unwrap_or(rest.len());

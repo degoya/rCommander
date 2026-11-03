@@ -83,3 +83,49 @@ async fn only_the_permission_bits_of_a_mode_are_listed() {
         .collect();
     assert_eq!(modes, [Some(0o644), Some(0o750), Some(0o755)]);
 }
+
+/// A GNU sparse entry: `stored` bytes of data, read back as `expanded` bytes with zeros in the
+/// holes.
+fn sparse_tar(expanded: u64, stored: u64) -> Vec<u8> {
+    let mut header = tar::Header::new_gnu();
+    header.set_path("holes.bin").expect("path");
+    header.set_entry_type(tar::EntryType::GNUSparse);
+    header.set_mode(0o644);
+    header.set_size(stored);
+    let gnu = header.as_gnu_mut().expect("gnu");
+    gnu.set_real_size(expanded);
+    gnu.sparse[0].set_offset(expanded - stored);
+    gnu.sparse[0].set_length(stored);
+    header.set_cksum();
+    let mut bytes = header.as_bytes().to_vec();
+    bytes.resize(
+        bytes.len() + usize::try_from(stored.div_ceil(512) * 512).expect("small"),
+        b'x',
+    );
+    bytes.resize(bytes.len() + 1024, 0);
+    bytes
+}
+
+/// A sparse entry counts its stored blocks as packed, so a few KB declaring a gigabyte of holes
+/// is over the ratio and never written out; a small one stays readable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_sparse_bomb_is_over_the_ratio() {
+    let (_dir, path) = super::super::test_support::temp_file("bomb.tar", &sparse_tar(1 << 30, 512));
+    let fs = open_path(path, crate::archive::ArchiveSettings::default()).await;
+    let entry = fs
+        .stat_detailed(Path::new("/holes.bin"))
+        .await
+        .expect("listed");
+    assert_eq!(entry.entry.size, 1 << 30);
+    assert_eq!(entry.info.packed_size, Some(512));
+    assert_eq!(
+        code(fs.open_read(Path::new("/holes.bin")).await),
+        "archive_limit"
+    );
+
+    let (_dir, path) = super::super::test_support::temp_file("small.tar", &sparse_tar(4096, 512));
+    let fs = open_path(path, crate::archive::ArchiveSettings::default()).await;
+    let read = read(&fs, "/holes.bin").await;
+    assert_eq!(read.len(), 4096);
+    assert!(read[..3584].iter().all(|byte| *byte == 0));
+}

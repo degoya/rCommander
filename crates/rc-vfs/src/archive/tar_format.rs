@@ -155,6 +155,12 @@ fn describe<R: Read>(entry: &tar::Entry<'_, R>, position: u64) -> RawEntry {
     let mode = header.mode().ok().map(permission_bits);
     let mut raw = RawEntry::new(name, kind, position);
     raw.size = entry.size();
+    if header.entry_type().is_gnu_sparse() {
+        // tar states a sparse file's expanded size (its holes read as zeros); the archive holds
+        // only the data blocks. That is its packed size, so the ratio limit sees a sparse bomb:
+        // a few KB declaring a terabyte of holes, written out dense.
+        raw.packed = header.entry_size().ok();
+    }
     raw.modified = header.mtime().ok().and_then(unix_time);
     raw.mode = mode;
     raw.readonly = readonly_mode(mode);

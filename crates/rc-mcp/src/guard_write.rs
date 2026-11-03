@@ -51,8 +51,21 @@ const AUTOSTART: &[&[&str]] = &[
 /// Git runs its hooks, fish its start-up file, an editor its tasks.
 const RUN_BY_TOOLS: &[(&[&str], &str)] = &[
     (&[".git", "hooks"], "Git's hooks"),
+    // A repository's and the XDG configuration name a pager, an editor and `core.fsmonitor`.
+    (&[".git", "config"], "Git's configuration"),
+    (&[".config", "git", "config"], "Git's configuration"),
     (&["fish", "config.fish"], "a shell's start-up file"),
+    (&["fish", "conf.d"], "a shell's start-up file"),
+    (&["fish", "functions"], "a shell's start-up file"),
     (&[".vscode", "tasks.json"], "an editor's tasks"),
+    (&[".vscode", "settings.json"], "an editor's settings"),
+    (&[".cargo", "config"], "Cargo's configuration"),
+    (&[".cargo", "config.toml"], "Cargo's configuration"),
+    // Programs found before the system's on the PATH, launchers, the session's environment.
+    (&[".local", "bin"], "a folder on the PATH"),
+    (&[".local", "share", "applications"], "a desktop launcher"),
+    (&[".config", "environment.d"], "the session's environment"),
+    (&["plasma-workspace", "env"], "the session's environment"),
 ];
 
 /// File names a tool reads its programs from wherever they are: Git's configuration names an
@@ -62,6 +75,7 @@ const TOOL_CONFIG: &[&str] = &[".gitconfig"];
 /// Shells' start-up files, run by the next shell or login; PowerShell's profiles end in
 /// `profile.ps1`.
 const SHELL_STARTUP: &[&str] = &[
+    ".bash_aliases",
     ".bash_login",
     ".bash_logout",
     ".bash_profile",
@@ -69,8 +83,13 @@ const SHELL_STARTUP: &[&str] = &[
     ".cshrc",
     ".login",
     ".profile",
+    ".pam_environment",
     ".tcshrc",
+    ".xinitrc",
+    ".xprofile",
+    ".xsessionrc",
     ".zlogin",
+    ".zlogout",
     ".zprofile",
     ".zshenv",
     ".zshrc",

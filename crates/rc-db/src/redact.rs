@@ -68,7 +68,19 @@ const SECRET_PARTS: &[&str] = &["passphrase", "passwd", "password", "private_key
 
 /// Words of a name, between `_`, `-` and `.`, that make it a secret's (`MY_API_TOKEN`,
 /// `mysql.pwd`); as words only, so `max_tokens` stays.
-const SECRET_WORDS: &[&str] = &["apikey", "pwd", "token"];
+const SECRET_WORDS: &[&str] = &["apikey", "authtoken", "pwd", "token"];
+
+/// Prefixes of credentials known by their own shape, whatever name they stand after or none at
+/// all: GitHub's tokens, GitLab's, npm's, Slack's, HashiCorp Vault's and an AWS access key id.
+/// Compared with case; a value counts only from [`MIN_PREFIXED_LEN`] characters of the token
+/// alphabet on, so `npm_config` and `ghp_` in prose stay.
+const TOKEN_PREFIXES: &[&str] = &[
+    "ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "glpat-", "npm_", "xoxa-", "xoxb-",
+    "xoxp-", "xoxr-", "xoxs-", "hvs.", "AKIA",
+];
+
+/// The shortest prefixed token [`TOKEN_PREFIXES`] masks, prefix included.
+const MIN_PREFIXED_LEN: usize = 20;
 
 /// Names of [`SECRET_NAMES`] too common in prose and answers for the colon forms: `key: F5`,
 /// `session: 3`, `signature: good` stay.
@@ -195,6 +207,11 @@ fn redact_inline(line: &str) -> String {
             continue;
         }
         if is_word_start(line, index) {
+            if let Some(end) = prefixed_token(line, index) {
+                out.push_str(PLACEHOLDER);
+                index = end;
+                continue;
+            }
             if let Some(scheme) = CREDENTIAL_SCHEMES
                 .iter()
                 .find(|scheme| lowered[index..].starts_with(**scheme))
@@ -313,6 +330,18 @@ fn closing_quote(text: &str, quote: char) -> Option<usize> {
         }
     }
     None
+}
+
+/// The end of a credential of [`TOKEN_PREFIXES`] starting at `start`, or `None`.
+fn prefixed_token(line: &str, start: usize) -> Option<usize> {
+    let rest = &line[start..];
+    TOKEN_PREFIXES.iter().find(|prefix| rest.starts_with(**prefix))?;
+    let len = rest
+        .find(|character: char| !(character.is_ascii_alphanumeric() || "_-.".contains(character)))
+        .unwrap_or(rest.len());
+    // A sentence's full stop after the token is not part of it.
+    let len = rest[..len].trim_end_matches('.').len();
+    (len >= MIN_PREFIXED_LEN).then_some(start + len)
 }
 
 /// Whether `index` starts a word, so `member` does not look like `basic `.

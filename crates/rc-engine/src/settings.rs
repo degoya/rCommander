@@ -99,6 +99,11 @@ pub use schema::{
 
 use crate::{Engine, EngineError, EngineEvent, Outcome};
 
+/// Settings the window sets through `settings.set` but an agent may not: the workspace applied
+/// at the next start may open terminals and SSH sessions, which an agent starts only through
+/// `workspaces_apply` with a person's answer (exec), never by naming it for the next start.
+const AGENT_MAY_NOT_SET: &[&str] = &[crate::workspaces::ON_START_KEY];
+
 /// One setting as `settings.get` and `settings.set` report it: its value and its row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettingValue {
@@ -247,7 +252,7 @@ impl Engine {
         key: &str,
         value: &Value,
     ) -> Result<Outcome, EngineError> {
-        if is_protected(key) {
+        if is_protected(key) || (crate::read_guard::from_mcp() && AGENT_MAY_NOT_SET.contains(&key)) {
             return Err(EngineError::SettingProtected {
                 key: key.to_owned(),
             });

@@ -192,6 +192,7 @@ impl Engine {
             Some(there) if !same(there, draft) => {
                 let updated = db.update_connection(there.id, &patch_of(draft)).await?;
                 self.forget_remote(there.id).await;
+                self.revoke_mcp_connection_grants(there.id);
                 self.announce(TreeItem::Connection(there.id), TreeChange::Updated);
                 updated
             }

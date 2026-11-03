@@ -154,3 +154,82 @@ async fn a_grant_run_out_is_announced_when_looked_at() {
         assert!(events.try_recv().is_err(), "{look}: told once");
     }
 }
+
+#[test]
+fn revoking_a_target_drops_it_in_every_session() {
+    let now = Instant::now();
+    let mut grants = Grants::default();
+    grants.grant("s1", "ssh_exec", Some("connection_id=5".into()), None);
+    grants.grant("s2", "ssh_exec", Some("connection_id=5".into()), None);
+    grants.grant("s1", "ssh_exec", Some("connection_id=6".into()), None);
+    assert!(grants.revoke_target("connection_id=5"));
+    assert!(!grants.holds("s1", "ssh_exec", Some("connection_id=5"), now));
+    assert!(!grants.holds("s2", "ssh_exec", Some("connection_id=5"), now));
+    assert!(grants.holds("s1", "ssh_exec", Some("connection_id=6"), now));
+    assert!(!grants.revoke_target("connection_id=5"), "nothing left to drop");
+}
+
+/// A grant to run commands on a connection was given for the server it pointed at: once an
+/// agent (or anyone) points the connection elsewhere, the next `ssh_exec` asks again.
+#[tokio::test]
+async fn changing_a_connection_takes_its_exec_grants_back() {
+    use crate::{AuthMethod, ConnectionDraft, ConnectionPatch};
+
+    let (_root, engine) = test_support::engine_with_db(&[]).await;
+    let draft = ConnectionDraft {
+        auth_method: AuthMethod::Agent,
+        ..ConnectionDraft::new("test-vm", "test.example")
+    };
+    let Ok(Outcome::Connection { connection }) = engine
+        .dispatch(Command::CreateConnection {
+            folder_id: None,
+            connection: draft,
+        })
+        .await
+    else {
+        panic!("a connection");
+    };
+    let target = format!("connection_id={}", connection.id.0);
+    engine.allow_mcp_for_session(
+        "s1",
+        "ssh_exec",
+        Some(target.clone()),
+        Some(Duration::from_secs(1800)),
+    );
+    engine.allow_mcp_for_session("s1", "terminal_send_input", Some("terminal=1".into()), None);
+
+    // Any change but the themes takes it back: the look stays simple and errs on asking.
+    engine
+        .dispatch_mcp(Command::UpdateConnection {
+            id: connection.id,
+            patch: ConnectionPatch {
+                notes: Some("still the test machine".into()),
+                ..ConnectionPatch::default()
+            },
+        })
+        .await
+        .expect("notes change");
+    assert!(!engine.mcp_allowed_for_session("s1", "ssh_exec", Some(&target)));
+
+    engine.allow_mcp_for_session(
+        "s1",
+        "ssh_exec",
+        Some(target.clone()),
+        Some(Duration::from_secs(1800)),
+    );
+    engine
+        .dispatch_mcp(Command::UpdateConnection {
+            id: connection.id,
+            patch: ConnectionPatch {
+                host: Some("prod.example".into()),
+                ..ConnectionPatch::default()
+            },
+        })
+        .await
+        .expect("no secret held: an agent may move it");
+    assert!(!engine.mcp_allowed_for_session("s1", "ssh_exec", Some(&target)));
+    assert!(
+        engine.mcp_allowed_for_session("s1", "terminal_send_input", Some("terminal=1")),
+        "other grants stay"
+    );
+}

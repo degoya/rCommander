@@ -161,6 +161,8 @@ impl Engine {
         // A new theme only recolours its panels: the session stays (RC-100-51).
         if !patch.only_themes() {
             self.forget_remote(id).await;
+            // A grant to run commands there was given for the server it pointed at.
+            self.revoke_mcp_connection_grants(id);
         }
         self.announce(TreeItem::Connection(id), TreeChange::Updated);
         Ok(Outcome::Connection { connection })

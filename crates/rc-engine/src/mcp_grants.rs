@@ -90,6 +90,15 @@ impl Grants {
         self.0.len() != before
     }
 
+    /// Drops every grant bound to `target` (`connection_id=7`), in every session; whether any
+    /// went.
+    pub(crate) fn revoke_target(&mut self, target: &str) -> bool {
+        let before = self.0.len();
+        self.0
+            .retain(|held| held.grant.target.as_deref() != Some(target));
+        self.0.len() != before
+    }
+
     /// Drops every grant; how many there were.
     pub(crate) fn clear(&mut self) -> usize {
         let removed = self.0.len();
@@ -145,6 +154,22 @@ impl Engine {
             .grants
             .grant(session, tool, target, until);
         self.publish(EngineEvent::McpGrantsChanged);
+    }
+
+    /// Drops every grant bound to connection `id` (`ssh_exec` on `connection_id=<id>`): a grant
+    /// was given for the server the connection pointed at, and a changed connection may point
+    /// elsewhere - its host, port, user or key - so the next call asks again.
+    pub(crate) fn revoke_mcp_connection_grants(&self, id: crate::ConnectionId) {
+        let target = format!("connection_id={}", id.0);
+        let revoked = self
+            .inner
+            .mcp_questions
+            .lock()
+            .grants
+            .revoke_target(&target);
+        if revoked {
+            self.publish(EngineEvent::McpGrantsChanged);
+        }
     }
 
     /// Drops the grants that ran out, telling the window when any did; the MCP server calls it

@@ -176,3 +176,36 @@ fn an_ssh_file_with_a_stream_suffix_stays_refused() {
     let parts = ["home", "bob", ".ssh", "known_hosts:evil"];
     assert!(sensitive_path(&path(&parts)).is_some());
 }
+
+/// Tokens of package registries and command lines, files that are a token, histories of what
+/// was typed and browsers' password stores never leave through MCP.
+#[test]
+fn tokens_histories_and_browser_passwords_are_sensitive() {
+    for parts in [
+        &["home", "bob", ".npmrc"][..],
+        &["home", "bob", ".pypirc"],
+        &["home", "bob", ".vault-token"],
+        &["home", "bob", ".cargo", "credentials.toml"],
+        &["home", "bob", ".config", "gh", "hosts.yml"],
+        &["home", "bob", ".config", "gcloud", "application_default_credentials.json"],
+        &["home", "bob", ".azure", "msal_token_cache.json"],
+        &["home", "bob", ".terraform.d", "credentials.tfrc.json"],
+        &["home", "bob", ".config", "rclone", "rclone.conf"],
+        &["home", "bob", ".bash_history"],
+        &["home", "bob", ".zsh_history"],
+        &["home", "bob", ".mozilla", "firefox", "x.default", "logins.json"],
+        &["home", "bob", ".mozilla", "firefox", "x.default", "key4.db"],
+        &["Users", "Bob", "AppData", "Local", "Google", "Chrome", "User Data", "Default", "Login Data"],
+        &["home", "bob", ".local", "share", "keyrings", "login.keyring"],
+        &["home", "bob", ".password-store", "mail.gpg"],
+    ] {
+        assert!(sensitive_path(&path(parts)).is_some(), "{parts:?}");
+    }
+    for parts in [
+        &["home", "bob", ".config", "gh", "config.yml"][..],
+        &["home", "bob", ".cargo", "config.toml"],
+        &["home", "bob", "history.txt"],
+    ] {
+        assert_eq!(sensitive_path(&path(parts)), None, "{parts:?}");
+    }
+}

@@ -194,6 +194,7 @@ impl Engine {
                     || request.credential.is_some()
                 {
                     self.forget_remote(id).await;
+                    self.revoke_mcp_connection_grants(id);
                 }
                 TreeChange::Updated
             }

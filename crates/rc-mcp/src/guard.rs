@@ -44,7 +44,27 @@ const CREDENTIAL_NAMES: &[&str] = &[
     ".pgpass",
     "_netrc",
     "winscp.ini",
+    // Package registries' and tools' tokens, and files that are a token and nothing else.
+    ".npmrc",
+    ".pypirc",
+    ".vault-token",
+    "credentials.tfrc.json",
+    "rclone.conf",
+    // What a shell or client remembers of what was typed, passwords on command lines included.
+    ".bash_history",
+    ".zsh_history",
+    ".python_history",
+    ".psql_history",
+    ".mysql_history",
+    // Browsers' stored passwords (Firefox: logins.json with key4.db; Chromium: Login Data).
+    "logins.json",
+    "key4.db",
+    "login data",
 ];
+
+/// Folders whose whole contents are credentials: Google Cloud's and Azure's command lines, the
+/// GNOME keyring and `pass`.
+const CREDENTIAL_DIRS: &[&str] = &["gcloud", ".azure", "keyrings", ".password-store"];
 
 /// Total Commander's FTP connections with their passwords, obfuscated with a fixed key stream
 /// (RC-080-12).
@@ -58,6 +78,9 @@ const RDM_EXTENSION: &str = "rdm";
 /// base64 unless a master password is set (RC-080-03).
 const CREDENTIAL_PAIRS: &[(&str, &str)] = &[
     (".aws", "credentials"),
+    (".cargo", "credentials"),
+    (".cargo", "credentials.toml"),
+    ("gh", "hosts.yml"),
     (".docker", "config.json"),
     (".kube", "config"),
     ("etc", "gshadow"),
@@ -121,6 +144,9 @@ fn judge(path: &Path, backup_dirs: &[PathBuf]) -> Option<&'static str> {
     }
     if inside(".gnupg") {
         return Some("a GnuPG key ring");
+    }
+    if CREDENTIAL_DIRS.iter().any(|dir| inside(dir)) {
+        return Some("a file of credentials");
     }
     let extension = Path::new(&name)
         .extension()

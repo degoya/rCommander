@@ -51,7 +51,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Change one setting, such as appearance.theme to system, light or dark; it takes effect at once unless restart is true. The MCP and vault settings (server switch, port, token, policy, idle lock) are refused with setting_protected: only a person changes them in rCommander. Answers the setting with its new value. Errors: setting_unknown, setting_protected, setting_invalid."
+        description = "Change one setting, such as appearance.theme to system, light or dark; it takes effect at once unless restart is true. The MCP and vault settings (server switch, port, token, policy, idle lock) are refused with setting_protected: only a person changes them in rCommander, as is workspaces.on_start. Answers the setting with its new value. Errors: setting_unknown, setting_protected, setting_invalid."
     )]
     pub(crate) async fn settings_set(
         &self,

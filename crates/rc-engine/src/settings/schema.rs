@@ -66,7 +66,7 @@ pub use keys::{
 pub use language::LANGUAGE_KEY;
 pub use lookup::{is_protected, setting};
 pub use macos::{MACOS_CMD_AS_CTRL_KEY, MACOS_LOOK_KEY};
-pub use mcp::{MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY};
+pub use mcp::{MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY};
 pub use mouse::{CLICK_CLEARS_MARKS_KEY, TAB_DRAG_KEY};
 pub use plugins::{
     ASSOCIATIONS_KEY, CRASH_LIMIT_KEY, DEFAULT_RECENT_CALLS_SHOWN, DEVELOPMENT_MODE_KEY,
@@ -389,6 +389,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     mcp::HTTP_PORT,
     mcp::HEADLESS_CODE,
     mcp::EXEC_SESSION_MINUTES,
+    mcp::ASK_OUTSIDE_PANELS,
     // Protected: the program that runs on F3 and F4 is a person's choice, never an agent's.
     SettingSpec {
         key: VIEWER_KEY,

@@ -19,7 +19,7 @@ use serde_json::Value;
 use crate::answer::error_result;
 
 /// The arguments of every tool that name a file or folder on this machine.
-const PATH_ARGUMENTS: &[&str] = &[
+pub(crate) const PATH_ARGUMENTS: &[&str] = &[
     "archives",
     "cwd",
     "dir",

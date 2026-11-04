@@ -1,5 +1,7 @@
 use rc_db::{Db, DbError};
-use rc_engine::settings::{MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY};
+use rc_engine::settings::{
+    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY,
+};
 
 use super::GateSettings;
 use crate::policy::{POLICY_KEY, Policy, Rule};
@@ -14,6 +16,7 @@ async fn nothing_stored_reads_as_the_defaults() {
             policy: Policy::default(),
             headless_codes: false,
             exec_minutes: 30,
+            ask_outside_panels: false,
         }
     );
 }
@@ -32,12 +35,16 @@ async fn the_three_stored_settings_are_read_at_once() {
     db.set(MCP_EXEC_SESSION_MINUTES_KEY, &5)
         .await
         .expect("stores");
+    db.set(MCP_ASK_OUTSIDE_PANELS_KEY, &true)
+        .await
+        .expect("stores");
     assert_eq!(
         GateSettings::load(&db).await.expect("loads"),
         GateSettings {
             policy,
             headless_codes: true,
             exec_minutes: 5,
+            ask_outside_panels: true,
         }
     );
 }

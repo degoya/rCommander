@@ -11,6 +11,21 @@ pub const MCP_HEADLESS_CODE_KEY: &str = "mcp.ask.headless_code";
 /// connection its call names (RC-010-27); 0 never offers it there.
 pub const MCP_EXEC_SESSION_MINUTES_KEY: &str = "mcp.ask.exec_session_minutes";
 
+/// Whether a reading or writing tool asks first when a path it names lies outside the folders
+/// the two panels show (the audit's H2). Off by default: an agent reads and writes where the
+/// policy allows, the deny lists aside.
+pub const MCP_ASK_OUTSIDE_PANELS_KEY: &str = "mcp.ask.outside_panels";
+
+pub(super) const ASK_OUTSIDE_PANELS: SettingSpec = SettingSpec {
+    key: MCP_ASK_OUTSIDE_PANELS_KEY,
+    page: SettingPage::Mcp,
+    kind: SettingKind::Bool { default: false },
+    label: "setting.mcp.ask.outside_panels",
+    help: "setting.mcp.ask.outside_panels.help",
+    protected: true,
+    restart: false,
+};
+
 pub(super) const HTTP_ENABLED: SettingSpec = SettingSpec {
     key: "mcp.http.enabled",
     page: SettingPage::Mcp,

@@ -34,8 +34,8 @@ pub use rc_term::{
 };
 pub use rc_vault::{VaultStateKind, VaultStatus};
 pub use rc_vfs::{
-    ArchiveEntryInfo, Details, Entry, EntryKind, LinkKind, LinkKinds, NetworkPath, Owner,
-    PropertyCapabilities, PropertyChange, UnsafeName, VfsPath, WslDistro, network_path,
+    ArchiveEntryInfo, BackendId, Details, Entry, EntryKind, LinkKind, LinkKinds, NetworkPath,
+    Owner, PropertyCapabilities, PropertyChange, UnsafeName, VfsPath, WslDistro, network_path,
     unix_seconds,
 };
 /// What stops a comparison the window runs ([`crate::Engine::diff_paths`],

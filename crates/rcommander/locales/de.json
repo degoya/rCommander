@@ -445,6 +445,8 @@
   "setting.mcp.ask.exec_session_minutes": "Minuten, die ein ausführender Aufruf erlaubt bleibt",
   "setting.mcp.ask.exec_session_minutes.help": "\"Hier für ... Min. erlauben\" lässt einen Agenten so lange ohne erneute Nachfrage in dasselbe Terminal tippen oder Befehle auf demselben Server ausführen; ein anderes Terminal oder ein anderer Server fragt weiterhin. 0 bietet es nie an. Die Statusleiste zeigt, was erlaubt ist; ein Klick dort nimmt es zurück.",
   "setting.mcp.ask.headless_code.help": "Wenn rCommander nicht läuft, hat rcommander mcp niemanden zum Fragen. Aus: jedes fragende Tool wird dort abgelehnt; an: der Agent erhält einen Einmalcode und soll nachfragen - aber nichts beweist, dass er gesehen wurde.",
+  "setting.mcp.ask.outside_panels": "Vor Lesen oder Schreiben außerhalb der Panel-Ordner fragen",
+  "setting.mcp.ask.outside_panels.help": "An: Ein lesendes oder schreibendes Tool fragt zuerst nach, wenn eine Datei oder ein Ordner, den es nennt, außerhalb der beiden Ordner liegt, die die Panels zeigen - wohin Links auch führen. Aus: Der Agent liest und schreibt, wo die Richtlinie es erlaubt; Schlüssel, Zugangsdaten und Startdateien bleiben so oder so gesperrt.",
   "db.title_backup": "Datenbank sichern",
   "db.title_restore": "Datenbank wiederherstellen",
   "db.tab_backup": "Sichern",

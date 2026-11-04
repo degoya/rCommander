@@ -445,6 +445,8 @@
   "setting.mcp.ask.exec_session_minutes": "Minutes an executing call stays allowed",
   "setting.mcp.ask.exec_session_minutes.help": "\"Allow here for ... min\" lets an agent keep typing into the same terminal or running commands on the same server for this long without asking again; another terminal or server still asks. 0 never offers it. The status bar shows what is allowed; a click there takes it back.",
   "setting.mcp.ask.headless_code.help": "When rCommander is not running, rcommander mcp has nobody to ask. Off, every tool that asks is refused there; on, the agent gets a one-time code and is told to ask you - but nothing proves you saw it.",
+  "setting.mcp.ask.outside_panels": "Ask before reading or writing outside the panels' folders",
+  "setting.mcp.ask.outside_panels.help": "On, a reading or writing tool asks you first when a file or folder it names lies outside the two folders the panels show - wherever links lead. Off, the agent reads and writes where the policy allows; keys, credential files and start-up files stay refused either way.",
   "db.title_backup": "Back up the database",
   "db.title_restore": "Restore the database",
   "db.tab_backup": "Back up",

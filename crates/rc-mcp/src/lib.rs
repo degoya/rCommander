@@ -32,6 +32,7 @@ pub mod instance;
 mod mask;
 mod policy;
 mod redact;
+mod roots;
 mod server;
 mod stdio;
 #[cfg(test)]

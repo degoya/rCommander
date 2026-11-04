@@ -40,5 +40,6 @@ mod restore;
 mod resume;
 mod sftp_case;
 mod sftp_transfer;
+mod sync_before_remove;
 mod transfer;
 mod transfer_as;

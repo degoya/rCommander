@@ -161,3 +161,16 @@ mod windows;
 
 #[path = "local_props_tests.rs"]
 mod props;
+
+/// `sync` flushes a file that is there, and names the path of one that is not.
+#[tokio::test]
+async fn sync_flushes_a_file_and_refuses_a_missing_one() {
+    let dir = tempfile::tempdir().expect("temp");
+    let file = dir.path().join("a.txt");
+    std::fs::write(&file, b"alpha").expect("write");
+    let fs = LocalFs::new();
+    fs.sync(&file).await.expect("synced");
+    let missing = dir.path().join("gone.txt");
+    let error = fs.sync(&missing).await.expect_err("missing");
+    assert_eq!(error.code(), "not_found", "{error}");
+}

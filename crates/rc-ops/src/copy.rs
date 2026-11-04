@@ -311,7 +311,7 @@ impl Runner {
         let source = self.src_path(&item.path);
         let size = item.entry.size;
         let mut asked_again = false;
-        let moved = loop {
+        let (moved, landed) = loop {
             let resolved = attempt!(self, target, self.resolve(item, &source, target).await);
             let placement = match resolved {
                 Some(Resolved::Write(placement)) => placement,
@@ -321,7 +321,10 @@ impl Runner {
                 }
                 // A restored job's file is there already: a move still owes its source's removal.
                 Some(Resolved::Complete) if moving => {
-                    self.remove_source(item, &source).await?;
+                    let dest = target.path.clone();
+                    if self.sync_target(&dest).await? {
+                        self.remove_source(item, &source).await?;
+                    }
                     self.count_done(1, size);
                     return Ok(());
                 }
@@ -355,20 +358,37 @@ impl Runner {
                     });
                     let failure = Failure::new(&source, &taken);
                     self.job.update(|snapshot| snapshot.failures.push(failure));
-                    break None;
+                    break (None, None);
                 }
-                moved => break moved,
+                moved => break (moved, Some(placement.dest)),
             }
         };
         if moved == Some(Moved::Renamed) {
             // Renamed in place: nothing streamed, and the file is whole at its target.
             self.progress.file_bytes_done = size;
         }
-        if moving && moved == Some(Moved::Copied) {
+        if moving
+            && moved == Some(Moved::Copied)
+            && let Some(dest) = landed
+            && self.sync_target(&dest).await?
+        {
             self.remove_source(item, &source).await?;
         }
         self.count_done(1, size);
         Ok(())
+    }
+
+    /// Makes a moved file's copy at `dest` durable before its source goes: on the target's disk,
+    /// not only in the page cache, which a crash or a pulled drive would lose with the source
+    /// already removed. Whether it is (a failure the person skipped keeps the source).
+    async fn sync_target(&mut self, dest: &Path) -> Result<bool, Stop> {
+        let dst = Arc::clone(&self.dst);
+        let shown = VfsPath {
+            backend: self.dst_id.clone().unwrap_or(BackendId::Local),
+            path: dest.to_path_buf(),
+        };
+        let synced = attempt!(self, &shown, dst.sync(dest).await.map_err(Step::from));
+        Ok(synced.is_some())
     }
 
     /// Removes a moved file's source; a refusal is a failure of the file.

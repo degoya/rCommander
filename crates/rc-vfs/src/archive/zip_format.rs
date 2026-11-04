@@ -39,13 +39,13 @@ pub(crate) fn scan(source: &Source, settings: &ArchiveSettings) -> Result<Vec<Ra
     let mut archive =
         ZipArchive::new(source.seekable()?).map_err(|error| zip_error(error, path))?;
     let legacy = settings.legacy_encoding();
-    let mut budget = Budget::new(&settings.limits, path);
+    let mut budget = Budget::new(&settings.limits, path).of_archive(source.len());
     let mut entries = Vec::with_capacity(archive.len().min(4096));
     for index in 0..archive.len() {
         let member = archive
             .by_index_raw(index)
             .map_err(|error| zip_error(error, path))?;
-        budget.admit(member.size())?;
+        budget.admit(member.size(), Some(member.compressed_size()))?;
         entries.push(describe(&member, index as u64, legacy));
     }
     // A link's target is its content: read now, for the few links there are.

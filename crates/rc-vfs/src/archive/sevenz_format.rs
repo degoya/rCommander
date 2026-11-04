@@ -45,14 +45,14 @@ pub(crate) fn scan(
     let archive = Archive::read(&mut reader, &key)
         .map_err(|error| seven_error(error, path, password.is_some()))?;
     let blocks = blocks(&archive);
-    let mut budget = Budget::new(&settings.limits, path);
+    let mut budget = Budget::new(&settings.limits, path).of_archive(source.len());
     let mut entries = Vec::with_capacity(archive.files.len().min(4096));
     for (index, file) in archive.files.iter().enumerate() {
         if file.is_anti_item {
             // A deletion marker of an update, not an entry.
             continue;
         }
-        budget.admit(file.size)?;
+        budget.admit(file.size, None)?;
         let block = archive
             .stream_map
             .file_block_index

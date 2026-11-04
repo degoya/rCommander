@@ -33,10 +33,10 @@ pub(crate) fn scan(
     settings: &ArchiveSettings,
 ) -> Result<Vec<RawEntry>> {
     let path = source.path();
-    let mut budget = Budget::new(&settings.limits, path);
+    let mut budget = Budget::new(&settings.limits, path).of_archive(source.len());
     let mut entries = Vec::new();
     walk(source, compression, settings.limits, &mut |_, entry, _| {
-        budget.admit(entry.size)?;
+        budget.admit(entry.size, entry.packed)?;
         entries.push(entry);
         Ok(true)
     })?;

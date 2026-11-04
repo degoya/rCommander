@@ -186,6 +186,25 @@ async fn an_archive_bomb_fails_instead_of_filling_memory_or_disk() {
     );
 }
 
+/// David Fifield's "better zip bomb", small: 16 entries share one deflated block. Each passes
+/// the ratio alone; together they store more than the file holds, and the listing is refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn entries_sharing_their_data_refuse_the_listing() {
+    let zip = open("overlapping.zip").await;
+    let refused = zip.list(Path::new("/")).await;
+    assert!(
+        matches!(
+            &refused,
+            Err(VfsError::ArchiveLimit {
+                limit: "overlapping entries",
+                ..
+            })
+        ),
+        "{:?}",
+        refused.err()
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn too_many_entries_or_bytes_refuse_the_listing() {
     let with = |limits| ArchiveSettings {
@@ -226,22 +245,66 @@ fn the_budget_counts_entries_and_stated_bytes() {
     };
     let path = Path::new("a.zip");
     let mut budget = Budget::new(&limits, path);
-    budget.admit(60).expect("one");
-    budget.admit(40).expect("two, exactly at both limits");
+    budget.admit(60, None).expect("one");
+    budget.admit(40, None).expect("two, exactly at both limits");
     assert!(matches!(
-        budget.admit(0),
+        budget.admit(0, None),
         Err(VfsError::ArchiveLimit {
             limit: "entry count",
             ..
         })
     ));
     assert!(matches!(
-        Budget::new(&limits, path).admit(101),
+        Budget::new(&limits, path).admit(101, None),
         Err(VfsError::ArchiveLimit {
             limit: "unpacked size",
             ..
         })
     ));
+}
+
+/// Entries that each pass may still add up to a bomb: entries whose stored data overlaps, and
+/// many entries each below the ratio threshold, are held against the archive file's own size -
+/// only where that size is known, and never an entry above the threshold, which the ratio checks
+/// on its own when it is read.
+#[test]
+fn the_budget_holds_the_entries_together_against_the_archive() {
+    let limits = ArchiveLimits {
+        max_ratio: 10,
+        ratio_threshold: 1000,
+        ..ArchiveLimits::default()
+    };
+    let path = Path::new("bomb.zip");
+    let mut small = Budget::new(&limits, path).of_archive(Some(100));
+    for _ in 0..10 {
+        small
+            .admit(100, Some(1))
+            .expect("1000 bytes out of 100: at the ratio");
+    }
+    assert!(matches!(
+        small.admit(1, Some(1)),
+        Err(VfsError::ArchiveLimit {
+            limit: "total compression ratio",
+            ..
+        })
+    ));
+    let mut overlapping = Budget::new(&limits, path).of_archive(Some(100));
+    overlapping.admit(10, Some(60)).expect("one");
+    assert!(matches!(
+        overlapping.admit(10, Some(60)),
+        Err(VfsError::ArchiveLimit {
+            limit: "overlapping entries",
+            ..
+        })
+    ));
+    let mut large = Budget::new(&limits, path).of_archive(Some(1));
+    large
+        .admit(1 << 20, Some(1))
+        .expect("above the threshold: the entry's own ratio decides when it is read");
+    let mut unknown = Budget::new(&limits, path);
+    unknown
+        .admit(999, Some(1 << 20))
+        .expect("no archive size known");
 }
 
 #[test]

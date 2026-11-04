@@ -37,7 +37,7 @@ pub(crate) fn scan(
     let path = source.path();
     let mut stream = open(source, compression, settings.limits)?;
     let size = io::copy(&mut stream, &mut io::sink()).map_err(|error| io_error(error, path))?;
-    Budget::new(&settings.limits, path).admit(size)?;
+    Budget::new(&settings.limits, path).admit(size, None)?;
     let mut entry = RawEntry::new(inner_name(&outer.name, compression), RawKind::File, 0);
     entry.size = size;
     entry.packed = Some(outer.size);

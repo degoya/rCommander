@@ -59,6 +59,14 @@ impl Source {
         &self.path
     }
 
+    /// The archive file's size in bytes; `None` when the backend cannot say. Blocks.
+    pub(crate) fn len(&self) -> Option<u64> {
+        self.handle
+            .block_on(self.vfs.stat(&self.path))
+            .ok()
+            .map(|entry| entry.size)
+    }
+
     /// Opens the archive for random access (zip, 7z, plain tar). Blocks.
     pub(crate) fn seekable(&self) -> Result<SeekReader> {
         let stream = self

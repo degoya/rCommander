@@ -63,7 +63,7 @@ fn wsl_hands_bashs_variables_through_wslenv() {
     let fresh = Integration::wsl(&InheritedEnv::default());
     assert_eq!(
         var(&fresh, "WSLENV"),
-        Some("RC_SHELL_INTEGRATION/u:PROMPT_COMMAND/u")
+        Some("RC_SHELL_NONCE/u:RC_SHELL_INTEGRATION/u:PROMPT_COMMAND/u")
     );
     let inherited = InheritedEnv {
         wslenv: Some("USERPROFILE/p".to_owned()),
@@ -72,23 +72,24 @@ fn wsl_hands_bashs_variables_through_wslenv() {
     let kept = Integration::wsl(&inherited);
     assert_eq!(
         var(&kept, "WSLENV"),
-        Some("USERPROFILE/p:RC_SHELL_INTEGRATION/u:PROMPT_COMMAND/u")
+        Some("USERPROFILE/p:RC_SHELL_NONCE/u:RC_SHELL_INTEGRATION/u:PROMPT_COMMAND/u")
     );
 }
 
 #[test]
 fn cmd_wraps_the_users_prompt_in_the_marks() {
     let fresh = Integration::local("cmd", &InheritedEnv::default(), None).expect("cmd");
+    let n = format!(";rc={}", fresh.nonce);
     assert_eq!(
         var(&fresh, "PROMPT"),
-        Some(r"$E]9;9;$P$E\$E]133;A$E\$P$G$E]133;B$E\")
+        Some(format!(r"$E]9;9;$P{n}$E\$E]133;A{n}$E\$P$G$E]133;B{n}$E\").as_str())
     );
     let inherited = InheritedEnv {
         prompt: Some("$T $P$G".to_owned()),
         ..InheritedEnv::default()
     };
     let own = Integration::local("cmd", &inherited, None).expect("cmd");
-    assert!(var(&own, "PROMPT").is_some_and(|prompt| prompt.contains("133;A$E\\$T $P$G$E]133;B")));
+    assert!(var(&own, "PROMPT").is_some_and(|prompt| prompt.contains("$E\\$T $P$G$E]133;B;rc=")));
 }
 
 #[test]
@@ -126,6 +127,7 @@ fn the_integration_is_added_to_the_command() {
     let integration = Integration {
         args: vec!["-NoExit".to_owned()],
         env: vec![("B".to_owned(), "2".to_owned())],
+        nonce: "00".to_owned(),
     };
     integration.apply(&mut command);
     assert_eq!(command.args, ["-NoLogo", "-NoExit"]);
@@ -163,4 +165,36 @@ fn the_snippets_report_folder_and_prompt() {
             "a folder"
         );
     }
+}
+
+/// Every integration hands its shell a nonce of its own - 32 hex digits, new each time - which
+/// its marks carry (RC-040-04).
+#[test]
+fn every_integration_carries_a_fresh_nonce() {
+    let shells = ["bash", "pwsh", "cmd"];
+    let mut seen = std::collections::HashSet::new();
+    for shell in shells {
+        for _ in 0..2 {
+            let integration =
+                Integration::local(shell, &InheritedEnv::default(), None).expect("integration");
+            assert_eq!(integration.nonce.len(), 32, "{shell}");
+            assert!(
+                integration
+                    .nonce
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit())
+            );
+            assert_eq!(
+                var(&integration, super::NONCE_VARIABLE),
+                Some(integration.nonce.as_str()),
+                "{shell}"
+            );
+            assert!(
+                seen.insert(integration.nonce.clone()),
+                "a new one each time"
+            );
+        }
+    }
+    let wsl = Integration::wsl(&InheritedEnv::default());
+    assert_eq!(var(&wsl, super::NONCE_VARIABLE), Some(wsl.nonce.as_str()));
 }

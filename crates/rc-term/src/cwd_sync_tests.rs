@@ -229,3 +229,49 @@ fn a_network_share_reported_by_a_shell_never_becomes_the_panel_folder() {
         Some(PathBuf::from(r"\\wsl.localhost\Ubuntu\home\x"))
     );
 }
+
+/// RC-040-04: a shell the app started with its integration vouches for its marks with the
+/// session's nonce. A mark a program prints - a server's shell after `ssh`, a file shown with
+/// `cat` - carries none: it neither releases a waiting `cd` into whatever runs nor moves the
+/// panel.
+#[test]
+fn a_mark_without_the_sessions_nonce_types_nothing_and_moves_nothing() {
+    let mut sync = bash();
+    sync.require_nonce(Some("n0nce".to_owned()));
+    mark(&mut sync, b"133;A;rc=n0nce");
+    assert_eq!(sync.prompt(), PromptState::AtPrompt);
+    sync.on_input(b"ssh winbox\r");
+    let (outcome, line) = sync.follow(Path::new("/x&calc&"));
+    assert_eq!(outcome, FollowOutcome::Waiting(FollowStatus::Running));
+    assert!(line.is_none());
+    for forged in [
+        &b"133;A"[..],
+        b"133;B",
+        b"133;A;rc=guess",
+        b"133;A;rc=n0nce;x",
+        b"7;file:///etc",
+    ] {
+        let changes = mark(&mut sync, forged);
+        assert!(changes.write.is_none(), "{forged:?}");
+        assert!(!changes.folder, "{forged:?}");
+    }
+    assert_eq!(sync.prompt(), PromptState::Running);
+    assert_eq!(sync.reported(), None);
+
+    // The shell's own prompt, back after `exit`, releases it.
+    let changes = mark(&mut sync, b"7;file:///start;rc=n0nce");
+    assert!(changes.folder);
+    let changes = mark(&mut sync, b"133;A;rc=n0nce");
+    assert_eq!(sent(changes.write), " cd -- '/x&calc&'\r");
+}
+
+/// Without the app's integration (a snippet added by hand) there is no nonce to ask for, and
+/// every mark counts as before.
+#[test]
+fn without_the_apps_integration_every_mark_counts() {
+    let mut sync = bash();
+    sync.require_nonce(None);
+    mark(&mut sync, PROMPT);
+    let (outcome, _) = sync.follow(Path::new("/elsewhere"));
+    assert_eq!(outcome, FollowOutcome::Sent);
+}

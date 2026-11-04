@@ -12,6 +12,9 @@ alacritty_terminal.workspace = true
 # PowerShell's shell integration as `-EncodedCommand` (`integration/`).
 base64.workspace = true
 portable-pty.workspace = true
+# The integration's nonce per session (`integration.rs`): marks from a program's output carry
+# none, so they move nothing (RC-040-04).
+rand.workspace = true
 rc-vfs = { path = "../rc-vfs" }
 # The SSH back end drives a session channel of the connection rc-remote opened.
 russh.workspace = true

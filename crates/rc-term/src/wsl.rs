@@ -212,10 +212,13 @@ impl TermSession {
                 scrollback: DEFAULT_SCROLLBACK,
             },
         );
-        session.sync().configure(
+        let mut sync = session.sync();
+        sync.configure(
             ShellSyntax::of(WSL_SHELL),
             ShellPaths::Wsl(launch.distro.clone()),
         );
+        sync.require_nonce(integration.map(|integration| integration.nonce.clone()));
+        drop(sync);
         Ok(session)
     }
 }

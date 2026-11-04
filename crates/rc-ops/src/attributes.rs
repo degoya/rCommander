@@ -2,8 +2,9 @@
 //! Commander's "Change attributes" with "Process subdirectories").
 //!
 //! The chosen entries always change; below them, `apply_to` picks files, folders or both, so
-//! a mode meant for files does not lock the folders. Links are changed as such (their target's
-//! times on Windows) and never entered. A failure below the start is reported and the rest goes
+//! a mode meant for files does not lock the folders. Links below the start are never entered
+//! and get no mode or read-only flag - set through a link, those land on its target, which may
+//! lie outside the tree; their times change as such (their target's on Windows). A failure below the start is reported and the rest goes
 //! on; the start failing fails the whole, before anything below it is touched.
 
 use std::path::{Path, PathBuf};
@@ -100,6 +101,16 @@ pub async fn set_properties_tree(
             if (is_dir && !apply_to.dirs) || (!is_dir && !apply_to.files) {
                 continue;
             }
+            let change = if matches!(entry.kind, EntryKind::Symlink { .. }) {
+                // A link below the start may lead anywhere - `key -> ~/.ssh/id_rsa` - and a mode
+                // or read-only flag set through it lands on its target, outside the tree.
+                link_change(change)
+            } else {
+                change
+            };
+            if change.is_empty() {
+                continue;
+            }
             match vfs.set_properties(&child, change).await {
                 Ok(()) => report.changed += 1,
                 Err(error) => report.record(&child, &error),
@@ -107,6 +118,16 @@ pub async fn set_properties_tree(
         }
     }
     Ok(())
+}
+
+/// What of `change` a link below the start gets: its own times and Windows flags, never a mode
+/// or the read-only flag, which the file systems set on the target.
+fn link_change(change: PropertyChange) -> PropertyChange {
+    PropertyChange {
+        mode: None,
+        readonly: None,
+        ..change
+    }
 }
 
 #[cfg(test)]

@@ -140,11 +140,17 @@ pub(super) fn set_properties(path: &Path, change: PropertyChange) -> Result<()> 
         },
     )?;
     if let Some(modified) = change.modified {
-        filetime::set_file_mtime(
-            long_path(path),
-            filetime::FileTime::from_system_time(modified),
-        )
-        .map_err(|error| VfsError::from_io(error, path))?;
+        let real = long_path(path);
+        let modified = filetime::FileTime::from_system_time(modified);
+        let meta = fs::symlink_metadata(&real).map_err(|error| VfsError::from_io(error, path))?;
+        let set = if meta.file_type().is_symlink() {
+            // The link's own time: following it would change a file outside the selection.
+            let accessed = filetime::FileTime::from_last_access_time(&meta);
+            filetime::set_symlink_file_times(&real, accessed, modified)
+        } else {
+            filetime::set_file_mtime(&real, modified)
+        };
+        set.map_err(|error| VfsError::from_io(error, path))?;
     }
     Ok(())
 }

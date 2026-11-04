@@ -115,3 +115,37 @@ async fn an_unsupported_change_fails_at_the_start() {
     assert!(result.is_err());
     assert_eq!(report.changed, 0);
 }
+
+/// A link below the start keeps its target's mode: `key -> ../outside/secret` with a recursive
+/// 0644 leaves the secret, outside the tree, at 0600 (RC-020-06).
+#[cfg(unix)]
+#[tokio::test]
+async fn a_recursive_mode_does_not_reach_through_a_link() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    let root = tempfile::tempdir().expect("temp");
+    let outside = root.path().join("outside");
+    let tree = root.path().join("tree");
+    std::fs::create_dir_all(&outside).expect("outside");
+    std::fs::create_dir_all(&tree).expect("tree");
+    let secret = outside.join("secret");
+    std::fs::write(&secret, b"key").expect("secret");
+    std::fs::set_permissions(&secret, std::fs::Permissions::from_mode(0o600)).expect("0600");
+    std::fs::write(tree.join("plain"), b"x").expect("plain");
+    symlink(&secret, tree.join("key")).expect("link");
+
+    let fs = rc_vfs::LocalFs::new();
+    let mut report = AttributeReport::default();
+    let change = PropertyChange {
+        mode: Some(0o644),
+        ..PropertyChange::default()
+    };
+    set_properties_tree(&fs, &tree, change, true, ApplyTo::default(), &mut report)
+        .await
+        .expect("set");
+
+    let mode = |path: &Path| std::fs::metadata(path).expect("stat").permissions().mode() & 0o7777;
+    assert_eq!(mode(&secret), 0o600, "the target outside the tree");
+    assert_eq!(mode(&tree.join("plain")), 0o644);
+    assert_eq!(report.failed, 0, "{report:?}");
+}

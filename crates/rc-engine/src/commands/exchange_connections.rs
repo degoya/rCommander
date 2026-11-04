@@ -120,10 +120,11 @@ impl Engine {
                     } else {
                         let draft = super::exchange_export::draft_of(connection);
                         row.old = Some(endpoint(&draft));
-                        let stored = connection.secrets;
                         let moved = endpoint(&draft) != endpoint(&entry.connection);
-                        if moved && (stored.has_password || stored.has_key || stored.has_passphrase)
-                        {
+                        // Every secret the new server would receive, not only the connection's
+                        // own: a shared credential's, a secret source's (Windows Credential
+                        // Manager, a plugin) and a login script's `send_secret` (RC-080-12).
+                        if moved && self.holds_secrets(connection).await {
                             row.warning = Some("endpoint_with_secrets".to_owned());
                         }
                         RowStatus::Changed

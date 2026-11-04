@@ -60,6 +60,7 @@ impl Engine {
             let offer = state.stored.offer.clone().ok_or_else(|| {
                 UpdateRefusal::new("update.no_offer", "no newer version is offered")
             })?;
+            not_older(&offer.version)?;
             let artifact = offer.artifact.ok_or_else(|| {
                 UpdateRefusal::new(
                     "update.no_artifact",
@@ -178,6 +179,7 @@ impl Engine {
         }
         let offer = offer
             .ok_or_else(|| UpdateRefusal::new("update.no_offer", "no newer version is offered"))?;
+        not_older(&offer.version)?;
         let artifact = offer.artifact.clone().ok_or_else(|| {
             UpdateRefusal::new("update.no_artifact", "no package for this platform")
         })?;
@@ -250,3 +252,21 @@ impl Engine {
         Ok(())
     }
 }
+
+/// Refuses a stored offer that is not newer than the running version: an offer is kept in the
+/// database across starts, and the program beside it may have been replaced by hand with the
+/// offered version or a newer one meanwhile - installing it then would roll back.
+fn not_older(offered: &str) -> Result<(), UpdateRefusal> {
+    if rc_update::is_newer(offered, crate::updates::RUNNING) {
+        Ok(())
+    } else {
+        Err(UpdateRefusal::new(
+            "update.no_offer",
+            "no newer version is offered",
+        ))
+    }
+}
+
+#[cfg(test)]
+#[path = "handover_tests.rs"]
+mod tests;

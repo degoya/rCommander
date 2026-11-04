@@ -122,3 +122,80 @@ async fn the_themes_go_out_and_a_missing_one_stays_behind() {
         .expect("tree");
     assert_eq!(tree.connections[0].theme_dark.as_deref(), Some(NIGHT));
 }
+
+/// A file that moves a connection whose secret comes from elsewhere - here its login script's
+/// `send_secret` - is a warning, not a quiet update: the next login would hand that secret to
+/// the file's server (RC-080-12).
+#[tokio::test]
+async fn moving_a_connection_whose_script_sends_a_secret_is_warned() {
+    use crate::{ConnectionPatch, LoginScriptDraft, Pattern, ScriptSecretRef, Step};
+
+    let (root, engine) = test_support::engine_with_db(&[]).await;
+    let Ok(Outcome::LoginScript { script }) = engine
+        .dispatch(Command::CreateLoginScript {
+            script: LoginScriptDraft {
+                name: "sudo".into(),
+                steps: vec![
+                    Step::WaitFor {
+                        pattern: Pattern::new("(?i)password.*:").expect("pattern"),
+                        timeout_ms: None,
+                    },
+                    Step::SendSecret {
+                        source: ScriptSecretRef::ConnectionPassword,
+                        newline: true,
+                    },
+                ],
+                step_timeout_ms: None,
+                total_timeout_ms: None,
+            },
+        })
+        .await
+    else {
+        panic!("a script");
+    };
+    let Ok(Outcome::Connection { connection }) = engine
+        .dispatch(Command::CreateConnection {
+            folder_id: None,
+            connection: ConnectionDraft::new("web", "attacker.example"),
+        })
+        .await
+    else {
+        panic!("a connection");
+    };
+    engine
+        .dispatch(Command::AssignLoginScript {
+            connection_id: connection.id,
+            script_id: Some(script.id),
+        })
+        .await
+        .expect("assigned");
+    let path = root.path().join("connections.rcexport");
+    let parts = ExportParts {
+        connections: true,
+        ..ExportParts::default()
+    };
+    engine
+        .dispatch(export(&path, parts, None, false))
+        .await
+        .expect("exported");
+    // The file now names another server than the connection: importing it would move it.
+    engine
+        .dispatch(Command::UpdateConnection {
+            id: connection.id,
+            patch: ConnectionPatch {
+                host: Some("prod.example".into()),
+                ..ConnectionPatch::default()
+            },
+        })
+        .await
+        .expect("moved here");
+
+    let preview = report(&engine, import(&path, None, true, None)).await;
+    let row = preview
+        .rows
+        .iter()
+        .find(|row| row.key.starts_with("connection:"))
+        .expect("the connection's row");
+    assert_eq!(row.status, RowStatus::Changed);
+    assert_eq!(row.warning.as_deref(), Some("endpoint_with_secrets"));
+}

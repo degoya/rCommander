@@ -246,7 +246,18 @@ impl RcMcpServer {
                     .into());
                 }
             };
-            match settings.policy.decide(class) {
+            let mut rule = settings.policy.decide(class);
+            // Outside the panels' folders a reading or writing tool asks, where the person
+            // switched that on (`mcp.ask.outside_panels`, the audit's H2).
+            if rule == Rule::Allowed
+                && settings.ask_outside_panels
+                && matches!(class, CommandClass::Read | CommandClass::Write)
+                && crate::roots::outside_panels(&self.context.engine, request.arguments.as_ref())
+                    .await
+            {
+                rule = Rule::Ask;
+            }
+            match rule {
                 Rule::Allowed => {}
                 Rule::Deny => {
                     return Ok(error_result(

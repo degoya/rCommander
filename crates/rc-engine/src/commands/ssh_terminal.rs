@@ -160,8 +160,23 @@ pub fn cd_command(folder: &str) -> Result<Vec<u8>, EngineError> {
         }
         .into());
     }
-    Ok(format!("cd {}\r", shell_quote(folder)).into_bytes())
+    // The server's shell is not known: a Windows OpenSSH server starts cmd, where single quotes
+    // quote nothing and `&`, `|`, `<`, `>`, `^` and `%` run or expand - `x&calc&` would start a
+    // program. Such a folder is not typed at all.
+    if folder.chars().any(|c| CMD_SPECIAL.contains(c)) {
+        return Err(VfsError::InvalidPath {
+            path: PathBuf::from(folder),
+            reason: "a character another shell than a POSIX one runs cannot be typed safely",
+        }
+        .into());
+    }
+    // `--`: a folder `-P` or `-` is a folder, not an option or the previous directory.
+    Ok(format!("cd -- {}\r", shell_quote(folder)).into_bytes())
 }
+
+/// What cmd runs or expands outside quotes of its own, which a folder typed at an unknown
+/// shell must not hold.
+const CMD_SPECIAL: &str = "&|<>^%";
 
 /// `text` as one word of a POSIX shell.
 #[must_use]

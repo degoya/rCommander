@@ -84,6 +84,22 @@ pub(crate) async fn open_part(vfs: &dyn Vfs, part: &Path) -> Result<WriteStream,
     }
 }
 
+/// The permission bits a file from another backend keeps: the owner's, group's and others'
+/// read and execute, the owner's and group's write.
+pub(crate) const FOREIGN_MODE_MASK: u32 = 0o775;
+
+/// The mode a copy keeps of a source's `bits` on `src`: all of a file on this machine's disks;
+/// of a server's, a device's or an archive's, no set-uid, set-gid or sticky bit and nothing
+/// everyone may write - a download would otherwise be a set-uid program of the person's, or a
+/// file every account may change (`sftp get -p` masks too).
+pub(crate) fn kept_mode(bits: u32, src: &BackendId) -> u32 {
+    if *src == BackendId::Local {
+        bits
+    } else {
+        bits & FOREIGN_MODE_MASK
+    }
+}
+
 /// How far apart two modification times may be and still count as one: a server keeps whole
 /// seconds, FAT two.
 const SAME_TIME: Duration = Duration::from_secs(2);
@@ -198,7 +214,11 @@ impl Runner {
         {
             let _ = self.dst.set_mtime(dest, modified).await;
         }
-        let mode = entry.attributes.mode.filter(|_| capabilities.unix_mode);
+        let mode = entry
+            .attributes
+            .mode
+            .filter(|_| capabilities.unix_mode)
+            .map(|bits| kept_mode(bits, &self.src_id));
         let readonly = (mode.is_none() && entry.attributes.readonly).then_some(true);
         if mode.is_some() || readonly.is_some() {
             let change = SetAttributes { mode, readonly };

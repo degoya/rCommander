@@ -61,7 +61,13 @@ jobs:
       - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
         with:
           tool: wasm-tools@1.261.0
-      - name: Build and sign the bundled plugins
+      # Built without the key: cargo runs the build scripts and proc macros of every dependency
+      # here, and none of them may read the signing key from the environment or a file.
+      - name: Build the bundled plugins
+        shell: bash
+        run: scripts/build-plugins.sh --build-only
+      # Signed in a step that compiles nothing: the packager and the components are those above.
+      - name: Sign the bundled plugins
         shell: bash
         env:
           RCOMMANDER_PLUGIN_SIGNING_KEY: ${{ secrets.RCOMMANDER_PLUGIN_SIGNING_KEY }}
@@ -73,7 +79,7 @@ jobs:
           key="${RUNNER_TEMP}/plugin-signing.pem"
           trap 'rm -f "${key}"' EXIT
           (umask 077 && printf '%s\n' "${RCOMMANDER_PLUGIN_SIGNING_KEY}" > "${key}")
-          RC_PLUGIN_KEY="${key}" scripts/build-plugins.sh
+          RC_PLUGIN_KEY="${key}" scripts/build-plugins.sh --sign-only
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plugins

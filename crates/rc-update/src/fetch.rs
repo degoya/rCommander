@@ -113,7 +113,10 @@ pub trait Fetcher: Send + Sync {
 
 /// The production fetcher: `reqwest`, https at every hop.
 pub struct HttpFetcher {
-    client: reqwest::Client,
+    /// `None` when the client with these rules could not be built: every request then fails,
+    /// rather than going out through a default client without https-only, the redirect rule
+    /// and the timeouts.
+    client: Option<reqwest::Client>,
 }
 
 impl HttpFetcher {
@@ -144,15 +147,19 @@ impl HttpFetcher {
                 }
             },
         };
-        Self {
-            client: builder.build().unwrap_or_default(),
-        }
+        let client = builder
+            .build()
+            .inspect_err(|error| tracing::warn!(%error, "the update client could not be built"))
+            .ok();
+        Self { client }
     }
 
     async fn get(&self, url: &url::Url) -> Result<Option<reqwest::Response>> {
         ensure!(url.scheme() == "https", "{url} is not https");
-        let response = self
-            .client
+        let Some(client) = &self.client else {
+            bail!("the update client could not be built (TLS setup); {url} is not fetched");
+        };
+        let response = client
             .get(url.clone())
             .header(
                 reqwest::header::ACCEPT,

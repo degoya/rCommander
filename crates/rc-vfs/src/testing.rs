@@ -87,6 +87,9 @@ pub trait Forward: Send + Sync {
     async fn set_attributes(&self, path: &Path, change: SetAttributes) -> Result<()> {
         self.inner().set_attributes(path, change).await
     }
+    async fn sync(&self, path: &Path) -> Result<()> {
+        self.inner().sync(path).await
+    }
 }
 
 #[async_trait]
@@ -129,6 +132,9 @@ impl<T: Forward> Vfs for T {
     }
     async fn set_attributes(&self, path: &Path, change: SetAttributes) -> Result<()> {
         Forward::set_attributes(self, path, change).await
+    }
+    async fn sync(&self, path: &Path) -> Result<()> {
+        Forward::sync(self, path).await
     }
 }
 

@@ -140,6 +140,14 @@ pub trait Vfs: Send + Sync {
     /// `Unsupported` before anything changes.
     async fn set_attributes(&self, path: &Path, change: SetAttributes) -> Result<()>;
 
+    /// Makes the file at `path` - its data, and its name in its folder - durable before the
+    /// caller goes on, such as a move removing its source: a crash or a pulled drive after the
+    /// copy returned may otherwise lose what was only in the page cache. Nothing by default: a
+    /// server writes to its own disks.
+    async fn sync(&self, _path: &Path) -> Result<()> {
+        Ok(())
+    }
+
     /// Bytes available to the user on the file system holding `path`; `None` when the
     /// backend cannot tell.
     async fn free_space(&self, _path: &Path) -> Result<Option<u64>> {

@@ -143,4 +143,11 @@ fn times_and_modes_parse() {
     assert_eq!(parse_mode("0755"), Some(0o755));
     assert_eq!(parse_mode("8"), None);
     assert_eq!(parse_mode("17777"), None);
+    // Through MCP: no set-uid, set-gid or sticky bit, and nothing everyone may write.
+    assert_eq!(parse_mode("4755"), None);
+    assert_eq!(parse_mode("2755"), None);
+    assert_eq!(parse_mode("1777"), None);
+    assert_eq!(parse_mode("777"), None);
+    assert_eq!(parse_mode("666"), None);
+    assert_eq!(parse_mode("775"), Some(0o775));
 }

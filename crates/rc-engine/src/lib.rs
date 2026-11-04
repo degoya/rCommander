@@ -127,7 +127,7 @@ use std::{
 use rc_db::Db;
 use rc_ops::{Backend, EventSink, Queue, QueueConfig, SystemTrash};
 use rc_vault::Vault;
-use rc_vfs::{BackendId, IoCancel, LocalFs, TimeoutFs, Timeouts, Vfs, WslCatalog};
+use rc_vfs::{IoCancel, LocalFs, TimeoutFs, Timeouts, Vfs, WslCatalog};
 use tokio::sync::broadcast;
 
 pub use commands::file_ops::{ExternalProgram, FileDialog};

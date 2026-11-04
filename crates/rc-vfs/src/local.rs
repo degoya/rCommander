@@ -161,6 +161,46 @@ impl Vfs for LocalFs {
             .map_err(io_err(from))
     }
 
+    /// `fsync` of the file and, on Unix, of its folder, which makes a rename into it durable;
+    /// Windows flushes the file (`FlushFileBuffers`) and journals the rename itself.
+    async fn sync(&self, path: &Path) -> Result<()> {
+        let real = long_path(path);
+        let shown = path.to_path_buf();
+        blocking(path, move || {
+            let synced = (|| -> io::Result<()> {
+                // Unix syncs through any descriptor of the file; Windows' flush needs write
+                // access.
+                let file = match std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(cfg!(windows))
+                    .open(&real)
+                {
+                    Ok(file) => file,
+                    // A copy that kept its source's read-only attribute opens for reading only
+                    // on Windows: it is left to the system's lazy writer, as before the flush
+                    // existed, rather than failing the move.
+                    Err(error)
+                        if cfg!(windows) && error.kind() == io::ErrorKind::PermissionDenied =>
+                    {
+                        return Ok(());
+                    }
+                    Err(error) => return Err(error),
+                };
+                file.sync_all()?;
+                #[cfg(unix)]
+                if let Some(folder) = real
+                    .parent()
+                    .filter(|folder| !folder.as_os_str().is_empty())
+                {
+                    std::fs::File::open(folder)?.sync_all()?;
+                }
+                Ok(())
+            })();
+            synced.map_err(|error| VfsError::from_io(error, &shown))
+        })
+        .await
+    }
+
     /// One call that refuses an existing `to` (Linux `renameat2` with `RENAME_NOREPLACE`,
     /// Windows `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING`); a file system without it
     /// (drvfs, 9p, an older kernel) gets the look first.

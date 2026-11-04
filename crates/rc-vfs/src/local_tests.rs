@@ -161,3 +161,29 @@ mod windows;
 
 #[path = "local_props_tests.rs"]
 mod props;
+
+/// `sync` flushes a file that is there, and names the path of one that is not.
+#[tokio::test]
+async fn sync_flushes_a_file_and_refuses_a_missing_one() {
+    let dir = tempfile::tempdir().expect("temp");
+    let file = dir.path().join("a.txt");
+    std::fs::write(&file, b"alpha").expect("write");
+    let fs = LocalFs::new();
+    fs.sync(&file).await.expect("synced");
+    let missing = dir.path().join("gone.txt");
+    let error = fs.sync(&missing).await.expect_err("missing");
+    assert_eq!(error.code(), "not_found", "{error}");
+}
+
+/// A read-only file - a move's copy that kept its source's attribute - syncs too: Windows opens
+/// it for reading only and leaves it to the lazy writer instead of failing the move.
+#[tokio::test]
+async fn sync_takes_a_read_only_file() {
+    let dir = tempfile::tempdir().expect("temp");
+    let file = dir.path().join("ro.txt");
+    std::fs::write(&file, b"alpha").expect("write");
+    let mut permissions = std::fs::metadata(&file).expect("meta").permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&file, permissions).expect("read-only");
+    LocalFs::new().sync(&file).await.expect("synced");
+}

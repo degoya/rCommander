@@ -83,10 +83,22 @@ fn describe(
     owners: &mut Owners,
 ) -> Entry {
     let (kind, shown) = if meta.file_type().is_symlink() {
-        let target = fs::read_link(real)
+        let raw = fs::read_link(real).ok();
+        // A link onto a share is not followed to describe it: following it signs in there with
+        // the person's Windows account, by merely listing the folder (RC-080-10).
+        let onto_share = cfg!(windows)
+            && raw
+                .as_deref()
+                .is_some_and(|target| crate::network_path(&target.to_string_lossy()).is_some());
+        let target = raw
             .map(|target| strip_verbatim(&target))
             .unwrap_or_default();
-        match fs::metadata(real) {
+        let followed = if onto_share {
+            Err(io::Error::other("a link onto a share is not followed"))
+        } else {
+            fs::metadata(real)
+        };
+        match followed {
             Ok(followed) => (
                 EntryKind::Symlink {
                     target,

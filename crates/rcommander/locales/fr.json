@@ -445,6 +445,8 @@
   "setting.mcp.ask.exec_session_minutes": "Minutes pendant lesquelles un appel d'exécution reste autorisé",
   "setting.mcp.ask.exec_session_minutes.help": "« Autoriser ici pour ... min » permet à un agent de continuer à taper dans le même terminal ou à exécuter des commandes sur le même serveur pendant cette durée sans redemander; un autre terminal ou serveur demande toujours. 0 ne le propose jamais. La barre d'état montre ce qui est autorisé; un clic dessus le retire.",
   "setting.mcp.ask.headless_code.help": "Quand rCommander ne tourne pas, rcommander mcp n'a personne à qui demander. Désactivé, chaque outil qui demande y est refusé; activé, l'agent reçoit un code à usage unique et doit vous le demander - mais rien ne prouve que vous l'avez vu.",
+  "setting.mcp.ask.outside_panels": "Demander avant de lire ou d'écrire hors des dossiers des panneaux",
+  "setting.mcp.ask.outside_panels.help": "Activé, un outil qui lit ou écrit vous demande d'abord lorsqu'un fichier ou un dossier qu'il nomme se trouve hors des deux dossiers affichés par les panneaux - où que mènent les liens. Désactivé, l'agent lit et écrit là où la politique le permet ; les clés, les fichiers d'identifiants et les fichiers de démarrage restent refusés dans tous les cas.",
   "db.title_backup": "Sauvegarder la base de données",
   "db.title_restore": "Restaurer la base de données",
   "db.tab_backup": "Sauvegarder",

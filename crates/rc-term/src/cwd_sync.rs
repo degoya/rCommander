@@ -85,6 +85,11 @@ pub(crate) struct CwdSync {
     syntax: Option<ShellSyntax>,
     paths: ShellPaths,
     hosts: Vec<String>,
+    /// The nonce of the integration the app started the shell with: only a payload ending in
+    /// `;rc=<nonce>` counts then, so a mark in a program's output - a server's, a file's -
+    /// moves no panel and types no `cd` (RC-040-04). `None` for a shell without the app's
+    /// integration (a snippet added by hand, a server's shell): every mark counts, as before.
+    nonce: Option<String>,
     /// The folder the session started in, or where the app last sent it.
     folder: PathBuf,
     /// The folder the shell last reported, as it named it.
@@ -105,6 +110,7 @@ impl CwdSync {
             syntax: None,
             paths: ShellPaths::Native(Platform::CURRENT),
             hosts,
+            nonce: None,
             folder,
             reported: None,
             prompt: PromptState::Unknown,
@@ -118,6 +124,20 @@ impl CwdSync {
     pub fn configure(&mut self, syntax: Option<ShellSyntax>, paths: ShellPaths) {
         self.syntax = syntax;
         self.paths = paths;
+    }
+
+    /// Requires every payload to carry `nonce` (the integration's), or - `None` - none.
+    pub fn require_nonce(&mut self, nonce: Option<String>) {
+        self.nonce = nonce;
+    }
+
+    /// `payload` without its nonce, when it carries the one required; all of it when none is.
+    fn vouched<'a>(&self, payload: &'a [u8]) -> Option<&'a [u8]> {
+        let Some(nonce) = &self.nonce else {
+            return Some(payload);
+        };
+        let suffix = format!(";rc={nonce}");
+        payload.strip_suffix(suffix.as_bytes())
     }
 
     /// The WSL distribution of a WSL shell, when its name is known.
@@ -163,6 +183,9 @@ impl CwdSync {
 
     /// One OSC payload of the program's output.
     pub fn on_payload(&mut self, payload: &[u8], changes: &mut Changes) {
+        let Some(payload) = self.vouched(payload) else {
+            return;
+        };
         match parse_osc(payload, &self.hosts) {
             Some(OscEvent::Folder(folder)) => {
                 if self.reported.as_deref() != Some(folder.as_str()) {

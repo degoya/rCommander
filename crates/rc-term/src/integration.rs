@@ -37,9 +37,14 @@ pub const ZSH_SNIPPET: &str = include_str!("integration/zsh.zsh");
 const BASH_VARIABLE: &str = "RC_SHELL_INTEGRATION";
 /// What `PROMPT_COMMAND` runs.
 const BASH_PROMPT_COMMAND: &str = "eval \"$RC_SHELL_INTEGRATION\"";
-/// cmd's prompt around the user's own: the folder and the start mark before, the end mark after.
-const CMD_BEFORE: &str = r"$E]9;9;$P$E\$E]133;A$E\";
-const CMD_AFTER: &str = r"$E]133;B$E\";
+/// The variable that hands a shell its session's nonce; the snippets append `;rc=<nonce>` to
+/// every mark they write.
+pub const NONCE_VARIABLE: &str = "RC_SHELL_NONCE";
+
+/// cmd's prompt around the user's own: the folder and the start mark before, the end mark after;
+/// `{n}` is the nonce's suffix.
+const CMD_BEFORE: &str = r"$E]9;9;$P{n}$E\$E]133;A{n}$E\";
+const CMD_AFTER: &str = r"$E]133;B{n}$E\";
 /// cmd's prompt when the user has none.
 const CMD_DEFAULT_PROMPT: &str = "$P$G";
 
@@ -75,6 +80,17 @@ impl InheritedEnv {
 pub struct Integration {
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
+    /// The session's nonce, which every mark of the snippets carries (`;rc=<nonce>`): a mark in
+    /// a program's output - a server's, a file's - carries none and is ignored, so it cannot make
+    /// the app type a `cd` into whatever runs (RC-040-04).
+    pub nonce: String,
+}
+
+/// A new nonce: 16 random bytes as 32 hex digits.
+fn new_nonce() -> String {
+    use rand::RngExt as _;
+    let bytes: [u8; 16] = rand::rng().random();
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 impl Integration {
@@ -82,45 +98,46 @@ impl Integration {
     /// wrote. `None` for a shell without one (sh, fish, other shells, zsh without its folder).
     #[must_use]
     pub fn local(shell: &str, inherited: &InheritedEnv, zsh_dir: Option<&Path>) -> Option<Self> {
-        match shell {
-            "pwsh" | "powershell" => Some(Self {
-                args: vec![
-                    "-NoExit".to_owned(),
-                    "-EncodedCommand".to_owned(),
-                    encoded_command(PWSH_SNIPPET),
-                ],
-                env: Vec::new(),
-            }),
-            "bash" => Some(Self {
-                args: Vec::new(),
-                env: bash_env(inherited),
-            }),
-            "zsh" => zsh_dir.map(|dir| {
-                let mut env = vec![("ZDOTDIR".to_owned(), dir.to_string_lossy().into_owned())];
+        let nonce = new_nonce();
+        let mut env = vec![(NONCE_VARIABLE.to_owned(), nonce.clone())];
+        let args = match shell {
+            "pwsh" | "powershell" => vec![
+                "-NoExit".to_owned(),
+                "-EncodedCommand".to_owned(),
+                encoded_command(PWSH_SNIPPET),
+            ],
+            "bash" => {
+                env.extend(bash_env(inherited));
+                Vec::new()
+            }
+            "zsh" => {
+                let dir = zsh_dir?;
+                env.push(("ZDOTDIR".to_owned(), dir.to_string_lossy().into_owned()));
                 if let Some(own) = &inherited.zdotdir {
                     env.push(("RC_USER_ZDOTDIR".to_owned(), own.clone()));
                 }
-                Self {
-                    args: Vec::new(),
-                    env,
-                }
-            }),
+                Vec::new()
+            }
             "cmd" => {
                 let own = inherited.prompt.as_deref().unwrap_or(CMD_DEFAULT_PROMPT);
-                Some(Self {
-                    args: Vec::new(),
-                    env: vec![("PROMPT".to_owned(), format!("{CMD_BEFORE}{own}{CMD_AFTER}"))],
-                })
+                let suffix = format!(";rc={nonce}");
+                let before = CMD_BEFORE.replace("{n}", &suffix);
+                let after = CMD_AFTER.replace("{n}", &suffix);
+                env.push(("PROMPT".to_owned(), format!("{before}{own}{after}")));
+                Vec::new()
             }
-            _ => None,
-        }
+            _ => return None,
+        };
+        Some(Self { args, env, nonce })
     }
 
     /// For a WSL shell: bash's variables, handed into the distribution through `WSLENV` (a
     /// login shell other than bash ignores them).
     #[must_use]
     pub fn wsl(inherited: &InheritedEnv) -> Self {
-        let mut env = bash_env(&InheritedEnv::default());
+        let nonce = new_nonce();
+        let mut env = vec![(NONCE_VARIABLE.to_owned(), nonce.clone())];
+        env.extend(bash_env(&InheritedEnv::default()));
         let names: Vec<String> = env.iter().map(|(name, _)| format!("{name}/u")).collect();
         let wslenv = match &inherited.wslenv {
             Some(own) => format!("{own}:{}", names.join(":")),
@@ -130,6 +147,7 @@ impl Integration {
         Self {
             args: Vec::new(),
             env,
+            nonce,
         }
     }
 
@@ -228,10 +246,13 @@ impl TermSession {
                 scrollback: DEFAULT_SCROLLBACK,
             },
         );
-        session.sync().configure(
+        let mut sync = session.sync();
+        sync.configure(
             ShellSyntax::of(&profile.id),
             ShellPaths::Native(Platform::CURRENT),
         );
+        sync.require_nonce(integration.map(|integration| integration.nonce.clone()));
+        drop(sync);
         Ok(session)
     }
 }

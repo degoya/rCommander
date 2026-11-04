@@ -90,9 +90,51 @@ where
         .with(error_log.with_filter(LevelFilter::WARN))
         .try_init()
         .is_ok();
+    if installed {
+        install_panic_hook();
+    }
     // Not installed, the layer is gone and `lines` closed: the task only sweeps.
     runtime.spawn(run(lines, db.clone()));
     installed
+}
+
+/// The target of a panic's line in the error log.
+pub(crate) const PANIC_TARGET: &str = "panic";
+
+/// Puts every panic into the error log - masked and capped like any line - before the hook
+/// that was there runs: a window on Windows has no stderr, so a panic in the update loop or in
+/// a background task would otherwise leave no trace at all.
+fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!(
+            target: PANIC_TARGET,
+            code = "panic",
+            "{}",
+            panic_line(info.payload(), info.location())
+        );
+        previous(info);
+    }));
+}
+
+/// A panic as one line: its message (a `&str` or `String` payload, else a placeholder), where it
+/// happened and on which thread.
+pub(crate) fn panic_line(
+    payload: &(dyn std::any::Any + Send),
+    location: Option<&std::panic::Location<'_>>,
+) -> String {
+    let message = payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("a panic without a message");
+    let place = location.map_or_else(
+        || "an unknown place".to_owned(),
+        |location| format!("{}:{}", location.file(), location.line()),
+    );
+    let thread = std::thread::current();
+    let thread = thread.name().unwrap_or("an unnamed thread");
+    format!("panicked at {place} on {thread}: {message}")
 }
 
 /// Stores lines as they come and sweeps on the interval, for the life of the process.

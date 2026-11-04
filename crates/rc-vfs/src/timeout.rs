@@ -197,6 +197,10 @@ impl Vfs for TimeoutFs {
         self.request(path, self.inner.remove_file(path)).await
     }
 
+    async fn sync(&self, path: &Path) -> Result<()> {
+        self.request(path, self.inner.sync(path)).await
+    }
+
     async fn remove_dir(&self, path: &Path, recursive: bool) -> Result<()> {
         if recursive {
             self.long(path, self.inner.remove_dir(path, true)).await

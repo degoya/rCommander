@@ -5,6 +5,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-04
+
+### Added
+
+- **MCP: ask before reading or writing outside the panels' folders** (security audit H2, public
+  PR #17): the protected setting `mcp.ask.outside_panels` (off) turns every read or write tool
+  call whose path argument leads outside both panels' folders into a question, as a destructive
+  tool asks - judged where the path really leads (`..`, links and junctions followed; a path not
+  there yet by its nearest existing folder; inside an archive, the archive file). Only this
+  machine's disks are judged. The deny lists stay as the second line. MCP: no new tool; the
+  setting is `mcp.*` and so never an agent's.
+
+### Changed
+
+- **Semver-compatible updates before 0.18.0**: async-lock 3.5.0, ctutils 0.4.8, russh 0.65.1,
+  toml 1.2.0, toml_edit 0.25.18, toml_writer 1.2.0, zip 9.3.0; async-executor 1.14.1 (1.14.0
+  was yanked). `deny.toml` loses the ignores of zip's and zstd's advisories, which match nothing
+  any more.
+- **Release CI signs the bundled plugins in a step that compiles nothing** (audit M9, public PR
+  #11): `scripts/build-plugins.sh --build-only` builds without the key, `--sign-only` packages
+  and signs; no build script or proc macro of a dependency runs while the key is there.
+
+### Fixed
+
+- **MCP boundary hardened** (audit H2, M1, M2, M3, M11, public PR #6): a changed connection
+  (`connections.update`, `connections.save`, a config import; a theme change aside) takes back
+  every `ssh_exec` grant bound to it; `files_set_attributes` takes at most mode 777 and never
+  o+w (no set-uid, set-gid, sticky or everyone-writable bit); `workspaces.on_start` is refused to
+  an agent (`setting_protected`), the window still sets it. The read guard knows the tokens of
+  npm, PyPI, Cargo, gh, Vault, Terraform and rclone, shell and client histories, the browsers'
+  password stores and the gcloud, Azure, keyring and `pass` folders; the mask knows npm's
+  `_authToken` and tokens by their prefix (`ghp_`, `github_pat_`, `glpat-`, `npm_`, `xox?-`,
+  `hvs.`, `AKIA`, from 20 characters). The write guard adds `.bash_aliases`, the X session
+  files, fish's `conf.d` and `functions`, Git's configuration, Cargo's, `.vscode/settings.json`,
+  `~/.local/bin`, desktop launchers, `environment.d` and Plasma's `env`.
+- **Sparse tar bombs stopped** (audit H1, public PR #7): a GNU sparse entry's stored blocks are
+  its packed size, so the ratio limit sees a few KB declaring a terabyte of holes.
+- **Archive entries held together against the archive's size** (audit M10, public PR #14): zip,
+  tar and 7z entries whose stated packed sizes add up to more than the archive (overlapping zip
+  entries), or small entries whose sum passes the compression ratio, stop the listing with
+  `archive_limit`.
+- **Update and plugin trust** (audit M8, M16, public PR #8): a stored update offer not newer than
+  the running version is neither downloaded nor installed (`update.no_offer`); the update client
+  never falls back to a default client without https-only, redirect rule and timeouts; the
+  development plugin key `rcommander-dev-v1` is a root only with debug assertions or the feature
+  `rc-plugin-host/dev-plugin-key`, never in a release build.
+- **File operations** (audit M6, M7, M14, public PR #9): a file from a server, a device or an
+  archive keeps no set-uid, set-gid or sticky bit and nothing everyone may write (mask 775);
+  a recursive Change attributes sets no mode or read-only flag through a link below the start,
+  and a link's own time instead of its target's; listing a local folder on Windows no longer
+  follows a link onto a share (no sign-in with the Windows account by merely listing).
+- **SSH terminal start folder** (audit M5, public PR #10): typed as `cd -- '<folder>'`, and a
+  folder holding `&`, `|`, `<`, `>`, `^` or `%` - which cmd on a Windows OpenSSH server would run
+  or expand - is not typed at all.
+- **Panics into the error log** (audit M20, public PR #12): a panic hook writes message, place
+  and thread as one masked `error` line (target and code `panic`) before the previous hook runs;
+  a window on Windows has no stderr.
+- **Import warns of a moved connection with indirect secrets** (audit M15, public PR #13): the
+  `endpoint_with_secrets` warning also counts a shared credential, a secret source and a login
+  script's `send_secret`, not only the connection's own secrets.
+- **A move's copy is durable before its source goes** (audit M17, public PR #15): `Vfs::sync`
+  (local: `fsync` of the file and, on Unix, its folder; Windows `FlushFileBuffers`, a read-only
+  copy left to the lazy writer) runs before a cross-volume move removes the source; a failed
+  sync keeps the source.
+- **Shell-integration marks carry a session nonce** (audit M4, public PR #16): a shell started
+  with the app's integration gets `RC_SHELL_NONCE` (local environment, `WSLENV`, cmd's `PROMPT`)
+  and its snippets end every OSC 133, 7 and 9;9 mark in `;rc=<nonce>`; such a session ignores
+  marks without it, so a mark in a program's output types no `cd` and moves no panel. A snippet
+  added by hand, without the app's environment, works as before.
+- **winget manifests back on schema 1.12.0**: komac 2.16.0 (winget-types 0.4.3) knows no newer
+  schema, rewrote every `$schema` header and the installer's `ManifestVersion` to 1.12.0 and left
+  the other two files at 1.28.0, so winget-pkgs refused the 0.17.0 pull request
+  (`InconsistentMultiFileManifestFieldValue`). `packaging/winget/*.yaml.in` return to 1.12.0
+  until a komac release writes 1.28.0.
+
 ## [0.17.0] - 2026-11-02
 
 ### Added

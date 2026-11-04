@@ -43,3 +43,10 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''^crates/(rc-engine/src/commands|rcommander/src/app/connections)/rdm_import_tests\.rs$''']
 regexes = ['''0f3c1a52-7d4e-4b8a-9c61-2e5b8d7a4f10''', '''7b9d1f3a-5c6e-4f8b-9d0e-2f4a6b8c0d2e''']
+
+[[allowlists]]
+description = "Made-up tokens (alphabet runs after a real prefix) in the masking test of tokens known by their shape (public PR #6, audit H2)"
+targetRules = ["generic-api-key", "gitlab-pat", "aws-access-token"]
+condition = "AND"
+paths = ['''^crates/rc-db/src/redact_tests\.rs$''']
+regexes = ['''npm_abcdefghijklmnop1234''', '''glpat-abcdefghijklmnopqrst''', '''AKIAABCDEFGHIJKLMNOP''']

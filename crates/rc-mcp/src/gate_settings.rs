@@ -7,7 +7,9 @@
 use std::collections::BTreeMap;
 
 use rc_db::{Db, DbError};
-use rc_engine::settings::{MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY, setting};
+use rc_engine::settings::{
+    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY, setting,
+};
 use serde_json::Value;
 
 use crate::policy::{POLICY_KEY, Policy};
@@ -20,6 +22,8 @@ pub(crate) struct GateSettings {
     pub(crate) headless_codes: bool,
     /// How long "allow for this session" holds for an executing tool's target; 0 offers none.
     pub(crate) exec_minutes: u32,
+    /// A reading or writing tool asks when a path it names lies outside the panels' folders.
+    pub(crate) ask_outside_panels: bool,
 }
 
 impl GateSettings {
@@ -34,6 +38,7 @@ impl GateSettings {
                 POLICY_KEY,
                 MCP_HEADLESS_CODE_KEY,
                 MCP_EXEC_SESSION_MINUTES_KEY,
+                MCP_ASK_OUTSIDE_PANELS_KEY,
             ])
             .await?;
         let policy: Policy = match stored.get(POLICY_KEY) {
@@ -50,10 +55,14 @@ impl GateSettings {
             .and_then(|value| value.as_u64())
             .and_then(|minutes| u32::try_from(minutes).ok())
             .unwrap_or(0);
+        let ask_outside_panels = effective(&stored, MCP_ASK_OUTSIDE_PANELS_KEY)
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
         Ok(Self {
             policy,
             headless_codes,
             exec_minutes,
+            ask_outside_panels,
         })
     }
 }

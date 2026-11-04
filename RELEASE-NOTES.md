@@ -11,6 +11,16 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.18.0
+
+- Security update: a series of fixes from a code audit, for archives, the MCP server, the terminal, updates and file operations.
+- A new MCP setting asks you before an agent reads or writes anything outside the folders the two panels show.
+- Crafted tar and zip archives that unpack to far more than they hold are refused before anything is written.
+- Moving files to another drive makes sure the copy is on disk before the original is deleted.
+- Files downloaded from a server never become set-uid programs or writable by everyone; an agent cannot set such rights either.
+- A program's output in the terminal can no longer make the panel change folder or type a command.
+- A crash is now written to the error log, so it can be reported.
+
 ## 0.17.0
 
 - Phones, tablets and cameras on USB appear in the drive bar on Windows and Linux: browse them, copy files both ways, make folders and delete. A setting turns this off.

@@ -163,3 +163,32 @@ fn the_colon_forms_leave_the_ambiguous_and_the_structured() {
         "password: [redacted] vault"
     );
 }
+
+/// Credentials known by their shape go without a name before them, and npm's `_authToken`
+/// after its registry; prose that only names a prefix stays (RC-080-42).
+#[test]
+fn tokens_known_by_their_shape_are_redacted() {
+    for (text, want) in [
+        (
+            "//registry.npmjs.org/:_authToken=npm_abcdefghijklmnop1234",
+            "//registry.npmjs.org/:_authToken=[redacted]",
+        ),
+        (
+            "export GH=ghp_abcdefghijklmnopqrstuvwxyz0123456789 # mine",
+            "export GH=[redacted] # mine",
+        ),
+        ("hvs.CAESIabcdefghijklmnopqrst", "[redacted]"),
+        ("key id AKIAABCDEFGHIJKLMNOP.", "key id [redacted]."),
+        ("glpat-abcdefghijklmnopqrst", "[redacted]"),
+    ] {
+        assert_eq!(redact_text(text), want, "{text}");
+    }
+    for prose in [
+        "npm_config_cache is a variable",
+        "tokens start with ghp_ on GitHub",
+        "the AKIA prefix",
+        "max_tokens = 3",
+    ] {
+        assert_eq!(redact_text(prose), prose);
+    }
+}

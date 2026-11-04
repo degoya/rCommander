@@ -173,3 +173,25 @@ async fn keymap_list_reads_the_keys_and_no_tool_moves_one() {
     let again = call(&setup, "keymap_list", json!({})).await;
     assert_eq!(again, keys, "nothing moved");
 }
+
+/// The workspace of the next start opens its terminals and SSH sessions without the question
+/// `workspaces_apply` asks (exec): the window names it, an agent may not.
+#[tokio::test]
+async fn an_agent_may_not_name_the_start_workspace() {
+    let setup = setup().await;
+    let refused = call(
+        &setup,
+        "settings_set",
+        json!({ "key": "workspaces.on_start", "value": "1" }),
+    )
+    .await;
+    assert_eq!(refused["code"], "setting_protected", "{refused}");
+    assert_eq!(
+        setup
+            .db
+            .get::<Value>("workspaces.on_start")
+            .await
+            .expect("read"),
+        None
+    );
+}

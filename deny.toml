@@ -17,12 +17,6 @@ ignore = [
   # only signs an SSH login with the person's own RSA key, on their machine, and never decrypts
   # with RSA. Leaves when rsa ships a constant-time release.
   { id = "RUSTSEC-2023-0071", reason = "no fixed rsa release; RSA is only used to sign SSH logins locally, never to decrypt" },
-  # zip: ZipArchive::extract and ZipStreamReader::extract keep set-uid bits and follow symlinks
-  # out of the target. rCommander never calls either: rc-vfs reads the entries, rc-ops writes
-  # them with its own name checks. Leaves with the bump to zip 9.
-  { id = "RUSTSEC-2026-0367", reason = "zip extract() APIs are not used; entries are written by rc-ops" },
-  { id = "RUSTSEC-2026-0368", reason = "zip extract() APIs are not used; entries are written by rc-ops" },
-  { id = "RUSTSEC-2026-0369", reason = "zip extract() APIs are not used; entries are written by rc-ops" },
   # Unmaintained, no known vulnerability: paste (a build-time macro of metal, macOS GPU only)
   # and ttf-parser (fontdb and owned_ttf_parser in iced's font stack). Leave with the iced
   # release that drops them.
@@ -34,15 +28,6 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
   { id = "RUSTSEC-2026-0371", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
   { id = "RUSTSEC-2026-0372", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
-  # zstd 0.13.3 / zstd-safe 7.3.0, only through wasmtime's `cache` feature (wasmtime-internal-cache
-  # 49 and 50 both require zstd ^0.13; the fixes are in zstd 0.14.3 and zstd-safe 8.2). The
-  # cache compresses and reads back only the compiled plugins rCommander itself wrote into its
-  # data folder - no untrusted stream reaches zstd, the seekable API is not used, and a context
-  # is not reused across streams of different origin. Leaves with the wasmtime release on zstd
-  # 0.14, or with a compile cache of our own (RC-080-36).
-  { id = "RUSTSEC-2026-0391", reason = "zstd only (de)compresses rCommander's own plugin compile cache; wasmtime has no release on zstd 0.14" },
-  { id = "RUSTSEC-2026-0398", reason = "zstd seekable API is not used; only wasmtime's compile cache, written by rCommander" },
-  { id = "RUSTSEC-2026-0403", reason = "zstd only decompresses rCommander's own plugin compile cache; no untrusted frames" },
 ]
 
 [licenses]

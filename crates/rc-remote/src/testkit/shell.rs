@@ -201,6 +201,7 @@ impl Shell {
             "whoami" => format!("\r\n{}", if self.root { "root" } else { "tester" }),
             "pwd" => format!("\r\n{}", lock(&self.seen.cwd).as_deref().unwrap_or("~")),
             "cd" => {
+                let rest = rest.strip_prefix("-- ").unwrap_or(rest);
                 *lock(&self.seen.cwd) = Some(shell_word(rest));
                 String::new()
             }

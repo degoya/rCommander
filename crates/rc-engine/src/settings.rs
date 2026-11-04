@@ -55,8 +55,8 @@ pub use schema::wsl_themes::{
 pub use schema::{ALTERNATE_ROWS_KEY, EDITOR_KEY, FKEY_BAR_KEY, MKDIR_PREFILL_KEY, VIEWER_KEY};
 pub use schema::{
     ARCHIVE_ENTER_KEY, Choice, FILE_ICONS_KEY, FOLLOW_PANEL_KEY, INTEGRATION_KEY, LEFT_START_KEY,
-    MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY, PANEL_FOLLOWS_KEY,
-    QUICK_SEARCH_ANYWHERE_KEY, QUICK_SEARCH_CASE_KEY, QUICK_SEARCH_FILTERS_KEY,
+    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY,
+    PANEL_FOLLOWS_KEY, QUICK_SEARCH_ANYWHERE_KEY, QUICK_SEARCH_CASE_KEY, QUICK_SEARCH_FILTERS_KEY,
     QUICK_SEARCH_KEYS_KEY, RIGHT_START_KEY, SELECT_FOLDERS_KEY, SETTINGS, SHELL_KEY,
     SPACE_MOVES_DOWN_KEY, SettingKind, SettingPage, SettingSpec, THEME_KEY, is_protected, setting,
 };
@@ -98,6 +98,11 @@ pub use schema::{
 };
 
 use crate::{Engine, EngineError, EngineEvent, Outcome};
+
+/// Settings the window sets through `settings.set` but an agent may not: the workspace applied
+/// at the next start may open terminals and SSH sessions, which an agent starts only through
+/// `workspaces_apply` with a person's answer (exec), never by naming it for the next start.
+const AGENT_MAY_NOT_SET: &[&str] = &[crate::workspaces::ON_START_KEY];
 
 /// One setting as `settings.get` and `settings.set` report it: its value and its row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -247,7 +252,8 @@ impl Engine {
         key: &str,
         value: &Value,
     ) -> Result<Outcome, EngineError> {
-        if is_protected(key) {
+        if is_protected(key) || (crate::read_guard::from_mcp() && AGENT_MAY_NOT_SET.contains(&key))
+        {
             return Err(EngineError::SettingProtected {
                 key: key.to_owned(),
             });

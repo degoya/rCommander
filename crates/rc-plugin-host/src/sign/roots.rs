@@ -8,7 +8,8 @@
 //!
 //! The release key `rcommander-plugin-v1` (decision 7, made 2026-10-29 with `rc-pack keygen
 //! --role plugin`) signs the bundled plugins of a release; the development key `rcommander-dev-v1`
-//! stays a root for locally signed packages until it is retired. Neither private half enters the
+//! stays a root for locally signed packages until it is retired - in development builds only
+//! (`debug_assertions`, or the feature `dev-plugin-key`), never in a release build. Neither private half enters the
 //! repository: they live outside it, with whoever packages the bundled plugins
 //! (`docs/security/plugins.md`, "Keys"). A package either signs is trusted without a question -
 //! the bundled plugins beside the executable are.
@@ -42,6 +43,10 @@ pub const EMBEDDED_KEYS: &[EmbeddedKey] = &[
         public_key: "B/mKOjG9t2sF5ikC0sJH6uzMg5TGQpXtwkGU8qLJMP4=",
         not_after: None,
     },
+    // A development build only (or one that asks for it): the development key's private half
+    // lives on a workstation, and a root signs packages that run without a question, so a
+    // release build does not carry it.
+    #[cfg(any(debug_assertions, feature = "dev-plugin-key"))]
     EmbeddedKey {
         key_id: DEVELOPMENT_KEY_ID,
         public_key: "B0zGe1KstAvHnny52BYAl7rrW3l5SVnBy8Fmf8NVkt0=",

@@ -238,6 +238,22 @@ def limits():
         file.write(gzip.compress(tar_bytes([("zeros.bin", zeros)]), compresslevel=9, mtime=0))
 
 
+def overlapping():
+    """A zip whose 16 entries all point at the one deflated block of the first (David Fifield's
+    "better zip bomb", small): each entry passes the ratio on its own, together they store more
+    than the file holds."""
+    path = out("overlapping.zip")
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(zip_info("part-00.bin", False), bytes(1024 * 1024), compresslevel=9)
+        first = archive.filelist[0]
+        for n in range(1, 16):
+            twin = zipfile.ZipInfo(f"part-{n:02}.bin", first.date_time)
+            for field in ("compress_type", "create_system", "external_attr", "extra", "CRC",
+                          "compress_size", "file_size", "header_offset", "flag_bits"):
+                setattr(twin, field, getattr(first, field))
+            archive.filelist.append(twin)
+
+
 def large_solid():
     first = bytes(i % 251 for i in range(251)) * (LARGE // 251 + 1)
     second = bytes(i % 253 for i in range(253)) * (LARGE // 253 + 1)
@@ -287,6 +303,7 @@ def main():
     encodings()
     encrypted()
     limits()
+    overlapping()
     large_solid()
     others()
     for name in sorted(os.listdir(HERE)):

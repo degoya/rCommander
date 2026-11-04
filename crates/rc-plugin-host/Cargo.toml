@@ -8,6 +8,9 @@ license.workspace = true
 publish = false
 
 [features]
+# The development signing key `rcommander-dev-v1` as a root in a build without debug assertions
+# (sign/roots.rs); a development build has it anyway, a release build never.
+dev-plugin-key = []
 # `test_support`: a working viewer component, one that imports what no viewer is granted, and
 # signed packages of them, for the tests of the crates above (rc-engine, rcommander). Switched on
 # only from dev-dependencies.

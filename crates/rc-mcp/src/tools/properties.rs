@@ -164,11 +164,14 @@ pub(crate) fn parse_time(text: &str) -> Option<SystemTime> {
         .map(SystemTime::from)
 }
 
-/// Octal permission bits, at most 7777.
+/// Octal permission bits an agent may set: at most 777 - no set-uid, set-gid or sticky bit,
+/// which would let a program run with the person's rights or change who may delete in a
+/// folder - and never writable by everyone, which hands the entry (or, for a folder, its
+/// contents) to every other account on the machine.
 pub(crate) fn parse_mode(text: &str) -> Option<u32> {
     u32::from_str_radix(text.trim(), 8)
         .ok()
-        .filter(|mode| *mode <= 0o7777)
+        .filter(|mode| *mode <= 0o777 && mode & 0o002 == 0)
 }
 
 /// The change the parameters ask for, or the answer that refuses them.
@@ -180,9 +183,9 @@ fn change_of(params: &SetAttributesParams) -> Result<PropertyChange, CallToolRes
         None => Ok(None),
     };
     let mode = match &params.mode {
-        Some(text) => {
-            Some(parse_mode(text).ok_or_else(|| invalid("mode is octal, 0 to 7777, such as 644"))?)
-        }
+        Some(text) => Some(parse_mode(text).ok_or_else(|| {
+            invalid("mode is octal, 0 to 777 and not writable by everyone (no o+w), such as 644")
+        })?),
         None => None,
     };
     Ok(PropertyChange {
@@ -259,7 +262,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Change attributes and times as Total Commander's Change attributes does: readonly, hidden, system, archive (Windows), mode (Unix, octal), modified and created (Windows) as RFC 3339 or now; omitted fields stay. recursive also changes everything below a folder, apply_to picks files, dirs or both there. Answers changed, failed and the failures with codes; unsupported for what the platform cannot set (nothing changes then). Keys and credential files are refused with sensitive_path; an entry in rCommander's data folder, an SSH folder or an autostart folder, a shell's start-up file - with recursive, anywhere below - with protected_target."
+        description = "Change attributes and times as Total Commander's Change attributes does: readonly, hidden, system, archive (Windows), mode (Unix, octal up to 775: no set-uid, set-gid, sticky or everyone-writable bit), modified and created (Windows) as RFC 3339 or now; omitted fields stay. recursive also changes everything below a folder, apply_to picks files, dirs or both there. Answers changed, failed and the failures with codes; unsupported for what the platform cannot set (nothing changes then). Keys and credential files are refused with sensitive_path; an entry in rCommander's data folder, an SSH folder or an autostart folder, a shell's start-up file - with recursive, anywhere below - with protected_target."
     )]
     pub(crate) async fn files_set_attributes(
         &self,

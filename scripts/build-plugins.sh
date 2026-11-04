@@ -31,6 +31,11 @@
 #   scripts/build-plugins.sh json-viewer     # only these
 #   scripts/build-plugins.sh --development   # unsigned, into artifacts/dev-plugins
 #   scripts/build-plugins.sh --list          # names the bundled plugins, builds nothing
+#   scripts/build-plugins.sh --build-only    # compiles the packager and the components, signs nothing
+#   scripts/build-plugins.sh --sign-only     # packages and signs what --build-only left; no compiler
+#
+# The release splits the two (release.yml): the signing key is present only in the step that
+# signs, never while cargo runs the build scripts and proc macros of every dependency.
 #
 # Takes the build lock (scripts/lib/lock.sh) - never wrap it in flock. Parallelism:
 # scripts/lib/jobs.sh (RC_JOBS).
@@ -50,17 +55,21 @@ source "$ROOT/scripts/lib/lock.sh"
 cd "$ROOT"
 
 usage() {
-    echo "usage: scripts/build-plugins.sh [--development] [--list] [<plugin>...]" >&2
+    echo "usage: scripts/build-plugins.sh [--development] [--list] [--build-only|--sign-only] [<plugin>...]" >&2
     exit 2
 }
 
 development=0
 list_only=0
+build=1
+sign=1
 selected=()
 for argument in "$@"; do
     case "$argument" in
         --development) development=1 ;;
         --list) list_only=1 ;;
+        --build-only) sign=0 ;;
+        --sign-only) build=0 ;;
         -h | --help) sed -n '2,/^set -euo/p' "$ROOT/scripts/build-plugins.sh" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         -*) usage ;;
         *) selected+=("$argument") ;;
@@ -82,8 +91,9 @@ if [[ "$list_only" -eq 1 ]]; then
     exit 0
 fi
 [[ ${#selected[@]} -gt 0 ]] || { echo "!! no plugin under plugins/" >&2; exit 1; }
+[[ "$build" -eq 1 || "$sign" -eq 1 ]] || { echo "!! --build-only and --sign-only exclude each other" >&2; exit 2; }
 
-if [[ "$development" -eq 0 && ! -f "$KEY" ]]; then
+if [[ "$sign" -eq 1 && "$development" -eq 0 && ! -f "$KEY" ]]; then
     echo "!! the signing key is not at $KEY" >&2
     echo "   The development key's private half is kept outside the repository" >&2
     echo "   (docs/development.md, \"Plugins\"); set RC_PLUGIN_KEY to where yours is, or pass" >&2
@@ -97,7 +107,7 @@ rc_take_lock "$@"
 # The component bytes depend on the wasm-tools that encodes them, so a build here uses the
 # pinned version or none.
 installed_wasm_tools="$(wasm-tools --version 2> /dev/null | awk '{ print $2 }' || true)"
-if [[ "$installed_wasm_tools" != "$RC_WASM_TOOLS_VERSION" ]]; then
+if [[ "$build" -eq 1 && "$installed_wasm_tools" != "$RC_WASM_TOOLS_VERSION" ]]; then
     echo "!! wasm-tools $RC_WASM_TOOLS_VERSION is required, found ${installed_wasm_tools:-none}" >&2
     echo "   cargo install wasm-tools --version $RC_WASM_TOOLS_VERSION --locked" >&2
     exit 1
@@ -111,9 +121,11 @@ mkdir -p "$COMPONENTS" "$OUT"
 
 # The packager is the native rcommander in the dev profile, which the tests build anyway; the
 # plugin host's Wasmtime and Cranelift are optimised in it (Cargo.toml, [profile.dev.package.*]).
-echo "==> building the packager (rcommander, dev profile, jobs: $JOBS)"
-CARGO_BUILD_JOBS="$JOBS" cargo build --locked --quiet -j "$JOBS" -p rcommander
 PACKAGER="$TARGET_DIR/debug/rcommander"
+if [[ "$build" -eq 1 ]]; then
+    echo "==> building the packager (rcommander, dev profile, jobs: $JOBS)"
+    CARGO_BUILD_JOBS="$JOBS" cargo build --locked --quiet -j "$JOBS" -p rcommander
+fi
 [[ -x "$PACKAGER" ]] || { echo "!! $PACKAGER was not produced" >&2; exit 1; }
 
 # The path map of every wasm32 build here; flags the caller set for wasm32 come first and stay.
@@ -126,23 +138,27 @@ export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="$wasm_flags"
 # The value of `key = "..."` in TOML file $2, the first one.
 toml_value() { sed -n "s/^$1 = \"\(.*\)\"\$/\1/p" "$2" | head -n 1; }
 
-echo "==> building ${#selected[@]} plugin(s) for $TARGET"
+echo "==> ${#selected[@]} plugin(s) for $TARGET (build: $build, package and sign: $sign)"
 for name in "${selected[@]}"; do
     directory="plugins/$name"
     crate="$(toml_value name "$directory/Cargo.toml")"
     version="$(toml_value version "$directory/manifest.toml")"
     [[ -n "$crate" && -n "$version" ]] || { echo "!! $directory names no crate or no version" >&2; exit 1; }
+    component="$COMPONENTS/$name.wasm"
 
     echo "--> $crate $version"
-    CARGO_BUILD_JOBS="$JOBS" cargo rustc --locked --release --target "$TARGET" -j "$JOBS" \
-        -p "$crate" --lib --crate-type cdylib \
-        || { echo "!! $crate does not build for $TARGET" >&2; exit 1; }
-    module="$TARGET_DIR/$TARGET/release/${crate//-/_}.wasm"
-    [[ -f "$module" ]] || { echo "!! the build left no $module" >&2; exit 1; }
-    component="$COMPONENTS/$name.wasm"
-    wasm-tools component new "$module" -o "$component" \
-        || { echo "!! wasm-tools could not make a component of $module" >&2; exit 1; }
-    "$ROOT/scripts/check-plugin-imports.sh" "$component"
+    if [[ "$build" -eq 1 ]]; then
+        CARGO_BUILD_JOBS="$JOBS" cargo rustc --locked --release --target "$TARGET" -j "$JOBS" \
+            -p "$crate" --lib --crate-type cdylib \
+            || { echo "!! $crate does not build for $TARGET" >&2; exit 1; }
+        module="$TARGET_DIR/$TARGET/release/${crate//-/_}.wasm"
+        [[ -f "$module" ]] || { echo "!! the build left no $module" >&2; exit 1; }
+        wasm-tools component new "$module" -o "$component" \
+            || { echo "!! wasm-tools could not make a component of $module" >&2; exit 1; }
+        "$ROOT/scripts/check-plugin-imports.sh" "$component"
+    fi
+    [[ "$sign" -eq 1 ]] || continue
+    [[ -f "$component" ]] || { echo "!! no component at $component: run --build-only first" >&2; exit 1; }
 
     output="$OUT/$name-$version.rcplug"
     arguments=(plugin package --manifest "$directory/manifest.toml" --component "$component"

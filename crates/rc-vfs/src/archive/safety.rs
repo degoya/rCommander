@@ -120,6 +120,14 @@ pub(crate) struct Budget<'a> {
     path: &'a Path,
     entries: u64,
     unpacked: u64,
+    /// The archive file's own size, when known.
+    archive_len: Option<u64>,
+    /// The stated sizes of the entries below the ratio threshold, which [`ArchiveLimits::
+    /// check_entry`] never asks about: held together against the archive's size.
+    small_unpacked: u64,
+    /// The packed sizes the format states, summed: more than the archive holds means entries
+    /// share their data.
+    packed: u64,
 }
 
 impl<'a> Budget<'a> {
@@ -129,11 +137,23 @@ impl<'a> Budget<'a> {
             path,
             entries: 0,
             unpacked: 0,
+            archive_len: None,
+            small_unpacked: 0,
+            packed: 0,
         }
     }
 
-    /// Counts one more entry of `size` stated bytes.
-    pub(crate) fn admit(&mut self, size: u64) -> Result<()> {
+    /// The same budget, also held against the archive file's `len`: entries that each pass the
+    /// ratio may still add up to a bomb - a zip whose entries all point at one compressed
+    /// kernel (overlapping entries), or many entries each just under the ratio threshold.
+    pub(crate) fn of_archive(mut self, len: Option<u64>) -> Self {
+        self.archive_len = len;
+        self
+    }
+
+    /// Counts one more entry of `size` stated bytes, `packed` of them stored where the format
+    /// says.
+    pub(crate) fn admit(&mut self, size: u64, packed: Option<u64>) -> Result<()> {
         self.entries += 1;
         if self.entries > self.limits.max_entries {
             return Err(limit(self.path, "entry count"));
@@ -141,6 +161,19 @@ impl<'a> Budget<'a> {
         self.unpacked = self.unpacked.saturating_add(size);
         if self.unpacked > self.limits.max_unpacked_size {
             return Err(limit(self.path, "unpacked size"));
+        }
+        let Some(len) = self.archive_len else {
+            return Ok(());
+        };
+        self.packed = self.packed.saturating_add(packed.unwrap_or(0));
+        if self.packed > len {
+            return Err(limit(self.path, "overlapping entries"));
+        }
+        if size < self.limits.ratio_threshold {
+            self.small_unpacked = self.small_unpacked.saturating_add(size);
+            if self.limits.over_ratio(self.small_unpacked, len) {
+                return Err(limit(self.path, "total compression ratio"));
+            }
         }
         Ok(())
     }

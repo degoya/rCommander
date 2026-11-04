@@ -150,7 +150,8 @@ fn a_folder_is_quoted_for_a_posix_shell() {
         r#"'/srv/it'\''s "here"'"#
     );
     assert_eq!(shell_quote("/srv/$HOME`x`\\"), "'/srv/$HOME`x`\\'");
-    assert_eq!(cd_command("/a b").expect("typed"), b"cd '/a b'\r");
+    assert_eq!(cd_command("/a b").expect("typed"), b"cd -- '/a b'\r");
+    assert_eq!(cd_command("-P").expect("typed"), b"cd -- '-P'\r");
     for folder in [
         "/srv/my site",
         "/srv/it's \"here\"",
@@ -174,6 +175,26 @@ const HOSTILE: &[&str] = &[
     "del\x7f",
     "c1\u{9b}2J",
 ];
+
+/// A Windows OpenSSH server's cmd reads none of the quotes: what it would run is not typed.
+#[test]
+fn a_folder_cmd_would_run_is_never_typed() {
+    for folder in [
+        "/C:/Users/u/x&calc&",
+        "/a|b",
+        "/a>b",
+        "/a<b",
+        "/a^b",
+        "/%PATH%",
+    ] {
+        let refused = cd_command(folder).expect_err("refused");
+        assert_eq!(refused.code(), "invalid_path", "{folder:?}");
+    }
+    assert!(
+        cd_command("/srv/it's (here) $x!").is_ok(),
+        "POSIX-quoted, harmless in cmd"
+    );
+}
 
 #[test]
 fn a_folder_with_a_control_character_is_never_typed() {

@@ -148,7 +148,7 @@ async fn sudo_from_the_vault_ends_in_a_root_shell_and_the_password_goes_nowhere_
     .await;
     assert_eq!(
         harness.server.lines(),
-        ["sudo -i", "<password>", "cd '/root/my files'"]
+        ["sudo -i", "<password>", "cd -- '/root/my files'"]
     );
     assert_eq!(type_in(&harness, info.terminal, "whoami\r"), None);
     shows(&harness.engine, info.terminal, "\nroot\n").await;

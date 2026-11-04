@@ -27,10 +27,16 @@ fn every_configured_root_decodes_and_the_store_trusts_it() {
             .unwrap_or_else(|error| panic!("{}: {error}", entry.key_id));
     }
     let store = TrustStore::with_roots().expect("roots");
-    assert_eq!(
-        store.key_ids().expect("ids"),
-        [DEVELOPMENT_KEY_ID, super::RELEASE_KEY_ID]
-    );
+    let ids = store.key_ids().expect("ids");
+    if cfg!(any(debug_assertions, feature = "dev-plugin-key")) {
+        assert_eq!(ids, [DEVELOPMENT_KEY_ID, super::RELEASE_KEY_ID]);
+    } else {
+        assert_eq!(
+            ids,
+            [super::RELEASE_KEY_ID],
+            "a release build has no development root"
+        );
+    }
 }
 
 #[test]

@@ -119,3 +119,22 @@ fn ftp_command_traces_are_never_written() {
     assert!(!carries_secrets("suppaftpx", &Level::TRACE));
     assert!(!carries_secrets("rc_remote::ftp", &Level::TRACE));
 }
+
+/// A panic's line names its message, place and thread, for a `&str` and a `String` payload
+/// alike, and says so when there is no message to read.
+#[test]
+fn a_panic_becomes_one_line_with_its_place() {
+    let location = std::panic::Location::caller();
+    let line = super::panic_line(&"index out of bounds", Some(location));
+    assert!(line.contains("index out of bounds"), "{line}");
+    assert!(
+        line.contains(&format!("{}:{}", location.file(), location.line())),
+        "{line}"
+    );
+    let owned: Box<dyn std::any::Any + Send> = Box::new(String::from("owned message"));
+    assert!(super::panic_line(owned.as_ref(), None).contains("owned message"));
+    let other: Box<dyn std::any::Any + Send> = Box::new(7_u32);
+    let line = super::panic_line(other.as_ref(), None);
+    assert!(line.contains("a panic without a message"), "{line}");
+    assert!(line.contains("an unknown place"), "{line}");
+}

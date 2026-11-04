@@ -5,6 +5,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-11-04
+
+### Fixed
+
+- **Dragging files starts the system's drag at once** (RC-080-01, Windows): local entries go to
+  the shell's drag loop (`SHDoDragDrop`) as soon as the pointer passes the drag threshold, not
+  only when it leaves the window - the drag image and the copy and move cursors show from the
+  start, and Alt+Tab in the middle of a drag drops into the window switched to, as in Total
+  Commander. A drop back on the other panel still opens the copy dialog (F5; with Shift the move
+  dialog), on the panel it came from nothing (`app/drag/own.rs`). Over rCommander's own window
+  the cursor shows copy (winit's drop target). Remote entries keep the drag inside the window and
+  start their drag-out also when the window loses the focus. The release that ends such a drag is
+  no click: it moves no cursor and clears no marks (`mouse.click_clears_marks`); the drag tests
+  drop through the system's path where the system runs the drag (Windows CI).
+
+- **After an update the notice links the changelog** (RC-100-06): "Updated to X" offered *What's
+  new*, which opened the Updates page with nothing new on it, and *Later*, which meant nothing
+  there. *What's new* now opens the changelog in the browser (the About page's address) and puts
+  the notice away; the other action is *Close*. An offer and a failed update keep the Updates
+  page and *Later*. The setting's help says so.
+
+### Changed
+
+- **komac 2.17.2 and winget manifests on schema 1.28.0** (RC-100-53): the release workflow's
+  winget job pins komac 2.17.2 (winget-types 0.6.0, checksum pinned), which writes every
+  manifest with `ManifestVersion: 1.28.0` and the 1.28.0 `$schema` headers - checked by letting
+  2.17.2 and 2.16.0 each write a package's manifests (2.16.0: 1.12.0 throughout).
+  `packaging/winget/*.yaml.in` move to 1.28.0 with it, so komac rewrites nothing and the three
+  files agree.
+
 ## [0.18.0] - 2026-11-04
 
 ### Added

@@ -11,6 +11,12 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.18.1
+
+- Dragging files on Windows shows the drag picture and cursor from the start, and you can switch windows with Alt+Tab while dragging and drop there.
+- After an update, What's new opens the changelog in your browser, and the notice closes with Close instead of Later.
+- rCommander's winget package uses the current manifest format.
+
 ## 0.18.0
 
 - Security update: a series of fixes from a code audit, for archives, the MCP server, the terminal, updates and file operations.

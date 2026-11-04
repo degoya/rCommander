@@ -4,8 +4,8 @@
 
 use rc_engine::{DownloadState, UpdateNotice, UpdateStatus};
 
-use super::{UpdateMsg, manager_line, notice_line};
-use crate::app::{Message, harness::Harness, settings::Page};
+use super::{UpdateMsg, changelog_url, manager_line, notice_actions, notice_line};
+use crate::app::{Effect, Message, harness::Harness, settings::Page, viewer::links};
 
 fn status() -> UpdateStatus {
     UpdateStatus {
@@ -61,6 +61,48 @@ fn every_notice_names_its_version() {
     }
     // "Installs when quitting" says so; the plain offer does not.
     assert_ne!(lines[0], lines[1]);
+}
+
+/// After an update the Updates page has nothing new and "Later" means nothing: "What's new" opens
+/// the changelog and the other action closes; an offer keeps the Updates page and "Later".
+#[test]
+fn after_an_update_whats_new_is_the_changelog_and_the_notice_closes() {
+    let updated = UpdateNotice::UpdatedTo {
+        version: "9.1.0".to_owned(),
+        notes: String::new(),
+    };
+    let offered = UpdateNotice::Available {
+        version: "9.1.0".to_owned(),
+        on_quit: false,
+    };
+    let after = notice_actions(&updated, "first");
+    assert!(
+        matches!(after.first.1, UpdateMsg::Changelog),
+        "{:?}",
+        after.first.1
+    );
+    assert_eq!(after.away, crate::i18n::t!("update.notice.close"));
+    let before = notice_actions(&offered, "first");
+    assert!(
+        matches!(before.first.1, UpdateMsg::WhatsNew),
+        "{:?}",
+        before.first.1
+    );
+    assert_eq!(before.away, crate::i18n::t!("update.notice.later"));
+    assert_ne!(after.away, before.away);
+}
+
+/// The changelog the notice opens is the About page's published one, and the click hands it to
+/// the system without opening the settings.
+#[tokio::test]
+async fn the_changelog_opens_in_the_browser_and_no_settings_open() {
+    let url = changelog_url().expect("the changelog is published");
+    assert!(links::opens(&url), "{url} would not open");
+    let (_root, mut harness) = Harness::temp_with_db().await;
+    let effects = harness.app.on_update(UpdateMsg::Changelog);
+    assert!(matches!(effects.as_slice(), [Effect::Task(_)]), "one task");
+    assert!(harness.app.settings.is_none(), "no settings dialog");
+    assert_eq!(harness.app.engine().update_notice(), None);
 }
 
 #[tokio::test]

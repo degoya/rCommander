@@ -3,7 +3,10 @@
 //! "install when idle".
 //!
 //! The notice is quiet: one line at the status bar's left with "What's new" and "Later", never a
-//! window of its own and never the focus. "What's new" opens the settings on the Updates page,
+//! window of its own and never the focus. After an update, "Updated to X" offers "What's new",
+//! which opens the changelog in the browser (the About page's address) and puts the notice away,
+//! and "Close" - the Updates page has nothing new then, and "Later" would mean nothing. For an
+//! offer, "What's new" opens the settings on the Updates page,
 //! which shows the version, the date, the size and the release notes as plain text, and the
 //! buttons: Check now, Download, Open folder (the panel goes there), Copy the download address
 //! (the way past a proxy that asks for a login; nothing here starts a browser), and Install and
@@ -25,11 +28,14 @@ use iced::{
     futures::{Stream, stream},
     widget::{Column, Space, button, column, row, text},
 };
-use rc_engine::{Command, DownloadState, Engine, EngineEvent, UpdateNotice, UpdateStatus};
+use rc_engine::{
+    Command, DownloadState, Engine, EngineEvent, UpdateNotice, UpdateStatus, about::AboutLinkKind,
+};
 
 use super::{
     App, Effect, Message,
     settings::{Page, SettingsMessage},
+    viewer::links,
 };
 use crate::{
     i18n::{error_text, t},
@@ -54,8 +60,13 @@ pub enum UpdateMsg {
     Looked,
     /// "What's new": the settings on the Updates page.
     WhatsNew,
-    /// "Later": the notice goes until the next check.
+    /// "Later" (an offer, a failure) or "Close" (after an update): the notice goes until the
+    /// next check.
     Later,
+    /// "What's new" after an update: the changelog in the browser, and the notice goes.
+    Changelog,
+    /// The browser was handed the changelog (or refused it); nothing follows.
+    ChangelogOpened,
     CheckNow,
     Download,
     /// The panel goes to the folder of the downloaded file.
@@ -112,7 +123,7 @@ impl App {
 
     fn on_update(&mut self, message: UpdateMsg) -> Vec<Effect> {
         match message {
-            UpdateMsg::Started | UpdateMsg::Looked => Vec::new(),
+            UpdateMsg::Started | UpdateMsg::Looked | UpdateMsg::ChangelogOpened => Vec::new(),
             UpdateMsg::Tick => {
                 let engine = self.engine.clone();
                 let dialog_open = self.dialog_open() || self.settings.is_some();
@@ -129,6 +140,16 @@ impl App {
             UpdateMsg::Later => {
                 self.engine.dismiss_update_notice();
                 Vec::new()
+            }
+            UpdateMsg::Changelog => {
+                self.engine.dismiss_update_notice();
+                match changelog_url() {
+                    Some(url) => vec![Effect::Task(Task::perform(links::open(url), |_| {
+                        wrap(UpdateMsg::ChangelogOpened)
+                    }))],
+                    // No published changelog: the Updates page, as for an offer.
+                    None => self.on_update(UpdateMsg::WhatsNew),
+                }
             }
             UpdateMsg::CheckNow => self.dispatch_update(Command::CheckForUpdates {}),
             UpdateMsg::Download => self.dispatch_update(Command::DownloadUpdate {}),
@@ -202,12 +223,44 @@ impl App {
     }
 }
 
+/// The changelog's published address, the one the About page opens.
+pub(super) fn changelog_url() -> Option<String> {
+    rc_engine::about::about()
+        .links
+        .into_iter()
+        .find(|link| link.kind == AboutLinkKind::Changelog && link.published)
+        .and_then(|link| link.url)
+}
+
+/// The notice's two actions: the first one's caption and message, and the caption of the one
+/// that puts the notice away ([`UpdateMsg::Later`]).
+pub(super) struct NoticeActions {
+    pub(super) first: (&'static str, UpdateMsg),
+    pub(super) away: &'static str,
+}
+
+/// The actions of `notice`: after an update the changelog and "Close"; else the Updates page and
+/// "Later".
+pub(super) fn notice_actions(notice: &UpdateNotice, first: &'static str) -> NoticeActions {
+    match notice {
+        UpdateNotice::UpdatedTo { .. } => NoticeActions {
+            first: (first, UpdateMsg::Changelog),
+            away: t!("update.notice.close"),
+        },
+        _ => NoticeActions {
+            first: (first, UpdateMsg::WhatsNew),
+            away: t!("update.notice.later"),
+        },
+    }
+}
+
 /// The notice at the status bar's left, with its two actions; nothing without one.
 pub(super) fn notice<'a>(app: &App, tokens: &'static Tokens) -> Element<'a, Message> {
     let Some(notice) = app.engine.update_notice() else {
         return Space::new().into();
     };
     let (line, action) = notice_line(&notice);
+    let actions = notice_actions(&notice, action);
     let link = |caption: &'static str, message: UpdateMsg| {
         button(
             label_or_glyph(caption)
@@ -224,8 +277,8 @@ pub(super) fn notice<'a>(app: &App, tokens: &'static Tokens) -> Element<'a, Mess
             .size(theme::STATUS_SIZE)
             .color(tokens.accent)
             .wrapping(text::Wrapping::None),
-        link(action, UpdateMsg::WhatsNew),
-        link(t!("update.notice.later"), UpdateMsg::Later),
+        link(actions.first.0, actions.first.1),
+        link(actions.away, UpdateMsg::Later),
     ]
     .spacing(8)
     .into()

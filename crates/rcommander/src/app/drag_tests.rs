@@ -63,6 +63,26 @@ async fn drag_from(harness: &mut Harness, row: usize) {
     drag(harness, DragMsg::Moved(Point::new(140.0, 100.0))).await;
 }
 
+/// Lets go over the right panel. Where the gesture stays in the window, the release there; where
+/// the system runs the drag of local entries (Windows, `drag/own.rs`), its drop of them on the
+/// window's right half.
+async fn release_over_right(harness: &mut Harness) {
+    if let Some(own) = harness.app.drag.own.clone() {
+        for path in own.paths {
+            drag(harness, DragMsg::FileDropped(path)).await;
+        }
+        let shift = harness.app.modifiers_held().shift;
+        drag(
+            harness,
+            DragMsg::Settled(Some(Pointer { across: 0.8, shift })),
+        )
+        .await;
+    } else {
+        harness.send(Message::Hover(PanelId::Right)).await;
+        drag(harness, DragMsg::Released).await;
+    }
+}
+
 /// Waits until the newest job is over and lets the app see its end.
 async fn finish_last(harness: &mut Harness) -> JobId {
     let id = harness
@@ -86,8 +106,7 @@ async fn a_drag_onto_the_other_panel_opens_the_copy_dialog_for_the_entry() {
     let (root, mut harness) = setup().await;
     let row = row_of(&harness, PanelId::Left, "b.txt");
     drag_from(&mut harness, row).await;
-    harness.send(Message::Hover(PanelId::Right)).await;
-    drag(&mut harness, DragMsg::Released).await;
+    release_over_right(&mut harness).await;
     let dialog = harness
         .app
         .file_ops
@@ -110,11 +129,10 @@ async fn shift_at_the_release_opens_the_move_dialog() {
     let (_root, mut harness) = setup().await;
     let row = row_of(&harness, PanelId::Left, "a.txt");
     drag_from(&mut harness, row).await;
-    harness.send(Message::Hover(PanelId::Right)).await;
     harness
         .send(Message::FileOps(FileOpsMsg::Modifiers(Modifiers::SHIFT)))
         .await;
-    drag(&mut harness, DragMsg::Released).await;
+    release_over_right(&mut harness).await;
     let dialog = harness
         .app
         .file_ops
@@ -137,8 +155,7 @@ async fn a_selected_entry_drags_the_selection() {
     .await;
     let row = row_of(&harness, PanelId::Left, "a.txt");
     drag_from(&mut harness, row).await;
-    harness.send(Message::Hover(PanelId::Right)).await;
-    drag(&mut harness, DragMsg::Released).await;
+    release_over_right(&mut harness).await;
     let dialog = harness
         .app
         .file_ops

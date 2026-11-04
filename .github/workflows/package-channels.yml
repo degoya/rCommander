@@ -269,7 +269,7 @@ jobs:
         with:
           name: rendered
           path: rendered
-      # The runner image's winget can be older than the manifests' schema (1.12.0). A client
+      # The runner image's winget can be older than the manifests' schema (1.28.0). A client
       # older than the pinned one is replaced by that winget-cli release, its App Installer bundle
       # and the x64 dependencies it ships, each checked against its SHA-256 (rDownloader's pins).
       # Windows PowerShell, not pwsh: the Appx cmdlets belong to it.

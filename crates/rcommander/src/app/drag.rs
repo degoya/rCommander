@@ -6,10 +6,12 @@
 //! put files on the clipboard and take them from it the same way (`drag/clipboard.rs`).
 //!
 //! The gesture (`drag/gesture.rs`) starts with a press on a row; while it lasts the window
-//! follows the pointer's moves, the button's release and the pointer leaving the window
-//! ([`pointer_events`]). Remote entries are fetched into a temporary folder before they leave
-//! the window (`drag/fetch.rs`, `drag/temp.rs`); above a size the person is asked first
-//! (`drag/view.rs`). Dropped and pasted paths are hostile input (`drag/dropped.rs`); a drop lands
+//! follows the pointer's moves, the button's release, the pointer leaving the window and the
+//! window losing the focus (Alt+Tab) ([`pointer_events`]). Local entries go to the system's drag
+//! as soon as the gesture starts, as in Total Commander (`drag/own.rs`): its drag image and
+//! cursors, Alt+Tab, and a drop back on the other panel still opens F5's dialog. Remote entries
+//! are fetched into a temporary folder before they leave the window (`drag/fetch.rs`,
+//! `drag/temp.rs`); above a size the person is asked first (`drag/view.rs`). Dropped and pasted paths are hostile input (`drag/dropped.rs`); a drop lands
 //! in the panel on its side of the divider, or in the maximized one.
 //! A drag or a drop is a gesture of the window, not a command: MCP copies with `ops_copy`.
 //! A click with Ctrl or Shift marks rows instead and starts no drag (`drag/marks.rs`).
@@ -19,6 +21,7 @@ mod dropped;
 mod fetch;
 mod gesture;
 mod marks;
+mod own;
 mod temp;
 mod view;
 
@@ -69,6 +72,8 @@ pub struct DragUi {
     temp: TempArea,
     /// The marks a click with Ctrl or Shift sets, and the anchor of a range.
     marks: marks::ClickMarks,
+    /// The system's drag of local entries, until its drop settles (`drag/own.rs`).
+    own: Option<own::OwnDrag>,
 }
 
 impl DragUi {
@@ -89,7 +94,7 @@ pub enum DragMsg {
     Moved(Point),
     /// The left button came up.
     Released,
-    /// The pointer left the window.
+    /// The pointer left the window, or the window lost the focus (Alt+Tab) with a drag going on.
     Left,
     /// A drag out of the window ended; `fetched` is the temporary folder it came from.
     Ended {
@@ -122,7 +127,9 @@ pub fn pointer_events(event: Event, _status: event::Status, _id: window::Id) -> 
     let message = match event {
         Event::Mouse(mouse::Event::CursorMoved { position }) => DragMsg::Moved(position),
         Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => DragMsg::Released,
-        Event::Mouse(mouse::Event::CursorLeft) => DragMsg::Left,
+        Event::Mouse(mouse::Event::CursorLeft) | Event::Window(window::Event::Unfocused) => {
+            DragMsg::Left
+        }
         _ => return None,
     };
     Some(wrap(message))
@@ -141,6 +148,7 @@ impl App {
         match message {
             Message::Click(panel, row) if self.drag.question.is_none() => {
                 self.drag.gesture = self.pressed_on(*panel, *row);
+                self.drag.own = None;
             }
             Message::Engine(event) if marks::concerns(event) => {
                 return Some(vec![Effect::Task(self.click_clears_task())]);
@@ -192,15 +200,26 @@ impl App {
                     self.drag.names = gesture::dragged_names(self.pane(panel), row);
                     if self.drag.names.is_empty() {
                         self.drag.gesture = Gesture::Idle;
+                    } else if let Some(effects) = self.own_drag(panel, &self.drag.names.clone()) {
+                        self.drag.gesture = Gesture::Idle;
+                        self.drag.names.clear();
+                        return effects;
                     }
                 }
             }
             DragMsg::Released => {
                 let Some(from) = self.drag.gesture.release() else {
+                    // The release that ends the system's drag of our own entries is no click:
+                    // it would move the cursor or clear the marks the drag took. The next press
+                    // forgets the drag (`drag_intercept`).
+                    if self.drag.own.is_some() {
+                        return Vec::new();
+                    }
                     return self.click_released();
                 };
                 let names = std::mem::take(&mut self.drag.names);
-                return self.drop_on_panel(from, names);
+                let shift = self.modifiers_held().shift;
+                return self.drop_on_panel(from, self.hovered, names, shift);
             }
             DragMsg::Left => {
                 if let Gesture::Dragging { panel } = self.drag.gesture
@@ -215,7 +234,20 @@ impl App {
                 panel,
                 outcome,
                 fetched,
-            } => return self.drag_ended(panel, outcome, fetched),
+            } => {
+                // The system's drag of our own entries: a fetched folder is never one.
+                if fetched.is_none()
+                    && self
+                        .drag
+                        .own
+                        .as_ref()
+                        .is_some_and(|own| own.ended.is_none())
+                    && let Some(effects) = self.own_ended(outcome)
+                {
+                    return effects;
+                }
+                return self.drag_ended(panel, outcome, fetched);
+            }
             DragMsg::FileDropped(path) => {
                 let first = self.drag.dropped.is_empty();
                 if self.drag.dropped.len() < dropped::MAX_PATHS {
@@ -230,6 +262,9 @@ impl App {
             }
             DragMsg::Settled(pointer) => {
                 let paths = std::mem::take(&mut self.drag.dropped);
+                if let Some(effects) = self.own_dropped(&paths, pointer) {
+                    return effects;
+                }
                 let across = pointer.map(|pointer| pointer.across);
                 let share = self.resize.left_share();
                 let panel = dropped::target_panel(across, share, self.maximized())
@@ -252,16 +287,22 @@ impl App {
         Vec::new()
     }
 
-    /// The release of a drag from `from`: over the other panel's file list the copy dialog (the
-    /// move dialog with Shift) opens for the dragged entries, as F5 and F6 open it.
-    fn drop_on_panel(&mut self, from: PanelId, names: Vec<String>) -> Vec<Effect> {
-        let Some(to) = self.hovered.filter(|panel| *panel != from) else {
+    /// The drop of a drag from `from` on panel `to`: on the other panel's file list the copy
+    /// dialog (the move dialog with `shift`) opens for the dragged entries, as F5 and F6 open it.
+    fn drop_on_panel(
+        &mut self,
+        from: PanelId,
+        to: Option<PanelId>,
+        names: Vec<String>,
+        shift: bool,
+    ) -> Vec<Effect> {
+        let Some(to) = to.filter(|panel| *panel != from) else {
             return Vec::new();
         };
         if names.is_empty() || self.pane(to).state.view != PanelView::Files {
             return Vec::new();
         }
-        let kind = if self.modifiers_held().shift {
+        let kind = if shift {
             FileDialog::Move
         } else {
             FileDialog::Copy

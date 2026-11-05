@@ -18,7 +18,7 @@ use rc_engine::{
 use super::{
     Page, SettingsDialog, SettingsMessage,
     draft::{Draft, Field, Limit},
-    fonts_page, host_keys_view, mcp_page, plugins_view, shortcuts_view,
+    fonts_page, host_keys_view, mcp_log_view, mcp_page, plugins_view, shortcuts_view,
     tabs::{self, Tab, Tabs},
     themes_page, wrap,
 };
@@ -80,6 +80,18 @@ impl SettingsDialog {
                     .height(Length::Fill)
                     .into()
             }
+            // The rights and the token, then the agents' calls (RC-080-66).
+            Some(draft) if self.page == Page::Mcp => scrollable(
+                column![
+                    page_view(self.page, tab, draft, tokens),
+                    mcp_log_view::view(&self.mcp_log, tokens),
+                ]
+                .spacing(16)
+                .padding([0, 12]),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
             // The self-update's state over its switches (RC-100-05).
             Some(draft) if self.page == Page::Updates => scrollable(
                 column![

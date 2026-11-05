@@ -15,6 +15,8 @@ portable-pty.workspace = true
 # The integration's nonce per session (`integration.rs`): marks from a program's output carry
 # none, so they move nothing (RC-040-04).
 rand.workspace = true
+# A WSL distribution's login shell is asked with `wsl.exe` (`wsl_shell.rs`, RC-080-65).
+rc-process = { path = "../rc-process" }
 rc-vfs = { path = "../rc-vfs" }
 # The SSH back end drives a session channel of the connection rc-remote opened.
 russh.workspace = true
@@ -22,6 +24,11 @@ serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# A closed terminal's program that ignores the hang-up gets SIGTERM, then SIGKILL, to its
+# process groups (`local_pty/hangup.rs`, RC-080-62); the version already in the workspace.
+nix = { workspace = true, features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
 # A terminal's program in a job object of its own, ended with the terminal and with rCommander
@@ -33,7 +40,6 @@ windows-sys = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
-rc-process = { path = "../rc-process" }
 # The in-process shell server the SSH back end is tested against.
 rc-remote = { path = "../rc-remote", features = ["testkit"] }
 serde_json.workspace = true

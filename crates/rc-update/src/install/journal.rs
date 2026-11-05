@@ -14,7 +14,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    InstallError, JOURNAL_FILE, PREVIOUS_DIR, REJECTED_FILE, durable, steps::is_sha256, update_dir,
+    InstallError, JOURNAL_FILE, PREVIOUS_DIR, REJECTED_FILE, durable, journal_check::is_name,
+    steps::is_sha256, update_dir,
 };
 use crate::install_kind::InstallKind;
 
@@ -78,6 +79,14 @@ impl Plan {
             .is_some_and(|digest| !is_sha256(digest))
         {
             return invalid("the database copy's digest is no BLAKE3".to_owned());
+        }
+        // The program is joined to the program folder ([`Journal::executable`]) and started:
+        // relative, `/`-separated plain names only - no `..`, no root, no drive prefix (RC-080-69).
+        if self.executable.is_empty() || !self.executable.split('/').all(is_name) {
+            return invalid(format!(
+                "{:?} is not a program in the program folder",
+                self.executable
+            ));
         }
         for path in [
             &self.artifact,

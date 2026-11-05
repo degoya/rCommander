@@ -6,10 +6,11 @@ plugin_type = "viewer"
 api_version = "0.3.0"
 id = "01a1588a-5ec2-7323-9d13-2eaae3eef934"
 name = "JSON viewer"
-version = "0.2.2"
+version = "0.3.0"
 
 [match]
-extensions = ["json", "geojson"]
+# JSONC, JSON5 and JSON Lines (RC-100-80): the extension picks the dialect (src/dialect.rs).
+extensions = ["json", "geojson", "jsonc", "json5", "jsonl", "ndjson"]
 magic = []
 # The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
 # file would be cut anyway.
@@ -23,7 +24,7 @@ outputs = ["highlighted", "tree"]
 [capabilities]
 
 [metadata]
-description = "Shows JSON coloured like an editor, or as a tree to unfold."
+description = "Shows JSON, JSONC, JSON5 and JSON Lines coloured like an editor, or as a tree to unfold."
 
 # The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
 # src/lib.rs) and the 1 MiB windows `open` and `text` read and write through; every byte read

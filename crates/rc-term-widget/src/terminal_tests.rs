@@ -67,3 +67,18 @@ fn a_reserved_key_by_place_matches_its_place_on_every_layout() {
     let quote = Physical::Code(Code::Quote);
     assert!(acute.matches(&Key::Unidentified, quote, Modifiers::CTRL));
 }
+
+#[test]
+fn a_program_copy_past_the_limit_never_reaches_the_app() {
+    let id = TermId(7);
+    let mut events = Vec::new();
+    let fits = "a".repeat(rc_term::osc::MAX_CLIPBOARD);
+    let copy = TermUiEvent::ClipboardStore(ClipboardType::Clipboard, fits);
+    assert!(!burst(id, TermEvent::Ui(copy), &mut events));
+    let long = "a".repeat(rc_term::osc::MAX_CLIPBOARD + 1);
+    let copy = TermUiEvent::ClipboardStore(ClipboardType::Clipboard, long);
+    assert!(!burst(id, TermEvent::Ui(copy), &mut events));
+    assert!(
+        matches!(&events[..], [Event::Copy(_, text)] if text.len() == rc_term::osc::MAX_CLIPBOARD)
+    );
+}

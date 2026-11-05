@@ -192,6 +192,8 @@ impl Engine {
             .saved_queue(saved)
             .await?
             .ok_or(EngineError::SavedQueueNotFound { saved })?;
+        // An MCP call loads only the list its class was judged on (RC-080-66).
+        crate::mcp_questions::check_judged_queue(saved, &texts)?;
         self.apply_transfer_settings().await;
         let list = self.inner.ops.create_list(&row.name)?.id;
         let mut jobs = Vec::new();

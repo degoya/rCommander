@@ -14,15 +14,13 @@
 //! its share (`\\wsl.localhost\<distro>\...` or `\\wsl$\<distro>\...`) and a WSL terminal of
 //! it; the name compares without regard to case, and the same switch turns both off.
 
-use std::{
-    collections::BTreeMap,
-    sync::{PoisonError, RwLock},
-};
+use std::{collections::BTreeMap, sync::RwLock};
 
 use rc_db::connections::ConnectionThemes;
 use rc_engine::settings::{WslTheme, wsl_theme};
 use rc_vfs::{BackendId, VfsPath, parse_wsl_unc};
 
+use crate::recover::RwLockOrRecover as _;
 use crate::theme::Tokens;
 
 /// What the window knows of the connections' and the WSL distributions' themes: the switch and
@@ -86,7 +84,7 @@ static ASSIGNED: RwLock<Option<Assigned>> = RwLock::new(None);
 
 /// The connections' themes and the switch from now on.
 pub fn set_assigned(assigned: Assigned) {
-    *ASSIGNED.write().unwrap_or_else(PoisonError::into_inner) = Some(assigned);
+    *ASSIGNED.write_or_recover("connections.assigned") = Some(assigned);
 }
 
 /// The connection a location is on: a server's, over SFTP or FTP; `None` on this machine, in an
@@ -110,8 +108,7 @@ pub fn distro_of(path: &VfsPath) -> Option<String> {
 fn assigned_look(dark: bool, pick: impl FnOnce(&Assigned) -> Option<&str>) -> &'static Tokens {
     let window = crate::theme::tokens(dark);
     let id = ASSIGNED
-        .read()
-        .unwrap_or_else(PoisonError::into_inner)
+        .read_or_recover("connections.assigned")
         .as_ref()
         .and_then(|assigned| pick(assigned).map(str::to_owned));
     id.and_then(|id| super::tokens_of(&id, dark))

@@ -348,3 +348,46 @@ async fn a_folder_under_the_restore_name_is_not_touched() {
     assert!(!rejected_restore_path(&path).exists());
     assert_eq!(state_of(&path).await.as_deref(), Some("current"));
 }
+
+/// RC-080-68: a backup with a trigger of its own - or the migrations' trigger with another body -
+/// is refused by name, before anything is staged.
+#[tokio::test]
+async fn a_backup_with_a_foreign_trigger_is_refused() {
+    for sql in [
+        "CREATE TRIGGER leak AFTER UPDATE ON settings BEGIN \
+         INSERT INTO settings (key, value) VALUES ('copy', NEW.value); END",
+        "DROP TRIGGER login_scripts_unlink; \
+         CREATE TRIGGER login_scripts_unlink AFTER DELETE ON login_scripts BEGIN \
+         DELETE FROM connections; END",
+    ] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (db, backup) = with_backup(dir.path()).await;
+        alter(&backup, sql).await;
+        let refused = db.restore_from(&backup).await.expect_err("refused");
+        assert_eq!(refused.code(), "restore_foreign_object", "{sql}");
+        assert!(
+            matches!(&refused, BackupError::RestoreForeignObject { kind, .. } if kind == "trigger"),
+            "{refused:?}"
+        );
+        nothing_staged(dir.path());
+        db.close().await;
+    }
+}
+
+/// RC-080-68: the staged copy is owner-only even when the backup is readable by everyone - it is
+/// written through its own handle, not copied with the source's permissions.
+#[cfg(unix)]
+#[tokio::test]
+async fn the_staged_copy_is_the_users_alone() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (db, backup) = with_backup(dir.path()).await;
+    std::fs::set_permissions(&backup, std::fs::Permissions::from_mode(0o644)).expect("chmod");
+    let report = db.restore_from(&backup).await.expect("restore");
+    let mode = std::fs::metadata(&report.staged)
+        .expect("staged")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+    db.close().await;
+}

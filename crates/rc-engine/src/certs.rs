@@ -13,6 +13,12 @@
 //! apart (`certificates.remove`), and the next connection asks as for a new server. An expired
 //! one that was trusted takes an "accept once", never a silent yes. Neither the answer nor the
 //! removal has an MCP tool: an agent sees the coded error and lists the stored certificates.
+//!
+//! A plain FTP connection has no certificate, but its question is of the same kind: before its
+//! `USER` and `PASS` cross the network unencrypted, a person allows it (RC-080-67,
+//! `ftp.ask_plaintext`) - once ("accept once"), or for the server until rCommander ends ("trust
+//! and save", [`Engine::plaintext_allowed`]); "cancel" sends nothing. rCommander's own rule:
+//! Total Commander does not ask.
 
 use rc_db::TrustedCertificate;
 use rc_remote::{
@@ -56,7 +62,12 @@ pub enum CertificateQuestionKind {
     Changed { stored: TrustedCertificate },
     /// The stored certificate, past its validity: a warning; "accept once" or cancel.
     Expired { stored: TrustedCertificate },
+    /// A plain FTP connection would send its password unencrypted: asked before it does.
+    Plaintext,
 }
+
+/// The "fingerprint" of a plain FTP connection's question and of its "accept once" grant.
+pub(crate) const PLAINTEXT_GRANT: &str = "plaintext";
 
 /// The person's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,6 +117,12 @@ pub enum CertificateError {
         port: u16,
         fingerprint: String,
     },
+    /// A plain FTP connection waits for a person to allow its password in clear.
+    #[error(
+        "the FTP server {host}:{port} is not encrypted; a person has to allow sending the \
+         password in clear in the rCommander window"
+    )]
+    Plaintext { host: String, port: u16 },
     /// No open certificate question has this id.
     #[error("no open certificate question {question}")]
     QuestionNotFound { question: u64 },
@@ -123,6 +140,7 @@ impl CertificateError {
         "certificate_unknown",
         "certificate_changed",
         "certificate_expired",
+        "ftp_plaintext_unconfirmed",
         "certificate_question_not_found",
         "certificate_unreadable",
         "trusted_certificate_not_found",
@@ -135,6 +153,7 @@ impl CertificateError {
             Self::Unknown { .. } => rc_remote::ftp::CERTIFICATE_UNKNOWN,
             Self::Changed { .. } => "certificate_changed",
             Self::Expired { .. } => "certificate_expired",
+            Self::Plaintext { .. } => "ftp_plaintext_unconfirmed",
             Self::QuestionNotFound { .. } => "certificate_question_not_found",
             Self::Unreadable => "certificate_unreadable",
             Self::NotFound { .. } => "trusted_certificate_not_found",
@@ -222,6 +241,36 @@ impl Engine {
         error
     }
 
+    /// Whether a plain FTP connection to `host` on `port` may send its password: allowed for the
+    /// server until rCommander ends, or once (that grant spent here).
+    pub(crate) fn plaintext_allowed(&self, host: &str, port: u16) -> bool {
+        let host = normalize_host(host);
+        self.inner.remotes.plaintext_allowed(&host, port)
+            || self
+                .inner
+                .certificates
+                .take_allowance(&host, port, PLAINTEXT_GRANT)
+    }
+
+    /// What a plain FTP connection to `host` on `port` fails with before its login: the coded
+    /// error, after filing its question for the GUI. Public so a test can file one.
+    pub fn plaintext_refused(&self, host: &str, port: u16) -> EngineError {
+        let question = self.inner.certificates.ask(CertificateQuestion {
+            id: 0,
+            host: normalize_host(host),
+            port,
+            fingerprint: PLAINTEXT_GRANT.to_owned(),
+            reason: String::new(),
+            info: None,
+            kind: CertificateQuestionKind::Plaintext,
+        });
+        let error = question_error(&question);
+        self.publish(EngineEvent::CertificateQuestion {
+            question: Box::new(question),
+        });
+        error
+    }
+
     /// The certificate questions no one has answered yet, oldest first.
     #[must_use]
     pub fn certificate_questions(&self) -> Vec<CertificateQuestion> {
@@ -253,6 +302,7 @@ pub(crate) fn question_error(question: &CertificateQuestion) -> EngineError {
             port,
             fingerprint,
         },
+        CertificateQuestionKind::Plaintext => CertificateError::Plaintext { host, port },
     })
 }
 

@@ -37,6 +37,16 @@ fn without_a_state_only_the_roots_are_trusted_and_a_broken_state_runs_nothing() 
     );
     let entries = inventory(data.path(), &PluginState::default()).expect("inventory");
     assert_eq!(entries[0].refused, Some("plugin_key_untrusted"));
+    // Signed, by a key not trusted here; what it claims is shown, never run (RC-100-79).
+    assert!(entries[0].signed && entries[0].manifest.is_none());
+    assert_eq!(
+        entries[0].label,
+        Some(UnverifiedLabel {
+            name: "CSV table".to_owned(),
+            version: "1.0.0".to_owned(),
+            kind: "viewer".to_owned(),
+        })
+    );
 
     std::fs::write(plugins_root(data.path()).join(STATE_FILE), b"{ broken").expect("write");
     assert!(list(data.path()).is_err());
@@ -168,11 +178,11 @@ fn a_bundled_package_needs_a_root_key_and_installs_once() {
     // Under a root that signed it (the test key standing in), it installs once, marked.
     let state = state_trusting(7);
     state.write(data.path()).expect("state");
-    let root = || state.verifier().expect("verifier");
-    let installed = bundled::sync_with(data.path(), bundled.path(), root()).expect("sync");
+    let root = || state.verifier();
+    let installed = bundled::sync_with(data.path(), bundled.path(), root).expect("sync");
     assert_eq!(installed, [(PLUGIN_ID.to_owned(), "1.0.0".to_owned())]);
     assert!(
-        bundled::sync_with(data.path(), bundled.path(), root())
+        bundled::sync_with(data.path(), bundled.path(), root)
             .expect("again")
             .is_empty()
     );

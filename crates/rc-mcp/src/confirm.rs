@@ -21,7 +21,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -29,6 +29,7 @@ use rand::Rng as _;
 use rc_engine::McpArgument;
 
 use crate::freeze::Frozen;
+use crate::recover::LockOrRecover as _;
 
 /// How long a question stays answerable.
 pub(crate) const VALID_FOR: Duration = Duration::from_secs(600);
@@ -40,7 +41,7 @@ pub(crate) const MAX_PER_SESSION: usize = 16;
 pub(crate) const MAX_OPEN: usize = 256;
 
 /// The argument that carries the code; the only one a code is not bound to.
-const CODE_ARGUMENT: &str = "confirmation";
+pub(crate) const CODE_ARGUMENT: &str = "confirmation";
 
 /// The code argument in a tool's input schema (`#[schemars(transform = ...)]` on its
 /// parameters, RC-080-48): every tool a person may have to confirm takes it, and none reads it -
@@ -168,7 +169,7 @@ impl Confirmations {
         now: Instant,
     ) -> String {
         let code = random_hex(16);
-        let mut pending = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut pending = self.0.lock_or_recover("confirm");
         pending.retain(|_, question| now.saturating_duration_since(question.asked) < VALID_FOR);
         // Bounded: a client asking in a loop spends its own oldest questions, not memory.
         while pending
@@ -217,11 +218,7 @@ impl Confirmations {
         subject: impl FnOnce(Option<&Frozen>) -> Option<String>,
         now: Instant,
     ) -> Option<Option<Frozen>> {
-        let question = self
-            .0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(code)?;
+        let question = self.0.lock_or_recover("confirm").remove(code)?;
         let answers = question.session == session
             && question.tool == tool
             && now.saturating_duration_since(question.asked) < VALID_FOR

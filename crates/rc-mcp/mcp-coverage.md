@@ -67,7 +67,9 @@ asks by.
 | `hostkeys.answer` | gui_only | omitted: GUI only: human decision | Answer the question about an unknown SSH host key: connect once, trust, or cancel |
 | `hostkeys.import_known_hosts` | gui_only | omitted: GUI only: human decision | Import the host keys of an OpenSSH known_hosts file (the user's own by default) |
 | `hostkeys.list` | read | `hostkeys_list` | The trusted SSH host keys, optionally filtered by host, key type or fingerprint |
+| `hostkeys.list_revoked` | read | `hostkeys_revoked` | The SSH host keys a known_hosts file revoked, optionally filtered |
 | `hostkeys.remove` | gui_only | omitted: GUI only: human decision | Forget a trusted SSH host key; the next connection asks again |
+| `hostkeys.remove_revoked` | gui_only | omitted: GUI only: human decision | Remove an SSH host key from the revoked keys; it is judged as any other again |
 | `hostkeys.replace` | gui_only | omitted: GUI only: human decision | Replace a stored SSH host key with the changed key a server presented |
 | `config.export` | gui_only | omitted: GUI only: human decision | Export settings, connections, trusted host keys and certificates, hotlist and tabs to a file, unencrypted or sealed with an export password |
 | `config.import` | gui_only | omitted: GUI only: human decision | Import an rCommander export: dry_run previews new, changed and conflicting rows; secrets go straight into the vault |
@@ -139,7 +141,7 @@ asks by.
 | `file.create_link` | write | `files_create_link` | Create a shortcut (.lnk), symbolic link, hard link or junction; never replaces an entry |
 | `file.dir_size` | read | `files_dir_size` | Occupied space of files and folders: bytes, files, folders, hard links counted once |
 | `file.properties` | read | `files_properties` | Properties of entries: kind, link target, sizes, times, attributes, owner, comment, sums |
-| `file.set_attributes` | write | `files_set_attributes` | Change attributes, Unix mode and times of entries, optionally down their folders |
+| `file.set_attributes` | write (destructive when the mode makes it writable by its group (g+w)) | `files_set_attributes` | Change attributes, Unix mode and times of entries, optionally down their folders |
 | `file.set_comment` | write | `files_set_comment` | Set or remove an entry's comment in the folder's descript.ion |
 | `panel.cancel_dir_sizes` | read | omitted: stops the window's size column count; an MCP call stops when the client cancels it | Stop counting folder sizes for a panel's size column |
 | `panel.count_dir_content` | read | omitted: fills the window's size column; files_dir_size answers the sizes | Count the size of every folder of a panel for its size column, in the background |
@@ -177,7 +179,7 @@ asks by.
 | `terminal.maximize` | exec | omitted: purely visual, a toggle of the window's layout; terminal_read_screen reads the terminal at any width | Lay a panel's terminal over both panels, or back (a shell starts when the panel shows its files) |
 | `terminal.open` | exec | `terminal_open` | Start a local shell in a terminal session, in a panel's folder by default |
 | `terminal.paste_image` | gui_only | omitted: GUI only: human decision | Paste the clipboard's image into a terminal as the path of a PNG file its program can read (uploaded to an SSH server) |
-| `terminal.read_screen` | read | `terminal_read_screen` | A terminal's screen (and scrollback) as text, with the cursor position |
+| `terminal.read_screen` | destructive | `terminal_read_screen` | A terminal's screen (and scrollback) as text, with the cursor position |
 | `terminal.send_input` | exec | `terminal_send_input` | Type text into a terminal session, as if from the keyboard |
 | `terminal.show` | read | `terminal_show` | Show a terminal session in its panel, in place of the panel's files or other session |
 | `vault.change_password` | gui_only | omitted: GUI only: human decision | Change the master password; every stored secret is re-encrypted in one transaction |
@@ -255,4 +257,4 @@ asks by.
 | `workspaces.rename` | write | `workspaces_rename` | Give a workspace another name |
 | `workspaces.update` | write | `workspaces_update` | Change a workspace's name, panels or themes |
 
-244 commands: 171 covered, 73 omitted.
+246 commands: 172 covered, 74 omitted.

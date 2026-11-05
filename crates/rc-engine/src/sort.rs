@@ -285,19 +285,51 @@ fn split_digits(text: &str) -> (&str, &str) {
 /// as `names` compares them. Directories have no extension and no size of their own, so by those
 /// keys they stay in name order; equal keys fall back to the name, so the order is total.
 pub fn sort_entries(entries: &mut [Entry], order: SortOrder, names: Names) {
-    entries.sort_unstable_by(|a, b| {
-        let (a_dir, b_dir) = (a.is_dir_like(), b.is_dir_like());
-        b_dir.cmp(&a_dir).then_with(|| {
-            let by_name = matches!(order.key, SortKey::Ext | SortKey::Size) && a_dir && b_dir;
-            if by_name {
-                by_names(a, b, names)
-            } else if order.descending {
-                compare(a, b, order.key, names).reverse()
-            } else {
-                compare(a, b, order.key, names)
-            }
-        })
-    });
+    entries.sort_unstable_by(|a, b| panel_cmp(a, b, order, names));
+}
+
+/// The panel order of [`sort_entries`] for two entries.
+pub(crate) fn panel_cmp(a: &Entry, b: &Entry, order: SortOrder, names: Names) -> Ordering {
+    let (a_dir, b_dir) = (a.is_dir_like(), b.is_dir_like());
+    b_dir.cmp(&a_dir).then_with(|| {
+        let by_name = matches!(order.key, SortKey::Ext | SortKey::Size) && a_dir && b_dir;
+        if by_name {
+            by_names(a, b, names)
+        } else if order.descending {
+            compare(a, b, order.key, names).reverse()
+        } else {
+            compare(a, b, order.key, names)
+        }
+    })
+}
+
+/// `sorted`, in panel order already, with `fresh` sorted in: the merge of the two, so a listing
+/// that grows sorts only what is new (RC-080-70). Entries are moved, never cloned.
+pub(crate) fn merge_sorted(
+    sorted: Vec<Entry>,
+    mut fresh: Vec<Entry>,
+    order: SortOrder,
+    names: Names,
+) -> Vec<Entry> {
+    if fresh.is_empty() {
+        return sorted;
+    }
+    sort_entries(&mut fresh, order, names);
+    if sorted.is_empty() {
+        return fresh;
+    }
+    let mut merged = Vec::with_capacity(sorted.len() + fresh.len());
+    let (mut old, mut new) = (sorted.into_iter().peekable(), fresh.into_iter().peekable());
+    loop {
+        let take_old = match (old.peek(), new.peek()) {
+            (Some(a), Some(b)) => panel_cmp(a, b, order, names) != Ordering::Greater,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => return merged,
+        };
+        let next = if take_old { old.next() } else { new.next() };
+        merged.extend(next);
+    }
 }
 
 fn compare(a: &Entry, b: &Entry, key: SortKey, names: Names) -> Ordering {

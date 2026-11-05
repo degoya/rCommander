@@ -5,11 +5,13 @@
 //! verified, never resolved. What the trust store cannot hold is skipped and reported: the
 //! markers `@revoked` and `@cert-authority`, wildcard and negated patterns, and lines or keys
 //! that do not parse. A key a `@revoked` line names is imported from no other line of the file
-//! either (RC-080-12). The file itself is only read, never written.
+//! either (RC-080-12), and is kept as revoked ([`ParsedKnownHosts::revoked`]): a server that
+//! presents it later is stopped before any trust question (RC-080-67). The file itself is only
+//! read, never written.
 
 use std::{io, path::Path, path::PathBuf};
 
-use rc_db::{HASHED_PREFIX, KnownHostSource, NewKnownHost};
+use rc_db::{HASHED_PREFIX, KnownHostSource, NewKnownHost, NewRevokedHostKey};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -46,10 +48,13 @@ pub struct Skipped {
     pub name: Option<String>,
 }
 
-/// A parsed file: the entries to store and what was skipped.
+/// A parsed file: the entries to store, the revoked keys and what was skipped.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParsedKnownHosts {
     pub entries: Vec<NewKnownHost>,
+    /// The keys of the `@revoked` lines that parse, each once; `source` is the file
+    /// ([`read`]), empty after [`parse`].
+    pub revoked: Vec<NewRevokedHostKey>,
     pub skipped: Vec<Skipped>,
 }
 
@@ -67,22 +72,31 @@ pub fn default_path() -> Option<PathBuf> {
 /// The file cannot be read.
 pub async fn read(path: &Path) -> io::Result<ParsedKnownHosts> {
     let bytes = tokio::fs::read(path).await?;
-    Ok(parse(&String::from_utf8_lossy(&bytes)))
+    let mut parsed = parse(&String::from_utf8_lossy(&bytes));
+    let source = path.display().to_string();
+    for key in &mut parsed.revoked {
+        key.source.clone_from(&source);
+    }
+    Ok(parsed)
 }
 
 /// Parses the text of a `known_hosts` file.
 #[must_use]
 pub fn parse(text: &str) -> ParsedKnownHosts {
     let mut parsed = ParsedKnownHosts::default();
-    // The fingerprints of revoked keys, and the line of each entry.
-    let mut revoked = Vec::new();
+    // The line of each entry.
     let mut lines = Vec::new();
     for (index, line) in text.lines().enumerate() {
-        parse_line(index + 1, line, &mut parsed, &mut revoked);
+        parse_line(index + 1, line, &mut parsed);
         lines.resize(parsed.entries.len(), index + 1);
     }
     // A revoked key is trusted from no line, whichever comes first.
-    if !revoked.is_empty() {
+    if !parsed.revoked.is_empty() {
+        let revoked: Vec<String> = parsed
+            .revoked
+            .iter()
+            .map(|key| key.fingerprint_sha256.clone())
+            .collect();
         for (entry, line) in std::mem::take(&mut parsed.entries).into_iter().zip(lines) {
             if revoked.contains(&entry.fingerprint_sha256) {
                 parsed.skipped.push(Skipped {
@@ -98,7 +112,7 @@ pub fn parse(text: &str) -> ParsedKnownHosts {
     parsed
 }
 
-fn parse_line(number: usize, line: &str, parsed: &mut ParsedKnownHosts, revoked: &mut Vec<String>) {
+fn parse_line(number: usize, line: &str, parsed: &mut ParsedKnownHosts) {
     let line = line.trim();
     if line.is_empty() || line.starts_with('#') {
         return;
@@ -115,13 +129,23 @@ fn parse_line(number: usize, line: &str, parsed: &mut ParsedKnownHosts, revoked:
         return;
     };
     if let Some(marker) = first.strip_prefix('@') {
-        // `@revoked <names> <type> <key>`: that key is refused from every line.
+        // `@revoked <names> <type> <key>`: that key is refused from every line, and kept.
         if marker == "revoked"
-            && let (Some(_), Some(algorithm), Some(base64)) =
+            && let (Some(hosts), Some(algorithm), Some(base64)) =
                 (fields.next(), fields.next(), fields.next())
             && let Ok(key) = OfferedKey::from_openssh(algorithm, base64)
+            && !parsed
+                .revoked
+                .iter()
+                .any(|known| known.fingerprint_sha256 == key.fingerprint)
         {
-            revoked.push(key.fingerprint);
+            parsed.revoked.push(NewRevokedHostKey {
+                algorithm: key.algorithm,
+                public_key: key.public_key,
+                fingerprint_sha256: key.fingerprint,
+                hosts: hosts.to_owned(),
+                source: String::new(),
+            });
         }
         let reason = match marker {
             "revoked" => SkipReason::Revoked,

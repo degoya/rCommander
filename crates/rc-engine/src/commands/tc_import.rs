@@ -17,6 +17,7 @@ use rc_db::connections::{ImportCandidate, ImportStatus, ImportTarget};
 use rc_vault::{ExposeSecret as _, SecretString};
 use rc_vfs::BackendId;
 
+use crate::recover::LogPanic as _;
 use crate::{
     AuthMethod, ConnectionDraft, Engine, EngineError, Outcome, PanelId, SecretKind, SecretParam,
     TreeChange, TreeItem,
@@ -125,6 +126,7 @@ async fn read(wanted: Wanted) -> Result<Loaded, EngineError> {
     };
     tokio::task::spawn_blocking(move || load(&wanted, caller))
         .await
+        .log_panic("engine.tc_import_read")
         .map_err(|error| EngineError::TcIniUnreadable {
             path: String::new(),
             source: std::io::Error::other(error),

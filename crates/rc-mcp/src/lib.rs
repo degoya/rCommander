@@ -19,6 +19,7 @@
 
 mod answer;
 mod ask;
+mod audit;
 mod codes;
 pub mod config;
 mod confirm;
@@ -31,6 +32,7 @@ mod http;
 pub mod instance;
 mod mask;
 mod policy;
+mod recover;
 mod redact;
 mod roots;
 mod server;

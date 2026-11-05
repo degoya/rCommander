@@ -1,6 +1,7 @@
 //! The settings the gate reads for a call, in one query (RC-080-54): the policy, whether a
 //! person allowed confirmation codes without a window, and the minutes an executing tool may be
-//! allowed on its target. Each decodes as it would alone: a policy that does not read refuses
+//! allowed on its target, whether a path outside the panels asks, and whether the call is written
+//! to the audit log (RC-080-66). Each decodes as it would alone: a policy that does not read refuses
 //! the call (`policy_unavailable`), the two others fall back to their schema default with a
 //! warning, as `rc_engine::settings::stored_setting` does.
 
@@ -8,7 +9,8 @@ use std::collections::BTreeMap;
 
 use rc_db::{Db, DbError};
 use rc_engine::settings::{
-    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY, setting,
+    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_AUDIT_LOG_KEY, MCP_EXEC_SESSION_MINUTES_KEY,
+    MCP_HEADLESS_CODE_KEY, setting,
 };
 use serde_json::Value;
 
@@ -24,10 +26,12 @@ pub(crate) struct GateSettings {
     pub(crate) exec_minutes: u32,
     /// A reading or writing tool asks when a path it names lies outside the panels' folders.
     pub(crate) ask_outside_panels: bool,
+    /// The call is written to the audit log (`mcp_audit_log`); yes by default.
+    pub(crate) audit_log: bool,
 }
 
 impl GateSettings {
-    /// The three settings, read at once.
+    /// The settings, read at once.
     ///
     /// # Errors
     ///
@@ -39,6 +43,7 @@ impl GateSettings {
                 MCP_HEADLESS_CODE_KEY,
                 MCP_EXEC_SESSION_MINUTES_KEY,
                 MCP_ASK_OUTSIDE_PANELS_KEY,
+                MCP_AUDIT_LOG_KEY,
             ])
             .await?;
         let policy: Policy = match stored.get(POLICY_KEY) {
@@ -58,11 +63,15 @@ impl GateSettings {
         let ask_outside_panels = effective(&stored, MCP_ASK_OUTSIDE_PANELS_KEY)
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
+        let audit_log = effective(&stored, MCP_AUDIT_LOG_KEY)
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
         Ok(Self {
             policy,
             headless_codes,
             exec_minutes,
             ask_outside_panels,
+            audit_log,
         })
     }
 }

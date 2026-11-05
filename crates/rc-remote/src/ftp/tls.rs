@@ -10,10 +10,14 @@
 //! connection fails with `certificate_unknown`, carrying the fingerprint a person has to compare.
 //! The stored decisions are [`super::trust::PinnedCertificates`]; nothing here turns verification
 //! off. The handshake signature is always checked, trusted or not.
+//!
+//! What a refused handshake reports is the certificate of exactly that handshake (RC-080-67):
+//! each control connection has a verifier and a refusal slot of its own ([`TlsSession`]), and the
+//! slot is empty before each of its handshakes - its own and every data connection's.
 
 use std::{
     fmt, io,
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
 };
 
 use rustls::client::{ClientSessionMemoryCache, Resumption};
@@ -28,6 +32,8 @@ use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
 
 use super::error::FtpError;
+
+use crate::recover::LockOrRecover as _;
 
 /// A certificate a server presented, as the trust hook sees it and as a refused connection
 /// reports it. Public data only: what a person compares.
@@ -84,8 +90,8 @@ pub fn fingerprint(der: &[u8]) -> String {
         .join(":")
 }
 
-/// The last refusal, read by the connection to tell `certificate_unknown` from other TLS errors
-/// (suppaftp turns every handshake error into text).
+/// The refusal of the current handshake, read by the connection to tell `certificate_unknown`
+/// from other TLS errors (suppaftp turns every handshake error into text).
 type RejectionSlot = Arc<Mutex<Option<CertificateRejection>>>;
 
 struct Verifier {
@@ -151,7 +157,7 @@ impl ServerCertVerifier for Verifier {
         match self.trust.decide(&rejection) {
             TrustDecision::Trust => Ok(ServerCertVerified::assertion()),
             TrustDecision::Refuse => {
-                *self.rejected.lock().unwrap_or_else(PoisonError::into_inner) = Some(rejection);
+                *self.rejected.lock_or_recover("tls.rejected") = Some(rejection);
                 Err(failure)
             }
         }
@@ -192,14 +198,43 @@ impl ServerCertVerifier for Verifier {
     }
 }
 
-/// The TLS side of one FTP server: a client configuration with the verifier, shared by every
-/// connection to it, and per control connection a copy with a resumption store of its own
-/// ([`TlsSetup::session`]). The control connection and its data connections ([`connect_data`])
-/// use that copy and the configured host name, so
-/// a data connection can only resume its own control connection's session: what servers that
-/// require TLS session reuse demand (vsftpd's `require_ssl_reuse`, FileZilla Server).
+/// The TLS side of one FTP server: a client configuration and what its verifier is made of,
+/// shared by every connection to it, and per control connection a copy with a verifier, a
+/// refusal slot and a resumption store of its own ([`TlsSetup::session`]). The control
+/// connection and its data connections ([`connect_data`]) use that copy and the configured host
+/// name, so a data connection can only resume its own control connection's session: what servers
+/// that require TLS session reuse demand (vsftpd's `require_ssl_reuse`, FileZilla Server).
 pub(crate) struct TlsSetup {
     config: Arc<rustls::ClientConfig>,
+    parts: VerifierParts,
+}
+
+/// What every session's verifier is made of.
+struct VerifierParts {
+    system: Option<Arc<dyn ServerCertVerifier>>,
+    provider: Arc<CryptoProvider>,
+    trust: Arc<dyn CertificateTrust>,
+    host: String,
+    port: u16,
+}
+
+impl VerifierParts {
+    fn verifier(&self, rejected: RejectionSlot) -> Arc<Verifier> {
+        Arc::new(Verifier {
+            system: self.system.clone(),
+            provider: Arc::clone(&self.provider),
+            trust: Arc::clone(&self.trust),
+            host: self.host.clone(),
+            port: self.port,
+            rejected,
+        })
+    }
+}
+
+/// One control connection's TLS: the connector it and its data connections handshake with, and
+/// the refusal of the handshake that runs.
+pub(crate) struct TlsSession {
+    pub connector: TlsConnector,
     rejected: RejectionSlot,
 }
 
@@ -209,48 +244,62 @@ const SESSIONS_PER_CONTROL: usize = 8;
 impl TlsSetup {
     pub fn new(host: &str, port: u16, trust: Arc<dyn CertificateTrust>) -> Result<Self, FtpError> {
         let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-        let rejected = RejectionSlot::default();
-        let verifier = Verifier {
-            system: rustls_platform_verifier::Verifier::new(Arc::clone(&provider))
-                .ok()
-                .map(|system| Arc::new(system) as Arc<dyn ServerCertVerifier>),
-            provider: Arc::clone(&provider),
+        let system = rustls_platform_verifier::Verifier::new(Arc::clone(&provider))
+            .ok()
+            .map(|system| Arc::new(system) as Arc<dyn ServerCertVerifier>);
+        Self::with_parts(VerifierParts {
+            system,
+            provider,
             trust,
             host: host.to_owned(),
             port,
-            rejected: Arc::clone(&rejected),
-        };
-        let config = rustls::ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()
-            .map_err(|error| FtpError::Tls(error.to_string()))?
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(verifier))
-            .with_no_client_auth();
-        Ok(Self {
-            config: Arc::new(config),
-            rejected,
         })
     }
 
-    /// The connector of one control connection and its data connections: the shared
-    /// configuration with a fresh resumption store, so no other control connection's session is
-    /// ever resumed.
-    pub fn session(&self) -> TlsConnector {
+    /// The setup over `parts`; a test gives it roots of its own.
+    fn with_parts(parts: VerifierParts) -> Result<Self, FtpError> {
+        // The template every session copies; each puts a verifier of its own in.
+        let config = rustls::ClientConfig::builder_with_provider(Arc::clone(&parts.provider))
+            .with_safe_default_protocol_versions()
+            .map_err(|error| FtpError::Tls(error.to_string()))?
+            .dangerous()
+            .with_custom_certificate_verifier(parts.verifier(RejectionSlot::default()))
+            .with_no_client_auth();
+        Ok(Self {
+            config: Arc::new(config),
+            parts,
+        })
+    }
+
+    /// The TLS of one control connection and its data connections: the shared configuration
+    /// with a verifier and refusal slot of its own and a fresh resumption store, so no other
+    /// control connection's session is ever resumed, nor its refusal reported.
+    pub fn session(&self) -> TlsSession {
+        let rejected = RejectionSlot::default();
+        let verifier = self.parts.verifier(Arc::clone(&rejected));
         let mut config = rustls::ClientConfig::clone(&self.config);
+        config.dangerous().set_certificate_verifier(verifier);
         config.resumption = Resumption::store(Arc::new(ClientSessionMemoryCache::new(
             SESSIONS_PER_CONTROL,
         )));
-        TlsConnector::from(Arc::new(config))
+        TlsSession {
+            connector: TlsConnector::from(Arc::new(config)),
+            rejected,
+        }
+    }
+}
+
+impl TlsSession {
+    /// Empties the refusal slot: called before each handshake, so a refusal reported is that
+    /// handshake's.
+    pub fn begin_handshake(&self) {
+        *self.rejected.lock_or_recover("tls.rejected") = None;
     }
 
     /// The error for a failed handshake: `certificate_unknown` when the verifier refused a
-    /// certificate, the handshake's own text otherwise.
+    /// certificate in it, the handshake's own text otherwise.
     pub fn handshake_error(&self, message: String) -> FtpError {
-        let rejection = self
-            .rejected
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .take();
+        let rejection = self.rejected.lock_or_recover("tls.rejected").take();
         match rejection {
             Some(rejection) => FtpError::CertificateUnknown(Box::new(rejection)),
             None => FtpError::Tls(message),
@@ -258,16 +307,18 @@ impl TlsSetup {
     }
 }
 
-/// TLS on a data connection to `host`, with its control connection's connector
-/// ([`TlsSetup::session`]): its verifier and its resumption store.
+/// TLS on a data connection to `host`, with its control connection's session
+/// ([`TlsSetup::session`]): its verifier and its resumption store, the refusal slot emptied
+/// first.
 pub(crate) async fn connect_data(
-    connector: &TlsConnector,
+    session: &TlsSession,
     host: &str,
     socket: TcpStream,
 ) -> io::Result<TlsStream<TcpStream>> {
     let name = ServerName::try_from(host.to_owned())
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    connector.connect(name, socket).await
+    session.begin_handshake();
+    session.connector.connect(name, socket).await
 }
 
 #[cfg(test)]

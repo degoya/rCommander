@@ -3,7 +3,8 @@
 //! Every tool call passes one gate and one mask in [`RcMcpServer::call_tool`]: the tool's class
 //! (from the command it wraps) is held against the policy, a confirmation code is asked for
 //! where the policy says so, and the answer - refusals included - leaves through the credential
-//! mask. In one place rather than in each tool, so no tool can forget either.
+//! mask. In one place rather than in each tool, so no tool can forget either. What the gate
+//! decided is one row of the audit log (`audit.rs`, RC-080-66).
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
@@ -22,6 +23,7 @@ use rmcp::{
 use crate::{
     answer::error_result,
     ask::Gate,
+    audit::{Audit, Decision},
     confirm::Confirmations,
     coverage::{COVERAGE, Coverage},
     gate_settings::GateSettings,
@@ -196,17 +198,21 @@ impl RcMcpServer {
 
     /// The policy and the confirmation, then the call itself; before the mask. A call the
     /// person allowed in the window runs with what the question showed: the arguments it froze
-    /// and the panels it read pinned (`freeze.rs`, RC-080-34).
+    /// and the panels it read pinned (`freeze.rs`, RC-080-34). What the gate decided goes into
+    /// `audit`.
     async fn call_gated(
         &self,
         mut request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
+        audit: &mut Audit,
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let tool = request.name.to_string();
         // The client's cancel of this call reaches the engine command (RC-080-50).
         let cancel = context.ct.clone();
         let mut frozen = None;
+        let mut judged = rc_engine::McpJudged::default();
         if self.tool_router.has_route(&tool) {
+            audit.decision = Decision::Refused;
             if let Some(refusal) = refuse_secrets(&tool, request.arguments.as_ref()) {
                 return Ok(refusal.into());
             }
@@ -227,13 +233,15 @@ impl RcMcpServer {
             };
             // A call's arguments can make it more dangerous than its command (an overwrite):
             // the engine judges the typed command (RC-080-42).
-            let class = crate::tools::effective_class(
+            let (class, judged_on) = crate::tools::effective_class(
                 &self.context.engine,
                 &tool,
                 request.arguments.as_ref(),
                 command_class,
             )
             .await;
+            judged = judged_on;
+            audit.class = Some(class);
             // The policy and what an answer needs, in one read (RC-080-54).
             let settings = match GateSettings::load(&self.context.db).await {
                 Ok(settings) => settings,
@@ -246,6 +254,7 @@ impl RcMcpServer {
                     .into());
                 }
             };
+            audit.enabled = Some(settings.audit_log);
             let mut rule = settings.policy.decide(class);
             // Outside the panels' folders a reading or writing tool asks, where the person
             // switched that on (`mcp.ask.outside_panels`, the audit's H2).
@@ -258,8 +267,9 @@ impl RcMcpServer {
                 rule = Rule::Ask;
             }
             match rule {
-                Rule::Allowed => {}
+                Rule::Allowed => audit.decision = Decision::Allowed,
                 Rule::Deny => {
+                    audit.decision = Decision::Denied;
                     return Ok(error_result(
                         "policy_denied",
                         &format!(
@@ -281,21 +291,33 @@ impl RcMcpServer {
                         class,
                         arguments,
                     );
+                    audit.decision = Decision::Declined;
                     match asked.await? {
-                        Gate::Answer(answer) => return Ok(answer.into()),
-                        Gate::Run(run) => frozen = run,
+                        Gate::Answer(answer) => {
+                            if answer.is_error != Some(true) {
+                                // Headless: the question with its code.
+                                audit.decision = Decision::Asked;
+                            }
+                            return Ok(answer.into());
+                        }
+                        Gate::Run(run) => {
+                            audit.decision = Decision::Confirmed;
+                            frozen = run;
+                        }
                     }
                 }
             }
         }
+        // The call runs on what its class was judged on, or not at all (RC-080-66).
         let Some(frozen) = frozen else {
             let call = ToolCallContext::new(self, request, context);
-            return with_call_cancel(cancel, self.tool_router.call(call)).await;
+            let run = with_call_cancel(cancel, self.tool_router.call(call));
+            return rc_engine::with_mcp_judged(judged, run).await;
         };
         request.arguments = Some(frozen.arguments);
         let call = ToolCallContext::new(self, request, context);
         let run = with_call_cancel(cancel, self.tool_router.call(call));
-        rc_engine::with_mcp_pins(frozen.pins, run).await
+        rc_engine::with_mcp_judged(judged, rc_engine::with_mcp_pins(frozen.pins, run)).await
     }
 }
 
@@ -309,9 +331,22 @@ impl ServerHandler for RcMcpServer {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let engine = &self.context.engine;
-        mask::mask_response(self.call_gated(request, context).await, &|text: &str| {
-            engine.scrub_secrets(text)
-        })
+        let session = self.session(&context);
+        let tool = request.name.to_string();
+        let arguments = request.arguments.clone();
+        let mut audit = Audit::default();
+        let answer = self.call_gated(request, context, &mut audit).await;
+        let answer = mask::mask_response(answer, &|text: &str| engine.scrub_secrets(text));
+        crate::audit::record(
+            &self.context,
+            &session,
+            &tool,
+            &audit,
+            arguments.as_ref(),
+            &answer,
+        )
+        .await;
+        answer
     }
 
     fn get_info(&self) -> ServerConfig {

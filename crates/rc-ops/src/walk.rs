@@ -4,7 +4,9 @@
 //! The walk is depth first and pre-order - a directory comes before its contents, and a
 //! directory's contents stay together - so a copy creates directories before their files and a
 //! permanent delete, walking the list backwards, empties a directory before removing it. Links
-//! are listed, never followed, and a listed name must be one plain name.
+//! are listed, never followed - but by a copy or a move with `ops.copy_links = contents`, which
+//! walks a link to a folder as that folder (`links.rs`, RC-080-63) - and a listed name must be
+//! one plain name.
 
 use std::{
     collections::HashSet,
@@ -16,6 +18,7 @@ use rc_vfs::{Entry, EntryKind, VfsPath};
 
 use crate::{
     JobState,
+    links::{Mark, Trail, is_dir_link},
     name::check_listed,
     runner::{Runner, Step, Stop, attempt},
 };
@@ -138,9 +141,21 @@ impl Runner {
     /// Every entry under `sources` on the source backend, counted into the progress. A source
     /// or a directory that cannot be read is a failing step like any other.
     pub(crate) async fn plan(&mut self, sources: &[VfsPath]) -> Result<Vec<Item>, Stop> {
+        Ok(self.plan_following(sources, false).await?.0)
+    }
+
+    /// [`Runner::plan`]; with `follow` a link to a folder is planned as that folder, its
+    /// contents behind it, unless it leads back into its own way ([`Trail::follow`]). The marks
+    /// say, item by item, which are such links and which lie below one; none without `follow`.
+    pub(crate) async fn plan_following(
+        &mut self,
+        sources: &[VfsPath],
+        follow: bool,
+    ) -> Result<(Vec<Item>, Vec<Mark>), Stop> {
         self.job
             .update(|snapshot| snapshot.state = JobState::Counting);
         let mut items = Vec::new();
+        let mut marks = Vec::new();
         for source in sources {
             self.checkpoint().await?;
             let src = std::sync::Arc::clone(&self.src);
@@ -155,17 +170,35 @@ impl Runner {
                 .path
                 .file_name()
                 .map_or_else(|| PathBuf::from(&entry.name), PathBuf::from);
-            let mut stack = vec![Item {
+            let first = Item {
                 path: source.path.clone(),
                 rel: name,
                 entry,
-            }];
-            while let Some(item) = stack.pop() {
+            };
+            let mut stack = vec![(first, Trail::default(), true)];
+            while let Some((mut item, trail, top)) = stack.pop() {
                 self.checkpoint().await?;
+                let mut mark = Mark {
+                    link: false,
+                    below: trail.below(),
+                };
+                let mut inside = trail.clone();
+                if follow
+                    && is_dir_link(&item.entry)
+                    && let EntryKind::Symlink { target, .. } = &item.entry.kind
+                    && let Some(into) = trail.follow(&item.path, target, top)
+                {
+                    item.entry.kind = EntryKind::Dir;
+                    mark.link = true;
+                    inside = into;
+                }
                 if item.entry.kind != EntryKind::Dir {
                     self.progress.files_total += 1;
                     self.progress.bytes_total += item.entry.size;
                     items.push(item);
+                    if follow {
+                        marks.push(mark);
+                    }
                     continue;
                 }
                 let at = self.src_path(&item.path);
@@ -183,20 +216,25 @@ impl Runner {
                     {
                         continue;
                     }
-                    stack.push(Item {
+                    let below = inside.child(&child.name);
+                    let next = Item {
                         path: item.path.join(&child.name),
                         rel: item.rel.join(&child.name),
                         entry: child,
-                    });
+                    };
+                    stack.push((next, below, false));
                 }
                 items.push(item);
+                if follow {
+                    marks.push(mark);
+                }
                 self.tick(false);
             }
         }
         self.job
             .update(|snapshot| snapshot.state = JobState::Running);
         self.tick(true);
-        Ok(items)
+        Ok((items, marks))
     }
 }
 

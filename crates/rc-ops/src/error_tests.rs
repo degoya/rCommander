@@ -50,6 +50,8 @@ fn one_of_each_own() -> Vec<OpsError> {
             path: path(),
             reason: "a key",
         },
+        OpsError::LinksUnsupported { path: path() },
+        OpsError::LinkLoop { path: path() },
     ];
     for sample in &samples {
         match sample {
@@ -80,7 +82,9 @@ fn one_of_each_own() -> Vec<OpsError> {
             | OpsError::QueueNameInvalid { .. }
             | OpsError::JobAtOnce { .. }
             | OpsError::RenameUndoFailed { .. }
-            | OpsError::Sensitive { .. } => {}
+            | OpsError::Sensitive { .. }
+            | OpsError::LinksUnsupported { .. }
+            | OpsError::LinkLoop { .. } => {}
         }
     }
     samples

@@ -18,7 +18,7 @@ mod listing;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
 };
 
 use rc_db::{Db, NewPluginExecution};
@@ -35,6 +35,8 @@ pub use rc_plugin_host::{
     KeyStatus, PackagePreview, Permissions, installed::bundled_dir as bundled_plugins_dir,
 };
 
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, EngineEvent,
     settings::{CRASH_LIMIT_KEY, DEVELOPMENT_MODE_KEY, PLUGINS_ENABLED_KEY, stored_setting},
@@ -115,8 +117,7 @@ impl Engine {
         let health = match self.inner.plugins.get() {
             Some(desk) => Arc::clone(
                 desk.health
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
+                    .lock_or_recover("plugin_admin.health")
                     .entry(id.to_owned())
                     .or_insert_with(|| Arc::new(PluginHealth::new(limit))),
             ),
@@ -149,6 +150,7 @@ impl Engine {
             start.bundled =
                 tokio::task::spawn_blocking(move || installed::sync_bundled(&data_dir, &bundled))
                     .await
+                    .log_panic("engine.plugin_sync_bundled")
                     .map_err(PluginAdminError::from)?
                     .map_err(|error| PluginAdminError::from_host(&error))?;
             for (id, _) in &start.bundled {
@@ -159,6 +161,7 @@ impl Engine {
         start.sweep =
             tokio::task::spawn_blocking(move || installed::sweep_at_start(&data_dir, &state))
                 .await
+                .log_panic("engine.plugin_sweep")
                 .map_err(PluginAdminError::from)?;
         self.publish(EngineEvent::PluginsChanged);
         Ok(start)
@@ -208,6 +211,7 @@ impl Engine {
         let (written, data_dir) = (state.clone(), desk.data_dir.clone());
         tokio::task::spawn_blocking(move || written.write(&data_dir))
             .await
+            .log_panic("engine.plugin_state_write")
             .map_err(PluginAdminError::from)?
             .map_err(|error| PluginAdminError::from_host(&error))?;
         Ok(state)
@@ -223,12 +227,7 @@ impl Engine {
             tracing::warn!(code = error.code(), "the plugin state was not written");
         }
         let limit = self.crash_limit().await;
-        for health in desk
-            .health
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .values()
-        {
+        for health in desk.health.lock_or_recover("plugin_admin.health").values() {
             health.set_crash_limit(limit);
         }
     }

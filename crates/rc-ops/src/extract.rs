@@ -17,7 +17,8 @@
 //! - a folder on the way that is a link or junction in the target is refused, so a link already
 //!   there cannot lead the files elsewhere, and an existing target file that is a link is not
 //!   written through;
-//! - set-user-id and the like are dropped: only the permission bits are kept.
+//! - set-user-id and the like are dropped, and so is everyone's write and what the umask takes
+//!   away (RC-080-70): only the permission bits a file of this process would get are kept.
 //!
 //! An encrypted archive asks for its password ([`crate::Question::Password`]); a wrong one asks
 //! again, a skipped one fails its encrypted entries with `password_required`. A job that may not
@@ -42,7 +43,7 @@ use crate::{
     ErrorChoice, Failure, JobState, OpsError,
     mask::Mask,
     runner::{Runner, Step, Stop, attempt},
-    staging::Resolved,
+    staging::{self, Resolved},
     walk::Item,
 };
 
@@ -340,8 +341,9 @@ impl Runner {
                     });
                 }
                 let mut entry = item.entry;
-                // Permission bits only: no set-user-id, set-group-id or sticky bit from an archive.
-                entry.attributes.mode = entry.attributes.mode.map(|mode| mode & 0o777);
+                // No set-user-id, set-group-id or sticky bit from an archive, no write for
+                // everyone, nothing the umask takes away (RC-080-70).
+                entry.attributes.mode = entry.attributes.mode.map(staging::foreign_mode);
                 planned.push(Planned {
                     item: Item { path, rel, entry },
                     refused,

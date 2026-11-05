@@ -1,13 +1,16 @@
-//! The `hostkeys` tool group: reading the trusted SSH host keys.
+//! The `hostkeys` tool group: reading the trusted SSH host keys and the revoked ones.
 //!
 //! There is deliberately no tool that trusts, accepts, replaces or forgets a key, and none that
 //! imports a `known_hosts` file (which would trust whatever the file says): a host key is a
 //! person's decision in the app (`hostkeys.answer`, `hostkeys.replace`, `hostkeys.remove` -
 //! forgetting a changed key would turn the stop into a first sighting, RC-080-12 - and
 //! `hostkeys.import_known_hosts` are `CommandClass::GuiOnly`, omitted in `coverage.rs` and
-//! refused by `Engine::dispatch_mcp`). A connection an agent starts answers `host_key_unknown` or
-//! `host_key_changed` with the fingerprint and the hint to decide in the rCommander window.
+//! refused by `Engine::dispatch_mcp`), and none that forgets a revocation
+//! (`hostkeys.remove_revoked`, RC-080-67). A connection an agent starts answers
+//! `host_key_unknown` or `host_key_changed` with the fingerprint and the hint to decide in the
+//! rCommander window, `host_key_revoked` for a key a `known_hosts` file revoked.
 
+use rc_db::RevokedHostKey;
 use rc_engine::{Command, KnownHost, Outcome};
 use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
 use serde::{Deserialize, Serialize};
@@ -59,6 +62,39 @@ impl From<KnownHost> for KnownHostView {
     }
 }
 
+#[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct RevokedParams {
+    /// Only keys whose names, key type or fingerprint contain this, ignoring case.
+    #[serde(default)]
+    pub filter: Option<String>,
+}
+
+/// A revoked key as tools answer it: without the key blob.
+#[derive(Serialize)]
+struct RevokedView {
+    id: i64,
+    /// The `@revoked` line's names as written; the key is refused for every host.
+    hosts: String,
+    algorithm: String,
+    fingerprint: String,
+    /// The file the line came from.
+    source: String,
+    added_at: String,
+}
+
+impl From<RevokedHostKey> for RevokedView {
+    fn from(key: RevokedHostKey) -> Self {
+        Self {
+            id: key.id,
+            hosts: key.hosts,
+            algorithm: key.algorithm,
+            fingerprint: key.fingerprint_sha256,
+            source: key.source,
+            added_at: key.added_at,
+        }
+    }
+}
+
 /// An outcome these tools do not expect (cannot happen while the engine keeps its contract),
 /// as an internal error rather than a guess.
 fn unexpected(outcome: &Outcome) -> ToolResult {
@@ -88,6 +124,30 @@ impl RcMcpServer {
         {
             Ok(Outcome::KnownHosts { keys }) => {
                 let keys: Vec<KnownHostView> = keys.into_iter().map(Into::into).collect();
+                json_result(&serde_json::json!({ "keys": keys }))
+            }
+            Ok(other) => unexpected(&other),
+            Err(error) => Ok(error_result(error.code(), &error.to_string())),
+        }
+    }
+
+    #[tool(
+        description = "List the SSH host keys an imported known_hosts file marked @revoked: id, hosts (the line's names as written), key type, SHA256 fingerprint, source file, added_at. A server presenting one of them is refused for every host with host_key_revoked, without a question. filter narrows by names, key type or fingerprint. Only a person removes a revocation, in the rCommander window."
+    )]
+    pub(crate) async fn hostkeys_revoked(
+        &self,
+        Parameters(params): Parameters<RevokedParams>,
+    ) -> ToolResult {
+        match self
+            .context
+            .engine
+            .dispatch_mcp(Command::ListRevokedHostKeys {
+                filter: params.filter,
+            })
+            .await
+        {
+            Ok(Outcome::RevokedHostKeys { keys }) => {
+                let keys: Vec<RevokedView> = keys.into_iter().map(Into::into).collect();
                 json_result(&serde_json::json!({ "keys": keys }))
             }
             Ok(other) => unexpected(&other),

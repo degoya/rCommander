@@ -1,9 +1,11 @@
 //! The bearer token of the HTTP transport: 32 random bytes, generated once and kept in the
-//! setting `mcp.token`.
+//! setting `mcp.token` - or, where `mcp.token.rotate_on_start` is on, new at every app start
+//! ([`McpToken::at_start`], RC-080-66).
 
 use std::fmt;
 
 use rc_db::Db;
+use rc_engine::settings::{MCP_TOKEN_ROTATE_ON_START_KEY, stored_setting};
 
 /// The settings key.
 pub const TOKEN_KEY: &str = "mcp.token";
@@ -77,6 +79,26 @@ impl McpToken {
         let token = Self::generate();
         db.set(TOKEN_KEY, &token.0).await?;
         Ok(token)
+    }
+
+    /// The token an app start serves with: a new one, stored, where the protected setting
+    /// `mcp.token.rotate_on_start` is on, so a token read from an earlier run's instance file
+    /// stops working; the stored one otherwise (the default: an HTTP client configured with the
+    /// token keeps working).
+    ///
+    /// # Errors
+    ///
+    /// The database read or write fails.
+    pub async fn at_start(db: &Db) -> rc_db::Result<Self> {
+        let rotate = stored_setting(db, MCP_TOKEN_ROTATE_ON_START_KEY)
+            .await
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if rotate {
+            Self::rotate(db).await
+        } else {
+            Self::load_or_create(db).await
+        }
     }
 
     /// A new token, stored in place of the old one: from the settings dialog, whose server

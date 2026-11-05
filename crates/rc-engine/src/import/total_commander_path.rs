@@ -6,14 +6,14 @@
 //! another file names is read only when its name is `wcx_ftp.ini`, so a `wincmd.ini` cannot point
 //! the import at any other file. `%variables%` come from the environment, `%COMMANDER_PATH%` from
 //! the registry's `InstallDir` when the environment has none - only the variables Total Commander
-//! itself puts into paths ([`KNOWN_VARIABLES`], RC-080-35). Any other stays unresolved, and the
-//! item naming it is skipped as `unknown_variable`: a crafted `wincmd.ini` (`cd
+//! itself puts into paths ([`KNOWN_VARIABLES`], RC-080-35). Any other stays as written, as one
+//! that is not set does in Total Commander (RC-080-71): a crafted `wincmd.ini` (`cd
 //! C:\%AWS_SECRET_ACCESS_KEY%`) cannot copy a secret of the environment into the report's paths,
-//! which MCP reads too.
+//! which MCP reads too. One of the list set to nothing is nothing.
 
 use std::path::{Path, PathBuf};
 
-use super::total_commander::{Lookup, expand};
+use super::total_commander::Lookup;
 
 /// Total Commander's main settings file.
 pub const WINCMD_INI: &str = "wincmd.ini";
@@ -81,19 +81,84 @@ fn resolve_known(
     install_dir: Option<&str>,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Option<String> {
-    if !KNOWN_VARIABLES
-        .iter()
-        .any(|known| known.eq_ignore_ascii_case(name))
-    {
+    if !is_known(name) {
         return None;
     }
-    env(name)
-        .or_else(|| {
-            install_dir
-                .filter(|_| name.eq_ignore_ascii_case("COMMANDER_PATH"))
-                .map(str::to_owned)
-        })
-        .filter(|value| !value.is_empty())
+    env(name).or_else(|| {
+        install_dir
+            .filter(|dir| !dir.is_empty() && name.eq_ignore_ascii_case("COMMANDER_PATH"))
+            .map(str::to_owned)
+    })
+}
+
+/// Whether `name` is one of [`KNOWN_VARIABLES`], ignoring ASCII case.
+fn is_known(name: &str) -> bool {
+    KNOWN_VARIABLES
+        .iter()
+        .any(|known| known.eq_ignore_ascii_case(name))
+}
+
+/// `text` with every `%name%` that `lookup` knows replaced by its value.
+///
+/// As Total Commander does (`history.txt`, 9.21 RC2, 29.07.18: "Distinguish between empty
+/// environment variables and non-existing environment variables. Replace %variable% with empty
+/// string in the first case"): a variable that is not set stays as written, `%` and all, one set
+/// to nothing becomes nothing, and the names after an unknown one are still replaced (8.51b4); a
+/// `%` that opens no name (`C:\100% done`) is text. Total Commander reads any variable; `lookup`
+/// answers only [`KNOWN_VARIABLES`] (RC-080-35), so any other name stays as written too - never
+/// read from the environment, it cannot carry a secret into the report.
+#[must_use]
+pub fn expand(text: &str, lookup: Lookup<'_>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('%') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        // Parentheses for `%ProgramFiles(x86)%`.
+        let allowed = |c: char| c.is_alphanumeric() || matches!(c, '_' | '(' | ')');
+        let name = after
+            .find('%')
+            .map(|end| &after[..end])
+            .filter(|name| !name.is_empty() && name.chars().all(allowed));
+        let Some(name) = name else {
+            // No name follows: the `%` is text, and the next `%` may open one.
+            out.push('%');
+            rest = after;
+            continue;
+        };
+        match lookup(name) {
+            Some(value) => out.push_str(&value),
+            None => {
+                out.push('%');
+                out.push_str(name);
+                out.push('%');
+            }
+        }
+        rest = &after[name.len() + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `path` without the `\\?\` prefix of a drive or a share (`\\?\C:\x`, `\\?\UNC\host\share`):
+/// the same folder, and Total Commander puts the prefix in front of a long path itself, as
+/// rCommander's local backend does (author, ghisler.ch `viewtopic.php?p=357612`). A volume
+/// (`\\?\Volume{...}`, which `cd` takes: `history.txt`, 10.11.21) and `\\.\` keep what they are.
+pub(super) fn without_verbatim_prefix(path: &str) -> String {
+    let Some(rest) = path.strip_prefix("\\\\?\\") else {
+        return path.to_owned();
+    };
+    if let Some(share) = rest
+        .get(..4)
+        .filter(|unc| unc.eq_ignore_ascii_case("UNC\\"))
+        .map(|_| &rest[4..])
+    {
+        return format!("\\\\{share}");
+    }
+    if rc_vfs::drive_letter(rest).is_some() {
+        return rest.to_owned();
+    }
+    path.to_owned()
 }
 
 /// The last part of `path`, whichever separator it uses.
@@ -111,7 +176,7 @@ pub fn is_named(path: &Path, name: &str) -> bool {
 /// Windows a path from the root of a drive (`\totalcmd\wincmd.ini`) takes `base`'s drive, and
 /// without `base` stays as it is: the current drive's.
 fn resolve(raw: &str, base: Option<&Path>, lookup: Lookup<'_>) -> Option<PathBuf> {
-    let expanded = expand(raw.trim().trim_matches('"'), lookup)?;
+    let expanded = expand(raw.trim().trim_matches('"'), lookup);
     if expanded.is_empty() {
         return None;
     }

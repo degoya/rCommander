@@ -78,3 +78,24 @@ async fn a_producer_that_dies_is_no_end_of_file() {
     .await;
     assert_eq!(code(opened), "io");
 }
+
+/// RC-080-70: the reader hands the chunks it has read back for the producer to fill again -
+/// never more than the pipe's depth are kept - and every byte arrives as it was.
+#[tokio::test]
+async fn read_chunks_go_back_to_the_producer() {
+    let size = 32 * CHUNK as u64 + 17;
+    let source: Vec<u8> = (0..size).map(|index| (index % 251) as u8).collect();
+    let (writer, mut reader) = pair(size);
+    let bytes = source.clone();
+    let producer =
+        tokio::task::spawn_blocking(move || pump(&mut &bytes[..], size, &writer, Path::new("/x")));
+    let mut got = Vec::new();
+    reader.read_to_end(&mut got).await.expect("read");
+    assert_eq!(
+        producer.await.expect("join").expect("pump"),
+        Pumped::Complete
+    );
+    assert_eq!(got, source);
+    let kept = reader.spare.lock().expect("spare").len();
+    assert!((1..=super::DEPTH).contains(&kept), "{kept} chunks kept");
+}

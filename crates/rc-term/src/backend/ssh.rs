@@ -4,8 +4,8 @@
 //! Two tasks per channel. The reader turns the channel's messages into [`BackendEvent`]s: data
 //! (and stderr, which a PTY merges anyway) as output, the exit status kept for the end, the
 //! channel's close - or the connection's end - as [`BackendEvent::Exited`]. The writer sends
-//! what [`TermBackend`] queued: input as data, a size as `window-change`, the end as EOF and
-//! close. A server that never answers the close is given [`CLOSE_GRACE`]; the reader then ends
+//! what [`TermBackend`] queued - at most [`INPUT_QUEUE`] writes, a write past them is refused
+//! (RC-080-65) -: input as data, a size as `window-change`, the end as EOF and close. A server that never answers the close is given [`CLOSE_GRACE`]; the reader then ends
 //! by itself. Whatever keeps the connection counted as in use (the engine's channel lease) is
 //! held by the reader and dropped when the channel is done.
 
@@ -23,7 +23,7 @@ use tokio::{
     time::Instant,
 };
 
-use crate::{BackendEvent, Spawned, TermBackend, TermError, TermSize};
+use crate::{BackendEvent, INPUT_QUEUE, Spawned, TermBackend, TermError, TermSize};
 
 /// A session channel of an SSH client connection.
 pub type SshTermChannel = Channel<Msg>;
@@ -38,20 +38,25 @@ const CLOSE_GRACE: Duration = Duration::from_secs(3);
 enum Input {
     Bytes(Vec<u8>),
     Resize(TermSize),
-    Close,
 }
 
 struct SshBackend {
-    input: mpsc::UnboundedSender<Input>,
+    input: mpsc::Sender<Input>,
+    /// Set by [`TermBackend::shutdown`]: the writer sends what is queued, then the end. Apart
+    /// from the queue, so a full one never loses it.
+    close: watch::Sender<bool>,
     ended: Arc<AtomicBool>,
 }
 
 impl SshBackend {
     fn send(&self, input: Input) -> Result<(), TermError> {
-        if self.ended.load(Ordering::SeqCst) {
+        if self.ended.load(Ordering::SeqCst) || *self.close.borrow() {
             return Err(TermError::Exited);
         }
-        self.input.send(input).map_err(|_| TermError::Exited)
+        self.input.try_send(input).map_err(|error| match error {
+            mpsc::error::TrySendError::Full(_) => TermError::InputFull,
+            mpsc::error::TrySendError::Closed(_) => TermError::Exited,
+        })
     }
 }
 
@@ -66,7 +71,7 @@ impl TermBackend for SshBackend {
 
     fn shutdown(&self) {
         // A writer that is gone has closed the channel already.
-        let _ = self.input.send(Input::Close);
+        self.close.send_replace(true);
     }
 }
 
@@ -80,10 +85,11 @@ impl TermBackend for SshBackend {
 pub fn spawn_ssh<K: Send + 'static>(channel: SshTermChannel, keep: K) -> Spawned {
     let (reader, writer) = channel.split();
     let (events, received) = mpsc::channel(OUTPUT_QUEUE);
-    let (input, queued) = mpsc::unbounded_channel();
+    let (input, queued) = mpsc::channel(INPUT_QUEUE);
+    let (close, close_asked) = watch::channel(false);
     let (closing, closing_seen) = watch::channel(false);
     let ended = Arc::new(AtomicBool::new(false));
-    tokio::spawn(write_loop(writer, queued, closing));
+    tokio::spawn(write_loop(writer, queued, close_asked, closing));
     tokio::spawn(read_loop(
         reader,
         events,
@@ -92,17 +98,32 @@ pub fn spawn_ssh<K: Send + 'static>(channel: SshTermChannel, keep: K) -> Spawned
         keep,
     ));
     Spawned {
-        backend: Box::new(SshBackend { input, ended }),
+        backend: Box::new(SshBackend {
+            input,
+            close,
+            ended,
+        }),
         events: received,
     }
 }
 
 async fn write_loop(
     writer: ChannelWriteHalf<Msg>,
-    mut queued: mpsc::UnboundedReceiver<Input>,
+    mut queued: mpsc::Receiver<Input>,
+    mut close: watch::Receiver<bool>,
     closing: watch::Sender<bool>,
 ) {
-    while let Some(input) = queued.recv().await {
+    loop {
+        let input = tokio::select! {
+            // What was queued before the end goes first.
+            biased;
+            input = queued.recv() => input,
+            // An error is a back end that is gone, which is the same.
+            _ = close.wait_for(|close| *close) => None,
+        };
+        let Some(input) = input else {
+            break;
+        };
         let sent = match input {
             Input::Bytes(bytes) => writer.data_bytes(bytes).await,
             Input::Resize(size) => {
@@ -110,7 +131,6 @@ async fn write_loop(
                     .window_change(u32::from(size.cols), u32::from(size.rows), 0, 0)
                     .await
             }
-            Input::Close => break,
         };
         if let Err(error) = sent {
             tracing::debug!(%error, "the SSH terminal's channel takes no more input");

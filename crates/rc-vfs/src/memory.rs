@@ -15,7 +15,7 @@ use std::{
     io,
     path::Path,
     pin::Pin,
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll},
     time::SystemTime,
 };
@@ -23,6 +23,7 @@ use std::{
 use async_trait::async_trait;
 use tokio::io::AsyncWrite;
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     Capabilities, Entry, ReadStream, Result, SetAttributes, Vfs, VfsError, WriteMode, WriteStream,
 };
@@ -63,7 +64,7 @@ impl MemoryFs {
 }
 
 fn lock(tree: &Mutex<Tree>) -> MutexGuard<'_, Tree> {
-    tree.lock().unwrap_or_else(PoisonError::into_inner)
+    tree.lock_or_recover("memory.tree")
 }
 
 #[async_trait]

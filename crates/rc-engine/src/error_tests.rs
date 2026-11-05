@@ -32,6 +32,12 @@ fn one_of_each_own() -> Vec<EngineError> {
             fingerprint: "SHA256:x".to_owned(),
             stored_fingerprint: "SHA256:y".to_owned(),
         },
+        EngineError::HostKeyRevoked {
+            host: "box".to_owned(),
+            port: 22,
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: "SHA256:x".to_owned(),
+        },
         EngineError::HostKeyStale,
         EngineError::HostKeyQuestionNotFound { question: 1 },
         EngineError::HostKeyNotChanged { question: 1 },
@@ -202,6 +208,7 @@ fn one_of_each_own() -> Vec<EngineError> {
             count: 2,
         },
         EngineError::SavedQueueNotFound { saved: 3 },
+        EngineError::SavedQueueChanged { saved: 3 },
         EngineError::QueueListEmpty,
         EngineError::PanelChanged { panel: "left" },
         EngineError::ThemeUnknown { id: "neon".into() },
@@ -259,6 +266,7 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::Database(_)
             | EngineError::HostKeyUnknown { .. }
             | EngineError::HostKeyChanged { .. }
+            | EngineError::HostKeyRevoked { .. }
             | EngineError::HostKeyStale
             | EngineError::HostKeyQuestionNotFound { .. }
             | EngineError::HostKeyNotChanged { .. }
@@ -308,7 +316,9 @@ fn one_of_each_own() -> Vec<EngineError> {
             EngineError::PropertyInvalid { .. } => {}
             EngineError::SftpConnectionNotFound { .. }
             | EngineError::SftpConnectionAmbiguous { .. } => {}
-            EngineError::SavedQueueNotFound { .. } | EngineError::QueueListEmpty => {}
+            EngineError::SavedQueueNotFound { .. }
+            | EngineError::SavedQueueChanged { .. }
+            | EngineError::QueueListEmpty => {}
             EngineError::PanelChanged { .. } => {}
             EngineError::ThemeUnknown { .. }
             | EngineError::ThemeWrongMode { .. }

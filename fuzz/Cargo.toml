@@ -1,0 +1,76 @@
+# The fuzz targets of RC-080-72: one per parser of data from outside, run by scripts/fuzz.sh with
+# cargo-fuzz (libFuzzer, a pinned nightly: scripts/lib/tool-versions.sh). A workspace of its own,
+# outside the main one, so the main workspace's stable toolchain and its cargo runs never see
+# it. scripts/fuzz.sh copies the main Cargo.lock in before every run (fuzz/Cargo.lock is not
+# kept), so the targets fuzz the dependency versions rCommander ships.
+#
+# The targets call only public functions; one a parser lacked is `#[doc(hidden)] pub` in its
+# crate (rc_remote::ftp::parse_listing).
+
+[package]
+name = "rc-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rc-engine = { path = "../crates/rc-engine" }
+rc-plugin-host = { path = "../crates/rc-plugin-host" }
+rc-remote = { path = "../crates/rc-remote" }
+rc-term = { path = "../crates/rc-term" }
+rc-vfs = { path = "../crates/rc-vfs" }
+tokio = { version = "1", features = ["rt"] }
+
+[workspace]
+members = ["."]
+
+# Line tables in the fuzz build, so a finding's stack names its lines.
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "archive_listing"
+path = "fuzz_targets/archive_listing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ftp_listing"
+path = "fuzz_targets/ftp_listing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "known_hosts"
+path = "fuzz_targets/known_hosts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "osc"
+path = "fuzz_targets/osc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "plugin_manifest"
+path = "fuzz_targets/plugin_manifest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tc_ini"
+path = "fuzz_targets/tc_ini.rs"
+test = false
+doc = false
+bench = false

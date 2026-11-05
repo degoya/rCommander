@@ -1,6 +1,7 @@
 use rc_db::{Db, DbError};
 use rc_engine::settings::{
-    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY,
+    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_AUDIT_LOG_KEY, MCP_EXEC_SESSION_MINUTES_KEY,
+    MCP_HEADLESS_CODE_KEY,
 };
 
 use super::GateSettings;
@@ -17,12 +18,13 @@ async fn nothing_stored_reads_as_the_defaults() {
             headless_codes: false,
             exec_minutes: 30,
             ask_outside_panels: false,
+            audit_log: true,
         }
     );
 }
 
 #[tokio::test]
-async fn the_three_stored_settings_are_read_at_once() {
+async fn the_stored_settings_are_read_at_once() {
     let db = Db::open_in_memory().await.expect("open");
     let policy = Policy {
         read: Rule::Allowed,
@@ -38,6 +40,7 @@ async fn the_three_stored_settings_are_read_at_once() {
     db.set(MCP_ASK_OUTSIDE_PANELS_KEY, &true)
         .await
         .expect("stores");
+    db.set(MCP_AUDIT_LOG_KEY, &false).await.expect("stores");
     assert_eq!(
         GateSettings::load(&db).await.expect("loads"),
         GateSettings {
@@ -45,6 +48,7 @@ async fn the_three_stored_settings_are_read_at_once() {
             headless_codes: true,
             exec_minutes: 5,
             ask_outside_panels: true,
+            audit_log: false,
         }
     );
 }

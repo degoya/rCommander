@@ -62,7 +62,7 @@ async fn no_tool_trusts_accepts_replaces_or_imports_a_key() {
     // `keymap_list` reads the keyboard shortcuts (RC-100-21), not a host key; it changes nothing.
     assert_eq!(
         host_tools,
-        vec!["hostkeys_list", "keymap_list"],
+        vec!["hostkeys_list", "hostkeys_revoked", "keymap_list"],
         "{names:?}"
     );
     // `connections_import_ssh_config`, `import_total_commander` and
@@ -85,6 +85,7 @@ async fn no_tool_trusts_accepts_replaces_or_imports_a_key() {
         "hostkeys.answer",
         "hostkeys.replace",
         "hostkeys.remove",
+        "hostkeys.remove_revoked",
         "hostkeys.import_known_hosts",
     ] {
         assert!(
@@ -176,4 +177,35 @@ async fn no_tool_forgets_a_key() {
     assert_eq!(refused.code(), "gui_only");
     let still = call(&client, "hostkeys_list", json!({})).await;
     assert_eq!(still["keys"].as_array().map(Vec::len), Some(2), "{still}");
+}
+
+/// RC-080-67: the revoked keys are listed without their blobs; none is forgotten through MCP.
+#[tokio::test]
+async fn the_revoked_keys_are_listed_and_kept() {
+    let (root, context) = setup().await;
+    let path = root.path().join("known_hosts");
+    std::fs::write(&path, format!("@revoked box.example {ED25519}")).expect("write");
+    context
+        .engine()
+        .dispatch(Command::ImportKnownHosts {
+            path: Some(path.display().to_string()),
+        })
+        .await
+        .expect("imported by a person");
+    let client = connect(&context).await;
+    let listed = call(&client, "hostkeys_revoked", json!({ "filter": "ED25519" })).await;
+    let keys = listed["keys"].as_array().expect("keys");
+    assert_eq!(keys.len(), 1, "{listed}");
+    assert_eq!(keys[0]["hosts"], "box.example");
+    assert_eq!(keys[0]["fingerprint"], key(ED25519).fingerprint.as_str());
+    assert!(keys[0].get("public_key").is_none(), "{listed}");
+    let id = keys[0]["id"].as_i64().expect("id");
+    let refused = context
+        .engine()
+        .dispatch_mcp(Command::RemoveRevokedHostKey { id })
+        .await
+        .expect_err("a person decides");
+    assert_eq!(refused.code(), "gui_only");
+    let still = call(&client, "hostkeys_revoked", json!({})).await;
+    assert_eq!(still["keys"].as_array().map(Vec::len), Some(1), "{still}");
 }

@@ -12,7 +12,7 @@
 
 use std::{
     cell::RefCell,
-    sync::{Mutex, OnceLock, PoisonError},
+    sync::{Mutex, OnceLock},
 };
 
 use iced::{
@@ -22,6 +22,8 @@ use iced::{
 };
 use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+
+use crate::recover::LockOrRecover as _;
 
 mod refill;
 
@@ -245,7 +247,7 @@ pub fn relabel(id: window::Id, menus: Vec<BarMenu>) -> Task<()> {
 pub fn events() -> impl Stream<Item = String> {
     iced::stream::channel(16, async |mut output: mpsc::Sender<String>| {
         let (sender, mut receiver) = unbounded_channel();
-        *CHOSEN.lock().unwrap_or_else(PoisonError::into_inner) = Some(sender);
+        *CHOSEN.lock_or_recover("menu_bar.chosen") = Some(sender);
         MenuEvent::set_event_handler(Some(forward));
         while let Some(id) = receiver.recv().await {
             if output.send(id).await.is_err() {
@@ -257,11 +259,7 @@ pub fn events() -> impl Stream<Item = String> {
 
 /// muda's event handler, on the window's thread: the id to the running stream.
 fn forward(event: MenuEvent) {
-    if let Some(sender) = CHOSEN
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .as_ref()
-    {
+    if let Some(sender) = CHOSEN.lock_or_recover("menu_bar.chosen").as_ref() {
         // Without a stream the window is gone: nobody waits for the choice.
         let _ = sender.send(event.id.0);
     }

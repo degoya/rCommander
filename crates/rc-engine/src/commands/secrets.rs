@@ -14,6 +14,7 @@ use rc_vault::{ExposeSecret as _, SecretString};
 use tokio::io::AsyncReadExt as _;
 use zeroize::Zeroize as _;
 
+use crate::recover::LogPanic as _;
 use crate::{
     ConnectionId, Engine, EngineError, EngineEvent, MAX_KEY_BYTES, Outcome, SecretKind,
     SecretParam, StoredKey, TreeChange, TreeItem,
@@ -170,6 +171,7 @@ pub(crate) async fn open_key(
             )
         })
         .await
+        .log_panic("engine.key_inspect")
         .map_err(|_| EngineError::KeyFormatUnknown)??
     };
     let passphrase = passphrase.filter(|_| info.encrypted);

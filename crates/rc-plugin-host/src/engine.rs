@@ -29,6 +29,7 @@ use sha2::{Digest, Sha256};
 use wasmtime::{Config, Engine, component::Component};
 
 use crate::compile_cache::CompileCache;
+use crate::recover::LogPanic as _;
 
 /// Distinct component contents kept compiled in memory. An installation holds one per plugin
 /// version it runs; past this the map starts over, and an evicted entry costs a disk read.
@@ -159,7 +160,7 @@ impl Drop for SharedEngine {
     fn drop(&mut self) {
         self.stop_ticker.store(true, Ordering::Release);
         if let Some(ticker) = self.ticker.take() {
-            let _ = ticker.join();
+            let _ = ticker.join().log_panic("plugin_host.epoch_ticker");
         }
     }
 }

@@ -14,6 +14,10 @@ Rust.
 - A small SSH connection manager: servers, keys, credentials and login scripts, stored
   encrypted behind an optional master password.
 - Copying local to remote and remote to remote over SFTP and FTP/FTPS; multi-rename.
+- A viewer (Lister and Quick View) whose bundled plugins colour JSON (with JSONC, JSON5 and
+  JSON Lines), XML, YAML, CSV, SQL, configuration files, shell, PowerShell, batch and Python
+  scripts, Dockerfiles, Makefiles, server configuration (nginx, Apache, SSH), diffs, logs, web code, SVG
+  and C-like languages from C to Rust - chosen by the file's extension or its whole name.
 - Colour themes for the whole window and the terminal, built in or your own, switched from the
   command palette or a key, and a theme per connection or WSL distribution so each server's
   panel and terminal stand out.

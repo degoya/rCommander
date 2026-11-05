@@ -285,3 +285,48 @@ async fn a_part_larger_than_the_source_is_not_resumed() {
     assert!(!exists(&server.fs, "/up/big.bin").await);
     assert!(exists(&server.fs, "/up/big.bin.rcpart").await);
 }
+
+/// RC-080-70: a part file that is a link - to a file holding the source's first bytes, so its
+/// tail would match - is not continued: the link goes, the copy starts over, and the file it
+/// led to stays as it was.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_part_that_is_a_link_is_not_continued() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let data = payload(SIZE, 9);
+    let (src, dst) = (root.path().join("src"), root.path().join("dst"));
+    std::fs::create_dir_all(&src).expect("mkdir");
+    std::fs::create_dir_all(&dst).expect("mkdir");
+    std::fs::write(src.join("big.bin"), &data).expect("write");
+    let victim = root.path().join("victim.bin");
+    std::fs::write(&victim, &data[..HALF as usize]).expect("write");
+    std::os::unix::fs::symlink(&victim, dst.join("big.bin.rcpart")).expect("symlink");
+    let harness = Harness::start();
+    harness.local();
+    let job = harness
+        .run(JobSpec {
+            kind: JobKind::Copy {
+                sources: vec![VfsPath::local(src.join("big.bin"))],
+                target: VfsPath::local(&dst),
+            },
+            options: JobOptions {
+                on_conflict: Some(ConflictChoice::Resume),
+                ..JobOptions::default()
+            },
+        })
+        .await;
+    assert_eq!(job.state, JobState::Completed, "{:?}", job.failures);
+    assert!(job.failures.is_empty(), "{:?}", job.failures);
+    assert_eq!(std::fs::read(dst.join("big.bin")).expect("read"), data);
+    assert_eq!(
+        std::fs::read(&victim).expect("read"),
+        &data[..HALF as usize],
+        "the file behind the link is untouched"
+    );
+    assert!(
+        std::fs::symlink_metadata(dst.join("big.bin.rcpart")).is_err(),
+        "no part is left"
+    );
+    let landed = std::fs::symlink_metadata(dst.join("big.bin")).expect("stat");
+    assert!(landed.file_type().is_file(), "a file, not the link");
+}

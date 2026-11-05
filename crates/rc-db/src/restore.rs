@@ -1,10 +1,12 @@
 //! Restoring a backup (RC-010-12): checked, staged beside the database, swapped in before the next
 //! open.
 //!
-//! [`Db::restore_from`] copies the chosen file next to the database under a temporary name and
-//! checks the copy - the bytes that will be swapped in: `PRAGMA integrity_check`, rCommander's
-//! tables, and migrations this build knows with the same checksums (a newer file is refused,
-//! since this build cannot open it). Then it backs the current state up into the backup folder,
+//! [`Db::restore_from`] copies the chosen file next to the database under a temporary name - an
+//! owner-only file written through its own handle (`restore/held.rs`) - and checks the copy, the
+//! bytes that will be swapped in: `PRAGMA integrity_check`, rCommander's tables, migrations this
+//! build knows with the same checksums (a newer file is refused, since this build cannot open
+//! it), and exactly the tables, indexes, triggers and views those migrations create
+//! (`restore/schema.rs`, RC-080-68). Then it backs the current state up into the backup folder,
 //! stores the copy's BLAKE3 digest inside the current database (the setting
 //! [`RESTORE_DIGEST_KEY`]) and only then names the copy `<database>.restore`.
 //! [`apply_pending_restore`], called before the database is opened at the next start, reads that
@@ -13,7 +15,9 @@
 //! put a file beside the database, never a row into it: a file of that name someone else put
 //! there - an agent, another program - is set aside as `<database>.restore-rejected` and the
 //! current database stays. Then the old WAL files go and the staged file is renamed over the
-//! database; the migrations run as on every start.
+//! database; the migrations run as on every start. The digest is read through the handle of the
+//! file that is renamed, before and after the rename, and the name must still be that file's:
+//! a file swapped in under the name after its check is never the database (RC-080-68).
 
 use std::{
     fs,
@@ -27,8 +31,11 @@ use tokio::io::AsyncReadExt as _;
 
 use crate::{
     Db, MIGRATOR,
-    backup::{BackupError, BackupReport, PartFile, SIDECARS, flush, integrity_problems},
+    backup::{BackupError, BackupReport, PartFile, SIDECARS, integrity_problems},
 };
+
+mod held;
+mod schema;
 
 /// The end of the safety backup's generated name: `rcommander-<stamp>-before-restore.db`.
 const SAFETY_SUFFIX: &str = "-before-restore";
@@ -105,8 +112,11 @@ impl Db {
         let source = source.as_ref();
         let database = self.path().ok_or(BackupError::InMemory)?;
         let staged = staged_restore_path(database);
-        let part = PartFile::create(&staged)?;
-        tokio::fs::copy(source, &part.path).await.map_err(|error| {
+        // Written through the owner-only file's own handle: `fs::copy` would give the copy the
+        // source's permissions.
+        let (part, file) = PartFile::create_open(&staged)?;
+        let mut file = tokio::fs::File::from_std(file);
+        held::copy_into(source, &mut file).await.map_err(|error| {
             BackupError::RestoreNotDatabase {
                 path: source.to_path_buf(),
                 detail: error.to_string(),
@@ -117,8 +127,12 @@ impl Db {
             path: staged.clone(),
             source: error,
         };
-        flush(&part.path).await.map_err(failed)?;
-        let digest = file_digest(&part.path).await.map_err(failed)?;
+        file.sync_all().await.map_err(failed)?;
+        // The digest of the file the handle holds, taken only while the name is still its.
+        let digest = held::digest(&mut file).await.map_err(failed)?;
+        held::still(&mut file, &part.path, digest)
+            .await
+            .map_err(failed)?;
         let safety_backup = self.backup_named(SAFETY_SUFFIX).await?;
         // The digest first: a staged file never waits without it.
         self.set(RESTORE_DIGEST_KEY, digest.to_hex().as_str())
@@ -139,7 +153,9 @@ impl Db {
 /// current database and pass that check again; otherwise it is set aside
 /// ([`rejected_restore_path`]) and the database is unchanged. The digest is cleared either way.
 /// The old WAL files go before the swap: SQLite would otherwise replay them into the restored
-/// file. The state they held is in the safety backup.
+/// file. The state they held is in the safety backup. The digest is read through one handle,
+/// and the staged name - before the rename - and the database's - after it - must still be that
+/// handle's unchanged file (RC-080-68); a file swapped in after the rename is set aside too.
 ///
 /// # Errors
 ///
@@ -154,17 +170,41 @@ pub async fn apply_pending_restore(database: &Path) -> Result<bool, BackupError>
     }
     let swap = |source| BackupError::RestoreSwap { source };
     let expected = stored_digest(database).await;
-    if let Err(reason) = confirm(&staged, expected).await {
-        let set_aside = rejected_restore_path(database);
-        fs::rename(&staged, &set_aside).map_err(swap)?;
-        clear_digest(database).await;
-        return Err(BackupError::RestoreRejected { set_aside, reason });
+    let (mut file, digest) = match confirm(&staged, expected).await {
+        Ok(confirmed) => confirmed,
+        Err(reason) => return Err(set_aside(&staged, database, reason).await),
+    };
+    // Still the file that was hashed and checked, under its name and unchanged.
+    if let Err(error) = held::still(&mut file, &staged, digest).await {
+        return Err(set_aside(&staged, database, error.to_string()).await);
     }
     remove_sidecars(database, &["-wal", "-shm"]).map_err(swap)?;
     fs::rename(&staged, database).map_err(swap)?;
+    // A file put under the staged name between the last look and the rename is never kept as
+    // the database: the state before the restore is in its safety backup.
+    if let Err(error) = held::still(&mut file, database, digest).await {
+        let set_aside = rejected_restore_path(database);
+        fs::rename(database, &set_aside).map_err(swap)?;
+        return Err(BackupError::RestoreRejected {
+            set_aside,
+            reason: error.to_string(),
+        });
+    }
+    drop(file);
     // A backup taken while a restore waited holds that digest too: none outlives its swap.
     clear_digest(database).await;
     Ok(true)
+}
+
+/// Sets the staged file at `staged` aside for `reason` and clears the digest: the database at
+/// `database` stays.
+async fn set_aside(staged: &Path, database: &Path, reason: String) -> BackupError {
+    let set_aside = rejected_restore_path(database);
+    if let Err(source) = fs::rename(staged, &set_aside) {
+        return BackupError::RestoreSwap { source };
+    }
+    clear_digest(database).await;
+    BackupError::RestoreRejected { set_aside, reason }
 }
 
 /// The digest the window's restore stored in the database at `database`, read through a
@@ -197,12 +237,19 @@ async fn clear_digest(database: &Path) {
     let _ = connection.close().await;
 }
 
-/// Why the staged file must not replace the database, or nothing when it may: it has the digest
-/// the window's restore stored (`expected`) and passes the check [`Db::restore_from`] made.
-async fn confirm(staged: &Path, expected: Option<blake3::Hash>) -> Result<(), String> {
+/// Why the staged file must not replace the database, or - when it may - its handle and digest:
+/// it has the digest the window's restore stored (`expected`), read through the handle, and
+/// passes the check [`Db::restore_from`] made.
+async fn confirm(
+    staged: &Path,
+    expected: Option<blake3::Hash>,
+) -> Result<(tokio::fs::File, blake3::Hash), String> {
     let expected =
         expected.ok_or_else(|| "rCommander's restore did not prepare this file".to_owned())?;
-    let actual = file_digest(staged)
+    let mut file = tokio::fs::File::open(staged)
+        .await
+        .map_err(|error| error.to_string())?;
+    let actual = held::digest(&mut file)
         .await
         .map_err(|error| error.to_string())?;
     // `blake3::Hash` compares in constant time.
@@ -213,7 +260,8 @@ async fn confirm(staged: &Path, expected: Option<blake3::Hash>) -> Result<(), St
     remove_sidecars(staged, &SIDECARS).map_err(|error| error.to_string())?;
     let checked = check(staged, staged).await.map(drop);
     remove_quietly_sidecars(staged);
-    checked.map_err(|error| error.to_string())
+    checked.map_err(|error| error.to_string())?;
+    Ok((file, expected))
 }
 
 /// Removes SQLite's files with `suffixes` beside `path`; a missing one is fine.
@@ -242,18 +290,9 @@ fn remove_quietly(path: &Path) {
 }
 
 /// The BLAKE3 digest of the file at `path`.
+#[cfg(test)]
 async fn file_digest(path: &Path) -> io::Result<blake3::Hash> {
-    let mut file = tokio::fs::File::open(path).await?;
-    let mut hasher = blake3::Hasher::new();
-    let mut buffer = vec![0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer).await?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hasher.finalize())
+    held::digest(&mut tokio::fs::File::open(path).await?).await
 }
 
 /// Whether the file at `path` is an rCommander database: a SQLite file with the vault's table.
@@ -412,6 +451,21 @@ async fn inspect(
         .all(|(version, checksum, success)| *success && ours(*version, checksum.as_slice()))
     {
         return Err(foreign());
+    }
+    // Exactly what those migrations create: no trigger, view or table of the file's own.
+    match schema::difference(connection, last)
+        .await
+        .map_err(not_database)?
+    {
+        None => {}
+        Some(schema::Difference::Missing) => return Err(foreign()),
+        Some(schema::Difference::Foreign { kind, name }) => {
+            return Err(BackupError::RestoreForeignObject {
+                path: shown.to_path_buf(),
+                kind,
+                name,
+            });
+        }
     }
     let has_vault: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM vault_meta)")
         .fetch_one(&mut *connection)

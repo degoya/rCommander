@@ -3,7 +3,7 @@
 //! (`Engine::effective_class`) - an overwriting copy, a login script with steps, a lowered
 //! retention limit are judged on typed parameters there, never on raw JSON here.
 
-use rc_engine::{Command, CommandClass, Engine};
+use rc_engine::{Command, CommandClass, Engine, McpJudged};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
@@ -14,6 +14,7 @@ use super::{
     diagnostics::SetRetentionParams,
     login_scripts::{CreateParams, UpdateParams},
     ops::TransferParams,
+    properties::SetAttributesParams,
     queue::SavedParams,
 };
 
@@ -27,6 +28,7 @@ pub(crate) const READ_TOOLS: &[&str] = &[
     "connections_save",
     "diagnostics_set_retention",
     "dirs_sync_apply",
+    "files_set_attributes",
     "login_scripts_create",
     "login_scripts_update",
     "ops_copy",
@@ -68,6 +70,9 @@ pub(crate) fn command_of(tool: &str, arguments: Option<&Map<String, Value>>) -> 
         "diagnostics_set_retention" => {
             typed::<SetRetentionParams>(arguments).map(SetRetentionParams::command)
         }
+        "files_set_attributes" => {
+            typed::<SetAttributesParams>(arguments).and_then(|params| params.command().ok())
+        }
         "queue_load" => typed::<SavedParams>(arguments).map(|params| Command::QueueLoad {
             saved: params.saved,
         }),
@@ -76,16 +81,20 @@ pub(crate) fn command_of(tool: &str, arguments: Option<&Map<String, Value>>) -> 
 }
 
 /// The class the gate holds a call of `tool` to: the engine's class of the command it
-/// dispatches, never lower than `class`, the tool's own.
+/// dispatches, never lower than `class`, the tool's own; and what the engine judged it on,
+/// which the call then runs with held (`rc_engine::with_mcp_judged`, RC-080-66).
 pub(crate) async fn effective_class(
     engine: &Engine,
     tool: &str,
     arguments: Option<&Map<String, Value>>,
     class: CommandClass,
-) -> CommandClass {
+) -> (CommandClass, McpJudged) {
     match command_of(tool, arguments) {
-        Some(command) => class.stricter(engine.effective_class(&command).await),
-        None => class,
+        Some(command) => {
+            let (judged_class, judged) = engine.judge_class(&command).await;
+            (class.stricter(judged_class), judged)
+        }
+        None => (class, McpJudged::default()),
     }
 }
 

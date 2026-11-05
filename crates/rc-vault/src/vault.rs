@@ -1,12 +1,13 @@
 //! [`Vault`]: the state machine over the database, the cipher and a clock.
 
 use std::{
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 
 use rc_db::{Db, SECRET_COLUMNS, SecretColumn, VaultMeta, VaultRemoval};
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     Clock, FieldRef, MasterPassword, Result, SecretBytes, SecretString, SystemClock, Use,
     VaultError, VaultState, VaultStatus,
@@ -105,10 +106,7 @@ impl Vault {
     }
 
     pub(crate) fn machine(&self) -> MutexGuard<'_, Machine> {
-        self.shared
-            .machine
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        self.shared.machine.lock_or_recover("vault.machine")
     }
 
     pub(crate) fn now(&self) -> Instant {
@@ -354,7 +352,7 @@ impl Vault {
             return Err(VaultError::Absent);
         };
         self.machine().exists();
-        let params = KdfParams::from_meta(&meta)?;
+        let params = KdfParams::from_meta(&meta, self.shared.options.kdf)?;
         let delay = self
             .machine()
             .pending_delay(self.shared.options.failure_delay);

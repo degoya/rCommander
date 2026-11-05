@@ -63,8 +63,17 @@ async fn no_service(source: &SecretsPlugin) -> Result<(), String> {
 
 /// `probe`, `open` and the first output of an empty file named like one the manifest claims.
 async fn empty_source(viewer: &ViewerPlugin, manifest: &PluginManifest) -> Result<(), String> {
+    // An exact name (RC-100-80) when the plugin claims no extension: `Dockerfile`, `PKGBUILD`.
+    let exact = || {
+        manifest
+            .matching
+            .names
+            .iter()
+            .find(|name| !name.contains('*'))
+            .cloned()
+    };
     let name = manifest.matching.extensions.first().map_or_else(
-        || "conformance".to_owned(),
+        || exact().unwrap_or_else(|| "conformance".to_owned()),
         |ext| format!("conformance.{ext}"),
     );
     let source = || Arc::new(BytesSource::new(&name, Vec::new()));

@@ -261,7 +261,7 @@ async fn prepare() -> Result<Setup, EngineError> {
     let (server, mcp) = match &db {
         Some(db) => {
             let instance_file = rc_mcp::instance::default_path().ok();
-            mcp::start(engine.clone(), db.clone(), instance_file).await
+            mcp::launch(engine.clone(), db.clone(), instance_file).await
         }
         None => (None, McpStatus::Off),
     };

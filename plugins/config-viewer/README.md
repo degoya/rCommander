@@ -10,12 +10,17 @@ The format is chosen by the file's name (`src/types.rs`, `Format::from_name`):
 
 | Name | Format |
 | --- | --- |
-| `*.ini` (`desktop.ini`), `*.inf`, `*.cfg`, `*.conf`, `.editorconfig`, `.gitconfig` | INI |
+| `*.ini` (`desktop.ini`), `*.inf`, `*.cfg`, `*.conf`, `.editorconfig`, `.gitconfig`, `.gitmodules`, `.npmrc`, systemd units (`*.service`, `*.timer`, `*.socket`, `*.mount`, `*.path`, `*.target`) | INI |
 | `*.reg` | Windows registry export |
-| `.env`, `*.env` (`.env.local` and the like when the host offers them) | `.env` |
+| `.env`, `*.env`, `.env.*` (`.env.local`, `.env.production`; by `[match] names`, rCommander 0.19.0 and later, after every extension) | `.env` |
 | `*.properties` | Java properties |
 | `*.toml`, `Cargo.lock` | TOML |
-| `.gitignore`, `.gitattributes` | a pattern a line |
+| `.gitignore`, `.gitattributes`, `.dockerignore` | a pattern a line |
+
+A `.conf` whose first meaningful line (not blank, no `#` or `;` comment) opens a `{` block
+(`server {`), is a directive ending in `;` without an `=` (`worker_processes auto;`) or a tag
+(`<VirtualHost *:80>`) is declined by `probe`, so the server configuration viewer asked after this
+one shows it; an INI-like `.conf` stays here.
 
 `.lock` is claimed for `Cargo.lock`; `probe` declines every other `.lock` file, so it stays with
 the built-in viewer.

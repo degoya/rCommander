@@ -14,11 +14,12 @@ mod session;
 
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
 };
 
 use self::{manager::Manager, session::WpdSession};
 use super::{DeviceFs, DeviceHub, PortableDevice, worker::Worker};
+use crate::recover::LockOrRecover as _;
 use crate::{BackendId, Result, Vfs, VfsPath};
 
 /// The devices WPD lists, through a manager made on first use.
@@ -29,7 +30,7 @@ pub(crate) struct WpdHub {
 
 impl DeviceHub for WpdHub {
     fn devices(&self) -> Vec<PortableDevice> {
-        let mut manager = self.manager.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut manager = self.manager.lock_or_recover("windows.manager");
         if manager.is_none() {
             match Worker::start("rc-wpd-devices", Manager::open) {
                 Ok(started) => *manager = Some(started),

@@ -8,7 +8,8 @@ use resvg::usvg::{self, FontResolver, ImageHrefResolver, Options, fontdb};
 
 use crate::budget::{self, MAX_EXPANDED_ELEMENTS, Remaining, read_as_svg};
 use crate::code;
-use crate::depth::{MAX_DEPTH, depth_within};
+use crate::depth::{MAX_DEPTH, depth_within, tree_within};
+use crate::doctype::{data_without_doctype, without_doctype};
 use crate::load::is_gzip;
 use crate::pixels::{MAX_PATTERN_PIXELS, pattern_pixels};
 use crate::settings::Settings;
@@ -46,14 +47,20 @@ pub fn options(remaining: Arc<Remaining>) -> Options<'static> {
         image_href_resolver: ImageHrefResolver {
             resolve_data: Box::new(move |mime, data, options| {
                 let raster = RASTER_MAGIC.iter().any(|magic| data.starts_with(magic));
-                if is_gzip(&data)
-                    || (!raster && !depth_within(&data, MAX_DEPTH))
-                    || (read_as_svg(mime) && !remaining.take_svg(&data))
-                {
-                    None
-                } else {
-                    data_only(mime, data, &without_images(Arc::clone(&options.fontdb)))
+                if is_gzip(&data) || (!raster && !depth_within(&data, MAX_DEPTH)) {
+                    return None;
                 }
+                // usvg reads an SVG here with DTDs: it gets the bytes without one (RC-080-69).
+                let data = if read_as_svg(mime) {
+                    let data = data_without_doctype(data);
+                    if !remaining.take_svg(&data) {
+                        return None;
+                    }
+                    data
+                } else {
+                    data
+                };
+                data_only(mime, data, &without_images(Arc::clone(&options.fontdb)))
             }),
             resolve_string: Box::new(|_, _| None),
         },
@@ -85,18 +92,30 @@ fn without_images(fontdb: Arc<fontdb::Database>) -> Options<'static> {
 }
 
 /// The picture of `svg` (UTF-8, a leading byte-order mark allowed) at `settings`: `not_svg` for
-/// a document usvg cannot read or one without a size, `too_complex` nested beyond the depth
-/// budget (told before parsing), beyond the element budget (`<use>`, markers, patterns and
+/// a document usvg cannot read, one using an entity of its DTD or one without a size,
+/// `too_complex` nested beyond the depth budget (told before parsing and on the tree), beyond
+/// the parse's node budget, beyond the element budget (`<use>`, markers, patterns and
 /// embedded SVGs) or with pattern tiles beyond [`MAX_PATTERN_PIXELS`].
 pub fn render(svg: &[u8], settings: Settings) -> Result<Pixmap, Failure> {
     let text = std::str::from_utf8(svg).map_err(|_| not_svg())?;
-    let text = text.strip_prefix(BOM).unwrap_or(text);
+    let text = without_doctype(text.strip_prefix(BOM).unwrap_or(text));
     if !depth_within(text.as_bytes(), MAX_DEPTH) {
         return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
     }
-    // As usvg itself reads: editors declare entities in a DTD.
+    // Without a DTD and within the node budget while it is parsed, the depth counted once more
+    // on the tree (RC-080-69).
     let document =
-        roxmltree::Document::parse_with_options(text, budget::parsing()).map_err(|_| not_svg())?;
+        roxmltree::Document::parse_with_options(&text, budget::parsing()).map_err(|error| {
+            match error {
+                roxmltree::Error::NodesLimitReached => {
+                    Failure::coded(FailureKind::BadData, code::TOO_COMPLEX)
+                }
+                _ => not_svg(),
+            }
+        })?;
+    if !tree_within(&document, MAX_DEPTH) {
+        return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
+    }
     let count = budget::expanded_elements(&document, MAX_EXPANDED_ELEMENTS);
     if count > MAX_EXPANDED_ELEMENTS {
         return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));

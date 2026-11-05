@@ -180,6 +180,55 @@ fn every_bundled_manifest_completes_to_a_valid_one() {
     assert!(checked >= 1, "no manifest under {}", plugins.display());
 }
 
+/// RC-100-80: the bundled manifests as the host ranks them (`MatchSection::rank`, best first,
+/// then by name) send each sample file to the viewer the job names - names before extensions
+/// before name patterns.
+#[test]
+fn the_bundled_manifests_send_each_sample_file_to_its_viewer() {
+    let plugins = workspace_root().join("plugins");
+    let defaults = ManifestDefaults::read(&plugins.join("metadata.toml")).expect("defaults");
+    let mut viewers = Vec::new();
+    for entry in std::fs::read_dir(&plugins).expect("plugins") {
+        let path = entry.expect("entry").path().join("manifest.toml");
+        let Ok(source) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let completed = complete_manifest(&source, Some(&defaults), Some(KEY))
+            .unwrap_or_else(|error| panic!("{}: {error:#}", path.display()));
+        let parsed = manifest(&completed);
+        viewers.push((parsed.name, parsed.matching));
+    }
+    let chosen = |file: &str| {
+        viewers
+            .iter()
+            .filter_map(|(name, matching)| Some((matching.rank(file, b"", 1)?, name.as_str())))
+            .min()
+            .map(|(_, name)| name.to_owned())
+    };
+    for (file, viewer) in [
+        ("Dockerfile", "Dockerfile viewer"),
+        ("dockerfile", "Dockerfile viewer"),
+        ("Dockerfile.dev", "Dockerfile viewer"),
+        ("app.dockerfile", "Dockerfile viewer"),
+        ("Containerfile", "Dockerfile viewer"),
+        ("Dockerfile.toml", "Config viewer"),
+        (".env.local", "Config viewer"),
+        (".env", "Config viewer"),
+        ("Cargo.toml", "Config viewer"),
+        ("app.service", "Config viewer"),
+        (".dockerignore", "Config viewer"),
+        ("PKGBUILD", "Shell script viewer"),
+        ("APKBUILD", "Shell script viewer"),
+        (".zshenv", "Shell script viewer"),
+        (".envrc", "Shell script viewer"),
+        ("deploy.sh", "Shell script viewer"),
+        ("setup.ps1", "PowerShell viewer"),
+        ("build.bat", "Batch viewer"),
+    ] {
+        assert_eq!(chosen(file).as_deref(), Some(viewer), "{file}");
+    }
+}
+
 /// A third party has no `plugins/metadata.toml`: a scaffolded manifest is complete and valid on
 /// its own, and packaging it changes none of its bytes.
 #[test]

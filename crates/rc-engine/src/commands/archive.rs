@@ -17,6 +17,9 @@ use crate::{
     sort::{names_for, sort_entries},
 };
 
+/// The buffer a file unpacked for a program of the system is copied through.
+const COPY_BUFFER: usize = 256 * 1024;
+
 /// Refuses a change inside an archive: archives are read-only in a panel.
 pub(crate) fn refuse_archive_change(path: &VfsPath) -> Result<(), EngineError> {
     if matches!(path.backend, BackendId::Archive { .. }) {
@@ -176,7 +179,9 @@ impl Engine {
                 .create_new(true)
                 .open(&file)
                 .await?;
-            tokio::io::copy(&mut reader, &mut writer).await?;
+            // 256 KiB at a time, as the queue copies, not `copy`'s 8 KiB (RC-080-70).
+            let mut reader = tokio::io::BufReader::with_capacity(COPY_BUFFER, &mut reader);
+            tokio::io::copy_buf(&mut reader, &mut writer).await?;
             writer.flush().await?;
             let mut permissions = writer.metadata().await?.permissions();
             permissions.set_readonly(true);

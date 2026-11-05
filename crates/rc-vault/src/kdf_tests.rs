@@ -56,14 +56,14 @@ fn new_salts_differ() {
 #[test]
 fn stored_parameters_are_read_and_checked() {
     assert_eq!(
-        KdfParams::from_meta(&meta(KDF_NAME, 64, 1, 1)).expect("valid"),
+        KdfParams::from_meta(&meta(KDF_NAME, 64, 1, 1), CHEAP).expect("valid"),
         CHEAP
     );
     assert_eq!(
-        KdfParams::from_meta(&meta(KDF_NAME, 65_536, 3, 1)).expect("valid"),
+        KdfParams::from_meta(&meta(KDF_NAME, 65_536, 3, 1), CHEAP).expect("valid"),
         KdfParams::DEFAULT
     );
-    assert!(KdfParams::from_meta(&meta(KDF_NAME, 1024 * 1024, 16, 16)).is_ok());
+    assert!(KdfParams::from_meta(&meta(KDF_NAME, 1024 * 1024, 16, 16), CHEAP).is_ok());
     let mut newer = meta(KDF_NAME, 64, 1, 1);
     newer.version = 2;
     for bad in [
@@ -78,7 +78,10 @@ fn stored_parameters_are_read_and_checked() {
         meta(KDF_NAME, 64, 1, 64),
     ] {
         assert!(
-            matches!(KdfParams::from_meta(&bad), Err(VaultError::BadParameters)),
+            matches!(
+                KdfParams::from_meta(&bad, CHEAP),
+                Err(VaultError::BadParameters)
+            ),
             "{bad:?}"
         );
     }
@@ -137,4 +140,77 @@ fn the_floor_refuses_parameters_cheap_to_guess_against() {
         );
     }
     assert_eq!(CHEAP.checked().is_ok(), cfg!(debug_assertions));
+}
+
+/// RC-080-68: what is read is held to the release floor whatever the build - a debug build of the
+/// program, which makes its keys with the default, refuses a weak stored row and a weak export;
+/// only a process that makes keys as weak itself (the tests of every crate) reads them.
+#[test]
+fn reading_holds_the_release_floor_in_every_build() {
+    let weak = meta(KDF_NAME, 64, 1, 1);
+    assert!(matches!(
+        KdfParams::from_meta(&weak, KdfParams::DEFAULT),
+        Err(VaultError::BadParameters)
+    ));
+    assert_eq!(KdfParams::read_floor(KdfParams::DEFAULT), KdfParams::MIN);
+    assert_eq!(KdfParams::read_floor(KdfParams::MIN), KdfParams::MIN);
+    assert!(matches!(
+        CHEAP.checked_import(KdfParams::DEFAULT),
+        Err(VaultError::BadParameters)
+    ));
+    assert_eq!(
+        KdfParams::MIN.checked_import(KdfParams::DEFAULT).ok(),
+        Some(KdfParams::MIN)
+    );
+    // The tests' own weak parameters are read only by a process that makes keys with them, and
+    // only in a debug build.
+    assert_eq!(
+        KdfParams::from_meta(&weak, CHEAP).is_ok(),
+        cfg!(debug_assertions)
+    );
+    // Never below argon2's own least, whatever the own parameters say.
+    let none = KdfParams {
+        m_cost_kib: 0,
+        t_cost: 0,
+        p_cost: 0,
+    };
+    assert_eq!(
+        KdfParams::read_floor(none),
+        if cfg!(debug_assertions) {
+            KdfParams::ARGON2_LEAST
+        } else {
+            KdfParams::MIN
+        }
+    );
+}
+
+/// RC-080-68: an export from elsewhere is capped below the own database - 256 MiB, eight passes,
+/// four lanes - and refused above it as too costly, not as damaged.
+#[test]
+fn an_import_is_capped_below_the_own_database() {
+    let cap = KdfParams::IMPORT_MAX;
+    assert_eq!(cap.checked_import(CHEAP).ok(), Some(cap));
+    assert_eq!(
+        KdfParams::DEFAULT.checked_import(KdfParams::DEFAULT).ok(),
+        Some(KdfParams::DEFAULT)
+    );
+    for costly in [
+        KdfParams {
+            m_cost_kib: 1024 * 1024,
+            ..CHEAP
+        },
+        KdfParams {
+            m_cost_kib: cap.m_cost_kib + 1,
+            ..CHEAP
+        },
+        KdfParams { t_cost: 9, ..CHEAP },
+        KdfParams { p_cost: 5, ..CHEAP },
+    ] {
+        assert!(
+            matches!(costly.checked_import(CHEAP), Err(VaultError::TooCostly)),
+            "{costly:?}"
+        );
+    }
+    // The own database keeps its higher cap.
+    assert!(KdfParams::from_meta(&meta(KDF_NAME, 1024 * 1024, 16, 16), CHEAP).is_ok());
 }

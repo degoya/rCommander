@@ -19,10 +19,15 @@
 //! The setting `format` (`as_is` or `pretty`) chooses the text: the file's own lines, or the
 //! JSON indented two spaces a level, since a minified file is otherwise one line.
 //!
+//! The file's extension chooses the [`Dialect`] (RC-100-80): JSON, JSONC (`.jsonc`), JSON5
+//! (`.json5`) or JSON Lines (`.jsonl`, `.ndjson`), a value per line, each line checked for
+//! itself and the tree a list of the lines' values.
+//!
 //! The layout is rDownloader's for plugins (`sdk/templates/*`, commit `26c8592a6`): the logic
 //! here, tested natively with `cargo test`; the WIT translation in `src/guest.rs`, only on
 //! `wasm32` (RC-100-12). The types in [`types`] mirror the viewer world one to one for that.
 
+pub mod dialect;
 #[cfg(target_arch = "wasm32")]
 mod guest;
 pub mod lexer;
@@ -40,6 +45,7 @@ mod walk;
 #[cfg(test)]
 mod test_support;
 
+use dialect::Dialect;
 use lexer::Lexer;
 use lines::LineIndex;
 use pretty::LayoutState;
@@ -57,8 +63,10 @@ pub const INDEX_BUDGET_BYTES: usize = 16 << 20;
 const BOM: &[u8] = b"\xEF\xBB\xBF";
 
 /// Whether the file looks like JSON: its first byte after a byte-order mark and whitespace
-/// starts a JSON value. rCommander matches the manifest's extensions itself; this is `probe`.
+/// starts a JSON value - or, in JSONC and JSON5, a comment; in JSON5 also one of its own values.
+/// rCommander matches the manifest's extensions itself; this is `probe`.
 pub fn probe<S: Source>(src: &mut S) -> bool {
+    let dialect = Dialect::from_name(&src.name());
     let length = u32::try_from(src.size().min(4096)).unwrap_or(4096);
     let Ok(head) = src.read_at(0, length) else {
         return false;
@@ -70,7 +78,8 @@ pub fn probe<S: Source>(src: &mut S) -> bool {
             matches!(
                 byte,
                 b'{' | b'[' | b'"' | b'-' | b'0'..=b'9' | b't' | b'f' | b'n'
-            )
+            ) || (dialect.comments() && *byte == b'/')
+                || (dialect.json5() && matches!(byte, b'\'' | b'+' | b'.' | b'I' | b'N'))
         })
 }
 
@@ -78,6 +87,7 @@ pub fn probe<S: Source>(src: &mut S) -> bool {
 pub struct Viewer<S: Source> {
     src: S,
     format: Format,
+    dialect: Dialect,
     /// The offset of the text's first byte: after a byte-order mark.
     start: u64,
     lines: LineIndex,
@@ -86,8 +96,10 @@ pub struct Viewer<S: Source> {
 }
 
 impl<S: Source> Viewer<S> {
-    /// `open`: reads the file once and offers `highlighted`, then `tree`.
+    /// `open`: reads the file once, in the dialect its name says, and offers `highlighted`,
+    /// then `tree`.
     pub fn open(mut src: S, format: Format) -> Result<(Self, Document), Failure> {
+        let dialect = Dialect::from_name(&src.name());
         let start = if src.size() >= 3 && src.read_at(0, 3)? == BOM {
             3
         } else {
@@ -95,16 +107,16 @@ impl<S: Source> Viewer<S> {
         };
         let mut lines = LineIndex::new(start);
         let (structure, line_count) = {
-            let mut lexer = Lexer::new(Reader::new(&mut src, start, OPEN_CHUNK));
-            let mut builder = Builder::new();
+            let mut lexer = Lexer::new(Reader::new(&mut src, start, OPEN_CHUNK)).dialect(dialect);
+            let mut builder = Builder::for_dialect(dialect, start);
             let mut layout = LayoutState::default();
             let mut pretty_lines = 0u64;
             let mut saw_lexeme = false;
             let indented = format == Format::Pretty;
             loop {
-                let lexeme = lexer.next_with(&mut |line, offset| {
+                let lexeme = lexer.next_with(&mut |line, offset, in_comment| {
                     if !indented {
-                        lines.line_start(line, offset, LayoutState::default());
+                        lines.line_start(line, offset, LayoutState::default(), in_comment);
                     }
                 })?;
                 let Some(lexeme) = lexeme else { break };
@@ -117,7 +129,7 @@ impl<S: Source> Viewer<S> {
                         if let pretty::Piece::Break(_) = piece {
                             pretty_lines += 1;
                             if first {
-                                lines.line_start(pretty_lines, lexeme.start, before);
+                                lines.line_start(pretty_lines, lexeme.start, before, false);
                                 first = false;
                             }
                         }
@@ -137,6 +149,7 @@ impl<S: Source> Viewer<S> {
         let viewer = Self {
             src,
             format,
+            dialect,
             start,
             lines,
             structure,
@@ -162,10 +175,19 @@ impl<S: Source> Viewer<S> {
         self.lines.lines()
     }
 
-    /// Where the JSON first stops being valid.
+    /// Where the JSON first stops being valid; in JSON Lines, the first broken line's error.
     #[must_use]
     pub fn parse_error(&self) -> Option<&ParseError> {
-        self.structure.error.as_ref()
+        self.structure
+            .error
+            .as_ref()
+            .or_else(|| self.structure.broken.first().map(|broken| &broken.error))
+    }
+
+    /// The dialect the file is read in.
+    #[must_use]
+    pub fn dialect(&self) -> Dialect {
+        self.dialect
     }
 
     /// The memory the index takes now.
@@ -178,7 +200,7 @@ impl<S: Source> Viewer<S> {
     pub fn text(&mut self, out: &mut impl Sink) -> Result<String, Failure> {
         match self.format {
             Format::AsIs => text::copy(&mut self.src, self.start, out)?,
-            Format::Pretty => text::pretty(&mut self.src, self.start, out)?,
+            Format::Pretty => text::pretty(&mut self.src, self.start, self.dialect, out)?,
         }
         Ok("utf-8".to_owned())
     }
@@ -191,10 +213,15 @@ impl<S: Source> Viewer<S> {
         if wanted == 0 {
             return Ok(Vec::new());
         }
+        let dialect = self.dialect;
         let fetched = match self.format {
-            Format::AsIs => text::as_is_lines(&mut self.src, &self.lines, first, wanted)?,
-            Format::Pretty => text::pretty_lines(&mut self.src, &self.lines, first, wanted)?,
+            Format::AsIs => text::as_is_lines(&mut self.src, &self.lines, first, wanted, dialect)?,
+            Format::Pretty => {
+                text::pretty_lines(&mut self.src, &self.lines, first, wanted, dialect)?
+            }
         };
+        // A JSON Lines file as it is has a value per line; laid out, a value has many.
+        let check = dialect.records() && self.format == Format::AsIs;
         let mut all = Vec::new();
         for (index, line) in fetched.iter().enumerate().take(wanted as usize) {
             let colon = !line.capped
@@ -204,7 +231,12 @@ impl<S: Source> Viewer<S> {
                         .skip(index + 1)
                         .map(|following| following.bytes.as_slice()),
                 );
-            let mut tokens = tokens::tokenize_line(&line.bytes, line.capped, colon);
+            let options = tokens::LineOptions {
+                dialect,
+                in_comment: line.in_comment,
+                check,
+            };
+            let mut tokens = tokens::tokenize_line_with(&line.bytes, line.capped, colon, options);
             utf8::to_text(&line.bytes, &mut tokens);
             all.push(tokens);
         }

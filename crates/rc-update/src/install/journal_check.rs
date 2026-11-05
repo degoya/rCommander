@@ -13,8 +13,8 @@ impl Journal {
     /// Refuses a journal that reaches outside the installation it belongs to: whatever a start
     /// does with it moves program files, puts a database in place and starts a program. On top
     /// of [`super::Plan::validate`]: the journal lies in the data directory it names, the database
-    /// in it, its copy in `update/pre-update`; the program, the entries and the replaced ones are
-    /// plain names in the program folder.
+    /// in it, its copy in `update/pre-update`; the entries and the replaced ones are plain names in
+    /// the program folder, the program (checked by `validate`) inside one of them.
     ///
     /// # Errors
     ///
@@ -50,12 +50,6 @@ impl Journal {
             return invalid(format!(
                 "the database copy {} is not in update/{PRE_UPDATE_DIR}",
                 copy.display()
-            ));
-        }
-        if plan.executable.is_empty() || !plan.executable.split('/').all(is_name) {
-            return invalid(format!(
-                "{:?} is not a program in the program folder",
-                plan.executable
             ));
         }
         if let Some(name) = self

@@ -78,6 +78,31 @@ async fn files_set_attributes_takes_rfc3339_and_refuses_keys() {
     assert_eq!(tree["code"], "sensitive_path", "{tree}");
 }
 
+/// RC-080-66: a mode writable by the group asks as a destructive call does; one that is not
+/// runs without a question.
+#[tokio::test]
+async fn files_set_attributes_with_g_w_asks() {
+    let built = Fixture::new().with_codes().build().await;
+    std::fs::write(built.root.path().join("top.txt"), b"hello").expect("top");
+    let client = connect(&built.context).await;
+    let shared = json!({ "paths": ["top.txt"], "mode": "664" });
+    let asked = call(&client, "files_set_attributes", shared.clone()).await;
+    assert_eq!(asked["confirmation_required"], true, "{asked}");
+    assert_eq!(asked["class"], "destructive", "{asked}");
+    let mut confirmed = shared;
+    confirmed["confirmation"] = asked["confirmation"].clone();
+    let ran = call(&client, "files_set_attributes", confirmed).await;
+    assert!(ran.get("confirmation_required").is_none(), "{ran}");
+
+    let own = call(
+        &client,
+        "files_set_attributes",
+        json!({ "paths": ["top.txt"], "mode": "644" }),
+    )
+    .await;
+    assert!(own.get("confirmation_required").is_none(), "{own}");
+}
+
 #[tokio::test]
 async fn files_create_link_makes_a_hard_link_but_never_to_a_key() {
     let (root, context) = setup().await;
@@ -150,4 +175,6 @@ fn times_and_modes_parse() {
     assert_eq!(parse_mode("777"), None);
     assert_eq!(parse_mode("666"), None);
     assert_eq!(parse_mode("775"), Some(0o775));
+    // Writable by the group is taken; the gate asks (RC-080-66).
+    assert_eq!(parse_mode("664"), Some(0o664));
 }

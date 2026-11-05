@@ -86,7 +86,16 @@ async fn closed_port() -> u16 {
     listener.local_addr().expect("address").port()
 }
 
+/// Creates `draft`. These tests log in to plain FTP servers of their own: the question before a
+/// password in clear is `remote/ftp_plaintext_tests.rs`'s (RC-080-67), off here.
 async fn create(engine: &Engine, folder: Option<FolderId>, draft: ConnectionDraft) -> ConnectionId {
+    engine
+        .dispatch(Command::SetSetting {
+            key: crate::settings::FTP_ASK_PLAINTEXT_KEY.into(),
+            value: serde_json::json!(false),
+        })
+        .await
+        .expect("no plaintext question");
     match engine
         .dispatch(Command::CreateConnection {
             folder_id: folder,

@@ -10,11 +10,12 @@
 
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 use super::{DeviceHub, PortableDevice};
+use crate::recover::LockOrRecover as _;
 use crate::{Result, Vfs, VfsError, VfsPath};
 
 /// How a gvfs mount folder of an MTP device begins.
@@ -132,7 +133,7 @@ impl GvfsHub {
     /// The volumes gio lists, asked again once [`GIO_MAX_AGE`] has passed. No gio, or one that
     /// fails, is no volume.
     fn volumes(&self) -> Vec<Volume> {
-        let mut kept = self.volumes.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut kept = self.volumes.lock_or_recover("gvfs.volumes");
         if let Some((asked, volumes)) = kept.as_ref()
             && asked.elapsed() < GIO_MAX_AGE
         {
@@ -150,10 +151,24 @@ impl GvfsHub {
     }
 }
 
+/// Where `gio` is looked for: system folders only, never a lookup through `PATH` (RC-080-65), so
+/// a `gio` placed earlier on the `PATH` is never run.
+const GIO_PATHS: &[&str] = &["/usr/bin/gio", "/bin/gio", "/usr/local/bin/gio"];
+
 /// What `gio <args>` writes, when it succeeds.
 fn gio(args: &[&str]) -> std::io::Result<String> {
     use rc_process::NoConsoleWindow;
-    let output = std::process::Command::new("gio")
+    let program = GIO_PATHS
+        .iter()
+        .map(std::path::Path::new)
+        .find(|path| path.is_file())
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("gio is not in {}", GIO_PATHS.join(", ")),
+            )
+        })?;
+    let output = std::process::Command::new(program)
         .args(args)
         .stdin(std::process::Stdio::null())
         .no_console_window()
@@ -194,7 +209,7 @@ impl DeviceHub for GvfsHub {
             });
         }
         // Mounted now: the next list names it without a mount.
-        *self.volumes.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        *self.volumes.lock_or_recover("gvfs.volumes") = None;
         Ok(None)
     }
 }

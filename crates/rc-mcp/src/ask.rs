@@ -9,8 +9,9 @@
 //! offered for write tools, per MCP session and tool, and for the executing tools that name
 //! their target - the terminal `terminal_send_input` types into, the connection `ssh_exec` runs
 //! on - per session, tool and target, for the minutes of
-//! [`rc_engine::settings::MCP_EXEC_SESSION_MINUTES_KEY`] (RC-010-27). The engine keeps the
-//! grants (`Engine::mcp_grants`), so the window shows them and takes them back.
+//! [`rc_engine::settings::MCP_EXEC_SESSION_MINUTES_KEY`] (RC-010-27); and for
+//! `terminal_read_screen`, destructive since RC-080-66, per session and terminal. The engine
+//! keeps the grants (`Engine::mcp_grants`), so the window shows them and takes them back.
 //!
 //! Without a window (`rcommander mcp` serving headless) nobody can be asked: the call is refused
 //! with `headless_ask_denied`, unless a person switched on
@@ -181,14 +182,21 @@ fn frozen_to_show(
 
 /// What "allow for this session" would grant this call, and the target it is bound to: a
 /// write tool the whole session, an executing tool that names its target ([`exec_target`])
-/// that target for the setting's minutes ([`GateSettings::exec_minutes`]); a destructive tool,
-/// an executing one without a target or with 0 minutes nothing.
+/// that target for the setting's minutes ([`GateSettings::exec_minutes`]), `terminal_read_screen`
+/// its terminal for the session; any other destructive tool, an executing one without a target
+/// or with 0 minutes nothing.
 fn session_offer(
     settings: &GateSettings,
     class: CommandClass,
     tool: &str,
     arguments: Option<&Map<String, Value>>,
 ) -> Option<(McpSessionOffer, Option<String>)> {
+    // Reading a terminal's screen asks as a destructive call does (RC-080-66, owner 2026-11-05):
+    // it shows what was typed there. The person may allow it on that terminal for the session.
+    if tool == SCREEN_TOOL {
+        let target = numbered_target("terminal", arguments)?;
+        return Some((McpSessionOffer::Session, Some(target)));
+    }
     match class {
         CommandClass::Write => Some((McpSessionOffer::Session, None)),
         CommandClass::Exec => {
@@ -209,6 +217,15 @@ fn exec_target(tool: &str, arguments: Option<&Map<String, Value>>) -> Option<Str
         "ssh_exec" => "connection_id",
         _ => return None,
     };
+    numbered_target(name, arguments)
+}
+
+/// The tool that reads a terminal's screen; its grant is bound to the terminal.
+const SCREEN_TOOL: &str = "terminal_read_screen";
+
+/// A grant's target from the number the call gives under `name`, as `name=value`; `None`
+/// without one.
+fn numbered_target(name: &str, arguments: Option<&Map<String, Value>>) -> Option<String> {
     let value = arguments?.get(name)?;
     (value.is_u64() || value.is_i64()).then(|| format!("{name}={value}"))
 }
@@ -435,3 +452,7 @@ mod shown_tests;
 #[cfg(test)]
 #[path = "ask_offer_tests.rs"]
 mod offer_tests;
+
+#[cfg(test)]
+#[path = "ask_screen_tests.rs"]
+mod screen_tests;

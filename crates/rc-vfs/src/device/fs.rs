@@ -5,7 +5,10 @@
 //! bounded cache of what was found (`cache.rs`) and the folders' listings where the cache does
 //! not know; names match in any case, as a phone's storage does. Every call of the device runs on
 //! a blocking thread, held to a time limit (a listing to the listing limit), so a device that
-//! hangs never holds its caller.
+//! hangs never holds its caller. The calls take turns (RC-080-70): a call that ran out of time
+//! still runs on its thread until the device answers, and the next one - a retry of a delete -
+//! starts only after it, never beside it; one that waits past its own limit fails as timed out
+//! without having started.
 //!
 //! What MTP has not, this backend refuses before the device is asked: appending, setting times
 //! or attributes, moving between folders, creating or removing a storage, files in the device's
@@ -15,7 +18,7 @@
 
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Mutex, MutexGuard},
     time::{Duration, Instant, SystemTime},
 };
 
@@ -28,6 +31,8 @@ use super::{
     pipe,
     write::{self, Target},
 };
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{
     Capabilities, Entry, ReadStream, Result, SetAttributes, Timeouts, Vfs, VfsError, WriteMode,
     WriteStream,
@@ -38,6 +43,8 @@ pub struct DeviceFs {
     session: Arc<dyn Session>,
     cache: Arc<Mutex<ObjectCache>>,
     timeouts: Timeouts,
+    /// Held by the call on the device's blocking thread until it returns.
+    turn: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// What a path names: the device itself, or one of its objects.
@@ -71,22 +78,37 @@ impl DeviceFs {
             session,
             cache: Arc::new(Mutex::new(ObjectCache::new(capacity))),
             timeouts,
+            turn: Arc::default(),
         }
     }
 
     fn cache(&self) -> MutexGuard<'_, ObjectCache> {
-        self.cache.lock().unwrap_or_else(PoisonError::into_inner)
+        self.cache.lock_or_recover("fs.cache")
     }
 
-    /// `work` on a blocking thread, ended after `limit`; its failure typed on `path`.
+    /// `work` on a blocking thread once the call before it has returned, given up after `limit`
+    /// (the wait for the turn included); its failure typed on `path`. A call given up keeps the
+    /// turn until the device answers it.
     async fn call<T, F>(&self, path: &Path, limit: Duration, work: F) -> Result<T>
     where
         T: Send + 'static,
         F: FnOnce(&dyn Session) -> DeviceResult<T> + Send + 'static,
     {
         let session = Arc::clone(&self.session);
-        let task = tokio::task::spawn_blocking(move || work(session.as_ref()));
-        match tokio::time::timeout(limit, task).await {
+        let turn = Arc::clone(&self.turn);
+        let task = async move {
+            let held = turn.lock_owned().await;
+            tokio::task::spawn_blocking(move || {
+                let answer = work(session.as_ref());
+                drop(held);
+                answer
+            })
+            .await
+        };
+        match tokio::time::timeout(limit, task)
+            .await
+            .map(|joined| joined.log_panic("vfs.device_call"))
+        {
             Err(_) => Err(VfsError::TimedOut {
                 path: path.to_path_buf(),
                 seconds: limit.as_secs(),

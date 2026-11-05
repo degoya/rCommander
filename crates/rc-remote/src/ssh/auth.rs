@@ -19,6 +19,7 @@ use secrecy::{ExposeSecret as _, SecretString};
 use tokio::time::timeout;
 
 use super::agent_offer::offer_order;
+use crate::recover::LogPanic as _;
 use crate::{
     PrivateKeyError,
     agent::{self, AGENT_WAIT},
@@ -181,7 +182,8 @@ async fn by_key(
                 .map(|passphrase| passphrase.expose_secret()),
         )
     })
-    .await;
+    .await
+    .log_panic("remote.private_key_decode");
     let key = match opened {
         Ok(Ok(key)) => key,
         Ok(Err(error)) => return Ok(Attempt::KeyUnusable(error)),

@@ -207,9 +207,22 @@ impl russh_sftp::server::Handler for Served {
         id: u32,
         filename: String,
         pflags: OpenFlags,
-        _attrs: FileAttributes,
+        attrs: FileAttributes,
     ) -> Result<Handle, Self::Error> {
-        let file = OpenOptions::from(pflags)
+        #[cfg_attr(
+            not(unix),
+            expect(unused_mut, reason = "the rights are set on Unix only")
+        )]
+        let mut options = OpenOptions::from(pflags);
+        // As OpenSSH's `sftp-server`: the rights asked for apply to a file the open creates.
+        #[cfg(unix)]
+        if let Some(mode) = attrs.permissions {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.mode(mode & 0o7777);
+        }
+        #[cfg(not(unix))]
+        let _ = attrs;
+        let file = options
             .open(self.local(&filename))
             .map_err(|error| status(&error))?;
         let handle = self.handle(Opened::File(file));

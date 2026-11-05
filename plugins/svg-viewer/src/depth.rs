@@ -2,7 +2,10 @@
 //! parses iteratively since 0.21.2), so a document of 100 000 nested `<g>` - a few hundred
 //! kilobytes - overflows the stack, which in the component is a trap. The nesting is told first
 //! by a scan of the bytes that keeps no state but a counter, and a document deeper than the
-//! budget is never parsed.
+//! budget is never parsed. What the parser made of it is counted once more ([`tree_within`],
+//! RC-080-69): the scan and the parser can never disagree into a deeper tree.
+
+use roxmltree::{Document, NodeId};
 
 /// The deepest element nesting a document may have, the root counted. Far beyond what an editor
 /// writes (a few dozen levels), and low enough that the recursions together stay inside
@@ -44,6 +47,28 @@ pub fn depth_within(text: &[u8], limit: usize) -> bool {
     true
 }
 
+/// Whether no element of the parsed `document` is nested deeper than `limit`, the root counted
+/// and, as in [`depth_within`], an element without content (`<rect/>`) not: one pass in document
+/// order over the path of open elements, never longer than `limit` itself.
+#[must_use]
+pub fn tree_within(document: &Document, limit: usize) -> bool {
+    let mut open: Vec<NodeId> = Vec::new();
+    for node in document
+        .descendants()
+        .filter(|node| node.is_element() && node.has_children())
+    {
+        let parent = node.parent().map(|parent| parent.id());
+        while open.last().is_some_and(|last| Some(*last) != parent) {
+            open.pop();
+        }
+        open.push(node.id());
+        if open.len() > limit {
+            return false;
+        }
+    }
+    true
+}
+
 /// The offset of the first `pattern` at or after `from`.
 fn find(text: &[u8], from: usize, pattern: &[u8]) -> Option<usize> {
     text.get(from..)?
@@ -53,7 +78,7 @@ fn find(text: &[u8], from: usize, pattern: &[u8]) -> Option<usize> {
 }
 
 /// The offset after the first `pattern` at or after `from`; the end of `text` without one.
-fn after(text: &[u8], from: usize, pattern: &[u8]) -> usize {
+pub(crate) fn after(text: &[u8], from: usize, pattern: &[u8]) -> usize {
     find(text, from, pattern).map_or(text.len(), |at| at + pattern.len())
 }
 
@@ -81,7 +106,7 @@ fn tag_end(text: &[u8], from: usize) -> (usize, bool) {
 
 /// The offset after the `>` that ends a `<!...` declaration starting at `from`: brackets of an
 /// internal subset, quoted literals and comments inside it skipped.
-fn declaration_end(text: &[u8], from: usize) -> usize {
+pub(crate) fn declaration_end(text: &[u8], from: usize) -> usize {
     let mut quote = None;
     let mut brackets = 0usize;
     let mut at = from;

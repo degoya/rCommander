@@ -97,6 +97,7 @@ mod properties;
 mod question_desk;
 pub mod quick_search;
 mod read_guard;
+mod recover;
 mod reexports;
 mod registry;
 mod remote;
@@ -120,7 +121,7 @@ pub mod workspaces;
 
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError},
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
     time::Duration,
 };
 
@@ -129,6 +130,8 @@ use rc_ops::{Backend, EventSink, Queue, QueueConfig, SystemTrash};
 use rc_vault::Vault;
 use rc_vfs::{IoCancel, LocalFs, TimeoutFs, Timeouts, Vfs, WslCatalog};
 use tokio::sync::broadcast;
+
+use crate::recover::LockOrRecover as _;
 
 pub use commands::file_ops::{ExternalProgram, FileDialog};
 pub use commands::filter::QuickFilter;
@@ -168,8 +171,8 @@ pub use login_scripts::{
 };
 pub use mcp_questions::{
     MAX_MCP_GRANTS, MAX_MCP_QUESTIONS, MAX_SHOWN_CHARS, McpAnswer, McpArgument, McpAsk,
-    McpFrozenPanel, McpGrant, McpPanelContext, McpPin, McpQuestion, McpSessionOffer, McpVerdict,
-    readable as mcp_readable, with_mcp_pins,
+    McpFrozenPanel, McpGrant, McpJudged, McpPanelContext, McpPin, McpQuestion, McpSessionOffer,
+    McpVerdict, readable as mcp_readable, with_mcp_judged, with_mcp_pins,
 };
 pub use plugin_admin::{
     KeyStatus, PackagePreview, Permissions, PluginAdminError, PluginInfo, PluginSettingInfo,
@@ -472,10 +475,7 @@ impl Engine {
     }
 
     fn state(&self) -> MutexGuard<'_, State> {
-        self.inner
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        self.inner.state.lock_or_recover("engine.state")
     }
 
     fn resolve(&self, panel: Option<PanelId>) -> PanelId {

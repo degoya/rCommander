@@ -33,6 +33,8 @@ use std::{path::Path, sync::Arc};
 use async_trait::async_trait;
 
 use crate::OpsError;
+#[cfg(any(windows, target_os = "macos"))]
+use crate::recover::LogPanic as _;
 
 /// A recycle bin for the paths of one backend.
 #[async_trait]
@@ -70,6 +72,7 @@ impl Trash for SystemTrash {
         let shown = path.clone();
         tokio::task::spawn_blocking(move || windows::trash(&path))
             .await
+            .log_panic("ops.trash")
             .map_err(|join| OpsError::from_io(std::io::Error::other(join), shown))?
     }
 
@@ -79,6 +82,7 @@ impl Trash for SystemTrash {
         let shown = path.clone();
         tokio::task::spawn_blocking(move || macos::trash(&path))
             .await
+            .log_panic("ops.trash")
             .map_err(|join| OpsError::from_io(std::io::Error::other(join), shown))?
     }
 

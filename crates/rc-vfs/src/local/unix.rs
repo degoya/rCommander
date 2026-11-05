@@ -6,6 +6,7 @@ use std::{
     io,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::Path,
+    sync::OnceLock,
 };
 
 use nix::unistd::{Gid, Group, Uid, User};
@@ -196,4 +197,40 @@ pub(super) fn rename_no_replace(from: &Path, to: &Path) -> Option<io::Result<()>
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 pub(super) fn rename_no_replace(_from: &Path, _to: &Path) -> Option<io::Result<()>> {
     None
+}
+
+/// The process's file mode creation mask, read once (RC-080-70): from `/proc/self/status` where
+/// Linux has it, else by setting a mask and putting the old one back - `umask(2)` cannot only
+/// read. The mask set meanwhile is `077`, so a file another thread creates in between gets fewer
+/// rights, never more.
+pub(super) fn umask() -> u32 {
+    static UMASK: OnceLock<u32> = OnceLock::new();
+    *UMASK.get_or_init(|| {
+        fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|status| parse_umask(&status))
+            .unwrap_or_else(swap_umask)
+    })
+}
+
+/// The `Umask:` line of a `/proc/<pid>/status`, octal.
+pub(super) fn parse_umask(status: &str) -> Option<u32> {
+    let value = status
+        .lines()
+        .find_map(|line| line.strip_prefix("Umask:"))?;
+    u32::from_str_radix(value.trim(), 8)
+        .ok()
+        .map(|mask| mask & 0o777)
+}
+
+fn swap_umask() -> u32 {
+    use nix::sys::stat::{Mode, umask};
+    let old = umask(Mode::S_IRWXG | Mode::S_IRWXO);
+    umask(old);
+    #[allow(
+        clippy::unnecessary_cast,
+        reason = "`mode_t` is `u32` on Linux and `u16` on macOS"
+    )]
+    let bits = old.bits() as u32;
+    bits & 0o777
 }

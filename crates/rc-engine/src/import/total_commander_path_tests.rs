@@ -127,14 +127,14 @@ fn only_known_variables_resolve() {
     assert_eq!(resolve_known("COMMANDER_PATH", None, &env), None);
 }
 
-/// A folder naming a secret stays unresolved and is reported as an unknown variable: the value
-/// never reaches the report.
+/// A folder naming a secret keeps the name as written (RC-080-71): the value never reaches the
+/// report.
 #[test]
-fn a_secret_variable_is_skipped_as_unknown() {
+fn a_secret_variable_stays_as_written() {
     let lookup = |name: &str| resolve_known(name, None, &env);
     assert_eq!(
-        folder("C:\\%AWS_SECRET_ACCESS_KEY%", &lookup),
-        Err(TcSkip::UnknownVariable)
+        folder("C:\\%AWS_SECRET_ACCESS_KEY%", &lookup).as_deref(),
+        Ok("C:\\%AWS_SECRET_ACCESS_KEY%")
     );
     assert_eq!(
         folder("%APPDATA%\\GHISLER", &lookup).as_deref(),
@@ -146,4 +146,24 @@ fn a_secret_variable_is_skipped_as_unknown() {
     );
     // The process environment goes through the same list.
     assert_eq!(environment("AWS_SECRET_ACCESS_KEY", None), None);
+}
+
+/// RC-080-71, as Total Commander: a variable of the list that is not set stays as written, one
+/// set to nothing is nothing - and a secret still never resolves.
+#[test]
+fn an_unset_known_variable_stays_and_an_empty_one_is_empty() {
+    let empty = |name: &str| (name == "TEMP").then(String::new);
+    assert_eq!(resolve_known("TEMP", None, &empty).as_deref(), Some(""));
+    assert_eq!(resolve_known("TMP", None, &empty), None);
+    assert_eq!(resolve_known("COMMANDER_PATH", Some(""), &empty), None);
+    let lookup = |name: &str| resolve_known(name, None, &empty);
+    assert_eq!(folder("C:\\x%TEMP%\\y", &lookup).as_deref(), Ok("C:\\x\\y"));
+    assert_eq!(
+        folder("C:\\%TMP%\\y", &lookup).as_deref(),
+        Ok("C:\\%TMP%\\y")
+    );
+    assert_eq!(
+        folder("%AWS_SECRET_ACCESS_KEY%\\x", &lookup),
+        Err(TcSkip::RelativePath)
+    );
 }

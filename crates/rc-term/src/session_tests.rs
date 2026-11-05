@@ -213,3 +213,35 @@ fn ids_are_fresh_and_sizes_are_never_empty() {
         TermSize { rows: 24, cols: 80 }
     );
 }
+
+#[tokio::test]
+async fn a_title_is_cleaned_and_an_overlong_osc_never_reaches_the_terminal() {
+    let (session, _fake, program) = session();
+    output(&program, "\x1b]0;a\u{202e}b\x07".as_bytes()).await;
+    eventually(|| session.title() == "ab").await;
+    // A title past the scanner's limit is dropped whole; the text after it still shows.
+    let mut long = b"\x1b]0;".to_vec();
+    long.extend(std::iter::repeat_n(b'x', crate::osc::MAX_SEQUENCE + 1));
+    long.extend(b"\x07after");
+    output(&program, &long).await;
+    eventually(|| {
+        session
+            .screen(0)
+            .lines
+            .iter()
+            .any(|line| line.contains("after"))
+    })
+    .await;
+    assert_eq!(session.title(), "ab");
+}
+
+#[test]
+fn the_terminals_requests_are_bounded() {
+    use alacritty_terminal::event::{Event, EventListener};
+    let (sender, receiver) = mpsc::channel(super::REPLY_QUEUE);
+    let proxy = super::EventProxy(sender);
+    for _ in 0..super::REPLY_QUEUE + 10 {
+        proxy.send_event(Event::PtyWrite("\x1b[0n".to_owned()));
+    }
+    assert_eq!(receiver.len(), super::REPLY_QUEUE);
+}

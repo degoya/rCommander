@@ -1,7 +1,7 @@
 //! A job as both sides hold it: the snapshot, the flags, the open question, its list.
 
 use std::sync::{
-    Arc, Mutex, MutexGuard, PoisonError,
+    Arc, Mutex, MutexGuard,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -9,6 +9,7 @@ use rc_vfs::ArchivePassword;
 use tokio::sync::{oneshot, watch};
 
 use super::batch::Batch;
+use crate::recover::LockOrRecover as _;
 use crate::{
     Answer, EventSink, JobChange, JobEvent, JobId, JobSnapshot, JobSpec, JobState, OpsError,
     Progress, Question, check_name, control::Control, runner::Stop,
@@ -77,7 +78,7 @@ impl JobShared {
     }
 
     fn held(&self) -> MutexGuard<'_, Held> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.lock_or_recover("shared.state")
     }
 
     /// The job as callers see it: a paused job that is not waiting on a question reads

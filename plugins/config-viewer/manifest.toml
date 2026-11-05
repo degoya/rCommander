@@ -6,18 +6,23 @@ plugin_type = "viewer"
 api_version = "0.3.0"
 id = "01a159c1-6b39-7240-9bbb-81ecaf343ed1"
 name = "Config viewer"
-version = "0.1.1"
+version = "0.2.0"
 
 [match]
 # rCommander takes what follows the last dot of a name as its extension, so `desktop.ini` matches
-# `ini`, `.env` matches `env` and `.gitconfig` matches `gitconfig`; `.env.local` ends in `local`,
-# which is not claimed. `lock` is for `Cargo.lock`: `probe` declines every other `.lock` file.
-# The format is chosen by the name (src/types.rs, `Format::from_name`): `.ini`, `.inf`, `.cfg`,
-# `.conf`, `.editorconfig` and `.gitconfig` are read as INI.
+# `ini`, `.env` matches `env` and `.gitconfig` matches `gitconfig`. `lock` is for `Cargo.lock`:
+# `probe` declines every other `.lock` file. The format is chosen by the name (src/types.rs,
+# `Format::from_name`): `.ini`, `.inf`, `.cfg`, `.conf`, `.editorconfig`, `.gitconfig`,
+# `.gitmodules`, `.npmrc` and the systemd units (`.service`, `.timer`, `.socket`, `.mount`,
+# `.path`, `.target`) are read as INI, `.dockerignore` as `.gitignore`.
 extensions = [
     "ini", "inf", "cfg", "conf", "reg", "env", "properties", "editorconfig", "gitconfig",
-    "gitattributes", "gitignore", "toml", "lock",
+    "gitattributes", "gitignore", "toml", "lock", "service", "timer", "socket", "mount", "path",
+    "target", "gitmodules", "npmrc", "dockerignore",
 ]
+# `.env.local`, `.env.production` end in an extension nobody claims (RC-100-80): by name, after
+# every extension, so `.env.json` stays a JSON file.
+names = [".env.*"]
 magic = []
 # The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
 # file would be cut anyway.
@@ -31,7 +36,9 @@ outputs = ["highlighted", "tree"]
 [capabilities]
 
 [metadata]
-description = "Shows INI, .reg, .env, properties and TOML files coloured, or their sections and keys as a tree."
+description = "Shows INI, .reg, .env, properties, TOML and systemd unit files coloured, or their sections and keys as a tree."
+# `[match] names` arrived with 0.19.0; an older rCommander refuses the field.
+min_app_version = "0.19.0"
 
 # The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
 # src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.

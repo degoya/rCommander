@@ -50,6 +50,10 @@ pub const PASTE_CTRL_V_KEY: &str = "terminal.paste_ctrl_v";
 /// it selected; reading the clipboard that way stays refused (alacritty's `Osc52::OnlyCopy`).
 pub const OSC52_COPY_KEY: &str = "terminal.osc52_copy";
 
+/// With [`OSC52_COPY_KEY`] on, a program in an SSH terminal may put text on the clipboard too, as
+/// in Windows Terminal; off, only the local and WSL terminals may (RC-080-65).
+pub const OSC52_REMOTE_KEY: &str = "terminal.osc52_remote";
+
 /// The clipboard's image pasted into a terminal as a file path (RC-040-08, Ctrl+Alt+V); on a
 /// server it is uploaded without asking while this is on (owner 2026-10-25).
 pub const PASTE_IMAGE_KEY: &str = "terminal.paste_image";
@@ -104,6 +108,16 @@ pub(super) const OSC52_COPY: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.terminal.osc52_copy",
     help: "setting.terminal.osc52_copy.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const OSC52_REMOTE: SettingSpec = SettingSpec {
+    key: OSC52_REMOTE_KEY,
+    page: SettingPage::Terminal,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.terminal.osc52_remote",
+    help: "setting.terminal.osc52_remote.help",
     protected: false,
     restart: false,
 };

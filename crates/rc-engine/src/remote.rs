@@ -19,10 +19,10 @@ pub(crate) mod quick;
 pub(crate) mod sftp;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Component, Path, PathBuf},
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -30,6 +30,7 @@ use std::{
 use rc_remote::FtpVfs;
 use rc_vfs::{BackendId, Vfs, VfsPath};
 
+use crate::recover::LockOrRecover as _;
 use crate::{ConnectionId, ConnectionKind, Engine, EngineError, EngineEvent, PanelId};
 
 /// The scheme of an FTP location; FTPS connections use it too, their encryption is the
@@ -51,19 +52,22 @@ pub(crate) struct Remotes {
     ftp_forgets: AtomicU64,
     /// The unsaved quick connections (Ctrl+N), by their negative ids.
     pub(crate) quick: quick::QuickConnections,
+    /// The plain FTP servers a person allowed to get the password in clear, until rCommander
+    /// ends (RC-080-67): host (lower case) and port.
+    plaintext: Mutex<HashSet<(String, u16)>>,
 }
 
 impl Remotes {
     pub(crate) fn open(&self) -> MutexGuard<'_, HashMap<BackendId, Arc<dyn Vfs>>> {
-        self.open.lock().unwrap_or_else(PoisonError::into_inner)
+        self.open.lock_or_recover("remote.open")
     }
 
     pub(crate) fn sftp(&self) -> MutexGuard<'_, HashMap<i64, sftp::KeptSftp>> {
-        self.sftp.lock().unwrap_or_else(PoisonError::into_inner)
+        self.sftp.lock_or_recover("remote.sftp")
     }
 
     pub(crate) fn ftp(&self) -> MutexGuard<'_, HashMap<i64, FtpVfs>> {
-        self.ftp.lock().unwrap_or_else(PoisonError::into_inner)
+        self.ftp.lock_or_recover("remote.ftp")
     }
 
     /// How many times kept FTP sessions were dropped; read under the `ftp` lock.
@@ -74,6 +78,20 @@ impl Remotes {
     /// Notes a drop of kept FTP sessions; called under the `ftp` lock.
     pub(crate) fn note_ftp_forget(&self) {
         self.ftp_forgets.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// Whether a person allowed the plain FTP server `host` on `port` the password in clear.
+    pub(crate) fn plaintext_allowed(&self, host: &str, port: u16) -> bool {
+        self.plaintext
+            .lock_or_recover("remote.plaintext")
+            .contains(&(host.to_owned(), port))
+    }
+
+    /// A person allowed it, until rCommander ends.
+    pub(crate) fn allow_plaintext(&self, host: &str, port: u16) {
+        self.plaintext
+            .lock_or_recover("remote.plaintext")
+            .insert((host.to_owned(), port));
     }
 }
 

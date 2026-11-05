@@ -12,7 +12,7 @@
 
 use std::{
     io,
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use async_trait::async_trait;
@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     ConnectionId, Engine, EngineError, EngineEvent, LoginScriptId, LoginScriptInfo,
     ScriptSecretRef, SecretError, SecretSource, TerminalChange,
@@ -93,7 +94,7 @@ impl LoginRunCell {
     }
 
     fn lock(&self) -> MutexGuard<'_, Option<LoginScriptRun>> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.0.lock_or_recover("ssh_login")
     }
 }
 
@@ -225,15 +226,7 @@ impl LoginTask {
             &mut observe,
         )
         .await;
-        let state = match outcome {
-            Ok(ScriptOutcome::Completed) => LoginRunState::Completed,
-            Ok(ScriptOutcome::TimedOut { step }) => LoginRunState::TimedOut { step },
-            Ok(ScriptOutcome::Cancelled) => LoginRunState::Cancelled,
-            Ok(ScriptOutcome::StreamClosed { step }) => LoginRunState::StreamClosed { step },
-            Err(error) => LoginRunState::Failed {
-                code: error.code().to_owned(),
-            },
-        };
+        let state = finished_state(outcome, stream.tap.overflowed());
         tracing::debug!(terminal = %self.terminal, state = ?state, "login script ended");
         // Only after a run that got through: a failed one may have left a prompt waiting for a
         // password, which must not be given a path.
@@ -245,6 +238,30 @@ impl LoginTask {
         self.session.release_input();
         self.cell.set_state(state);
         self.announce();
+    }
+}
+
+/// The code of a run whose tap fell behind and was cut off (RC-080-65): the output it waited
+/// for may have been lost.
+const OUTPUT_OVERFLOW: &str = "login_script_output_overflow";
+
+/// How a run ended; a stream that closed because the tap was cut off (`overflowed`) is a
+/// failure, not the shell's end.
+fn finished_state(
+    outcome: Result<ScriptOutcome, rc_remote::login_script::ScriptError>,
+    overflowed: bool,
+) -> LoginRunState {
+    match outcome {
+        Ok(ScriptOutcome::Completed) => LoginRunState::Completed,
+        Ok(ScriptOutcome::TimedOut { step }) => LoginRunState::TimedOut { step },
+        Ok(ScriptOutcome::Cancelled) => LoginRunState::Cancelled,
+        Ok(ScriptOutcome::StreamClosed { .. }) if overflowed => LoginRunState::Failed {
+            code: OUTPUT_OVERFLOW.to_owned(),
+        },
+        Ok(ScriptOutcome::StreamClosed { step }) => LoginRunState::StreamClosed { step },
+        Err(error) => LoginRunState::Failed {
+            code: error.code().to_owned(),
+        },
     }
 }
 

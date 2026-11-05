@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use rc_vfs::{BackendId, VfsPath, WslDistro};
 
 use super::favourites::Favourites;
+use crate::recover::LogPanic as _;
 use crate::{
     Connection, ConnectionId, ConnectionKind, Drive, DriveGroup, DriveKind, DriveState, Engine,
     EngineError, EngineEvent, FolderNode, Outcome, PanelId,
@@ -116,7 +117,9 @@ impl Engine {
             return false;
         };
         let source = self.inner.drives.source();
-        let answer = tokio::task::spawn_blocking(move || source.restore_network(letter)).await;
+        let answer = tokio::task::spawn_blocking(move || source.restore_network(letter))
+            .await
+            .log_panic("engine.restore_network_drive");
         match answer {
             Ok(Ok(())) => true,
             Ok(Err(code)) => {

@@ -10,6 +10,7 @@ use rc_update::{install::InstanceLock, retention};
 
 use super::{RUNNING, Started};
 use crate::Engine;
+use crate::recover::LogPanic as _;
 
 /// The first check waits this long after the start ...
 const FIRST_CHECK: Duration = Duration::from_secs(120);
@@ -82,7 +83,8 @@ impl Engine {
             };
             retention::sweep(&data_dir, &install_dir, policy)
         })
-        .await;
+        .await
+        .log_panic("engine.update_retention");
         match swept {
             Ok(report) if !report.removed.is_empty() => {
                 tracing::info!(

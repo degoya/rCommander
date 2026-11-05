@@ -11,7 +11,7 @@ use std::{
     io,
     path::PathBuf,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -22,6 +22,8 @@ use tokio::sync::broadcast;
 
 use super::{Drive, DriveGroup, DriveKind, DriveState};
 use crate::EngineEvent;
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 
 /// How long opening a device may take: a phone asked for its first session, gvfs mounting.
 pub(crate) const OPEN_TIMEOUT: Duration = Duration::from_secs(30);
@@ -81,7 +83,7 @@ impl DeviceList {
     }
 
     fn known(&self) -> MutexGuard<'_, Vec<PortableDevice>> {
-        self.known.lock().unwrap_or_else(PoisonError::into_inner)
+        self.known.lock_or_recover("devices.known")
     }
 
     /// The devices there now: asked unless a question is still open, waited for at most the
@@ -99,7 +101,7 @@ impl DeviceList {
                 let _open = open;
                 let devices = hub.devices();
                 let changed = {
-                    let mut known = known.lock().unwrap_or_else(PoisonError::into_inner);
+                    let mut known = known.lock_or_recover("devices.known");
                     let changed = *known != devices;
                     *known = devices;
                     changed
@@ -109,7 +111,11 @@ impl DeviceList {
                     let _ = events.send(EngineEvent::Drives);
                 }
             });
-            if tokio::time::timeout(self.timeout, asked).await.is_err() {
+            if tokio::time::timeout(self.timeout, asked)
+                .await
+                .map(|joined| joined.log_panic("engine.device_list"))
+                .is_err()
+            {
                 tracing::debug!("the portable devices did not answer in time; the last list stays");
             }
             late.store(true, Ordering::SeqCst);
@@ -134,7 +140,10 @@ impl DeviceList {
         let hub = Arc::clone(&self.hub);
         let name = PathBuf::from(&device.name);
         let task = tokio::task::spawn_blocking(move || hub.open(&device));
-        match tokio::time::timeout(OPEN_TIMEOUT, task).await {
+        match tokio::time::timeout(OPEN_TIMEOUT, task)
+            .await
+            .map(|joined| joined.log_panic("engine.device_open"))
+        {
             Err(_) => Err(VfsError::TimedOut {
                 path: name,
                 seconds: OPEN_TIMEOUT.as_secs(),

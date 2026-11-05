@@ -19,6 +19,11 @@
 //! the backend then counts as closed ([`SftpVfs::is_closed`]) so the engine opens a new one - also
 //! when a file stream finds the channel closed (`stream.rs`), so an interrupted transfer resumes on
 //! a new session (RC-060-07). The server's own error texts never reach a message.
+//!
+//! An upload creates its file owner-only (`0600`) and gives it [`SftpLimits::upload_mode`] only
+//! once it is complete (RC-080-67): while the transfer runs, nobody else on the server reads it,
+//! whatever the server's umask. A file that exists keeps its rights; the copy's `preserve` sets
+//! the source's afterwards where it keeps them.
 
 mod case;
 mod change;
@@ -41,6 +46,8 @@ pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DEFAULT_LISTING_TIMEOUT: Duration = Duration::from_secs(300);
 /// How many names one directory may list unless the caller says otherwise.
 pub const DEFAULT_MAX_ENTRIES: usize = 500_000;
+/// The rights a completed upload gets unless the caller says otherwise: `rw-r--r--`.
+pub const DEFAULT_UPLOAD_MODE: u32 = 0o644;
 
 /// The bounds a server is held to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +58,9 @@ pub struct SftpLimits {
     pub listing_timeout: Duration,
     /// The most names one directory may list, the dropped ones included.
     pub max_entries: usize,
+    /// The rights a file an upload created gets once it is complete; `0o600` keeps it
+    /// owner-only.
+    pub upload_mode: u32,
 }
 
 impl Default for SftpLimits {
@@ -59,6 +69,7 @@ impl Default for SftpLimits {
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
             listing_timeout: DEFAULT_LISTING_TIMEOUT,
             max_entries: DEFAULT_MAX_ENTRIES,
+            upload_mode: DEFAULT_UPLOAD_MODE,
         }
     }
 }

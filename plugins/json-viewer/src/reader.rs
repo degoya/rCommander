@@ -7,6 +7,9 @@ use crate::types::{Failure, FailureKind, Source};
 pub(crate) trait Bytes {
     /// The next byte, without taking it; `None` at the end.
     fn peek(&mut self) -> Result<Option<u8>, Failure>;
+    /// The byte after the next one, without taking either: `/` starts a comment only before
+    /// `/` or `*` (RC-100-80).
+    fn peek_second(&mut self) -> Result<Option<u8>, Failure>;
     /// Takes the byte the last `peek` returned.
     fn bump(&mut self);
     /// The offset of the next byte.
@@ -121,6 +124,7 @@ impl<'a, S: Source> Reader<'a, S> {
                 return Ok(Some(Line {
                     bytes,
                     capped: true,
+                    in_comment: false,
                 }));
             }
         }
@@ -130,6 +134,7 @@ impl<'a, S: Source> Reader<'a, S> {
         Ok(Some(Line {
             bytes,
             capped: false,
+            in_comment: false,
         }))
     }
 
@@ -171,6 +176,21 @@ impl<S: Source> Bytes for Reader<'_, S> {
         }
     }
 
+    fn peek_second(&mut self) -> Result<Option<u8>, Failure> {
+        if self.peek()?.is_none() {
+            return Ok(None);
+        }
+        if let Some(byte) = self.buf.get(self.pos + 1) {
+            return Ok(Some(*byte));
+        }
+        // The window ends after the next byte: one byte more, straight from the source.
+        let at = self.offset() + 1;
+        if at >= self.size {
+            return Ok(None);
+        }
+        Ok(self.src.read_at(at, 1)?.first().copied())
+    }
+
     fn bump(&mut self) {
         self.pos += 1;
     }
@@ -186,6 +206,8 @@ pub(crate) struct Line {
     pub(crate) bytes: Vec<u8>,
     /// Longer than the cap: the bytes are its beginning.
     pub(crate) capped: bool,
+    /// It starts inside a `/* */` comment (JSONC, JSON5, as-is).
+    pub(crate) in_comment: bool,
 }
 
 /// One line in memory as a byte stream.
@@ -203,6 +225,10 @@ impl<'a> SliceBytes<'a> {
 impl Bytes for SliceBytes<'_> {
     fn peek(&mut self) -> Result<Option<u8>, Failure> {
         Ok(self.bytes.get(self.pos).copied())
+    }
+
+    fn peek_second(&mut self) -> Result<Option<u8>, Failure> {
+        Ok(self.bytes.get(self.pos + 1).copied())
     }
 
     fn bump(&mut self) {

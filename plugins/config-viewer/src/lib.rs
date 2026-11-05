@@ -1,6 +1,7 @@
 //! rCommander's bundled configuration file viewer (RC-100-22): INI and its kin (`.inf`, `.cfg`,
-//! `.conf`, `.editorconfig`, `.gitconfig`), Windows registry exports, `.env`, Java properties,
-//! TOML, `.gitignore` and `.gitattributes`, coloured like an editor (`highlighted`) or as their
+//! `.conf`, `.editorconfig`, `.gitconfig`, `.gitmodules`, `.npmrc`, systemd units), Windows
+//! registry exports, `.env` and `.env.*`, Java properties, TOML, `.gitignore`, `.gitattributes`
+//! and `.dockerignore` (RC-100-80), coloured like an editor (`highlighted`) or as their
 //! sections and keys (`tree`), for files of any size the viewer accepts.
 //!
 //! What the host promises a viewer, and how this one is built on it (`docs/plugins.md`, "Viewer
@@ -63,7 +64,9 @@ const PROBE_BYTES: u64 = 4096;
 
 /// Whether the file looks like text: a UTF-16 byte-order mark, or no NUL byte in its first 4 KiB.
 /// rCommander matches the manifest's extensions itself; of `.lock` files only `Cargo.lock` is
-/// TOML, so every other is declined. This is `probe`.
+/// TOML, so every other is declined, and a `.conf` that reads like nginx or Apache
+/// ([`server_like`]) is left to the server config viewer, the next plugin asked (RC-100-80,
+/// RC-100-81). This is `probe`.
 pub fn probe<S: Source>(src: &mut S) -> bool {
     let name = src.name().to_ascii_lowercase();
     if name.ends_with(".lock") && name != "cargo.lock" {
@@ -77,7 +80,31 @@ pub fn probe<S: Source>(src: &mut S) -> bool {
         detect(&head, Encoding::Windows1252).0,
         Encoding::Utf16Le | Encoding::Utf16Be
     );
+    if name.ends_with(".conf") && server_like(&head) {
+        return false;
+    }
     utf16 || !head.contains(&0)
+}
+
+/// Whether the first meaningful line of `head` - not blank, no `#` or `;` comment - is nginx's or
+/// Apache's rather than INI's: it opens a `{` block (`server {`), is a directive ending in `;`
+/// without an `=` (`worker_processes auto;`), or a tag (`<VirtualHost *:80>`). An INI-like
+/// `.conf` - `[section]`, `key = value` - stays here.
+fn server_like(head: &[u8]) -> bool {
+    let Some(line) = head
+        .split(|byte| *byte == b'\n')
+        .map(<[u8]>::trim_ascii)
+        .find(|line| !line.is_empty() && !line.starts_with(b"#") && !line.starts_with(b";"))
+    else {
+        return false;
+    };
+    let tag = line.starts_with(b"<")
+        && line
+            .get(1)
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || *byte == b'/');
+    let block = line.ends_with(b"{");
+    let directive = line.ends_with(b";") && !line.contains(&b'=');
+    tag || block || directive
 }
 
 /// One open document.

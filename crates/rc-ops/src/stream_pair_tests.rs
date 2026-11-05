@@ -200,3 +200,23 @@ async fn a_feed_without_its_drain_ends_quietly() {
     let outcome = feed.fill(&mut reader, &control, Path::new("/src")).await;
     assert!(outcome.is_ok(), "the write side has the reason");
 }
+
+/// RC-080-70: the turn to open an FTP copy's two streams is one per server - a turn held on one
+/// server never holds a copy within another - and a turn nobody holds any more is dropped.
+#[tokio::test]
+async fn each_ftp_server_has_a_turn_of_its_own() {
+    let held = ftp_turn(-701).lock_owned().await;
+    let other = tokio::time::timeout(Duration::from_secs(1), ftp_turn(-702).lock_owned())
+        .await
+        .expect("another server's turn is free");
+    assert!(
+        ftp_turn(-701).try_lock().is_err(),
+        "the same server's turn is taken"
+    );
+    drop((held, other));
+    assert!(ftp_turn(-701).try_lock().is_ok(), "free once let go");
+    ftp_turn(-703);
+    let turns = FTP_TURNS.lock().expect("turns");
+    assert!(!turns.contains_key(&-701), "dropped once nobody holds it");
+    assert!(!turns.contains_key(&-702), "dropped once nobody holds it");
+}

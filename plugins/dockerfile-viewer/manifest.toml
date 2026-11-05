@@ -1,0 +1,39 @@
+# rCommander's bundled Dockerfile viewer (RC-100-80). The fields every bundled plugin shares are
+# in plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+plugin_type = "viewer"
+# The plugin declares no `[[settings]]` and never calls the `settings` interface, so its
+# component does not import it.
+api_version = "0.3.0"
+id = "01a1ab00-1875-76a3-b82e-11060080c3ff"
+name = "Dockerfile viewer"
+version = "0.1.0"
+
+[match]
+# `app.dockerfile` and `app.containerfile` by extension.
+extensions = ["dockerfile", "containerfile"]
+# A Dockerfile has no extension, `Dockerfile.dev` one nobody claims (RC-100-80): the names,
+# without regard to case. An exact name is asked before every extension, a pattern with `*` after
+# them, so `Dockerfile.toml` stays with the config viewer.
+names = ["Dockerfile", "Containerfile", "Dockerfile.*", "Containerfile.*"]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# A Dockerfile has no structure worth unfolding: coloured text only.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows Dockerfiles and Containerfiles coloured like an editor."
+# `[match] names` arrived with 0.19.0; an older rCommander refuses the field.
+min_app_version = "0.19.0"
+
+# The host's 64 MiB of memory hold the line index of at most 8 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs) and the 1 MiB windows `open` and `text` read and write through.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000

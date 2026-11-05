@@ -15,7 +15,7 @@ mod sources;
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
@@ -29,6 +29,7 @@ use rc_remote::{
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
+use crate::recover::LockOrRecover as _;
 use crate::{ConnectionId, EngineError};
 
 pub(crate) use sources::{EngineCredentials, EngineGate};
@@ -434,7 +435,7 @@ impl Drop for SetupGuard {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+    mutex.lock_or_recover("sessions.mutex")
 }
 
 #[cfg(test)]

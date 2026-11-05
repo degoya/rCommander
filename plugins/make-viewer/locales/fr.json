@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse Makefile",
+  "description": "Affiche les Makefiles (Makefile, GNUmakefile, .mk) en couleurs, comme un éditeur.",
+  "codes": {
+    "01a1aafa-5f74-7653-9fa4-111059e2f306.setting.encoding": "Encodage"
+  }
+}

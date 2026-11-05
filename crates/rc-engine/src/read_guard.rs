@@ -19,6 +19,7 @@ use std::{
 
 use rc_vfs::BackendId;
 
+use crate::recover::LogPanic as _;
 use crate::{Command, Engine, EngineError, Outcome};
 
 /// Why the file at a path must not be read through MCP, or `None` when it may; judged by its
@@ -94,7 +95,10 @@ impl ReadGuard {
             return self.refuses(path);
         }
         let owned = path.to_path_buf();
-        match tokio::task::spawn_blocking(move || self.refuses(&owned)).await {
+        match tokio::task::spawn_blocking(move || self.refuses(&owned))
+            .await
+            .log_panic("engine.read_guard")
+        {
             Ok(reason) => reason,
             // The blocking pool is shutting down: judged here, as it always was.
             Err(_) => self.refuses(path),
@@ -119,7 +123,10 @@ impl ReadGuard {
         let refused = if self.local {
             let paths: Arc<[PathBuf]> = paths.into();
             let judged = Arc::clone(&paths);
-            match tokio::task::spawn_blocking(move || self.first_refused(&judged)).await {
+            match tokio::task::spawn_blocking(move || self.first_refused(&judged))
+                .await
+                .log_panic("engine.read_guard")
+            {
                 Ok(refused) => refused,
                 // The blocking pool is shutting down: judged here, as `check` does.
                 Err(_) => self.first_refused(&paths),

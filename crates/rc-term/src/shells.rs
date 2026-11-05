@@ -3,7 +3,8 @@
 //!
 //! Windows: PowerShell 7 (`pwsh.exe`, on `PATH` or where its installers put it), Windows
 //! PowerShell and `cmd.exe` - those two from `%SystemRoot%\System32` first, so a `cmd.exe` in a
-//! folder early on `PATH` is not the shell (RC-080-43). Unix: the login shell from `$SHELL`, then
+//! folder early on `PATH` is not the shell (RC-080-43), and never by a bare name: found nowhere,
+//! the System32 path stays, and starting it fails with that path (RC-080-65). Unix: the login shell from `$SHELL`, then
 //! `bash`, `zsh` and `sh` from `PATH`. Only absolute `PATH` entries count: a relative one is
 //! read against whatever folder the app runs in. The decision reads a [`ShellEnv`] and takes the [`Platform`] as a parameter, so
 //! both halves are tested on any machine with a fake `PATH`.
@@ -24,7 +25,7 @@ pub struct ShellProfile {
     /// The i18n key of its name: `terminal.shell.<id>`, `terminal.shell.other` for a shell the
     /// catalogue does not name.
     pub label_key: String,
-    /// The program, a full path when it was found; a bare name the system looks up otherwise.
+    /// The program, a full path; on Windows a system program not found is its System32 path.
     pub program: PathBuf,
     pub args: Vec<String>,
     /// The WSL distribution of a `wsl` profile; `None` for every other shell.
@@ -142,28 +143,23 @@ fn windows_shells(env: &ShellEnv) -> Vec<ShellProfile> {
     }) {
         shells.push(ShellProfile::new("pwsh", pwsh, &["-NoLogo"]));
     }
-    let system32 = env
-        .system_root
-        .as_ref()
-        .filter(|root| root.is_absolute())
-        .map(|root| root.join("System32"));
-    let in_system32 = |relative: &[&str]| {
-        system32
-            .as_ref()
-            .map(|dir| {
-                relative
-                    .iter()
-                    .fold(dir.clone(), |path, part| path.join(part))
-            })
-            .filter(|candidate| is_program(platform, candidate))
+    let system32 = rc_vfs::system32(env.system_root.as_deref());
+    // In System32, else in an absolute `PATH` folder, else the System32 path all the same.
+    let system_program = |relative: &[&str], name: &str| {
+        let candidate = relative
+            .iter()
+            .fold(system32.clone(), |path, part| path.join(part));
+        if is_program(platform, &candidate) {
+            return candidate;
+        }
+        on_path(platform, env, name).unwrap_or(candidate)
     };
-    let powershell = in_system32(&["WindowsPowerShell", "v1.0", "powershell.exe"])
-        .or_else(|| on_path(platform, env, "powershell.exe"))
-        .unwrap_or_else(|| PathBuf::from("powershell.exe"));
+    let powershell = system_program(
+        &["WindowsPowerShell", "v1.0", "powershell.exe"],
+        "powershell.exe",
+    );
     shells.push(ShellProfile::new("powershell", powershell, &["-NoLogo"]));
-    let cmd = in_system32(&["cmd.exe"])
-        .or_else(|| on_path(platform, env, "cmd.exe"))
-        .unwrap_or_else(|| PathBuf::from("cmd.exe"));
+    let cmd = system_program(&["cmd.exe"], "cmd.exe");
     shells.push(ShellProfile::new("cmd", cmd, &[]));
     shells
 }

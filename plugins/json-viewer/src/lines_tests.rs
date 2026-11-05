@@ -6,7 +6,7 @@ fn a_checkpoint_every_64_lines_or_after_a_long_line() {
     for line in 1..200u64 {
         // Line 100 is 100 KiB long: the line after it gets a checkpoint of its own.
         let offset = line * 10 + if line > 100 { 100 * 1024 } else { 0 };
-        index.line_start(line, offset, LayoutState::default());
+        index.line_start(line, offset, LayoutState::default(), false);
     }
     index.finish(200);
     assert_eq!(index.lines(), 200);
@@ -23,7 +23,7 @@ fn the_index_thins_itself_and_stays_bounded() {
     let mut index = LineIndex::new(3);
     let lines = 64 * MAX_CHECKPOINTS as u64 * 5;
     for line in 1..lines {
-        index.line_start(line, 3 + line * 40, LayoutState::default());
+        index.line_start(line, 3 + line * 40, LayoutState::default(), false);
     }
     index.finish(lines);
     assert!(index.points.len() < MAX_CHECKPOINTS);

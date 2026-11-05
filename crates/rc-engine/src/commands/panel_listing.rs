@@ -7,11 +7,13 @@
 //! marked as still arriving ([`crate::PanelState::listing`]), and a task of its own takes in the
 //! rest. Like the flat view's (`flat.rs`), it shows what arrived sorted in the panel's order every
 //! [`FLUSH_EVERY`] or so - less often as the list grows - and once more at the end, sorted
-//! outside the lock; the cursor stays on its entry, the selection and the counted folder sizes
-//! stay. A panel that shows anything else by then - another folder, a refresh, a flat view, a
-//! tab - ends the task, and with its receiver gone the backend stops reading (SFTP after the
-//! block in flight, its handle closed). A listing that breaks off after it was shown keeps what
-//! arrived and says why ([`EngineEvent::ListingFailed`]).
+//! outside the lock: what arrived since the last time is sorted and merged into what is sorted
+//! already (RC-080-70), the whole is sorted again only when the panel's order changed. The
+//! cursor stays on its entry, the selection and the counted folder sizes stay. A panel that shows
+//! anything else by then - another folder, a refresh, a flat view, a tab - ends the task, and
+//! with its receiver gone the backend stops reading (SFTP after the block in flight, its handle
+//! closed). A listing that breaks off after it was shown keeps what arrived and says why
+//! ([`EngineEvent::ListingFailed`]).
 
 use std::{
     io,
@@ -28,10 +30,11 @@ use tokio::{
 };
 
 use super::flat::{ENTRIES_PER_MS, FLUSH_EVERY};
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, EngineEvent, PanelChange, PanelId, PanelState, SortOrder,
     flat::next_run,
-    sort::{names_for, sort_entries},
+    sort::{Names, merge_sorted, names_for, sort_entries},
     state::is_hidden,
 };
 
@@ -47,8 +50,12 @@ pub(crate) struct Arriving {
     run: u64,
     /// The folder listed, for the error of a listing that breaks off.
     dir: PathBuf,
-    /// Everything that arrived, hidden entries left out unless shown.
+    /// What arrived up to the last flush, hidden entries left out unless shown, sorted as
+    /// `sorted_as` says.
     found: Vec<Entry>,
+    sorted_as: (SortOrder, Names),
+    /// What arrived since, in the backend's order.
+    fresh: Vec<Entry>,
     receiver: Receiver<Vec<Entry>>,
     lister: Lister,
     show_hidden: bool,
@@ -104,16 +111,19 @@ impl Engine {
             }
         };
         if complete {
-            ended(lister.await, &path.path)?;
+            ended(lister.await.log_panic("engine.panel_listing"), &path.path)?;
             sort_entries(&mut found, sort, names_for(path));
             return Ok((found, None));
         }
-        let mut shown = found.clone();
-        sort_entries(&mut shown, sort, names_for(path));
+        let names = names_for(path);
+        sort_entries(&mut found, sort, names);
+        let shown = found.clone();
         let arriving = Arriving {
             run: next_run(),
             dir: path.path.clone(),
             found,
+            sorted_as: (sort, names),
+            fresh: Vec::new(),
             receiver,
             lister,
             show_hidden,
@@ -126,6 +136,25 @@ impl Arriving {
     /// The run the panel shows while the rest arrives.
     pub(crate) fn run(&self) -> u64 {
         self.run
+    }
+
+    /// Everything that arrived, in the order `order` and `names`: what came since the last time
+    /// merged in, or - the panel sorted another way meanwhile - the whole sorted anew.
+    fn sorted(&mut self, order: SortOrder, names: Names) -> Vec<Entry> {
+        let (found, fresh) = (
+            std::mem::take(&mut self.found),
+            std::mem::take(&mut self.fresh),
+        );
+        self.found = if self.sorted_as == (order, names) {
+            merge_sorted(found, fresh, order, names)
+        } else {
+            let mut all = found;
+            all.extend(fresh);
+            sort_entries(&mut all, order, names);
+            all
+        };
+        self.sorted_as = (order, names);
+        self.found.clone()
     }
 
     /// Takes in the rest of the listing for panel `panel`, in a task of its own.
@@ -184,7 +213,7 @@ impl Follower {
             match timeout(FLUSH_EVERY, self.arriving.receiver.recv()).await {
                 Ok(Some(batch)) => {
                     let shown = self.arriving.show_hidden;
-                    keep(&mut self.arriving.found, batch, shown);
+                    keep(&mut self.arriving.fresh, batch, shown);
                     self.dirty = true;
                 }
                 Ok(None) => break,
@@ -214,9 +243,8 @@ impl Follower {
 
     /// Whether it is time to show what arrived: every [`FLUSH_EVERY`], less often for a long list.
     fn due(&self) -> bool {
-        let every = FLUSH_EVERY.max(Duration::from_millis(
-            (self.arriving.found.len() / ENTRIES_PER_MS) as u64,
-        ));
+        let arrived = self.arriving.found.len() + self.arriving.fresh.len();
+        let every = FLUSH_EVERY.max(Duration::from_millis((arrived / ENTRIES_PER_MS) as u64));
         self.last_flush.elapsed() >= every
     }
 
@@ -243,11 +271,7 @@ impl Follower {
                 }
                 (panel.sort, names_for(&panel.path))
             };
-            let sorted = self.dirty.then(|| {
-                let mut sorted = self.arriving.found.clone();
-                sort_entries(&mut sorted, order, names);
-                sorted
-            });
+            let sorted = self.dirty.then(|| self.arriving.sorted(order, names));
             {
                 let mut state = self.engine.state();
                 let panel = state.panel_mut(self.panel);

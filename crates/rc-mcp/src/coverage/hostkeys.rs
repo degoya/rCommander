@@ -13,7 +13,15 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
     ),
     ("hostkeys.list", Coverage::Covered("hostkeys_list")),
     (
+        "hostkeys.list_revoked",
+        Coverage::Covered("hostkeys_revoked"),
+    ),
+    (
         "hostkeys.remove",
+        Coverage::Omitted("GUI only: human decision"),
+    ),
+    (
+        "hostkeys.remove_revoked",
         Coverage::Omitted("GUI only: human decision"),
     ),
     (

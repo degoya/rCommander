@@ -46,9 +46,10 @@ pub(super) async fn list(limit: Duration) -> Vec<WslDistro> {
     assemble(names, &details, host_for_build(windows_build()))
 }
 
-/// `wsl.exe` with `args`, without a console window.
+/// `wsl.exe` from the system folder (never a bare name, RC-080-65) with `args`, without a
+/// console window.
 fn wsl(args: &[&str]) -> Command {
-    let mut command = Command::new("wsl.exe");
+    let mut command = Command::new(crate::system32_from_env().join("wsl.exe"));
     // Versions that know it then write UTF-8; older ones write UTF-16LE, which is read as well.
     command.args(args).env("WSL_UTF8", "1").no_console_window();
     command

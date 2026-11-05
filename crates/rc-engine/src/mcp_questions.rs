@@ -17,7 +17,7 @@ use std::{
     collections::VecDeque,
     fmt::Write as _,
     sync::{
-        Mutex, MutexGuard, PoisonError,
+        Mutex, MutexGuard,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -26,6 +26,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
+use crate::recover::LockOrRecover as _;
 use crate::{CommandClass, Engine, EngineError, EngineEvent, Outcome, PanelId};
 
 #[path = "mcp_grants.rs"]
@@ -36,6 +37,11 @@ pub use grants::{MAX_MCP_GRANTS, McpGrant};
 mod pins;
 pub(crate) use pins::check as check_mcp_pin;
 pub use pins::{McpFrozenPanel, McpPin, with_mcp_pins};
+
+#[path = "mcp_judged.rs"]
+mod judged;
+pub(crate) use judged::check_judged_queue;
+pub use judged::{McpJudged, with_mcp_judged};
 
 /// How many questions wait at most; another one is refused at once ([`McpVerdict::Busy`]).
 pub const MAX_MCP_QUESTIONS: usize = 8;
@@ -167,7 +173,7 @@ struct Open {
 
 impl McpDesk {
     fn lock(&self) -> MutexGuard<'_, Desk> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.inner.lock_or_recover("mcp_questions.inner")
     }
 
     /// Takes the question `id` off the desk; whether it was still open.
@@ -243,13 +249,14 @@ impl Engine {
                 return McpVerdict::Busy;
             }
             desk.next_id += 1;
+            let session = offer(ask.class, &ask.tool, ask.session);
             let question = McpQuestion {
                 id: desk.next_id,
                 tool: ask.tool,
                 class: ask.class,
                 arguments: ask.arguments,
                 panel,
-                session: offer(ask.class, ask.session),
+                session,
             };
             desk.open.push_back(Open {
                 question: question.clone(),
@@ -303,11 +310,24 @@ impl Engine {
     }
 }
 
-/// The offer a question makes: a destructive tool gets none, a write tool none but the whole
-/// session, an executing one none but its minutes - whatever the gate asked for.
-fn offer(class: CommandClass, asked: Option<McpSessionOffer>) -> Option<McpSessionOffer> {
+/// The one destructive tool whose question offers "allow for this session" (bound to its
+/// terminal by the gate).
+const SCREEN_TOOL: &str = "terminal_read_screen";
+
+/// The offer a question makes: a destructive tool gets none - but reading a terminal's screen,
+/// which may be allowed on that terminal for the session (RC-080-66, owner 2026-11-05) - a write
+/// tool none but the whole session, an executing one none but its minutes - whatever the gate
+/// asked for.
+fn offer(
+    class: CommandClass,
+    tool: &str,
+    asked: Option<McpSessionOffer>,
+) -> Option<McpSessionOffer> {
     match (class, asked?) {
         (CommandClass::Write, McpSessionOffer::Session) => Some(McpSessionOffer::Session),
+        (CommandClass::Destructive, McpSessionOffer::Session) if tool == SCREEN_TOOL => {
+            Some(McpSessionOffer::Session)
+        }
         (CommandClass::Exec, McpSessionOffer::Minutes(minutes)) if minutes > 0 => {
             Some(McpSessionOffer::Minutes(minutes))
         }

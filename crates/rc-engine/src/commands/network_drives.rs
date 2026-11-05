@@ -7,6 +7,7 @@
 //! blocking call on the blocking pool, and answer the drive bar as it is afterwards, announced as
 //! [`EngineEvent::Drives`].
 
+use crate::recover::LogPanic as _;
 use crate::{
     DriveGroup, DriveKind, Engine, EngineError, EngineEvent, Outcome,
     drives::{
@@ -32,6 +33,7 @@ impl Engine {
         let answer =
             tokio::task::spawn_blocking(move || source.map_network(letter, &folder, reconnect))
                 .await
+                .log_panic("engine.map_network_drive")
                 .map_err(|_| NetworkDriveError::Failed { code: 0 })?;
         answer.map_err(|code| network::from_system(code, letter, &remote))?;
         Ok(self.drives_changed().await)
@@ -65,6 +67,7 @@ impl Engine {
         let source = self.inner.drives.source();
         let answer = tokio::task::spawn_blocking(move || source.unmap_network(letter, force))
             .await
+            .log_panic("engine.unmap_network_drive")
             .map_err(|_| NetworkDriveError::Failed { code: 0 })?;
         answer.map_err(|code| network::from_system(code, letter, &remote))?;
         Ok(self.drives_changed().await)

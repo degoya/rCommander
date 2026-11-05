@@ -19,6 +19,14 @@ pub enum DbError {
         #[source]
         source: io::Error,
     },
+    /// The database file or one of SQLite's files beside it could not be created or made
+    /// owner-only (RC-080-68).
+    #[error("make {} owner-only: {source}", path.display())]
+    Permissions {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
     /// SQLite or the driver failed.
     #[error("database: {0}")]
     Sqlx(#[from] sqlx::Error),

@@ -50,8 +50,14 @@ fn windows_with_pwsh_on_the_path_offers_it_first() {
     assert_eq!(shells[0].args, ["-NoLogo"]);
     assert_eq!(shells[0].label_key, "terminal.shell.pwsh");
     assert_eq!(shells[2].program, cmd);
-    // Not found anywhere: the bare name, which Windows finds in its own folders.
-    assert_eq!(shells[1].program, PathBuf::from("powershell.exe"));
+    // Not found anywhere: the System32 path, never the bare name (RC-080-65).
+    assert_eq!(
+        shells[1].program,
+        system32
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe")
+    );
 }
 
 #[test]
@@ -71,7 +77,7 @@ fn windows_without_pwsh_defaults_to_windows_powershell() {
     let shells = detect_shells(Platform::Windows, &env);
     assert_eq!(ids(&shells), ["powershell", "cmd"]);
     assert_eq!(shells[0].program, powershell);
-    assert_eq!(shells[1].program, PathBuf::from("cmd.exe"));
+    assert_eq!(shells[1].program, system32.join("cmd.exe"));
 }
 
 #[test]

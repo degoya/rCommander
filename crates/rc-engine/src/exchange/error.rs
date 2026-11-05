@@ -11,6 +11,9 @@ pub enum ExchangeError {
     /// An export password was given, but empty.
     #[error("the export password is empty")]
     PasswordEmpty,
+    /// The export password of a file with secrets is shorter than a master password may be.
+    #[error("an export password for passwords and keys needs at least {min} characters")]
+    PasswordShort { min: usize },
     /// Secrets in an unencrypted file without the person's confirmation that they are in clear.
     #[error("passwords and keys go into an unencrypted file only after its warning")]
     SecretsUnencrypted,
@@ -46,6 +49,10 @@ pub enum ExchangeError {
     /// The export password does not open the file - or the file was changed.
     #[error("the export password is wrong, or the file was changed")]
     PasswordWrong,
+    /// The sealed file asks more of argon2 than an import gives
+    /// (`rc_vault::KdfParams::IMPORT_MAX`); nothing was derived.
+    #[error("the export's key derivation asks more memory or time than an import allows")]
+    KdfTooCostly,
 }
 
 impl ExchangeError {
@@ -53,6 +60,7 @@ impl ExchangeError {
     pub const ALL_CODES: &[&str] = &[
         "exchange_nothing_chosen",
         "exchange_password_empty",
+        "exchange_password_short",
         "exchange_secrets_unencrypted",
         "exchange_target_exists",
         "exchange_target_unwritable",
@@ -62,6 +70,7 @@ impl ExchangeError {
         "exchange_version_unknown",
         "exchange_password_needed",
         "exchange_password_wrong",
+        "exchange_kdf_too_costly",
     ];
 
     /// The stable code.
@@ -70,6 +79,7 @@ impl ExchangeError {
         match self {
             Self::NothingChosen => "exchange_nothing_chosen",
             Self::PasswordEmpty => "exchange_password_empty",
+            Self::PasswordShort { .. } => "exchange_password_short",
             Self::SecretsUnencrypted => "exchange_secrets_unencrypted",
             Self::TargetExists { .. } => "exchange_target_exists",
             Self::TargetUnwritable { .. } => "exchange_target_unwritable",
@@ -79,6 +89,7 @@ impl ExchangeError {
             Self::VersionUnknown { .. } => "exchange_version_unknown",
             Self::PasswordNeeded => "exchange_password_needed",
             Self::PasswordWrong => "exchange_password_wrong",
+            Self::KdfTooCostly => "exchange_kdf_too_costly",
         }
     }
 }

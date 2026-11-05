@@ -19,7 +19,7 @@ use tempfile::TempDir;
 
 use rc_mcp::config::{ENABLED_KEY, PORT_KEY};
 
-use super::{McpServer, McpStatus, restart, start};
+use super::{McpServer, McpStatus, launch, restart, start};
 use crate::app::harness::Harness;
 use crate::app::harness::headless_engine;
 
@@ -175,4 +175,42 @@ async fn switched_off_the_endpoint_stops_answering() {
         tokio::net::TcpStream::connect(addr).await.is_err(),
         "nothing listens any more"
     );
+}
+
+/// RC-080-66: with `mcp.token.rotate_on_start` on, each app start writes a new token into the
+/// instance file and the old one stops working; off, as before, the token stays.
+#[tokio::test]
+async fn each_start_writes_a_new_token_only_where_the_setting_asks() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let engine = headless_engine(root.path()).await;
+    let db = Db::open_in_memory().await.expect("db");
+    let file = root.path().join("data").join(instance::INSTANCE_FILE);
+    let started = |db: Db| {
+        let (engine, file) = (engine.clone(), file.clone());
+        async move {
+            let (handle, _) = launch(engine, db, Some(file.clone())).await;
+            let handle = handle.expect("the server runs");
+            let written = instance::read(&file).expect("instance file");
+            (handle, written)
+        }
+    };
+
+    let (handle, first) = started(db.clone()).await;
+    handle.shutdown().await.expect("stops");
+    let (handle, kept) = started(db.clone()).await;
+    assert_eq!(kept.token, first.token, "off: the token stays");
+    handle.shutdown().await.expect("stops");
+
+    db.set(rc_engine::settings::MCP_TOKEN_ROTATE_ON_START_KEY, &true)
+        .await
+        .expect("stored");
+    let (handle, renewed) = started(db.clone()).await;
+    assert_ne!(renewed.token, first.token, "on: a new token");
+    assert!(instance::probe(&renewed).await);
+    let old = instance::Instance {
+        token: first.token.clone(),
+        ..renewed.clone()
+    };
+    assert!(!instance::probe(&old).await, "the old token stops working");
+    handle.shutdown().await.expect("stops");
 }

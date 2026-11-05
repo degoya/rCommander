@@ -100,6 +100,39 @@ pub fn viewer_package(
     .expect("a valid test package")
 }
 
+/// [`viewer_manifest`] with `component`, signed by `key` as it is - without the packager's
+/// checks, so a component the host refuses to compile still carries a valid signature: what an
+/// author bypassing the packager would publish (RC-080-69's tests).
+///
+/// # Panics
+///
+/// The archive cannot be written, which a test helper may.
+#[must_use]
+pub fn viewer_package_unchecked(
+    id: &str,
+    version: &str,
+    key_id: &str,
+    key: &SigningKey,
+    component: &[u8],
+) -> Vec<u8> {
+    use std::io::Write as _;
+
+    let manifest = viewer_manifest(id, version, key_id, key);
+    let digest = crate::package_digest(manifest.as_bytes(), component, &[]);
+    let signature = crate::sign_detached(key, &digest);
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    for (name, bytes) in [
+        (crate::MANIFEST_MEMBER, manifest.as_bytes()),
+        (crate::COMPONENT_MEMBER, component),
+        (crate::SIGNATURE_MEMBER, signature.as_bytes()),
+    ] {
+        writer.start_file(name, options).expect("member");
+        writer.write_all(bytes).expect("write member");
+    }
+    writer.finish().expect("archive").into_inner()
+}
+
 /// A package of the secret source `component` (a `testbed::secrets::SecretsBed` built, for
 /// example) as plugin `id` named `Test source`, signed by `key` under `key_id`, with a 1 s time
 /// limit per call and no `http` (RC-100-34's tests).

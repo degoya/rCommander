@@ -11,7 +11,9 @@
 //!   `http(s)` is not followed ([`render`]). Text is set in the one font the plugin brings (Lato
 //!   Regular, `fonts/`), whatever `font-family` asks for: the sandbox has no system fonts.
 //! - **Bounded work.** A file and an inflated `.svgz` are at most [`MAX_SVG_BYTES`]; a document
-//!   nested deeper than [`depth::MAX_DEPTH`] is refused before it is parsed, one whose `<use>`
+//!   nested deeper than [`depth::MAX_DEPTH`] is refused before it is parsed and again on the
+//!   parsed tree, a DOCTYPE is blanked so no entity expands ([`doctype`]), the parse stops at
+//!   [`budget::MAX_PARSED_NODES`] nodes, and one whose `<use>`
 //!   references would expand beyond [`budget::MAX_EXPANDED_ELEMENTS`] elements before usvg
 //!   builds it - markers counted per vertex and patterns per painted shape - and the SVGs
 //!   embedded as `data:` pictures take their share of the same budget each time usvg reads one.
@@ -28,6 +30,7 @@
 
 pub mod budget;
 pub mod depth;
+pub mod doctype;
 mod expand;
 #[cfg(target_arch = "wasm32")]
 mod guest;

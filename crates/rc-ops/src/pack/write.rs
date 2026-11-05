@@ -14,7 +14,7 @@ use std::{
     io::{self, BufReader, BufWriter, Read, Write},
     path::PathBuf,
     sync::{
-        Arc, Mutex, PoisonError,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
         mpsc,
     },
@@ -26,6 +26,8 @@ use tokio::{io::AsyncReadExt, runtime::Handle, sync::watch};
 
 use super::{PackFormat, sevenz, tar, zip};
 use crate::control::Control;
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 
 /// Bytes per read of a source.
 const BUFFER: usize = 256 * 1024;
@@ -79,14 +81,11 @@ pub(crate) struct AtWork {
 
 impl Current {
     pub(crate) fn get(&self) -> Option<AtWork> {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        self.0.lock_or_recover("write").clone()
     }
 
     fn set(&self, member: &Member, from: u64) {
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(AtWork {
+        *self.0.lock_or_recover("write") = Some(AtWork {
             path: member.path.clone(),
             size: member.size,
             from,
@@ -100,14 +99,11 @@ pub(crate) struct Grown(Arc<Mutex<Vec<PathBuf>>>);
 
 impl Grown {
     pub(crate) fn take(&self) -> Vec<PathBuf> {
-        std::mem::take(&mut *self.0.lock().unwrap_or_else(PoisonError::into_inner))
+        std::mem::take(&mut *self.0.lock_or_recover("write"))
     }
 
     fn push(&self, path: PathBuf) {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(path);
+        self.0.lock_or_recover("write").push(path);
     }
 }
 
@@ -303,7 +299,7 @@ where
         };
         ruzstd::encoding::compress(reader, &mut sink, level);
         // Joined here, so a panic there is an answer, not a panic of the scope.
-        producer.join()
+        producer.join().log_panic("ops.pack_producer")
     });
     // The output's own failure first: the producer then only saw the pipe close.
     if let Some(error) = sink.error {

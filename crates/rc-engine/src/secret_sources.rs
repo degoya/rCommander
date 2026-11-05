@@ -42,6 +42,7 @@ pub use error::SecretSourceError;
 pub use rc_db::SecretSourceRef;
 pub use wincred::WINCRED_SOURCE_KEY;
 
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, SecretKind,
     plugins::{PluginSettings, stored_plugin_settings},
@@ -127,6 +128,7 @@ async fn blocking<T: Send + 'static>(
 ) -> Result<T, Failure> {
     tokio::task::spawn_blocking(call)
         .await
+        .log_panic("engine.secret_source_call")
         .unwrap_or_else(|_| Err(Failure::new(FailureKind::Other)))
 }
 
@@ -167,7 +169,10 @@ impl Engine {
         else {
             return Vec::new();
         };
-        match tokio::task::spawn_blocking(move || installed::list(&data_dir)).await {
+        match tokio::task::spawn_blocking(move || installed::list(&data_dir))
+            .await
+            .log_panic("engine.secret_source_list")
+        {
             Ok(Ok(packages)) => packages
                 .into_iter()
                 .filter(|package| {
@@ -248,7 +253,8 @@ impl Engine {
         let built = tokio::task::spawn_blocking(move || {
             SecretsPlugin::new(&package.manifest, &package.component, options)
         })
-        .await;
+        .await
+        .log_panic("engine.secret_source_build");
         match built {
             Ok(Ok(plugin)) => Ok(LoadedSource {
                 name,

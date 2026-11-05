@@ -63,6 +63,7 @@ fn control_characters_and_empty_paths_get_no_line() {
         ShellSyntax::Posix,
         ShellSyntax::PowerShell,
         ShellSyntax::Cmd,
+        ShellSyntax::Csh,
     ] {
         assert_eq!(cd_line(syntax, ""), None);
         assert_eq!(cd_line(syntax, "/a\nrm -rf ~"), None, "{syntax:?}");
@@ -87,6 +88,33 @@ fn every_hostile_name_stays_inside_its_quotes() {
             .and_then(|rest| rest.strip_suffix("'\r"))
             .expect("quoted");
         assert!(!inner.replace("''", "").contains('\''), "{name}");
+    }
+}
+
+/// RC-080-65: tcsh expands `!` even in single quotes; `\!` keeps it a character, and a quote
+/// leaves the quotes as in POSIX.
+#[test]
+fn csh_escapes_history_inside_its_quotes() {
+    assert_eq!(
+        cd_line(ShellSyntax::Csh, "/home/a!b").as_deref(),
+        Some(" cd '/home/a\\!b'\r")
+    );
+    assert_eq!(
+        cd_line(ShellSyntax::Csh, "/x/it's !!").as_deref(),
+        Some(" cd '/x/it'\\''s \\!\\!'\r")
+    );
+    // Relative or option-like: no line, there is no `--` to put before it.
+    assert_eq!(cd_line(ShellSyntax::Csh, "-x"), None);
+    assert_eq!(cd_line(ShellSyntax::Csh, "rel/dir"), None);
+    for name in HOSTILE {
+        let path = format!("/{name}");
+        let line = cd_line(ShellSyntax::Csh, &path).expect("a line");
+        let inner = line
+            .strip_prefix(" cd '")
+            .and_then(|rest| rest.strip_suffix("'\r"))
+            .expect("quoted");
+        assert_eq!(inner.replace(r"'\''", "'").replace(r"\!", "!"), path);
+        assert!(!inner.replace(r"\!", "").contains('!'), "{name}");
     }
 }
 

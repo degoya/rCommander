@@ -262,3 +262,68 @@ async fn a_job_run_at_once_is_listed_marked_and_never_moved() {
     let saved = call(&client, "queue_save", json!({ "list": rc_engine::AT_ONCE })).await;
     assert_eq!(saved["code"], "queue_list_not_found", "{saved}");
 }
+
+/// RC-080-66: an overwriting list asks; saved again under its id while the person reads the
+/// question, it is not loaded when they allow - its class was judged on the list before.
+#[tokio::test]
+async fn a_list_saved_again_while_its_load_is_asked_is_not_loaded() {
+    let (_root, context) = setup().await;
+    let engine = context.engine().clone();
+    let db = context.db.clone();
+    let client = connect(&context).await;
+    let created = call(&client, "queue_create", json!({ "name": "Swap" })).await;
+    let list = created["lists"][1]["id"].as_u64().expect("the new list");
+    let job = copy(&engine, "a.txt").await;
+    call(&client, "queue_assign", json!({ "job": job, "list": list })).await;
+    let saved = call(&client, "queue_save", json!({ "list": list })).await;
+    let id = saved["saved"]["id"].as_i64().expect("the saved id");
+    let (_, plain) = db.saved_queue(id).await.expect("reads").expect("saved");
+    let overwriting: Vec<String> = plain
+        .iter()
+        .map(|text| {
+            let mut spec: Value = serde_json::from_str(text).expect("a job");
+            spec["options"]["on_conflict"] = json!("overwrite");
+            spec.to_string()
+        })
+        .collect();
+    db.save_queue("Swap", false, &overwriting)
+        .await
+        .expect("saved overwriting");
+
+    engine.attach_window();
+    let mut events = engine.subscribe();
+    let person = {
+        let engine = engine.clone();
+        tokio::spawn(async move {
+            loop {
+                let event = events.recv().await.expect("event");
+                let rc_engine::EngineEvent::McpQuestion { question } = event else {
+                    continue;
+                };
+                // While the person reads, the list is saved again under its id.
+                db.save_queue("Swap", false, &plain)
+                    .await
+                    .expect("saved again");
+                engine
+                    .dispatch(Command::AnswerMcpQuestion {
+                        question: question.id,
+                        answer: rc_engine::McpAnswer::Allow,
+                    })
+                    .await
+                    .expect("the window answers");
+                return question.class;
+            }
+        })
+    };
+    let refused = call(&client, "queue_load", json!({ "saved": id })).await;
+    let asked = tokio::time::timeout(Duration::from_secs(10), person).await;
+    assert_eq!(
+        asked.expect("a question").expect("joins"),
+        rc_engine::CommandClass::Destructive,
+        "the overwriting list asked"
+    );
+    assert_eq!(refused["code"], "queue_changed", "{refused}");
+    for job in engine.ops().jobs() {
+        let _ = engine.ops().cancel(job.id);
+    }
+}

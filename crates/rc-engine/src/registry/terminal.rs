@@ -29,9 +29,10 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         class: CommandClass::GuiOnly,
         summary: "Paste the clipboard's image into a terminal as the path of a PNG file its program can read (uploaded to an SSH server)",
     },
+    // What was typed there shows - passwords, tokens: MCP asks first (RC-080-66).
     CommandSpec {
         id: "terminal.read_screen",
-        class: CommandClass::Read,
+        class: CommandClass::Destructive,
         summary: "A terminal's screen (and scrollback) as text, with the cursor position",
     },
     CommandSpec {

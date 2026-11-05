@@ -217,7 +217,9 @@ impl Session {
             "SYST" if self.shared.case_sensitive => self.reply("215 UNIX Type: L8").await?,
             "SYST" => self.reply("215 Windows_NT").await?,
             "OPTS" if self.shared.options.utf8 => self.reply("200 Always in UTF8 mode.").await?,
-            "TYPE" | "NOOP" | "MODE" | "STRU" => self.reply("200 OK.").await?,
+            "TYPE" | "MODE" | "STRU" => self.reply("200 OK.").await?,
+            // Its own text, so a test can hold it back alone (`Options::hold`).
+            "NOOP" => self.reply("200 NOOP ok.").await?,
             "PWD" => self.reply(&format!("257 \"{}\"", self.cwd)).await?,
             "CWD" if local.is_dir() => {
                 self.cwd = ftp;

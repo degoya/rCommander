@@ -399,8 +399,8 @@ impl PartFile {
         Self::create_open(target).map(|(part, _)| part)
     }
 
-    /// [`PartFile::create`] with the file it opened: `create_new`, so an existing file or link
-    /// at the name is refused, never followed.
+    /// [`PartFile::create`] with the file it opened, for reading and writing: `create_new`, so
+    /// an existing file or link at the name is refused, never followed.
     pub(crate) fn create_open(target: &Path) -> Result<(Self, fs::File), BackupError> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let failed = |source| BackupError::Target {
@@ -417,7 +417,7 @@ impl PartFile {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
+        options.read(true).write(true).create_new(true);
         owner_only(&mut options);
         let file = options.open(&path).map_err(failed)?;
         Ok((Self { path }, file))

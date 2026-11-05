@@ -24,7 +24,8 @@ mod test_support;
 
 use test_support::Fixture;
 
-/// The destructive and exec tools of the review (2026-10-18).
+/// The destructive and exec tools of the review (2026-10-18), and `terminal_read_screen`
+/// (RC-080-66).
 const KNOWN_GATED: &[&str] = &[
     "connections_delete",
     "connections_folder_delete",
@@ -38,6 +39,7 @@ const KNOWN_GATED: &[&str] = &[
     "ssh_exec",
     "terminal_close",
     "terminal_open",
+    "terminal_read_screen",
     "terminal_send_input",
 ];
 
@@ -85,6 +87,12 @@ fn escalated_calls() -> Vec<(&'static str, Value, &'static str)> {
             "login_scripts_update",
             json!({ "id": 1, "steps": [] }),
             "exec",
+        ),
+        // Writable by the group (RC-080-66).
+        (
+            "files_set_attributes",
+            json!({ "paths": ["a.txt"], "mode": "664" }),
+            "destructive",
         ),
         // Below the limit in force (`Engine::effective_class`, RC-080-12).
         (

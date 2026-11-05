@@ -2,9 +2,11 @@
 //! A call beyond it waits until one ends. Every running call is bounded by its wall clock, so
 //! the wait is bounded as well, and a caller that gives up (Quick View moved on) drops its wait.
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
+
+use crate::recover::LockOrRecover as _;
 
 /// The calls of one plugin that run, shared by all its stores and versions.
 #[derive(Debug, Default)]
@@ -22,7 +24,7 @@ impl CallGate {
             // Registered before the count is read, so an end in between is not missed.
             ended.as_mut().enable();
             {
-                let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
+                let mut running = self.running.lock_or_recover("call_gate.running");
                 if *running < max {
                     *running += 1;
                     return CallSlot {
@@ -37,7 +39,7 @@ impl CallGate {
     /// How many calls run now.
     #[cfg(test)]
     pub(crate) fn running(&self) -> u32 {
-        *self.running.lock().unwrap_or_else(PoisonError::into_inner)
+        *self.running.lock_or_recover("call_gate.running")
     }
 }
 
@@ -51,11 +53,7 @@ pub struct CallSlot {
 impl Drop for CallSlot {
     fn drop(&mut self) {
         {
-            let mut running = self
-                .gate
-                .running
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner);
+            let mut running = self.gate.running.lock_or_recover("call_gate.running");
             *running = running.saturating_sub(1);
         }
         self.gate.ended.notify_waiters();

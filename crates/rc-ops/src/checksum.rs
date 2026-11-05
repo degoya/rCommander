@@ -27,7 +27,8 @@ const POLL: Duration = Duration::from_millis(100);
 /// The most lines (files hashed, lines checked) a report keeps.
 pub const MAX_REPORT_LINES: usize = 10_000;
 
-/// What a checksum, split or combine job found and wrote.
+/// What a checksum, split or combine job found and wrote; and where a multi-rename stopped with
+/// entries under temporary names (RC-080-64).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum JobReport {
@@ -50,6 +51,14 @@ pub enum JobReport {
     },
     Combined {
         report: CombineReport,
+    },
+    /// A rename job stopped at a failing step while entries were under temporary names: with
+    /// `rolled_back` every step done is reversed and each name is as before the run; else the
+    /// entries still under a temporary name are `parked`.
+    RenameStopped {
+        rolled_back: bool,
+        #[serde(default)]
+        parked: Vec<crate::ParkedName>,
     },
 }
 

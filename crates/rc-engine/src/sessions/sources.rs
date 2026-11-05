@@ -34,6 +34,7 @@ impl HostKeyGate for EngineGate {
             Err(EngineError::HostKeyChanged {
                 stored_fingerprint, ..
             }) => Err(HostKeyRefusal::Changed { stored_fingerprint }),
+            Err(EngineError::HostKeyRevoked { .. }) => Err(HostKeyRefusal::Revoked),
             Err(error) => Err(HostKeyRefusal::Failed {
                 reason: error.to_string(),
             }),
@@ -131,6 +132,17 @@ impl From<SshError> for EngineError {
                 algorithm: offered.algorithm,
                 fingerprint: offered.fingerprint,
                 stored_fingerprint,
+            },
+            SshError::HostKey {
+                host,
+                port,
+                offered,
+                refusal: HostKeyRefusal::Revoked,
+            } => Self::HostKeyRevoked {
+                host,
+                port,
+                algorithm: offered.algorithm,
+                fingerprint: offered.fingerprint,
             },
             other => Self::Ssh(other),
         }

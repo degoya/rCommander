@@ -21,6 +21,10 @@
 //! then is its source removed, and each source directory once it is empty. A restored move
 //! removes the source of a file it finds complete at its target. Modification times and
 //! attributes are kept where the target can hold them (`staging.rs`).
+//!
+//! A link to a folder goes by `ops.copy_links` (`links.rs`, RC-080-63): renamed by a move
+//! within one backend, else copied as the folder's contents, made anew as a link, or skipped;
+//! the directories, links walked into among them, are `copy_dirs.rs`'.
 
 use std::{
     io,
@@ -31,26 +35,15 @@ use std::{
 use rc_vfs::{BackendId, Entry, EntryKind, TargetKind, Vfs, VfsError, VfsPath, WriteMode};
 
 use crate::{
-    Failure, OpsError,
+    CopyLinks, Failure, OpsError,
+    copy_dirs::{DirDone, DirOutcome, OpenLink, subtree_end},
+    links::{LinkDone, is_dir_link},
     name::{check_target, keeps_windows_rules},
     runner::{Runner, Step, Stop, attempt},
     staging::{Resolved, is_resumable, is_staged, open_part, remove_leftover},
     temp_name::part_path,
     walk::{Item, Subtrees},
 };
-
-/// How a directory of the plan was handled.
-enum DirOutcome {
-    /// Made on the target.
-    Created,
-    /// One of the same name was there; the contents go into it.
-    Merged,
-    /// Moved in one rename, contents and all.
-    Renamed,
-}
-
-/// A directory made or merged: source, target, whether made here, the source's entry.
-type DirDone = (PathBuf, PathBuf, bool, Entry);
 
 /// How a file reached its target.
 #[derive(PartialEq, Eq)]
@@ -62,7 +55,7 @@ pub(crate) enum Moved {
 }
 
 /// Whether a failed rename means "not this way" rather than "not at all".
-fn falls_back(error: &VfsError) -> bool {
+pub(crate) fn falls_back(error: &VfsError) -> bool {
     match error {
         VfsError::Io { source, .. } => source.kind() == io::ErrorKind::CrossesDevices,
         VfsError::Unsupported { .. } => true,
@@ -183,7 +176,8 @@ impl Runner {
         if attempt!(self, target, ensure_dir(dst.as_ref(), &target.path).await).is_none() {
             return Ok(());
         }
-        let mut items = self.plan(sources).await?;
+        let follow = self.options.copy_links == CopyLinks::Contents;
+        let (mut items, marks) = self.plan_following(sources, follow).await?;
         if let Some(name) = name {
             rename_top(&mut items, name);
         }
@@ -193,16 +187,19 @@ impl Runner {
         };
         // Subtrees done in one step (renamed) or given up (skipped): their items are counted.
         let mut subtrees = Subtrees::new(&items);
-        // Directories made or merged, in plan order.
+        // Directories made or merged, in plan order; the links walked into still being copied.
         let mut dirs: Vec<DirDone> = Vec::new();
+        let mut open: Vec<OpenLink> = Vec::new();
         // Names out of an archive are judged as unpacking judges them, everywhere (RC-080-12).
         let strict = keeps_windows_rules(&target.backend)
             || matches!(self.src_id, BackendId::Archive { .. });
         for (at, item) in items.iter().enumerate() {
+            self.close_links(&mut open, &mut dirs, at);
             if subtrees.skipped(at) {
                 continue;
             }
             self.checkpoint().await?;
+            let mark = marks.get(at).copied().unwrap_or_default();
             let to = target.path.join(&item.rel);
             // On a local Windows folder every name keeps Windows' rules, the sources' own too: a
             // listed `a:b` is no stream there, `con` no device (RC-080-12).
@@ -213,20 +210,59 @@ impl Runner {
                 continue;
             }
             if item.entry.kind == EntryKind::Dir {
-                match attempt!(self, &on_target(&to), self.transfer_dir(item, &to).await) {
-                    Some(DirOutcome::Created) => {
-                        dirs.push((item.path.clone(), to, true, item.entry.clone()));
-                    }
-                    Some(DirOutcome::Merged) => {
-                        dirs.push((item.path.clone(), to, false, item.entry.clone()));
-                    }
+                let outcome = attempt!(
+                    self,
+                    &on_target(&to),
+                    self.transfer_dir(item, &to, !mark.below).await
+                );
+                let made = match outcome {
+                    Some(DirOutcome::Created) => true,
+                    Some(DirOutcome::Merged) => false,
                     Some(DirOutcome::Renamed) | None => {
                         let (files, bytes) = subtrees.give_up(at);
                         self.count_done(files, bytes);
+                        continue;
                     }
+                };
+                if mark.link {
+                    open.push(OpenLink {
+                        end: subtree_end(&items, at),
+                        dir: dirs.len(),
+                        counts: self.counts(),
+                    });
+                }
+                dirs.push(DirDone {
+                    from: item.path.clone(),
+                    to,
+                    made,
+                    entry: item.entry.clone(),
+                    mark,
+                    whole: false,
+                });
+            } else if is_dir_link(&item.entry) {
+                let source = self.src_path(&item.path);
+                let moving = moving && !mark.below;
+                match attempt!(self, &source, self.dir_link(item, &to, moving).await) {
+                    Some(LinkDone::Skipped) => self.count_skipped(item.entry.size),
+                    Some(LinkDone::Made) if moving => {
+                        self.remove_source(item, &source).await?;
+                        self.count_done(1, item.entry.size);
+                    }
+                    _ => self.count_done(1, item.entry.size),
                 }
             } else if copyable(&item.entry) || self.link_to_a_file(item).await {
-                self.transfer_file(item, &on_target(&to), moving).await?;
+                // Below a link walked into a file is copied, never renamed away or removed.
+                let renaming = self.rename_ok;
+                if mark.below {
+                    self.rename_ok = false;
+                }
+                let copied = self
+                    .transfer_file(item, &on_target(&to), moving && !mark.below)
+                    .await;
+                if mark.below {
+                    self.rename_ok = renaming;
+                }
+                copied?;
             } else {
                 let failure = Failure::new(
                     &self.src_path(&item.path),
@@ -238,67 +274,9 @@ impl Runner {
                 self.count_done(1, item.entry.size);
             }
         }
+        self.close_links(&mut open, &mut dirs, items.len());
         self.finish_dirs(&dirs, moving).await;
         Ok(())
-    }
-
-    /// Deepest first: the times of the directories made, and when moving the emptied sources.
-    /// A source directory that still holds something skipped stays.
-    async fn finish_dirs(&mut self, dirs: &[DirDone], moving: bool) {
-        let set_mtime = self.dst.capabilities().set_mtime;
-        for (from, to, made, entry) in dirs.iter().rev() {
-            if *made
-                && set_mtime
-                && self.options.keep_attributes
-                && let Some(modified) = entry.modified
-            {
-                let _ = self.dst.set_mtime(to, modified).await;
-            }
-            if moving {
-                match self.src.remove_dir(from, false).await {
-                    Ok(())
-                    | Err(VfsError::DirectoryNotEmpty { .. } | VfsError::NotFound { .. }) => {}
-                    Err(error) => {
-                        let failure = Failure::new(&self.src_path(from), &error.into());
-                        self.job.update(|snapshot| snapshot.failures.push(failure));
-                    }
-                }
-            }
-        }
-    }
-
-    async fn transfer_dir(&mut self, item: &Item, to: &Path) -> Result<DirOutcome, Step> {
-        match self.dst.stat(to).await {
-            Ok(existing) if existing.is_dir_like() => Ok(DirOutcome::Merged),
-            Ok(_) => Err(OpsError::KindMismatch {
-                path: to.to_path_buf(),
-            }
-            .into()),
-            Err(VfsError::NotFound { .. }) => {
-                if self.rename_ok {
-                    match self.src.rename_no_replace(&item.path, to).await {
-                        Ok(()) => return Ok(DirOutcome::Renamed),
-                        // A folder that took the name meanwhile is merged into, as one found
-                        // first; never replaced (RC-080-56).
-                        Err(VfsError::AlreadyExists { .. }) => {
-                            return match self.dst.stat(to).await {
-                                Ok(existing) if existing.is_dir_like() => Ok(DirOutcome::Merged),
-                                Ok(_) => Err(OpsError::KindMismatch {
-                                    path: to.to_path_buf(),
-                                }
-                                .into()),
-                                Err(error) => Err(error.into()),
-                            };
-                        }
-                        Err(error) if falls_back(&error) => self.rename_ok = false,
-                        Err(error) => return Err(error.into()),
-                    }
-                }
-                self.dst.mkdir(to, false).await?;
-                Ok(DirOutcome::Created)
-            }
-            Err(error) => Err(error.into()),
-        }
     }
 
     /// One file: the conflict, the copy, and when moving the source's removal.

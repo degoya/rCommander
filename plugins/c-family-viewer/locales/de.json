@@ -1,0 +1,7 @@
+{
+  "name": "Viewer für C-Sprachen",
+  "description": "Zeigt Quelltext in C, C++, C#, Java, Kotlin, Go und Rust farbig wie ein Editor.",
+  "codes": {
+    "01a1aafa-df23-7a2d-aa5e-82bf3f2359dd.setting.encoding": "Kodierung"
+  }
+}

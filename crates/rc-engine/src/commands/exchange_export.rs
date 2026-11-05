@@ -21,9 +21,10 @@ use rc_vfs::{BackendId, VfsPath};
 use serde_json::Value;
 use zeroize::Zeroizing;
 
+use crate::recover::LogPanic as _;
 use crate::{
     ConfigExportRequest, Connection, ConnectionDraft, Engine, EngineError, LoginScriptInfo,
-    Outcome, PanelId, SecretKind, SecretRef,
+    MIN_MASTER_PASSWORD_LEN, Outcome, PanelId, SecretKind, SecretRef,
     exchange::{
         ConnectionsPart, Content, ExchangeError, ExportFile, ExportParts, ExportReport,
         ExportSecret, ExportedCertificate, ExportedConnection, ExportedHostKey,
@@ -36,11 +37,12 @@ use crate::{
     },
 };
 
-/// argon2id's cost for a sealed export: the vault's; cheap in the tests.
+/// argon2id's cost for a sealed export: the vault's; cheap in the tests. An import reads no
+/// export weaker than this or than the release floor (RC-080-68).
 #[cfg(not(test))]
-const EXPORT_KDF: KdfParams = KdfParams::DEFAULT;
+pub(crate) const EXPORT_KDF: KdfParams = KdfParams::DEFAULT;
 #[cfg(test)]
-const EXPORT_KDF: KdfParams = KdfParams {
+pub(crate) const EXPORT_KDF: KdfParams = KdfParams {
     m_cost_kib: 64,
     t_cost: 1,
     p_cost: 1,
@@ -56,14 +58,26 @@ impl Engine {
         if !parts.any() {
             return Err(ExchangeError::NothingChosen.into());
         }
+        let secrets = request.secrets && parts.connections;
         let password = match &request.password {
             Some(password) if password.is_empty() => {
                 return Err(ExchangeError::PasswordEmpty.into());
             }
+            // A file with secrets is guarded by its password alone: as long as the master
+            // password's (RC-080-68).
+            Some(password)
+                if secrets
+                    && password.secret().expose_secret().chars().count()
+                        < MIN_MASTER_PASSWORD_LEN =>
+            {
+                return Err(ExchangeError::PasswordShort {
+                    min: MIN_MASTER_PASSWORD_LEN,
+                }
+                .into());
+            }
             Some(password) => Some(MasterPassword::from(password.secret().clone())),
             None => None,
         };
-        let secrets = request.secrets && parts.connections;
         if secrets && password.is_none() && !request.plain_secrets {
             return Err(ExchangeError::SecretsUnencrypted.into());
         }
@@ -440,6 +454,7 @@ async fn write_file(
     let written =
         tokio::task::spawn_blocking(move || rc_db::write_private_file(&target, &bytes, overwrite))
             .await
+            .log_panic("engine.export_write")
             .map_err(|error| std::io::Error::other(error.to_string()));
     let failed = |source| ExchangeError::TargetUnwritable {
         path: path.to_owned(),

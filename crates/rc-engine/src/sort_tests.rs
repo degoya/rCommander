@@ -252,3 +252,24 @@ fn by_target_takes_the_order_of_the_system_the_panel_shows() {
     );
     set_names(NameOrder::Windows, true);
 }
+
+/// RC-080-70: entries sorted into a sorted listing land where a sort of the whole would put
+/// them, for every key and direction.
+#[test]
+fn merging_new_entries_is_sorting_the_whole() {
+    for key in [SortKey::Name, SortKey::Ext, SortKey::Size, SortKey::Date] {
+        for descending in [false, true] {
+            let order = order(key, descending);
+            for split in 0..=listing().len() {
+                let mut first = listing();
+                let fresh = first.split_off(split);
+                sort_entries(&mut first, order, Names::WINDOWS);
+                let merged: Vec<String> = merge_sorted(first, fresh, order, Names::WINDOWS)
+                    .into_iter()
+                    .map(|entry| entry.name)
+                    .collect();
+                assert_eq!(merged, sorted(order), "{order:?} split at {split}");
+            }
+        }
+    }
+}

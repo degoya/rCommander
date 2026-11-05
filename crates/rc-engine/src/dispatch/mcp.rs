@@ -1,10 +1,14 @@
 //! [`Engine::dispatch_mcp`]: the MCP server's only way into the engine, and
 //! [`Engine::effective_class`], the class its gate asks by.
+//!
+//! A class judged on what is stored holds only while it stays so (RC-080-66): the gate gets what
+//! it judged with the class ([`Engine::judge_class`]) and runs the call with it held
+//! ([`crate::with_mcp_judged`], `mcp_judged.rs`).
 
 use rc_ops::JobSpec;
 
 use crate::{
-    Command, CommandClass, Engine, EngineError, Outcome, RetentionRequest,
+    Command, CommandClass, Engine, EngineError, McpJudged, Outcome, RetentionRequest,
     registry::{escalation, overwrites},
 };
 
@@ -41,16 +45,28 @@ impl Engine {
     /// list with a job that overwrites (or a list that cannot be read). `rc-mcp`'s gate asks by
     /// this and nothing else.
     pub async fn effective_class(&self, command: &Command) -> CommandClass {
+        self.judge_class(command).await.0
+    }
+
+    /// [`Engine::effective_class`], and what it was judged on: the gate runs the call with it
+    /// held ([`crate::with_mcp_judged`]), so stored content changed in between refuses the call.
+    pub async fn judge_class(&self, command: &Command) -> (CommandClass, McpJudged) {
         let class = command.effective_class();
+        let mut judged = McpJudged::default();
         let stored = match command {
             Command::SetRetention(request) => self.lowers_retention(request).await,
-            Command::QueueLoad { saved } => self.loads_overwriting(*saved).await,
+            Command::QueueLoad { saved } => {
+                let (overwrites, entries) = self.loads_overwriting(*saved).await;
+                judged.queue = entries.map(|entries| (*saved, entries));
+                overwrites
+            }
             _ => false,
         };
-        match escalation(command.id()) {
+        let class = match escalation(command.id()) {
             Some(row) if stored => class.stricter(row.class),
             _ => class,
-        }
+        };
+        (class, judged)
     }
 
     /// Whether `request` sets a limit below the one in force: the next sweep deletes more.
@@ -74,19 +90,23 @@ impl Engine {
         })
     }
 
-    /// Whether the saved list `saved` holds a job that overwrites what it finds; an entry that
-    /// does not read is never loaded. Without a database the load fails anyway.
-    async fn loads_overwriting(&self, saved: i64) -> bool {
+    /// Whether the saved list `saved` holds a job that overwrites what it finds, and the
+    /// entries judged (`Some(None)` for a list that is not there; `None` where nothing was read);
+    /// an entry that does not read is never loaded. Without a database the load fails anyway.
+    async fn loads_overwriting(&self, saved: i64) -> (bool, Option<Option<Vec<String>>>) {
         let Ok(db) = self.db() else {
-            return false;
+            return (false, None);
         };
         match db.saved_queue(saved).await {
-            Ok(Some((_, texts))) => texts.iter().any(|text| {
-                serde_json::from_str::<JobSpec>(text)
-                    .is_ok_and(|spec| overwrites(spec.options.on_conflict))
-            }),
-            Ok(None) => false,
-            Err(_) => true,
+            Ok(Some((_, texts))) => {
+                let overwrites = texts.iter().any(|text| {
+                    serde_json::from_str::<JobSpec>(text)
+                        .is_ok_and(|spec| overwrites(spec.options.on_conflict))
+                });
+                (overwrites, Some(Some(texts)))
+            }
+            Ok(None) => (false, Some(None)),
+            Err(_) => (true, None),
         }
     }
 }

@@ -2,6 +2,8 @@
 
 use rc_db::RekeyError;
 
+#[cfg(test)]
+use crate::recover::LockOrRecover as _;
 use crate::{FieldRef, MasterPassword, Result, Vault, VaultError, aead, vault::new_key};
 
 impl Vault {
@@ -33,8 +35,7 @@ impl Vault {
         let fail_after = *self
             .shared
             .fail_rekey_after
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .lock_or_recover("rekey.fail_rekey_after");
         #[cfg(test)]
         let mut done = 0_usize;
         let rewritten = self

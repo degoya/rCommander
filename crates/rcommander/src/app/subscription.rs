@@ -7,10 +7,7 @@
 //! cursor in the panel Tab made active). The engine's events come on a stream of their own, so
 //! the changes an MCP client makes arrive the same way as the window's own.
 
-use std::{
-    hash::{Hash, Hasher},
-    sync::PoisonError,
-};
+use std::hash::{Hash, Hasher};
 
 use iced::{
     Subscription,
@@ -26,6 +23,7 @@ use super::{
     window_state::WindowChange,
 };
 use crate::keymap;
+use crate::recover::LockOrRecover as _;
 
 impl App {
     pub fn subscription(&self) -> Subscription<Message> {
@@ -152,11 +150,7 @@ impl Hash for Jobs {
 
 fn job_results(jobs: &Jobs) -> impl Stream<Item = Message> + use<> {
     let engine = jobs.engine.clone();
-    let receiver = jobs
-        .queue
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .take();
+    let receiver = jobs.queue.lock_or_recover("subscription.queue").take();
     stream::unfold((engine, receiver), |(engine, mut receiver)| async move {
         let job = receiver.as_mut()?.recv().await?;
         let message = run_job(&engine, job).await;

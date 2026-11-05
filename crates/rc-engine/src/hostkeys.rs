@@ -7,6 +7,9 @@
 //! `hostkeys.answer` (connect once, trust and save, cancel), the connection is tried again, and
 //! a "connect once" is spent by that retry.
 //!
+//! A key an imported `known_hosts` file revoked fails with `host_key_revoked` and files no
+//! question at all: a hard stop, as OpenSSH makes it (RC-080-67).
+//!
 //! A changed key cannot be answered with either kind of yes: only the separate, explicit
 //! `hostkeys.replace` swaps the stored key. Neither command has an MCP tool - an agent only
 //! ever sees the coded error and the hint that a person has to decide in the app.
@@ -92,7 +95,8 @@ impl Engine {
     /// # Errors
     ///
     /// [`EngineError::HostKeyUnknown`] or [`EngineError::HostKeyChanged`], both after filing a
-    /// [`HostKeyQuestion`] for the GUI; database failures.
+    /// [`HostKeyQuestion`] for the GUI; [`EngineError::HostKeyRevoked`] without one; database
+    /// failures.
     pub async fn check_host_key(
         &self,
         host: &str,
@@ -103,6 +107,12 @@ impl Engine {
         let verdict = trust::verify(self.db()?, &host, port, offered).await?;
         match verdict {
             Verdict::Trusted(_) => Ok(()),
+            Verdict::Revoked { offered, .. } => Err(EngineError::HostKeyRevoked {
+                host,
+                port,
+                algorithm: offered.algorithm,
+                fingerprint: offered.fingerprint,
+            }),
             Verdict::Unknown(offered) => {
                 if self
                     .inner

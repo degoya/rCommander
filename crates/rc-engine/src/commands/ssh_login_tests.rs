@@ -50,3 +50,27 @@ async fn prefetched_secrets_answer_as_they_were_read() {
         "one the script does not send"
     );
 }
+
+/// RC-080-65: a tap that fell behind and was cut off ends the run as a failure with its own
+/// code, not as the shell's end; a run that got through stays one.
+#[test]
+fn a_tap_cut_off_ends_the_run_as_a_failure() {
+    use rc_remote::login_script::ScriptOutcome;
+
+    use super::finished_state;
+    let closed = || Ok(ScriptOutcome::StreamClosed { step: 1 });
+    assert_eq!(
+        finished_state(closed(), true),
+        LoginRunState::Failed {
+            code: "login_script_output_overflow".into()
+        }
+    );
+    assert_eq!(
+        finished_state(closed(), false),
+        LoginRunState::StreamClosed { step: 1 }
+    );
+    assert_eq!(
+        finished_state(Ok(ScriptOutcome::Completed), true),
+        LoginRunState::Completed
+    );
+}

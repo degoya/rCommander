@@ -11,6 +11,17 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.19.0
+
+- New viewers colour Dockerfiles, SQL, Makefiles, server configuration (nginx, Apache, SSH, crontab, hosts) and C, C++, C#, Java, Kotlin, Go and Rust in the Lister and Quick View.
+- Viewers now recognise files by their whole name, such as Dockerfile or Makefile; JSONC, JSON5, JSON Lines and more config and shell files open coloured too.
+- Bundled viewers come back after an old development install, and the plugin list names a package whose key is not trusted instead of calling it unsigned.
+- Links to folders can be copied and moved; a setting chooses the folder's contents, the link itself or skipping it. A multi-rename that fails halfway undoes itself.
+- Settings > MCP lists every call an agent made; an agent now asks before it reads a terminal's screen; new switches give a new token at every start and turn the log off.
+- Terminal programs copy to the clipboard only from a terminal you see, with a switch for SSH; on Linux and macOS closing a terminal ends programs that ignore the hang-up.
+- Revoked SSH host keys stop the connection, plain FTP asks before sending a password, SFTP upload rights are a setting, and a paused FTP copy no longer holds up others.
+- Also fixed: export passwords need 8 characters, safer restores, private database files on Linux and macOS, % kept in Total Commander paths, no freeze from slow Explorer menu entries.
+
 ## 0.18.1
 
 - Dragging files on Windows shows the drag picture and cursor from the start, and you can switch windows with Alt+Tab while dragging and drop there.

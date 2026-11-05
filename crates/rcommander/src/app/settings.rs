@@ -19,7 +19,8 @@
 //! schema rows like any other. The Plugins and Appearance pages are split into tabs (RC-100-20,
 //! `tabs.rs`); the tab each shows is the app's for the session. The Keyboard page's Shortcuts tab
 //! changes the keys (RC-100-21, `shortcuts.rs`); the Appearance page's Themes tab chooses, edits,
-//! imports and exports the colour themes (RC-100-50, `themes_page.rs`). What the window applies at
+//! imports and exports the colour themes (RC-100-50, `themes_page.rs`). The MCP page lists the
+//! agents' calls below its rights and token (RC-080-66, `mcp_log.rs`). What the window applies at
 //! once when a setting changes - the keys among it - is `apply.rs`.
 
 mod about;
@@ -29,6 +30,8 @@ mod draft;
 mod fonts_page;
 mod host_keys;
 mod host_keys_view;
+mod mcp_log;
+mod mcp_log_view;
 mod mcp_page;
 mod plugins;
 mod plugins_calls;
@@ -123,6 +126,8 @@ pub enum SettingsMessage {
     OpenPage(Page),
     About(about::AboutMsg),
     HostKeys(host_keys::HostKeysMsg),
+    /// The MCP page's call log (RC-080-66).
+    McpLog(mcp_log::McpLogMsg),
     Plugins(PluginsMsg),
     /// The Shortcuts tab (RC-100-21).
     Shortcuts(ShortcutsMsg),
@@ -181,6 +186,7 @@ pub struct SettingsDialog {
     saving: bool,
     about: about::AboutPage,
     host_keys: host_keys::HostKeysPage,
+    mcp_log: mcp_log::McpLogPage,
     plugins: plugins::PluginsPage,
     shortcuts: shortcuts::ShortcutsPage,
     themes: themes_page::ThemesPage,
@@ -198,6 +204,7 @@ impl SettingsDialog {
             saving: false,
             about: about::AboutPage::default(),
             host_keys: host_keys::HostKeysPage::default(),
+            mcp_log: mcp_log::McpLogPage::default(),
             plugins: plugins::PluginsPage::default(),
             shortcuts: shortcuts::ShortcutsPage::default(),
             themes: themes_page::ThemesPage::default(),
@@ -245,6 +252,7 @@ impl App {
             // A menu entry opens its page on the first tab ("Plugins...": Installed).
             self.settings_tabs.first(page);
             effects.extend(self.host_keys_shown());
+            effects.extend(self.mcp_log_shown());
             effects.extend(self.plugins_shown());
             return effects;
         }
@@ -253,6 +261,9 @@ impl App {
         }
         if let SettingsMessage::HostKeys(message) = message {
             return self.host_keys_message(message);
+        }
+        if let SettingsMessage::McpLog(message) = message {
+            return self.mcp_log_message(message);
         }
         if let SettingsMessage::Plugins(message) = message {
             return self.plugins_message(message);
@@ -311,6 +322,7 @@ impl App {
                 dialog.page = page;
             }
             let mut effects = self.host_keys_shown();
+            effects.extend(self.mcp_log_shown());
             effects.extend(self.plugins_shown());
             return effects;
         }
@@ -383,6 +395,7 @@ impl App {
             | SettingsMessage::OpenPage(_)
             | SettingsMessage::About(_)
             | SettingsMessage::HostKeys(_)
+            | SettingsMessage::McpLog(_)
             | SettingsMessage::Plugins(_)
             | SettingsMessage::Shortcuts(_)
             | SettingsMessage::Keymap(_)

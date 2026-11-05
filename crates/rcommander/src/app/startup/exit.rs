@@ -18,7 +18,7 @@
 use std::{
     future::Future,
     sync::{
-        OnceLock, PoisonError,
+        OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     thread,
@@ -28,6 +28,7 @@ use std::{
 use iced::Task;
 use tokio::runtime::Handle;
 
+use crate::recover::LockOrRecover as _;
 use crate::{app::Message, mcp::McpServer};
 
 /// How long the MCP server may take to stop.
@@ -101,7 +102,7 @@ pub(super) fn wait_for_guard() -> ! {
 /// The MCP server stopped (or given up), this run's copies of archive files removed and the
 /// restart after a lost graphics device started.
 pub(super) fn finish(runtime: &Handle, server: &McpServer) {
-    let server = server.lock().unwrap_or_else(PoisonError::into_inner).take();
+    let server = server.lock_or_recover("exit.server").take();
     if let Some(server) = server {
         tracing::debug!(limit = ?MCP_LIMIT, "the MCP server stops");
         match runtime.block_on(within(MCP_LIMIT, server.shutdown())) {

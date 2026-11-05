@@ -16,7 +16,7 @@
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicI64, Ordering},
     },
     time::Duration,
@@ -30,6 +30,7 @@ use rc_remote::{
 use rc_vault::{SecretString, VaultStateKind};
 use tokio_util::sync::CancellationToken;
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     AuthMethod, ConnectionDraft, ConnectionError, ConnectionId, ConnectionKind, Drive, DriveGroup,
     DriveKind, DriveState, Engine, EngineError, Outcome, QuickConnectRequest, SecretKind,
@@ -61,7 +62,7 @@ pub(crate) struct QuickConnections {
 
 impl QuickConnections {
     fn open(&self) -> MutexGuard<'_, HashMap<ConnectionId, Arc<QuickConnection>>> {
-        self.open.lock().unwrap_or_else(PoisonError::into_inner)
+        self.open.lock_or_recover("quick.open")
     }
 }
 

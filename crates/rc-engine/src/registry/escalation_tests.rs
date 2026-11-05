@@ -81,6 +81,11 @@ fn escalated() -> Vec<Command> {
                 patch.steps = Some(Vec::new());
             }
         }),
+        changed("file.set_attributes", |command| {
+            if let Command::SetFileAttributes { change, .. } = command {
+                change.mode = Some(0o664);
+            }
+        }),
     ]
 }
 
@@ -117,6 +122,11 @@ fn plain() -> Vec<Command> {
         changed("login_scripts.update", |command| {
             if let Command::UpdateLoginScript { patch, .. } = command {
                 patch.steps = None;
+            }
+        }),
+        changed("file.set_attributes", |command| {
+            if let Command::SetFileAttributes { change, .. } = command {
+                change.mode = Some(0o755);
             }
         }),
     ]

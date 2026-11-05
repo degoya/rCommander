@@ -12,7 +12,7 @@
 
 use std::{
     sync::{
-        LazyLock, Mutex, PoisonError,
+        LazyLock, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -24,6 +24,8 @@ use tracing::{
     field::{Field, Visit},
 };
 use tracing_subscriber::{Layer, Registry, filter::LevelFilter, layer::Context};
+
+use crate::recover::LockOrRecover as _;
 
 /// The words of iced's line for a present that failed (`iced_winit`, `run_action`).
 const PRESENT_FAILED: &str = "when presenting surface";
@@ -96,8 +98,7 @@ impl<S: Subscriber, F: Fn() + Send + Sync + 'static> Layer<S> for Watch<F> {
         }
         let reached = self
             .storm
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("gpu_loss.storm")
             .seen(Instant::now());
         if reached {
             (self.on_storm)();

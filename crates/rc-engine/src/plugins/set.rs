@@ -14,7 +14,7 @@ use std::{
     sync::{Arc, atomic::AtomicUsize},
 };
 
-use rc_plugin_host::{ExecutionLog, PluginHealth, PluginManifest, ViewerPlugin};
+use rc_plugin_host::{ExecutionLog, MatchRank, PluginHealth, PluginManifest, ViewerPlugin};
 
 use crate::viewer::sniff;
 
@@ -163,9 +163,9 @@ impl ViewerPlugins {
     /// The plugins asked in turn to show the file `name` of `size` bytes starting with `head`,
     /// decided without running one; empty for the built-in viewer. First the plugin
     /// `plugins.associations` assigns the extension to (within its `max_size`); then, unless the
-    /// file is an image or Markdown, which stay built in, the plugins whose extension matches,
-    /// then those whose magic matches, each by name. No plugin twice, at most
-    /// [`MAX_CANDIDATES`].
+    /// file is an image or Markdown, which stay built in, the plugins naming the file exactly,
+    /// those whose extension matches, those whose name pattern matches, then those whose magic
+    /// matches, each by name. No plugin twice, at most [`MAX_CANDIDATES`].
     #[must_use]
     pub fn claims(&self, name: &str, head: &[u8], size: u64) -> Vec<Arc<InstalledViewer>> {
         let extension = name
@@ -191,17 +191,18 @@ impl ViewerPlugins {
         if markdown || sniff::sniff_image(head).is_some() {
             return claims;
         }
-        // `matches` with an empty head asks the extension alone (a magic is never empty), with a
-        // name without a dot the magic alone; both keep `max_size`.
-        let by_extension = self
+        // Every plugin's strongest claim: an exact name, then an extension, then a name pattern,
+        // then a magic (`MatchRank`, RC-100-80); a stable sort keeps the name order within each.
+        let mut ranked: Vec<(MatchRank, &Arc<InstalledViewer>)> = self
             .plugins
             .iter()
-            .filter(|viewer| viewer.manifest.matching.matches(name, &[], size));
-        let by_magic = self
-            .plugins
-            .iter()
-            .filter(|viewer| viewer.manifest.matching.matches("", head, size));
-        for viewer in by_extension.chain(by_magic) {
+            .filter_map(|viewer| {
+                let rank = viewer.manifest.matching.rank(name, head, size)?;
+                Some((rank, viewer))
+            })
+            .collect();
+        ranked.sort_by_key(|(rank, _)| *rank);
+        for (_, viewer) in ranked {
             if claims.len() == MAX_CANDIDATES {
                 break;
             }

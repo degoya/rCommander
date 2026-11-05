@@ -41,6 +41,8 @@ const CONCURRENT_READS: usize = 8;
 /// How many writes of one file are on their way at once (RC-060-05): 32 KiB each, as OpenSSH's
 /// `sftp` sends them, so an upload too keeps 2 MiB in flight and never more.
 const CONCURRENT_WRITES: usize = 64;
+/// The rights an upload creates its file with: the owner's only, until the transfer is done.
+pub(crate) const UPLOAD_MODE: u32 = 0o600;
 
 /// One SSH server's file system over SFTP.
 pub struct SftpVfs {
@@ -263,12 +265,21 @@ impl SftpVfs {
             .map_err(|error| self.fail(error, path))
     }
 
+    /// Opens `wire` for writing. A file it creates is created owner-only (`0600`, RC-080-67):
+    /// while the transfer runs nobody else reads it, whatever the server's umask; the final
+    /// rights are set afterwards (the copy's `preserve`). A file that exists keeps its rights.
     pub(super) async fn open_for_writing(
         &self,
         wire: String,
         flags: russh_sftp::protocol::OpenFlags,
     ) -> std::result::Result<File, Error> {
-        self.files.open_with_flags(wire, flags).await
+        let attributes = FileAttributes {
+            permissions: Some(UPLOAD_MODE),
+            ..FileAttributes::empty()
+        };
+        self.files
+            .open_with_flags_and_attributes(wire, flags, attributes)
+            .await
     }
 }
 
@@ -393,3 +404,8 @@ impl Vfs for SftpVfs {
 #[cfg(test)]
 #[path = "vfs_tests.rs"]
 pub(super) mod tests;
+
+// Unix modes: a Windows directory served knows only read-only.
+#[cfg(all(test, unix))]
+#[path = "vfs_upload_tests.rs"]
+mod upload_tests;

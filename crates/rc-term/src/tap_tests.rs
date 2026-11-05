@@ -40,7 +40,7 @@ async fn a_dropped_tap_leaves_the_session_running() {
 }
 
 #[tokio::test]
-async fn a_tap_that_falls_behind_misses_output_but_holds_up_nothing() {
+async fn a_tap_that_falls_behind_is_cut_off_and_holds_up_nothing() {
     let (spawned, _fake, program) = test_support::spawned();
     let (mut session, mut tapped) = tap(spawned);
     let chunks = super::TAP_QUEUE + 10;
@@ -66,4 +66,17 @@ async fn a_tap_that_falls_behind_misses_output_but_holds_up_nothing() {
         copied += 1;
     }
     assert_eq!(copied, super::TAP_QUEUE);
+    assert_eq!(tapped.read().await, None, "the gap ends the tap");
+    assert!(tapped.overflowed());
+}
+
+#[tokio::test]
+async fn a_tap_that_keeps_up_is_not_cut_off() {
+    let (spawned, _fake, program) = test_support::spawned();
+    let (_session, mut tapped) = tap(spawned);
+    program.send(output("one")).await.expect("sent");
+    drop(program);
+    assert_eq!(tapped.read().await, Some(b"one".to_vec()));
+    assert_eq!(tapped.read().await, None);
+    assert!(!tapped.overflowed());
 }

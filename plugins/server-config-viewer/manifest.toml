@@ -1,0 +1,53 @@
+# rCommander's bundled server configuration viewer (RC-100-81). The fields every bundled plugin
+# shares are in plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it
+# packages. A failure code starts with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `encoding`.
+api_version = "0.3.0"
+id = "01a1aafa-5f75-7144-a75e-b91bc95937f1"
+name = "Server config viewer"
+version = "0.1.0"
+
+[match]
+# Claimed by name (RC-100-80; any case, `*` the only wildcard, the name alone, never the folder).
+# The order: associations, exact names (`nginx.conf`, `.htaccess`, `crontab` ... before every
+# other claim), extensions, patterns (`*.nginx`, `*.conf`), magic. For `*.conf` the config
+# viewer's extension claim comes first; its `probe` declines a `.conf` whose first line that is
+# no comment opens a block, ends with `;` or is a tag, and this plugin's `probe` takes it - and
+# declines an INI-like one, which the config viewer kept anyway (src/format.rs).
+names = [
+    "nginx.conf", "*.nginx", "httpd.conf", "apache2.conf", ".htaccess", "ssh_config",
+    "sshd_config", "crontab", "hosts", "*.conf",
+]
+extensions = ["nginx", "htaccess"]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured; the blocks are not unfolded as a tree.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows nginx, Apache (.htaccess), OpenSSH, crontab and hosts files coloured like an editor."
+# `[match] names` is understood from 0.19.0 on (RC-100-80).
+min_app_version = "0.19.0"
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs), the 1 MiB windows `open` and `text` read and write through, and one line of at
+# most 1 MiB with its text.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+# How the file's bytes are read: `auto` takes the encoding of a byte-order mark (UTF-8, UTF-16),
+# else UTF-8 when the start of the file is valid UTF-8, else Windows-1252.
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "utf-16le", "windows-1252"]
+default = "auto"

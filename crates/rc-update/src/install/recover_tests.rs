@@ -153,3 +153,76 @@ fn nothing_happens_while_the_updater_runs_or_for_another_program() {
     );
     assert_eq!(fixture.stored().phase, Phase::Staged);
 }
+
+/// RC-080-69: while a headless `rcommander mcp` (or a window) still has the database open, a
+/// roll-back puts the program files back and leaves the database alone; once it let go, the copy
+/// goes back in place.
+#[test]
+fn a_roll_back_leaves_the_database_alone_while_another_process_has_it_open() {
+    let mut fixture = Fixture::zip();
+    portable::stage(&mut fixture.journal).expect("stage");
+    portable::switch(&mut fixture.journal).expect("switch");
+    fixture.journal.new_started = true;
+    fs::write(fixture.data.join("rcommander.db"), "written by the server").expect("db");
+    let server = crate::install::DatabaseLock::share(&fixture.data)
+        .expect("lock")
+        .expect("free");
+    take_back_waiting(
+        &mut fixture.journal,
+        "update.not_confirmed",
+        "unproven",
+        Duration::ZERO,
+    )
+    .expect("take back");
+    assert_eq!(
+        stored_phase(&fixture),
+        (
+            Phase::RolledBack,
+            Some("update.instance_running".to_owned())
+        )
+    );
+    fixture.assert_old();
+    assert_eq!(
+        fs::read_to_string(fixture.data.join("rcommander.db")).expect("db"),
+        "written by the server",
+        "the live database stays where the server writes"
+    );
+    assert!(
+        fixture
+            .journal
+            .plan
+            .database_copy
+            .as_ref()
+            .is_some_and(|copy| copy.is_file()),
+        "the copy stays for the manual recovery"
+    );
+    drop(server);
+
+    // A window's share keeps it too; with nobody left, the copy goes back.
+    let mut fixture = Fixture::zip();
+    portable::stage(&mut fixture.journal).expect("stage");
+    portable::switch(&mut fixture.journal).expect("switch");
+    fixture.journal.new_started = true;
+    fs::write(fixture.data.join("rcommander.db"), "migrated").expect("db");
+    let window = crate::install::InstanceLock::share(&fixture.data)
+        .expect("lock")
+        .expect("free");
+    assert!(!database_free(&fixture.data, Duration::ZERO).expect("check"));
+    drop(window);
+    assert!(database_free(&fixture.data, Duration::ZERO).expect("check"));
+    take_back_waiting(
+        &mut fixture.journal,
+        "update.not_confirmed",
+        "unproven",
+        Duration::ZERO,
+    )
+    .expect("take back");
+    assert_eq!(
+        stored_phase(&fixture),
+        (Phase::RolledBack, Some("update.not_confirmed".to_owned()))
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.data.join("rcommander.db")).expect("db"),
+        "database before the update"
+    );
+}

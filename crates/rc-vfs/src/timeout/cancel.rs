@@ -4,13 +4,15 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
 
 use tokio::sync::{Notify, futures::Notified};
+
+use crate::recover::LockOrRecover as _;
 
 /// Stops the calls of the [`crate::TimeoutFs`] it was given to that wait at that moment; the
 /// calls after it run as usual. Clones share one switch.
@@ -59,10 +61,7 @@ impl IoCancel {
     }
 
     fn waiting(&self) -> MutexGuard<'_, BTreeMap<u64, Instant>> {
-        self.inner
-            .waiting
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        self.inner.waiting.lock_or_recover("cancel.waiting")
     }
 }
 

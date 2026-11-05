@@ -76,7 +76,14 @@ fn preview_card<'a>(
     let permissions = &preview.permissions;
     let claims = t!(
         "settings.plugins.claims",
-        extensions = permissions.extensions.join(", "),
+        // The claimed file names (RC-100-80) beside the extensions, as written in the manifest.
+        extensions = permissions
+            .extensions
+            .iter()
+            .chain(&permissions.names)
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(", "),
         outputs = permissions.outputs.join(", ")
     );
     let mut lines = column![
@@ -209,12 +216,7 @@ fn plugin_row<'a>(
     let [name, version, kind, state] = PORTIONS;
     let cells = vec![
         fit::cell(plugin.name.clone(), name, false, tokens),
-        fit::cell(
-            plugin.version.clone().unwrap_or_default(),
-            version,
-            false,
-            tokens,
-        ),
+        fit::cell(shown_version(plugin), version, false, tokens),
         fit::cell(plugin.kind.clone(), kind, true, tokens),
         fit::cell(state_of(page, plugin), state, true, tokens),
     ];
@@ -229,8 +231,25 @@ fn plugin_row<'a>(
     .into()
 }
 
-/// On, off or suspended, and the marks a person must see: unsigned, bundled, and a secret
-/// source that does not answer - locked, unreachable, no licence (RC-100-36).
+/// The version that runs; when none verifies, the newest installed one, as its folder names it
+/// (RC-100-79).
+fn shown_version(plugin: &PluginInfo) -> String {
+    plugin
+        .version
+        .clone()
+        .or_else(|| {
+            plugin
+                .refused
+                .as_ref()
+                .and(plugin.versions.first())
+                .map(|version| version.version.clone())
+        })
+        .unwrap_or_default()
+}
+
+/// On, off or suspended, and the marks a person must see: why no version verifies (a key not
+/// trusted, RC-100-79), unsigned, bundled, and a secret source that does not answer - locked,
+/// unreachable, no licence (RC-100-36).
 fn state_of(page: &PluginsPage, plugin: &PluginInfo) -> String {
     let mut state = if plugin.suspended {
         t!("settings.plugins.suspended")
@@ -240,8 +259,22 @@ fn state_of(page: &PluginsPage, plugin: &PluginInfo) -> String {
         t!("settings.plugins.off")
     }
     .to_owned();
-    if !plugin.signed {
-        state = t!("settings.plugins.unsigned_mark", state = state);
+    match plugin.refused.as_deref() {
+        Some("plugin_key_untrusted") => {
+            state = t!("settings.plugins.key_untrusted_mark", state = state);
+        }
+        Some(code) => {
+            let reason = crate::i18n::error_text(code);
+            state = t!(
+                "settings.plugins.refused_mark",
+                state = state,
+                reason = reason
+            );
+        }
+        None if !plugin.signed => {
+            state = t!("settings.plugins.unsigned_mark", state = state);
+        }
+        None => {}
     }
     if plugin.bundled {
         state = t!("settings.plugins.bundled_mark", state = state);

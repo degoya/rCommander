@@ -30,6 +30,7 @@ use super::{
     escape::{enter, escape},
     field_walk,
 };
+use crate::recover::LogPanic as _;
 use crate::{
     gpu_loss,
     i18n::t,
@@ -176,6 +177,7 @@ impl App {
                         platform::gpu_loss::ask_restart(&title, &text)
                     })
                     .await
+                    .log_panic("app.gpu_loss_restart")
                     .unwrap_or(false)
             },
             |restart| Message::Quit(QuitMsg::Restart(restart)),

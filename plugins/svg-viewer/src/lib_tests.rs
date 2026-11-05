@@ -178,3 +178,54 @@ fn probe_takes_svg_and_svgz_and_declines_other_xml() {
     assert!(!probe_of(b"<?xml version=\"1.0\"?><project/>"));
     assert!(!probe_of(b""));
 }
+
+/// RC-080-69: an entity that would expand to far more than the file is never expanded - the
+/// picture is an error, not a trap (out of memory in the component) - and the source still shows.
+#[test]
+fn a_document_with_entities_in_its_dtd_is_refused_not_expanded() {
+    let amplified = format!(
+        r#"<?xml version="1.0"?>
+<!DOCTYPE svg [
+  <!ENTITY a "{}">
+  <!ENTITY c "<g>{}</g>">
+]>
+<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">{}</svg>"#,
+        "x".repeat(10_000),
+        "&a;".repeat(250),
+        "&c;".repeat(1_000)
+    );
+    // Within roxmltree's own entity limits, this was 2.5 GB of text from 15 kB.
+    let mut viewer = open(amplified.as_bytes());
+    let failure = viewer
+        .image(&mut VecSink::default())
+        .expect_err("no picture");
+    assert_eq!(failure.kind, FailureKind::BadData);
+    assert_eq!(failure.code.as_deref(), Some(code::NOT_SVG));
+    assert_eq!(text_of(&mut viewer), amplified);
+}
+
+/// The usual DOCTYPE without entities still draws.
+#[test]
+fn a_document_with_a_plain_doctype_is_drawn() {
+    let svg = format!(
+        "<?xml version=\"1.0\"?>\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \
+         \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n{}",
+        nested(2)
+    );
+    let mut viewer = open(svg.as_bytes());
+    let mut sink = VecSink::default();
+    assert_eq!(viewer.image(&mut sink).expect("image"), "rgba:1024x1024");
+    assert_eq!(&sink.0[..4], &[255, 0, 0, 255]);
+}
+
+/// 10 000 nested groups, with and without a DTD before them: an error picture, no overflow.
+#[test]
+fn ten_thousand_nested_groups_are_refused_with_or_without_a_dtd() {
+    let deep = nested(10_000);
+    let with_dtd = format!("<!DOCTYPE svg [<!ENTITY e \"\">]>{deep}");
+    for document in [deep, with_dtd] {
+        let mut viewer = open(document.as_bytes());
+        let failure = viewer.image(&mut VecSink::default()).expect_err("too deep");
+        assert_eq!(failure.code.as_deref(), Some(code::TOO_COMPLEX));
+    }
+}

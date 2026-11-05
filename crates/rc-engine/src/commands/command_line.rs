@@ -10,6 +10,8 @@ mod windows;
 
 use std::path::Path;
 
+#[cfg(test)]
+use crate::recover::LockOrRecover as _;
 use crate::{
     Engine, EngineError, Outcome, PanelId,
     command_line::{Parsed, check, parse, runs_in},
@@ -84,8 +86,7 @@ fn start(line: &str, folder: &Path, keep_open: bool) -> std::io::Result<()> {
 #[cfg(test)]
 fn start(line: &str, folder: &Path, keep_open: bool) -> std::io::Result<()> {
     tests::STARTED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .lock_or_recover("command_line.started")
         .push((line.to_owned(), folder.to_path_buf(), keep_open));
     Ok(())
 }

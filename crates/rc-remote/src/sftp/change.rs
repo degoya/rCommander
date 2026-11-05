@@ -3,7 +3,7 @@
 //! Version 3 answers "already exists", "is a directory" and "not empty" with a bare failure, so
 //! each refusal is explained by looking at the path and its parent, as FTP does.
 
-use std::{io::SeekFrom, path::Path, time::SystemTime};
+use std::{io::SeekFrom, path::Path, sync::Arc, time::SystemTime};
 
 use rc_vfs::{EntryKind, Result, SetAttributes, VfsError, WriteMode, WriteStream};
 use russh_sftp::{
@@ -12,7 +12,7 @@ use russh_sftp::{
 };
 use tokio::io::AsyncSeekExt;
 
-use super::{SftpVfs, error::is_vague, path::wire_path};
+use super::{SftpVfs, error::is_vague, path::wire_path, stream::Settle, vfs::UPLOAD_MODE};
 use crate::tree::{self, TreeOps};
 
 fn not_found(path: &Path) -> VfsError {
@@ -31,6 +31,16 @@ impl SftpVfs {
                 WriteMode::Truncate => OpenFlags::TRUNCATE,
                 WriteMode::Append => OpenFlags::APPEND,
             };
+        // A file this upload creates - a new one, or the part it continues - gets its rights
+        // once it is whole; one it truncates keeps its own (RC-080-67).
+        let settle =
+            (mode != WriteMode::Truncate && self.limits.upload_mode != UPLOAD_MODE).then(|| {
+                Settle {
+                    raw: Arc::clone(&self.raw),
+                    wire: wire.clone(),
+                    mode: self.limits.upload_mode,
+                }
+            });
         let mut file = match self.open_for_writing(wire, flags).await {
             Ok(file) => file,
             Err(error) => {
@@ -44,7 +54,9 @@ impl SftpVfs {
                 .await
                 .map_err(|error| VfsError::from_io(error, path))?;
         }
-        Ok(Box::new(self.transfer_file(file, path)))
+        Ok(Box::new(
+            self.transfer_file(file, path).settling_with(settle),
+        ))
     }
 
     pub(super) async fn mkdir_one(&self, path: &Path) -> Result<()> {

@@ -3,7 +3,7 @@
 use std::{
     hash::{Hash, Hasher},
     path::PathBuf,
-    sync::{Arc, PoisonError},
+    sync::Arc,
     time::Instant,
 };
 
@@ -11,6 +11,7 @@ use rc_vfs::{BackendId, Vfs, VfsError};
 use tokio::sync::mpsc;
 
 use super::panel::resolve_path;
+use crate::recover::LockOrRecover as _;
 use crate::{
     Engine, EngineError, Outcome, PanelId, read_guard,
     search::{
@@ -140,8 +141,7 @@ impl Engine {
     fn search_pages(&self) -> std::sync::MutexGuard<'_, SearchPages> {
         self.inner
             .search_pages
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("search.search_pages")
     }
 
     /// Starts a search in the background; its hits and progress arrive on the handle as they

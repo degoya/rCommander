@@ -1,6 +1,7 @@
 //! rCommander's SQLite database (`rcommander.db`): the migrations, the settings, the connection
 //! tree and each connection's SSH session settings (`session_prefs.rs`), the SSH host keys a
-//! person trusted (`known_hosts`), the error log, the multi-rename undo log (`rename_log`), the
+//! person trusted (`known_hosts`) and those a `known_hosts` file revoked
+//! (`revoked_host_keys.rs`), the error log, the multi-rename undo log (`rename_log`), the
 //! vault's metadata and its encrypted columns (`secrets.rs`), the login scripts
 //! (`login_scripts.rs`), the panels' folder tabs with their history (`tabs.rs`), the directory
 //! hotlist (`hotlist.rs`), the FTPS certificates a person trusted (`tls_certificates.rs`), the
@@ -42,12 +43,15 @@ mod error_log;
 mod hotlist;
 mod known_hosts;
 pub mod login_scripts;
+mod mcp_audit_log;
 mod plugins;
 mod private_dir;
+mod recover;
 pub mod redact;
 mod rename_log;
 mod restore;
 mod retention;
+mod revoked_host_keys;
 mod saved_queues;
 mod secret_sources;
 mod secrets;
@@ -89,6 +93,10 @@ pub use hotlist::{
     HOTLIST_MAX_DEPTH, HOTLIST_MAX_NAME, HotlistError, HotlistItem, HotlistPatch, NewHotlistItem,
 };
 pub use known_hosts::{HASHED_PREFIX, KnownHost, KnownHostSource, KnownHostsImport, NewKnownHost};
+pub use mcp_audit_log::{
+    MCP_AUDIT_ARGUMENTS_MAX_BYTES, MCP_AUDIT_MAX_PAGE, MCP_AUDIT_MAX_SESSIONS,
+    MCP_AUDIT_NAME_MAX_BYTES, McpAuditEntry, NewMcpAuditEntry, cut_to_bytes,
+};
 pub use plugins::{
     NewPluginExecution, PLUGIN_EXECUTIONS_MAX_PAGE, PluginExecution, PluginExecutionSummary,
     StoredPlugin, StoredPluginKey,
@@ -102,6 +110,7 @@ pub use retention::{
     CheckedLimits, DURABLE_TABLES, PRUNE_BATCH, PruneReport, RETAINED_TABLES, RetainedTable,
     RetentionError, RetentionLimits, RetentionSettings, RetentionStatus, retained_table,
 };
+pub use revoked_host_keys::{NewRevokedHostKey, RevokedHostKey};
 pub use saved_queues::SavedQueue;
 pub use secret_sources::{MAX_SOURCE_ENTRY_ID_CHARS, MAX_SOURCE_LABEL_CHARS, SecretSourceRef};
 pub use secrets::{
@@ -146,11 +155,13 @@ pub struct Db {
 impl Db {
     /// Opens (or creates) the database file at `path`, creating its directory - owner-only on
     /// Unix, and the platform's data folder made so when it is there already (RC-080-42) - and
-    /// applies every pending migration.
+    /// applies every pending migration. On Unix the file and SQLite's files beside it are
+    /// owner-only too (`0600`, RC-080-68).
     ///
     /// # Errors
     ///
-    /// The directory cannot be created, the file cannot be opened, or a migration fails.
+    /// The directory cannot be created, the file cannot be made owner-only or opened, or a
+    /// migration fails.
     pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path
@@ -166,6 +177,12 @@ impl Db {
                     source,
                 })?;
         }
+        private_dir::secure_database_files(path)
+            .await
+            .map_err(|source| DbError::Permissions {
+                path: path.to_path_buf(),
+                source,
+            })?;
         let options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(true)

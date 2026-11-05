@@ -24,6 +24,8 @@ use rc_engine::{
 use super::last_page::LastPage;
 use super::picture;
 
+use crate::recover::LogPanic as _;
+
 /// Bytes per row of the binary view.
 pub const BINARY_COLUMNS: usize = 80;
 
@@ -343,6 +345,7 @@ pub async fn picture(
         .map_err(|e| e.code())?;
     let pixels = tokio::task::spawn_blocking(move || picture::decode(&bytes, format, shown))
         .await
+        .log_panic("app.picture_decode")
         .map_err(|error| decoder_gone(&error))??;
     Ok(ready(pixels, format.label()))
 }
@@ -371,6 +374,7 @@ pub async fn raster(
     let pixels =
         tokio::task::spawn_blocking(move || picture::raster(bytes, width, height, shown_pixels))
             .await
+            .log_panic("app.picture_raster")
             .map_err(|error| decoder_gone(&error))??;
     Ok(ready(pixels, "RGBA"))
 }

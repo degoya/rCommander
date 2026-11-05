@@ -5,13 +5,15 @@ use std::{
     collections::BTreeMap,
     io::Read,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     time::{Duration, SystemTime},
 };
 
 use super::{Abilities, DeviceError, DeviceResult, Object, Session, Sink};
+
+use crate::recover::LockOrRecover as _;
 
 /// Bytes a storage of the fake device has free.
 pub(crate) const FREE: u64 = 1 << 30;
@@ -35,6 +37,9 @@ pub(crate) struct FakeDevice {
     pub(crate) listings: AtomicUsize,
     /// Milliseconds every call waits before it answers: a device that hangs.
     pub(crate) stall: AtomicU64,
+    /// Calls waiting out their stall right now, and the most there ever were at once.
+    running: AtomicUsize,
+    pub(crate) most_at_once: AtomicUsize,
 }
 
 impl FakeDevice {
@@ -60,6 +65,8 @@ impl FakeDevice {
             gone: AtomicBool::new(false),
             listings: AtomicUsize::new(0),
             stall: AtomicU64::new(0),
+            running: AtomicUsize::new(0),
+            most_at_once: AtomicUsize::new(0),
         })
     }
 
@@ -69,14 +76,17 @@ impl FakeDevice {
     }
 
     fn nodes(&self) -> MutexGuard<'_, BTreeMap<String, Node>> {
-        self.nodes.lock().unwrap_or_else(PoisonError::into_inner)
+        self.nodes.lock_or_recover("fake.nodes")
     }
 
     fn here(&self) -> DeviceResult<()> {
+        let now = self.running.fetch_add(1, Ordering::SeqCst) + 1;
+        self.most_at_once.fetch_max(now, Ordering::SeqCst);
         let stall = self.stall.load(Ordering::SeqCst);
         if stall > 0 {
             std::thread::sleep(Duration::from_millis(stall));
         }
+        self.running.fetch_sub(1, Ordering::SeqCst);
         if self.gone.load(Ordering::SeqCst) {
             return Err(DeviceError::Unavailable);
         }

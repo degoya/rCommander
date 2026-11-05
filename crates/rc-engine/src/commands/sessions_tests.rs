@@ -220,6 +220,39 @@ async fn a_changed_host_key_stops_before_any_secret_is_sent() {
     )));
 }
 
+/// RC-080-67: a key an imported `known_hosts` file revoked stops the connection hard - trusted
+/// or not, no question for a person, no secret sent.
+#[tokio::test]
+async fn a_revoked_host_key_stops_without_a_question() {
+    let harness = harness(None, true).await;
+    let offered = OfferedKey::from_public_key(host_key_a().public_key()).expect("a key");
+    let dir = tempfile::tempdir().expect("temp dir");
+    let file = dir.path().join("known_hosts");
+    let line = format!("@revoked * {} {}\n", offered.algorithm, offered.public_key);
+    std::fs::write(&file, line).expect("write");
+    harness
+        .engine
+        .dispatch(Command::ImportKnownHosts {
+            path: Some(file.display().to_string()),
+        })
+        .await
+        .expect("imported");
+    let mut events = harness.engine.subscribe();
+    let error = harness
+        .engine
+        .dispatch(Command::ConnectSession { id: harness.id })
+        .await;
+    assert_eq!(code(error), "host_key_revoked");
+    assert_eq!(harness.server.auth_attempts(), 0, "no secret sent");
+    assert!(
+        !drain(&mut events)
+            .iter()
+            .any(|event| matches!(event, EngineEvent::HostKeyQuestion { .. })),
+        "no trust question"
+    );
+    assert!(harness.engine.host_key_questions().is_empty());
+}
+
 #[tokio::test]
 async fn test_reports_the_method_and_leaves_no_session() {
     let harness = harness(None, true).await;

@@ -25,6 +25,10 @@ pub struct PluginInfo {
     pub bundled: bool,
     /// `false` for a package development mode accepted unsigned.
     pub signed: bool,
+    /// Why no version verifies, when none does: the newest version's refusal code, such as
+    /// `plugin_key_untrusted` for a package signed by a key this build does not trust (RC-100-79).
+    #[serde(default)]
+    pub refused: Option<String>,
     /// The signing key's id and fingerprint.
     pub key_id: String,
     pub key_fingerprint: Option<String>,

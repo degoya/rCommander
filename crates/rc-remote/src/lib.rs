@@ -1,5 +1,5 @@
 //! rCommander's remote side. The SSH host-key trust store: what a server presented, the verdict
-//! on it against `rcommander.db` (trusted, unknown, changed), trusting and replacing a key, and
+//! on it against `rcommander.db` (trusted, unknown, changed, revoked), trusting and replacing a key, and
 //! the import of OpenSSH's `known_hosts`; the SSH agents ([`agent`]: `ssh-agent`, the Windows
 //! OpenSSH agent service, Pageant), whose keys it lists and whose signer the login uses; and the
 //! private keys a person takes into the vault ([`private_key`]: checked, described, opened again
@@ -21,6 +21,7 @@ pub mod known_hosts_import;
 mod listed_name;
 pub mod login_script;
 pub mod private_key;
+mod recover;
 pub mod sftp;
 pub mod ssh;
 #[cfg(any(test, feature = "testkit"))]
@@ -35,8 +36,8 @@ pub use agent::{
 };
 pub use ftp::{FtpError, FtpVfs};
 pub use hostkey::{
-    HOST_KEY_CHANGED, HOST_KEY_INVALID, HOST_KEY_UNKNOWN, HOST_KEY_UNSUPPORTED, KeyError,
-    OfferedKey, Verdict, describe,
+    HOST_KEY_CHANGED, HOST_KEY_INVALID, HOST_KEY_REVOKED, HOST_KEY_UNKNOWN, HOST_KEY_UNSUPPORTED,
+    KeyError, OfferedKey, Verdict, describe,
 };
 pub use private_key::{KeyFormat, KeyInfo, MAX_KEY_BYTES, PrivateKeyError};
 pub use sftp::{SftpError, SftpVfs};

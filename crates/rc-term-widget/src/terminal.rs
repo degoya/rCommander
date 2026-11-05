@@ -33,8 +33,9 @@ pub enum Event {
     /// character but a tab, which would act as its key: the app asks the person first, then
     /// calls [`Terminal::paste`].
     Paste(TermId, String),
-    /// A program put text on the clipboard (OSC 52); the app writes it when
-    /// [`CopySettings::osc52`] allows.
+    /// A program put text on the clipboard (OSC 52), at most [`rc_term::osc::MAX_CLIPBOARD`]
+    /// bytes - a longer text never comes; the app writes it when [`CopySettings::osc52`] allows,
+    /// and only for the terminal it shows.
     Copy(TermId, String),
 }
 
@@ -100,6 +101,8 @@ pub struct CopySettings {
     pub ctrl_v: bool,
     /// A program's OSC 52 copy reaches the clipboard ([`Event::Copy`]; the app honours it).
     pub osc52: bool,
+    /// With `osc52`, a program in an SSH terminal's copy too (the app tells them apart).
+    pub osc52_remote: bool,
     /// Shift with the mouse selects even while the program takes the mouse.
     pub shift_selects: bool,
 }
@@ -112,6 +115,7 @@ impl Default for CopySettings {
             on_select: false,
             ctrl_v: true,
             osc52: true,
+            osc52_remote: true,
             shift_selects: true,
         }
     }
@@ -273,7 +277,9 @@ fn burst(id: TermId, event: TermEvent, events: &mut Vec<Event>) -> bool {
     match event {
         TermEvent::Exited(_) => return true,
         // Only the clipboard: Windows has no primary selection to fill.
-        TermEvent::Ui(TermUiEvent::ClipboardStore(ClipboardType::Clipboard, text)) => {
+        TermEvent::Ui(TermUiEvent::ClipboardStore(ClipboardType::Clipboard, text))
+            if text.len() <= rc_term::osc::MAX_CLIPBOARD =>
+        {
             events.push(Event::Copy(id, text));
         }
         _ => {}

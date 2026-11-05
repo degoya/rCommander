@@ -32,17 +32,21 @@ thread_local! {
     static DOCUMENT: RefCell<Option<Viewer<Handle>>> = const { RefCell::new(None) };
 }
 
-/// The file behind a `source` handle, valid for the life of the store; its size asked once.
+/// The file behind a `source` handle, valid for the life of the store; its name and size asked
+/// once.
 struct Handle {
     src: wit_types::Source,
+    name: String,
     size: u64,
 }
 
 impl Handle {
     fn new(src: wit_types::Source) -> Self {
+        let info = source::info(src);
         Self {
             src,
-            size: source::info(src).size,
+            name: info.name,
+            size: info.size,
         }
     }
 }
@@ -50,6 +54,10 @@ impl Handle {
 impl Source for Handle {
     fn size(&self) -> u64 {
         self.size
+    }
+
+    fn name(&self) -> String {
+        self.name.clone()
     }
 
     fn read_at(&mut self, offset: u64, length: u32) -> Result<Vec<u8>, Failure> {

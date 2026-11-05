@@ -16,6 +16,7 @@ use super::{
     settings::{PluginSettings, stored_plugin_settings},
 };
 use crate::Engine;
+use crate::recover::LogPanic as _;
 
 impl ViewerPlugins {
     /// Every installed, enabled viewer plugin of `engine`'s data folder, with the settings in
@@ -33,7 +34,10 @@ impl ViewerPlugins {
         let log = engine
             .plugin_execution_log()
             .unwrap_or_else(|| Arc::new(ExecutionLog::new()));
-        let packages = match tokio::task::spawn_blocking(move || installed::list(&data_dir)).await {
+        let packages = match tokio::task::spawn_blocking(move || installed::list(&data_dir))
+            .await
+            .log_panic("engine.plugin_list")
+        {
             Ok(Ok(packages)) => packages,
             Ok(Err(error)) => {
                 tracing::warn!(error = %format!("{error:#}"), "the installed plugins could not be listed");
@@ -64,7 +68,8 @@ impl ViewerPlugins {
                 let plugin = ViewerPlugin::new(&package.manifest, &package.component, options);
                 (package, plugin)
             })
-            .await;
+            .await
+            .log_panic("engine.viewer_compile");
             match compiled {
                 Ok((package, Ok(plugin))) => built.push(InstalledViewer::installed(
                     package.manifest,

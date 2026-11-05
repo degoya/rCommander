@@ -3,7 +3,7 @@
 use rc_checksum::ChecksumError;
 use rc_db::connections::ConnectionError;
 use rc_db::login_scripts::LoginScriptError;
-use rc_db::{BackupError, DbError, RetentionError};
+use rc_db::{BackupError, DbError};
 use rc_ops::OpsError;
 use rc_remote::login_script::ScriptInvalid;
 use rc_remote::{AgentError, FtpError, SftpError, SshError};
@@ -15,6 +15,9 @@ use rc_vfs::VfsError;
 use crate::ConnectionId;
 
 mod codes;
+mod convert;
+
+use convert::describe_mismatches;
 
 /// What went wrong running a command.
 ///
@@ -84,6 +87,15 @@ pub enum EngineError {
         algorithm: String,
         fingerprint: String,
         stored_fingerprint: String,
+    },
+    /// The SSH server presented a key a `known_hosts` file revoked: a hard stop, no question
+    /// (RC-080-67).
+    #[error("the SSH server {host}:{port} presented a revoked {algorithm} key ({fingerprint})")]
+    HostKeyRevoked {
+        host: String,
+        port: u16,
+        algorithm: String,
+        fingerprint: String,
     },
     /// The stored key changed since the question was asked; nothing was replaced.
     #[error("the stored host key changed since it was shown")]
@@ -400,6 +412,9 @@ pub enum EngineError {
     /// No saved transfer list has this id (RC-010-15).
     #[error("no saved queue list {saved}")]
     SavedQueueNotFound { saved: i64 },
+    /// An MCP call's saved list changed after its class was judged on it (RC-080-66).
+    #[error("the saved queue list {saved} changed after the call was judged; nothing was loaded")]
+    SavedQueueChanged { saved: i64 },
     /// The list holds no job that can be saved: copies and moves are.
     #[error("the queue list holds no copy or move to save")]
     QueueListEmpty,
@@ -443,45 +458,6 @@ pub enum EngineError {
     /// [`crate::WorkspaceError`].
     #[error(transparent)]
     Workspace(crate::WorkspaceError),
-}
-
-/// The first few mismatches as `from -> to (problem)`.
-fn describe_mismatches(mismatches: &[UndoMismatch]) -> String {
-    const SHOWN: usize = 5;
-    let mut text: Vec<String> = mismatches
-        .iter()
-        .take(SHOWN)
-        .map(|mismatch| {
-            let problem = match mismatch.problem {
-                rc_rename::UndoProblem::SourceMissing => "gone or renamed since",
-                rc_rename::UndoProblem::TargetOccupied => "old name taken",
-            };
-            format!("{} -> {} ({problem})", mismatch.step.from, mismatch.step.to)
-        })
-        .collect();
-    if mismatches.len() > SHOWN {
-        text.push(format!("and {} more", mismatches.len() - SHOWN));
-    }
-    text.join(", ")
-}
-
-impl From<RetentionError> for EngineError {
-    fn from(error: RetentionError) -> Self {
-        match error {
-            RetentionError::UnknownTable { table } => Self::RetentionUnknownTable { table },
-            RetentionError::OutOfRange {
-                key,
-                value,
-                min,
-                max,
-            } => Self::RetentionOutOfRange {
-                key,
-                value,
-                min,
-                max,
-            },
-        }
-    }
 }
 
 #[cfg(test)]

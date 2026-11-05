@@ -31,6 +31,7 @@ mod integration;
 mod local_pty;
 pub mod osc;
 mod quote;
+mod recover;
 mod screen;
 mod session;
 mod shells;
@@ -39,9 +40,12 @@ mod tap;
 mod test_support;
 mod wsl;
 mod wsl_path;
+mod wsl_shell;
 
 pub use alacritty_terminal;
-pub use backend::{BackendEvent, Spawned, SshTermChannel, TermBackend, TermSize, spawn_ssh};
+pub use backend::{
+    BackendEvent, INPUT_QUEUE, Spawned, SshTermChannel, TermBackend, TermSize, spawn_ssh,
+};
 pub use cwd_sync::{FollowOutcome, FollowStatus, PromptState};
 pub use error::TermError;
 pub use integration::{
@@ -63,3 +67,4 @@ pub use wsl_path::{
     HomeReason, ShellPaths, WslCwd, panel_to_shell_path, shell_fits, shell_to_panel_path,
     windows_to_wsl_path,
 };
+pub use wsl_shell::{syntax_of_passwd, wsl_login_syntax};

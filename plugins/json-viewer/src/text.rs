@@ -1,10 +1,12 @@
-//! The text in both formats: whole for `text`, by line for `tokens`.
+//! The text in both formats: whole for `text`, by line for `tokens`. `pretty` lays out the values
+//! alone: the comments of JSONC and JSON5 are left out, as a formatter that re-indents does.
 
+use crate::dialect::Dialect;
 use crate::lexer::Lexer;
 use crate::lines::LineIndex;
 use crate::pretty::{LayoutState, Piece, indentation};
 use crate::reader::{Line, Reader};
-use crate::tokens::is_blank;
+use crate::tokens::{ends_in_comment, is_blank};
 use crate::types::{Failure, Sink, Source};
 use crate::utf8::TextWriter;
 
@@ -30,11 +32,13 @@ pub(crate) fn copy<S: Source>(src: &mut S, start: u64, out: &mut impl Sink) -> R
 pub(crate) fn pretty<S: Source>(
     src: &mut S,
     start: u64,
+    dialect: Dialect,
     out: &mut impl Sink,
 ) -> Result<(), Failure> {
     let mut writer = TextWriter::new(out);
-    let mut lexer =
-        Lexer::new(Reader::new(src, start, crate::OPEN_CHUNK)).with_capture(MAX_LINE_BYTES);
+    let mut lexer = Lexer::new(Reader::new(src, start, crate::OPEN_CHUNK))
+        .dialect(dialect)
+        .with_capture(MAX_LINE_BYTES);
     let mut layout = LayoutState::default();
     while let Some(lexeme) = lexer.next()? {
         for piece in layout.feed(&lexeme).iter() {
@@ -61,18 +65,35 @@ pub(crate) fn pretty<S: Source>(
     writer.finish()
 }
 
-/// `as_is`: lines `first..first + wanted` and the look-ahead after them.
+/// `as_is`: lines `first..first + wanted` and the look-ahead after them. In a dialect with
+/// comments each line says whether it starts inside one, which the lines from the checkpoint
+/// on tell.
 pub(crate) fn as_is_lines<S: Source>(
     src: &mut S,
     lines: &LineIndex,
     first: u64,
     wanted: u64,
+    dialect: Dialect,
 ) -> Result<Vec<Line>, Failure> {
     let checkpoint = lines.at_or_before(first);
     let mut reader = Reader::new(src, checkpoint.offset, LINE_CHUNK);
     let mut line = checkpoint.line;
+    let mut in_comment = checkpoint.in_comment;
     while line < first {
-        if !reader.skip_line()? {
+        if dialect.comments() {
+            let Some(read) = reader.read_line(MAX_LINE_BYTES)? else {
+                return Ok(Vec::new());
+            };
+            in_comment = next_in_comment(lines, line + 1, &read, dialect, in_comment);
+            if read.capped {
+                match lines.exact(line + 1) {
+                    Some(next) => reader.seek(next.offset),
+                    None => {
+                        reader.skip_line()?;
+                    }
+                }
+            }
+        } else if !reader.skip_line()? {
             return Ok(Vec::new());
         }
         line += 1;
@@ -87,10 +108,14 @@ pub(crate) fn as_is_lines<S: Source>(
         } else {
             MAX_LINE_BYTES
         };
-        let Some(read) = reader.read_line(cap)? else {
+        let Some(mut read) = reader.read_line(cap)? else {
             break;
         };
         line += 1;
+        read.in_comment = in_comment;
+        if dialect.comments() {
+            in_comment = next_in_comment(lines, line, &read, dialect, in_comment);
+        }
         let (capped, blank) = (read.capped, is_blank(&read.bytes));
         out.push(read);
         if looking_ahead && !blank {
@@ -109,6 +134,21 @@ pub(crate) fn as_is_lines<S: Source>(
     Ok(out)
 }
 
+/// Whether line `next` starts inside a comment, after `read`, which started inside one when
+/// `in_comment`: the checkpoint says it when there is one, else `read` does.
+fn next_in_comment(
+    lines: &LineIndex,
+    next: u64,
+    read: &Line,
+    dialect: Dialect,
+    in_comment: bool,
+) -> bool {
+    match lines.exact(next) {
+        Some(point) => point.in_comment,
+        None => ends_in_comment(&read.bytes, dialect, in_comment),
+    }
+}
+
 /// `pretty`: lines `first..first + wanted` and the look-ahead after them, laid out again from
 /// the nearest checkpoint.
 pub(crate) fn pretty_lines<S: Source>(
@@ -116,6 +156,7 @@ pub(crate) fn pretty_lines<S: Source>(
     lines: &LineIndex,
     first: u64,
     wanted: u64,
+    dialect: Dialect,
 ) -> Result<Vec<Line>, Failure> {
     let checkpoint = lines.at_or_before(first);
     let last = first + wanted;
@@ -127,8 +168,9 @@ pub(crate) fn pretty_lines<S: Source>(
             MAX_LINE_BYTES
         }
     };
-    let mut lexer =
-        Lexer::new(Reader::new(src, checkpoint.offset, LINE_CHUNK)).with_capture(MAX_LINE_BYTES);
+    let mut lexer = Lexer::new(Reader::new(src, checkpoint.offset, LINE_CHUNK))
+        .dialect(dialect)
+        .with_capture(MAX_LINE_BYTES);
     let mut layout = checkpoint.state;
     // Line 0 starts with the file; any other checkpoint's lexeme still lays out the line before
     // its own until its first break.

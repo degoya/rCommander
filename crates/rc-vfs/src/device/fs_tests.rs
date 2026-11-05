@@ -265,3 +265,38 @@ async fn a_device_that_hangs_fails_in_time() {
         "the caller is not held"
     );
 }
+
+/// RC-080-70: a call that ran out of time keeps the device until it answers; the next one - a
+/// retry - waits for it instead of running beside it, and fails in its own time if it must.
+#[tokio::test]
+async fn a_call_after_a_timeout_never_runs_beside_it() {
+    let device = FakeDevice::new(&[STORAGE], Abilities::ALL);
+    let limits = Timeouts {
+        request: Duration::from_millis(50),
+        listing: Duration::from_millis(50),
+    };
+    let fs = DeviceFs::with_limits(Arc::<FakeDevice>::clone(&device), 16, limits);
+    device.stall.store(400, Ordering::SeqCst);
+    assert_eq!(code(fs.list(Path::new("/")).await), "drive_timed_out");
+    let started = std::time::Instant::now();
+    assert_eq!(code(fs.list(Path::new("/")).await), "drive_timed_out");
+    assert!(
+        started.elapsed() < Duration::from_millis(300),
+        "the retry is not held past its limit"
+    );
+    assert_eq!(
+        device.listings.load(Ordering::SeqCst),
+        0,
+        "none answered yet"
+    );
+    device.stall.store(0, Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    fs.list(Path::new("/"))
+        .await
+        .expect("lists once the old call is back");
+    assert_eq!(
+        device.most_at_once.load(Ordering::SeqCst),
+        1,
+        "never two calls at once"
+    );
+}

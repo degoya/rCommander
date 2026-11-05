@@ -3,7 +3,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use rc_checksum::{Algorithm, CombineReport, CreateReport, SplitReport, VerifyReport};
-use rc_db::KnownHost;
+use rc_db::{KnownHost, RevokedHostKey};
 use rc_ops::JobSnapshot;
 use rc_rename::RenamePlan;
 use rc_term::{ScreenText, SessionState, ShellProfile, TermId};
@@ -259,6 +259,10 @@ pub enum Outcome {
     KnownHosts { keys: Vec<KnownHost> },
     /// The stored host key a command removed.
     KnownHostRemoved { key: KnownHost },
+    /// The host keys a `known_hosts` file revoked (RC-080-67).
+    RevokedHostKeys { keys: Vec<RevokedHostKey> },
+    /// The revoked host key a person removed.
+    RevokedHostKeyRemoved { key: RevokedHostKey },
     /// What an import of a `known_hosts` file stored and skipped.
     KnownHostsImported(ImportReport),
     /// A host-key question answered; `stored` is the key saved by "trust and save".

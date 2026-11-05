@@ -1,5 +1,13 @@
 # Changes
 
+## 0.2.0
+
+More files: `.env.local`, `.env.production` and every other `.env.*` (rCommander 0.19.0 and
+later), systemd units (`.service`, `.timer`, `.socket`, `.mount`, `.path`, `.target`),
+`.gitmodules` and `.npmrc` as INI, and `.dockerignore` like `.gitignore`.
+A `.conf` that reads like nginx or Apache (a `{` block, a `directive;`, a `<Tag>` first) is left
+to the server configuration viewer.
+
 ## 0.1.1
 
 Built against plugin contract 0.3.0; nothing else changed.

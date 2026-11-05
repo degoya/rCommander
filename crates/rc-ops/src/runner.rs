@@ -210,7 +210,12 @@ impl Runner {
             JobKind::Move { sources, target } => self.transfer(sources, target, true).await,
             JobKind::Delete { sources, mode } => self.delete(sources, *mode).await,
             JobKind::Mkdir { path } => self.mkdir(path).await,
-            JobKind::Rename { dir, steps, .. } => self.rename(dir, steps).await,
+            JobKind::Rename {
+                dir,
+                steps,
+                rollback,
+                ..
+            } => self.rename(dir, steps, *rollback).await,
             JobKind::CopyAs { source, target } => self.transfer_as(source, target, false).await,
             JobKind::MoveAs { source, target } if self.changes_case_only(source, target) => {
                 self.rename_case(source, target).await

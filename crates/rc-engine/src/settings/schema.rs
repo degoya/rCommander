@@ -16,6 +16,7 @@ mod delete;
 mod drive_line;
 pub(super) mod drives;
 mod exchange;
+mod file_ops;
 mod folders;
 mod fonts;
 pub(super) mod ftp;
@@ -35,6 +36,7 @@ mod ssh_agent;
 pub(super) mod terminal;
 mod themes;
 mod transfers;
+mod types;
 pub(super) mod update;
 mod vault;
 pub(super) mod viewer;
@@ -54,6 +56,7 @@ pub use exchange::{
     EXPORT_CONNECTIONS_KEY, EXPORT_ENCRYPTED_KEY, EXPORT_HOTLIST_KEY, EXPORT_SETTINGS_KEY,
     EXPORT_TRUST_KEY,
 };
+pub use file_ops::{COPY_LINKS_KEY, RENAME_UNDO_ON_FAILURE_KEY};
 pub use fonts::{
     DEFAULT_FONT_SIZE, LIST_FONT_KEY, LIST_FONT_SIZE_KEY, MARK_HIDDEN_KEY, MAX_FONT_SIZE,
     MIN_FONT_SIZE, NAME_CUT_KEY, NAME_TIP_DELAY_KEY, TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY,
@@ -66,7 +69,10 @@ pub use keys::{
 pub use language::LANGUAGE_KEY;
 pub use lookup::{is_protected, setting};
 pub use macos::{MACOS_CMD_AS_CTRL_KEY, MACOS_LOOK_KEY};
-pub use mcp::{MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY};
+pub use mcp::{
+    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_AUDIT_LOG_KEY, MCP_EXEC_SESSION_MINUTES_KEY,
+    MCP_HEADLESS_CODE_KEY, MCP_TOKEN_ROTATE_ON_START_KEY,
+};
 pub use mouse::{CLICK_CLEARS_MARKS_KEY, TAB_DRAG_KEY};
 pub use plugins::{
     ASSOCIATIONS_KEY, CRASH_LIMIT_KEY, DEFAULT_RECENT_CALLS_SHOWN, DEVELOPMENT_MODE_KEY,
@@ -93,125 +99,7 @@ pub use windows::{DIALOG_WINDOWS_KEY, GPU_LOSS_NOTICE_KEY};
 /// The longest text or path a setting takes.
 const MAX_TEXT: usize = 4096;
 
-/// The dialog page a setting is shown on, in the dialog's order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum SettingPage {
-    Appearance,
-    Folders,
-    Terminal,
-    Vault,
-    Mcp,
-    /// The external viewer and editor (RC-010-07).
-    Programs,
-    /// Copies and moves: buffer and how many run at once (RC-060-05), retries of a lost
-    /// connection (RC-060-07).
-    Transfers,
-    /// What keys do beyond the keymap: F10 (RC-080-17); and the keymap's deviations (RC-100-21).
-    Keyboard,
-    /// What the export of settings and connections starts with (RC-080-19).
-    Exchange,
-    /// Plugins: the master switch, suspension, output limits, associations (RC-100-09).
-    Plugins,
-    /// The self-update: checks, channel, source, proxy, automation (RC-100-05, RC-100-07).
-    Updates,
-}
-
-/// One choice of a [`SettingKind::Choice`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Choice {
-    /// The stored value.
-    pub value: &'static str,
-    /// The i18n key of its label.
-    pub label: &'static str,
-}
-
-/// A setting's type, with its default and bounds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SettingKind {
-    Bool {
-        default: bool,
-    },
-    /// A whole number within `min..=max`.
-    Int {
-        min: i64,
-        max: i64,
-        default: i64,
-    },
-    /// One of a fixed list.
-    Choice {
-        choices: &'static [Choice],
-        default: &'static str,
-    },
-    /// A short identifier: letters, digits, `.`, `_` and `-`; empty for none.
-    Id {
-        default: &'static str,
-    },
-    /// An absolute path, or empty for none.
-    Path {
-        default: &'static str,
-    },
-    /// A font family's name, or empty for the area's default (RC-010-17).
-    Font {
-        default: &'static str,
-    },
-    /// File extensions without dots, separated by spaces; empty for none (RC-020-11).
-    Extensions {
-        default: &'static str,
-    },
-    /// Extensions given to a plugin: `csv=<plugin id> tsv=<plugin id>`; empty for none
-    /// (RC-100-09).
-    Associations {
-        default: &'static str,
-    },
-    /// The deviations from the standard keymap: `Ctrl+K=copy F5=`; empty for none (RC-100-21,
-    /// `rc_engine::Overrides`).
-    Keymap {
-        default: &'static str,
-    },
-    /// A colour `#rrggbb`, or empty for the theme's own (RC-100-43).
-    Colour {
-        default: &'static str,
-    },
-    /// The colours by file type: one rule per line, `mask<TAB>#light[<TAB>#dark]`; empty for
-    /// none (RC-100-43, `schema/colours.rs`).
-    ColourRules {
-        default: &'static str,
-    },
-    /// An `https://` folder serving the update manifests; empty for the official releases
-    /// (RC-100-05).
-    Source {
-        default: &'static str,
-    },
-    /// A proxy: empty for the system's, `direct`, or `http(s)://host:port` without a login.
-    Proxy {
-        default: &'static str,
-    },
-    /// The id of a colour theme, built in or own (RC-100-50, `schema/themes.rs`).
-    Theme {
-        default: &'static str,
-    },
-    /// The themes of the WSL distributions: `Distro<TAB>light<TAB>dark` per line (RC-100-56).
-    WslThemes {
-        default: &'static str,
-    },
-}
-
-/// One setting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SettingSpec {
-    /// The key in the `settings` table.
-    pub key: &'static str,
-    pub page: SettingPage,
-    pub kind: SettingKind,
-    /// The i18n key of its label.
-    pub label: &'static str,
-    /// The i18n key of its help line.
-    pub help: &'static str,
-    /// Only a person in the window changes it: `settings.set` refuses it for every caller.
-    pub protected: bool,
-    /// It takes effect at the next start.
-    pub restart: bool,
-}
+pub use types::{Choice, SettingKind, SettingPage, SettingSpec};
 
 /// The folder the left panel starts in; empty for the home folder.
 pub const LEFT_START_KEY: &str = "folders.left_start";
@@ -372,6 +260,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     terminal::COPY_ON_SELECT,
     terminal::PASTE_CTRL_V,
     terminal::OSC52_COPY,
+    terminal::OSC52_REMOTE,
     terminal::SHIFT_SELECTS,
     terminal::PASTE_IMAGE,
     keys::F10,
@@ -390,6 +279,8 @@ pub const SETTINGS: &[SettingSpec] = &[
     mcp::HEADLESS_CODE,
     mcp::EXEC_SESSION_MINUTES,
     mcp::ASK_OUTSIDE_PANELS,
+    mcp::TOKEN_ROTATE_ON_START,
+    mcp::AUDIT_LOG,
     // Protected: the program that runs on F3 and F4 is a person's choice, never an agent's.
     SettingSpec {
         key: VIEWER_KEY,
@@ -428,6 +319,8 @@ pub const SETTINGS: &[SettingSpec] = &[
     transfers::RETRY_DELAY,
     keys::CONFIRM_QUIT,
     delete::PERMANENT_WITHOUT_TRASH,
+    file_ops::COPY_LINKS,
+    file_ops::RENAME_UNDO_ON_FAILURE,
     SettingSpec {
         key: MKDIR_PREFILL_KEY,
         page: SettingPage::Transfers,
@@ -478,7 +371,9 @@ pub const SETTINGS: &[SettingSpec] = &[
     ssh_agent::AGENT_MAX_KEYS,
     backup::KEEP,
     ftp::RESOLVE_LINKS,
+    ftp::ASK_PLAINTEXT,
     sftp::CASE,
+    sftp::UPLOAD_RIGHTS,
     update::CHECK_ENABLED,
     update::CHECK_INTERVAL,
     update::CHANNEL,

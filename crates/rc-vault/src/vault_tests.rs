@@ -310,6 +310,33 @@ async fn kdf_parameters_are_read_from_the_vault_not_assumed() {
     );
 }
 
+/// RC-080-68: a debug build of the program - keys made with the default - refuses to unlock a
+/// vault whose stored row names parameters below the release floor, as a release build does,
+/// before anything is derived.
+#[tokio::test]
+async fn a_weak_stored_row_is_refused_by_a_vault_that_makes_default_keys() {
+    let clock = ManualClock::new();
+    let db = Db::open_in_memory().await.expect("db");
+    let weak = Vault::open_with(db.clone(), options(&clock))
+        .await
+        .expect("vault");
+    weak.create(&password("pw")).await.expect("create");
+    drop(weak);
+    let program = Vault::open_with(
+        db,
+        VaultOptions {
+            kdf: KdfParams::DEFAULT,
+            ..options(&clock)
+        },
+    )
+    .await
+    .expect("vault");
+    assert!(matches!(
+        program.unlock(&password("pw")).await,
+        Err(VaultError::BadParameters)
+    ));
+}
+
 #[tokio::test]
 async fn repeated_failures_slow_the_next_attempt_down() {
     let clock = ManualClock::new();

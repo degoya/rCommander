@@ -28,6 +28,8 @@ mod local;
 mod memory;
 mod paths;
 mod props;
+mod recover;
+mod system_folder;
 #[cfg(any(test, feature = "memory"))]
 pub mod testing;
 mod timeout;
@@ -48,8 +50,8 @@ pub use entry::{
     unix_seconds, unix_time,
 };
 pub use error::{Result, VfsError};
-pub use local::LocalFs;
 pub use local::space::disk_space;
+pub use local::{LocalFs, umask};
 #[cfg(any(test, feature = "memory"))]
 pub use memory::MemoryFs;
 pub use paths::{
@@ -57,6 +59,7 @@ pub use paths::{
     wsl_unc_path,
 };
 pub use props::{Details, FileId, LinkKind, LinkKinds, PropertyCapabilities, PropertyChange};
+pub use system_folder::{DEFAULT_SYSTEM_ROOT, system32, system32_from_env};
 pub use timeout::{
     DEFAULT_LISTING_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, IoCancel, TimeoutFs, Timeouts,
 };

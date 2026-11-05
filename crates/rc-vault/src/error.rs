@@ -34,6 +34,10 @@ pub enum VaultError {
     /// The stored key-derivation parameters are not usable.
     #[error("the vault's key derivation parameters are not usable")]
     BadParameters,
+    /// A sealed export asks more memory, passes or lanes of argon2 than an import gives
+    /// ([`crate::KdfParams::IMPORT_MAX`]); nothing was derived (RC-080-68).
+    #[error("the export's key derivation asks more than an import allows")]
+    TooCostly,
     /// The key derivation stopped before it finished.
     #[error("the key derivation was interrupted")]
     Interrupted,
@@ -60,6 +64,7 @@ impl VaultError {
         "vault_malformed",
         "vault_undecryptable",
         "vault_bad_parameters",
+        "vault_too_costly",
         "vault_interrupted",
         "vault_in_use",
         "vault_changed",
@@ -78,6 +83,7 @@ impl VaultError {
             Self::Malformed => "vault_malformed",
             Self::Undecryptable => "vault_undecryptable",
             Self::BadParameters => "vault_bad_parameters",
+            Self::TooCostly => "vault_too_costly",
             Self::Interrupted => "vault_interrupted",
             Self::InUse { .. } => "vault_in_use",
             Self::Changed => "vault_changed",

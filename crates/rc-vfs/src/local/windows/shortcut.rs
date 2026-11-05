@@ -10,6 +10,7 @@ use std::{path::Path, thread};
 
 use winsafe::{self as w, co, prelude::*};
 
+use crate::recover::LogPanic as _;
 use crate::{Result, VfsError};
 
 /// A shortcut at `real` (the caller's `link`) to `target`, starting in the target's folder.
@@ -24,6 +25,7 @@ pub(super) fn create(link: &Path, real: &Path, target: &Path) -> Result<()> {
             .spawn_scoped(scope, || create_here(link, real, target))
             .map_err(|error| failed(format!("cannot start the shortcut's thread: {error}")))?
             .join()
+            .log_panic("vfs.shortcut")
             .map_err(|_| failed("creating the shortcut failed".to_owned()))?
     })
 }

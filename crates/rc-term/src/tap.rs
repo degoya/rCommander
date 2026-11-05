@@ -4,10 +4,15 @@
 //! [`tap`] puts itself between a started back end and its session. The session still gets every
 //! event in order; the [`Tap`] gets a copy of each output chunk until it is dropped or the
 //! program ends, and writes to the program directly, past the session's held input
-//! ([`crate::TermSession::hold_input`]). A tap that falls [`TAP_QUEUE`] chunks behind misses the
-//! next ones rather than holding up the screen.
+//! ([`crate::TermSession::hold_input`]). A tap that falls [`TAP_QUEUE`] chunks behind is cut off
+//! rather than holding up the screen (RC-080-65): it reads the chunks before the gap, then the
+//! end, and [`Tap::overflowed`] says the end was the gap's - a login script waiting for text that
+//! was lost would otherwise wait for its timeout.
 
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use tokio::sync::mpsc::{self, error::TrySendError};
 
@@ -23,12 +28,20 @@ const EVENT_QUEUE: usize = 64;
 pub struct Tap {
     output: mpsc::Receiver<Vec<u8>>,
     backend: Arc<dyn TermBackend>,
+    overflowed: Arc<AtomicBool>,
 }
 
 impl Tap {
-    /// The next chunk of output; `None` once the program ended.
+    /// The next chunk of output; `None` once the program ended or the tap was cut off
+    /// ([`Self::overflowed`]).
     pub async fn read(&mut self) -> Option<Vec<u8>> {
         self.output.recv().await
+    }
+
+    /// Whether the tap fell [`TAP_QUEUE`] chunks behind and was cut off: output was lost.
+    #[must_use]
+    pub fn overflowed(&self) -> bool {
+        self.overflowed.load(Ordering::SeqCst)
     }
 
     /// Sends `bytes` to the program, held input or not.
@@ -58,6 +71,8 @@ pub fn tap(spawned: Spawned) -> (Spawned, Tap) {
     let (copies, output) = mpsc::channel(TAP_QUEUE);
     let (events, received) = mpsc::channel(EVENT_QUEUE);
     let mut source = spawned.events;
+    let overflowed = Arc::new(AtomicBool::new(false));
+    let cut_off = Arc::clone(&overflowed);
     tokio::spawn(async move {
         let mut copies = Some(copies);
         while let Some(event) = source.recv().await {
@@ -66,7 +81,9 @@ pub fn tap(spawned: Spawned) -> (Spawned, Tap) {
                     let sent = copies.as_ref().map(|sender| sender.try_send(bytes.clone()));
                     match sent {
                         Some(Err(TrySendError::Full(_))) => {
-                            tracing::debug!("a terminal tap fell behind and missed output");
+                            tracing::debug!("a terminal tap fell behind and was cut off");
+                            cut_off.store(true, Ordering::SeqCst);
+                            copies = None;
                         }
                         Some(Err(TrySendError::Closed(_))) => copies = None,
                         Some(Ok(())) | None => {}
@@ -84,7 +101,14 @@ pub fn tap(spawned: Spawned) -> (Spawned, Tap) {
         backend: Box::new(Shared(Arc::clone(&backend))),
         events: received,
     };
-    (shared, Tap { output, backend })
+    (
+        shared,
+        Tap {
+            output,
+            backend,
+            overflowed,
+        },
+    )
 }
 
 /// The back end, shared by the session and the tap.

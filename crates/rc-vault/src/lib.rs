@@ -25,6 +25,7 @@ mod aead;
 mod envelope;
 mod error;
 mod kdf;
+mod recover;
 mod rekey;
 mod state;
 mod types;

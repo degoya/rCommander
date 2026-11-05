@@ -3,14 +3,16 @@
 //! of the reader and stops as soon as the reader is dropped, so an entry streams - also from the
 //! middle of a solid 7z block - instead of unpacking into memory. A [`Watch`] tells the archive
 //! reads underneath that the reader is gone, so a producer still unpacking its way towards the
-//! entry stops there too (RC-080-46).
+//! entry stops there too (RC-080-46). The chunks go round: the reader hands each one it has
+//! read back to the producer, which reads the next bytes into it (RC-080-70) - an entry of any
+//! size costs a few chunks, not one allocation per chunk.
 
 use std::{
     io::{self, Read},
     path::Path,
     pin::Pin,
     sync::{
-        Arc, Mutex, PoisonError,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     task::{Context, Poll, ready},
@@ -22,6 +24,7 @@ use tokio::{
 };
 
 use super::source::io_error;
+use crate::recover::LockOrRecover as _;
 use crate::{ReadStream, Result, VfsError};
 
 /// Bytes per chunk.
@@ -30,6 +33,9 @@ pub(crate) const CHUNK: usize = 64 * 1024;
 const DEPTH: usize = 4;
 
 type Message = io::Result<Vec<u8>>;
+
+/// The chunks the reader has read and the producer may fill again; never more than [`DEPTH`].
+type Spare = Arc<Mutex<Vec<Vec<u8>>>>;
 
 /// How a producer ended without an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,9 +51,18 @@ pub(crate) struct PipeWriter {
     tx: mpsc::Sender<Message>,
     /// Set once the reader is dropped.
     gone: Arc<AtomicBool>,
+    spare: Spare,
 }
 
 impl PipeWriter {
+    /// A chunk of [`CHUNK`] bytes to read into: one the reader gave back, else a new one.
+    fn buffer(&self) -> Vec<u8> {
+        let kept = self.spare.lock_or_recover("pipe.spare").pop();
+        let mut buffer = kept.unwrap_or_default();
+        buffer.resize(CHUNK, 0);
+        buffer
+    }
+
     /// Sends a chunk; `false` when the reader has gone.
     fn send(&self, chunk: Vec<u8>) -> bool {
         self.tx.blocking_send(Ok(chunk)).is_ok()
@@ -69,6 +84,7 @@ pub(crate) struct PipeReader {
     expected: u64,
     done: bool,
     gone: Arc<AtomicBool>,
+    spare: Spare,
 }
 
 impl Drop for PipeReader {
@@ -81,6 +97,7 @@ impl Drop for PipeReader {
 pub(crate) fn pair(expected: u64) -> (PipeWriter, PipeReader) {
     let (tx, rx) = mpsc::channel(DEPTH);
     let gone = Arc::new(AtomicBool::new(false));
+    let spare = Spare::default();
     let reader = PipeReader {
         rx,
         chunk: Vec::new(),
@@ -89,8 +106,9 @@ pub(crate) fn pair(expected: u64) -> (PipeWriter, PipeReader) {
         expected,
         done: false,
         gone: Arc::clone(&gone),
+        spare: Arc::clone(&spare),
     };
-    (PipeWriter { tx, gone }, reader)
+    (PipeWriter { tx, gone, spare }, reader)
 }
 
 /// The stream of `reader` once the first chunk, the end or the error has arrived: an entry that
@@ -127,15 +145,14 @@ pub(crate) struct Watch(Arc<Mutex<Option<Arc<AtomicBool>>>>);
 impl Watch {
     /// From now on the reads work for the reader of `writer`.
     pub(crate) fn follow(&self, writer: &PipeWriter) {
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&writer.gone));
+        *self.0.lock_or_recover("pipe") = Some(Arc::clone(&writer.gone));
     }
 
     /// An error once the reader followed is gone.
     pub(crate) fn check(&self) -> io::Result<()> {
         let gone = self
             .0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("pipe")
             .as_ref()
             .is_some_and(|gone| gone.load(Ordering::Relaxed));
         if gone {
@@ -153,8 +170,14 @@ impl PipeReader {
         match message {
             Some(Ok(chunk)) => {
                 self.received += chunk.len() as u64;
-                self.chunk = chunk;
+                let read = std::mem::replace(&mut self.chunk, chunk);
                 self.offset = 0;
+                if read.capacity() >= CHUNK {
+                    let mut spare = self.spare.lock_or_recover("pipe.spare");
+                    if spare.len() < DEPTH {
+                        spare.push(read);
+                    }
+                }
                 Ok(())
             }
             Some(Err(error)) => {
@@ -208,9 +231,9 @@ pub(crate) fn pump(
     path: &Path,
 ) -> Result<Pumped> {
     let mut sent: u64 = 0;
-    // One buffer for every read; each chunk sent is as large as what was read.
-    let mut buffer = vec![0; CHUNK];
     loop {
+        // Each chunk sent is as large as what was read into it.
+        let mut buffer = writer.buffer();
         let read = match reader.read(&mut buffer) {
             Ok(0) => break,
             Ok(read) => read,
@@ -224,7 +247,8 @@ pub(crate) fn pump(
                 limit: "entry larger than its stated size",
             });
         }
-        if !writer.send(buffer[..read].to_vec()) {
+        buffer.truncate(read);
+        if !writer.send(buffer) {
             return Ok(Pumped::Abandoned { sent });
         }
     }

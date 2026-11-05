@@ -63,6 +63,8 @@ impl Content for Repeated {
 /// A source over `content` that counts its reads and can be told to stop.
 pub(crate) struct TestSource<C: Content> {
     pub(crate) content: C,
+    /// The file's name, `test.json` unless a test names it.
+    pub(crate) name: String,
     pub(crate) reads: u64,
     pub(crate) bytes_read: u64,
     pub(crate) largest_read: u32,
@@ -74,6 +76,7 @@ impl<C: Content> TestSource<C> {
     pub(crate) fn new(content: C) -> Self {
         Self {
             content,
+            name: "test.json".to_owned(),
             reads: 0,
             bytes_read: 0,
             largest_read: 0,
@@ -91,6 +94,10 @@ impl<C: Content> TestSource<C> {
 impl<C: Content> Source for TestSource<C> {
     fn size(&self) -> u64 {
         self.content.size()
+    }
+
+    fn name(&self) -> String {
+        self.name.clone()
     }
 
     fn read_at(&mut self, offset: u64, length: u32) -> Result<Vec<u8>, Failure> {
@@ -113,6 +120,13 @@ impl<C: Content> Source for TestSource<C> {
 /// A source over `text`.
 pub(crate) fn source(text: &str) -> TestSource<Vec<u8>> {
     TestSource::new(text.as_bytes().to_vec())
+}
+
+/// A source over `text` in a file named `name`.
+pub(crate) fn named(text: &str, name: &str) -> TestSource<Vec<u8>> {
+    let mut src = source(text);
+    src.name = name.to_owned();
+    src
 }
 
 /// A sink in memory.

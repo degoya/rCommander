@@ -23,7 +23,7 @@ mod task;
 
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, atomic::AtomicI64},
+    sync::{Arc, Mutex, MutexGuard, OnceLock, atomic::AtomicI64},
 };
 
 use rc_update::{
@@ -35,6 +35,7 @@ use rc_update::{
 
 pub use status::{DownloadState, LastUpdate, REFUSAL_CODES, UpdateRefusal, UpdateStatus};
 
+use crate::recover::LockOrRecover as _;
 use crate::{Engine, EngineEvent};
 
 /// The running version, the one every offer is held against.
@@ -133,10 +134,7 @@ impl Engine {
     }
 
     fn desk_state(&self) -> MutexGuard<'_, DeskState> {
-        self.desk()
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        self.desk().state.lock_or_recover("updates.state")
     }
 
     /// The folder and installation once the window started the self-update.

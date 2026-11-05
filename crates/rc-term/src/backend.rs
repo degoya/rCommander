@@ -5,7 +5,10 @@
 //! of [`BackendEvent`]s - the program's output in order, then exactly one
 //! [`BackendEvent::Exited`], then the channel closes. Neither side blocks the caller: input and
 //! size changes are queued, output arrives on the channel, so an async back end (a russh channel)
-//! and a blocking one (a PTY read on a thread) look the same to [`crate::TermSession`].
+//! and a blocking one (a PTY read on a thread) look the same to [`crate::TermSession`]. The input
+//! queue is bounded ([`INPUT_QUEUE`], RC-080-65): a program that reads none of its input gets no
+//! more queued, the write is refused with [`TermError::InputFull`] rather than blocking the
+//! caller - the window's thread or the session's own pump.
 
 use alacritty_terminal::grid::Dimensions;
 use serde::{Deserialize, Serialize};
@@ -16,6 +19,9 @@ use crate::TermError;
 mod ssh;
 
 pub use ssh::{SshTermChannel, spawn_ssh};
+
+/// Writes queued for a program before the next is refused.
+pub const INPUT_QUEUE: usize = 1024;
 
 /// A terminal's size in character cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -82,7 +88,8 @@ pub trait TermBackend: Send + Sync + 'static {
     ///
     /// # Errors
     ///
-    /// [`TermError::Exited`] once the program has ended.
+    /// [`TermError::Exited`] once the program has ended; [`TermError::InputFull`] while
+    /// [`INPUT_QUEUE`] writes wait for the program.
     fn write(&self, bytes: Vec<u8>) -> Result<(), TermError>;
 
     /// Tells the program its new size (a PTY resize, an SSH `window-change`).

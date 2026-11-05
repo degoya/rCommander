@@ -12,7 +12,7 @@ use std::{
     fmt,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicU64, Ordering},
     },
     time::Instant,
@@ -31,10 +31,11 @@ use tokio::{
     task::JoinHandle,
 };
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     BackendEvent, ScreenText, Spawned, TermBackend, TermError, TermSize,
     cwd_sync::{Changes, CwdSync},
-    osc::{OscScanner, local_host_names},
+    osc::{OscScanner, clean_title, local_host_names},
     screen_text,
 };
 
@@ -44,6 +45,10 @@ pub const DEFAULT_SCROLLBACK: usize = 10_000;
 /// How many [`TermEvent`]s a slow viewer may fall behind before it misses some; it then
 /// re-reads the [`Term`], which is all a missed event would have told it to do.
 const EVENT_BUFFER: usize = 256;
+
+/// What the terminal may ask of the pump before the pump takes it (replies, title, clipboard);
+/// past it a request is dropped rather than queued (RC-080-65).
+const REPLY_QUEUE: usize = 1024;
 
 /// A session's id, unique in the process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -131,12 +136,15 @@ pub struct SessionInfo {
 
 /// The [`Term`]'s link back to its session: what the terminal wants done goes to the pump.
 #[derive(Clone)]
-pub struct EventProxy(mpsc::UnboundedSender<Event>);
+pub struct EventProxy(mpsc::Sender<Event>);
 
 impl EventListener for EventProxy {
     fn send_event(&self, event: Event) {
-        // The pump is gone only when the session is; nothing is left to tell then.
-        let _ = self.0.send(event);
+        // Full: a program that floods the terminal with requests; gone: the session is, and
+        // nothing is left to tell.
+        if let Err(mpsc::error::TrySendError::Full(_)) = self.0.try_send(event) {
+            tracing::debug!("a terminal's requests came faster than its pump; one was dropped");
+        }
     }
 }
 
@@ -174,7 +182,7 @@ impl TermSession {
     /// Outside a tokio runtime.
     #[must_use]
     pub fn start(id: TermId, spawned: Spawned, options: SessionOptions) -> Self {
-        let (replies, replies_received) = mpsc::unbounded_channel();
+        let (replies, replies_received) = mpsc::channel(REPLY_QUEUE);
         let config = Config {
             scrolling_history: options.scrollback,
             ..Config::default()
@@ -377,21 +385,33 @@ impl Shared {
         let _ = self.events.send(event);
     }
 
-    fn set_title(&self, title: String) {
+    fn set_title(&self, title: &str) {
+        let title = clean_title(title);
         *lock(&self.title) = title.clone();
         self.notify(TermEvent::Title(title));
     }
 
     /// Reads the shell's OSC payloads in `bytes`; a `cd` waiting for the prompt is written
-    /// while the state is held. Output without an ESC costs one scan.
-    fn scan(&self, backend: &dyn TermBackend, scanner: &mut OscScanner, bytes: &[u8]) {
+    /// while the state is held. What the parser is to see of `bytes`: all of it, but an OSC
+    /// sequence only once it ends and an overlong one never (`osc.rs`, RC-080-65). Output
+    /// without an ESC costs one scan and no copy.
+    fn scan<'a>(
+        &self,
+        backend: &dyn TermBackend,
+        scanner: &mut OscScanner,
+        bytes: &'a [u8],
+        forward: &'a mut Vec<u8>,
+    ) -> &'a [u8] {
         if scanner.is_idle() && !bytes.contains(&0x1b) {
-            return;
+            return bytes;
         }
+        forward.clear();
         let mut changes = Changes::default();
         {
             let mut sync = lock(&self.sync);
-            scanner.feed(bytes, |payload| sync.on_payload(payload, &mut changes));
+            scanner.feed(bytes, forward, |payload| {
+                sync.on_payload(payload, &mut changes);
+            });
             if let Some(line) = changes.write.take() {
                 let _ = backend.write(line);
             }
@@ -402,6 +422,7 @@ impl Shared {
         if changes.prompt {
             self.notify(TermEvent::Prompt);
         }
+        forward
     }
 
     /// What the terminal asked for while parsing.
@@ -410,8 +431,8 @@ impl Shared {
             Event::PtyWrite(reply) => {
                 let _ = backend.write(reply.into_bytes());
             }
-            Event::Title(title) => self.set_title(title),
-            Event::ResetTitle => self.set_title(self.default_title.clone()),
+            Event::Title(title) => self.set_title(&title),
+            Event::ResetTitle => self.set_title(&self.default_title),
             // The pump reports the end from the back end; alacritty's own loop is not used.
             Event::Wakeup | Event::Exit | Event::ChildExit(_) => {}
             other => self.notify(TermEvent::Ui(other)),
@@ -424,10 +445,11 @@ async fn pump(
     shared: Arc<Shared>,
     backend: Arc<dyn TermBackend>,
     mut output: mpsc::Receiver<BackendEvent>,
-    mut replies: mpsc::UnboundedReceiver<Event>,
+    mut replies: mpsc::Receiver<Event>,
 ) {
     let mut parser: Processor = Processor::new();
     let mut scanner = OscScanner::default();
+    let mut forward = Vec::new();
     let code = loop {
         let sync_deadline = parser.sync_timeout().sync_timeout();
         tokio::select! {
@@ -435,8 +457,8 @@ async fn pump(
             Some(event) = replies.recv() => shared.answer(&*backend, event),
             event = output.recv() => match event {
                 Some(BackendEvent::Output(bytes)) => {
-                    shared.scan(&*backend, &mut scanner, &bytes);
-                    parser.advance(&mut *shared.term.lock(), &bytes);
+                    let shown = shared.scan(&*backend, &mut scanner, &bytes, &mut forward);
+                    parser.advance(&mut *shared.term.lock(), shown);
                     shared.notify(TermEvent::Wakeup);
                 }
                 Some(BackendEvent::Exited(code)) => break code,
@@ -462,7 +484,7 @@ async fn until(deadline: Option<Instant>) {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+    mutex.lock_or_recover("session.mutex")
 }
 
 mod hold;

@@ -9,10 +9,11 @@
 //! `false` there produces an opaque protocol error that cannot say *why* the connection was
 //! refused, so the handler records what it saw ([`describe`]) and the caller turns the
 //! [`Verdict`] into a coded failure carrying the fingerprint a person has to confirm
-//! ([`HOST_KEY_UNKNOWN`], [`HOST_KEY_CHANGED`]).
+//! ([`HOST_KEY_UNKNOWN`], [`HOST_KEY_CHANGED`]), or a hard stop for a key a `known_hosts` file
+//! revoked ([`HOST_KEY_REVOKED`], RC-080-67).
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use rc_db::KnownHost;
+use rc_db::{KnownHost, RevokedHostKey};
 use russh::keys::{Algorithm, HashAlg, PublicKey, PublicKeyOrCertificate};
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,9 @@ use crate::hashed;
 pub const HOST_KEY_UNKNOWN: &str = "host_key_unknown";
 /// Connection refused because the server presented a different key than the stored one.
 pub const HOST_KEY_CHANGED: &str = "host_key_changed";
+/// Connection refused because the server presented a key a `known_hosts` file marked
+/// `@revoked`: a hard stop without a trust question, as OpenSSH does.
+pub const HOST_KEY_REVOKED: &str = "host_key_revoked";
 /// The server offered a certificate; certificate-based host trust is not implemented.
 pub const HOST_KEY_UNSUPPORTED: &str = "host_key_unsupported";
 /// A key that does not parse as an SSH public key.
@@ -161,6 +165,11 @@ pub enum Verdict {
         stored: KnownHost,
         offered: OfferedKey,
     },
+    /// The key is revoked: refused whatever is stored for the host, and never asked about.
+    Revoked {
+        revoked: RevokedHostKey,
+        offered: OfferedKey,
+    },
 }
 
 impl Verdict {
@@ -171,6 +180,7 @@ impl Verdict {
             Self::Trusted(_) => None,
             Self::Unknown(_) => Some(HOST_KEY_UNKNOWN),
             Self::Changed { .. } => Some(HOST_KEY_CHANGED),
+            Self::Revoked { .. } => Some(HOST_KEY_REVOKED),
         }
     }
 }

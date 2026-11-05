@@ -15,6 +15,10 @@ public_key = "REPLACE_WITH_YOUR_BASE64_ED25519_PUBLIC_KEY"
 # rCommander offers the plugin only these files, without running it; `probe` answers finer.
 [match]
 extensions = ["csv", "tsv"]
+# Whole file names for files whose extension says nothing, compared without regard to case,
+# `*` the only wildcard: `names = ["Dockerfile", "Dockerfile.*", "*.dockerfile"]`. A name
+# without `*` is asked before every extension, one with `*` after them. A manifest naming any
+# needs `min_app_version = "0.19.0"` or later.
 max_size = 268435456
 
 # Every output a document of this plugin may name; the host refuses any other.
@@ -29,7 +33,7 @@ description = "Shows CSV and TSV files as a table."
 author = "Your name"
 license = "MIT"
 # The first rCommander release that accepts this plugin's `api_version`.
-min_app_version = "0.18.1"
+min_app_version = "0.19.0"
 
 [limits]
 # `text` of a large file shown as text copies all of it.

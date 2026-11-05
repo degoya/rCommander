@@ -86,6 +86,8 @@ async fn the_list_reaches_mcp_and_nothing_else_does() {
     assert_eq!(plugin["version"], json!("1.0.0"));
     assert_eq!(plugin["key_fingerprint"], json!(fingerprint));
     assert_eq!(plugin["permissions"]["extensions"], json!(["csv", "tsv"]));
+    // RC-100-80: the claimed file names are listed, none for this one.
+    assert_eq!(plugin["permissions"]["names"], json!([]));
     assert_eq!(listed["executions"], json!([]));
     // RC-100-75: the summary of no call, and the bound the setting sets.
     assert_eq!(listed["summary"]["calls"], json!(0));

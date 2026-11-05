@@ -106,10 +106,9 @@ impl App {
             TermMessage::Widget(WidgetEvent::Paste(terminal, text)) => {
                 self.terms.paste = Some((terminal, text));
             }
-            TermMessage::Widget(WidgetEvent::Copy(_, text)) if self.terms.copy.osc52 => {
-                return vec![Effect::Task(iced::clipboard::write(text))];
+            TermMessage::Widget(WidgetEvent::Copy(terminal, text)) => {
+                return self.program_copy(terminal, text);
             }
-            TermMessage::Widget(WidgetEvent::Copy(..)) => {}
             TermMessage::Select(panel, terminal) => {
                 return vec![Effect::Dispatch(
                     panel,

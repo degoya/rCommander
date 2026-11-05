@@ -8,8 +8,16 @@
 //! long list starts near its first child. Values below `min_size` are read when a walk passes
 //! them, which bounds that read. The index never takes more than [`MAX_INDEX_BYTES`]: past that
 //! `min_size` doubles and the smaller entries go, so a huge file costs walks, not memory.
+//!
+//! The [`Dialect`] decides what is valid: JSONC and JSON5 take a comma before a closing bracket,
+//! JSON5 a key without quotes; JSON Lines is a list of values, a line each (`records`).
 
+mod records;
+
+use crate::dialect::Dialect;
 use crate::lexer::{Kind, Lexeme};
+
+pub(crate) use records::Broken;
 
 /// Children per page of the tree: a container with more is shown as ranges.
 pub const PAGE: u64 = 1000;
@@ -55,6 +63,11 @@ pub(crate) struct Structure {
     pub(crate) error: Option<ParseError>,
     /// Where the valid part ends: the error's offset, or the end of the file.
     pub(crate) end: u64,
+    pub(crate) dialect: Dialect,
+    /// JSON Lines: the list of the lines' values - its count and anchors - from the text's start.
+    pub(crate) records: Option<Entry>,
+    /// JSON Lines: the lines that are no value, by the offset they start at.
+    pub(crate) broken: Vec<Broken>,
 }
 
 impl Structure {
@@ -67,7 +80,13 @@ impl Structure {
     }
 
     pub(crate) fn memory_bytes(&self) -> usize {
-        self.entries.capacity() * size_of::<Entry>() + self.entry_bytes
+        self.entries.capacity() * size_of::<Entry>()
+            + self.entry_bytes
+            + self.broken.capacity() * size_of::<Broken>()
+            + self
+                .records
+                .as_ref()
+                .map_or(0, |records| records.anchors.len() * size_of::<u64>())
     }
 
     fn record(&mut self, entry: Entry) {
@@ -155,36 +174,68 @@ pub(crate) struct Builder {
     stack: Vec<Frame>,
     expect: Expect,
     structure: Structure,
+    /// JSON Lines: the list of the lines and the line being read.
+    records: Option<records::Records>,
 }
 
 impl Builder {
+    /// A validator of JSON.
     pub(crate) fn new() -> Self {
+        Self::for_dialect(Dialect::Json, 0)
+    }
+
+    /// A validator of `dialect`, whose text starts at `start` (after a byte-order mark).
+    pub(crate) fn for_dialect(dialect: Dialect, start: u64) -> Self {
         Self {
             stack: Vec::new(),
             expect: Expect::Value,
             structure: Structure {
                 min_size: FIRST_MIN_SIZE,
+                dialect,
                 ..Structure::default()
             },
+            records: dialect.records().then(|| records::Records::new(start)),
         }
     }
 
     pub(crate) fn feed(&mut self, lexeme: &Lexeme) {
+        if self.records.is_some() {
+            return self.feed_record(lexeme);
+        }
         if self.structure.error.is_some() {
             return;
         }
+        if let Err(message) = self.step(lexeme) {
+            self.fail(lexeme, message);
+        }
+    }
+
+    /// Whether the JSON stopped being valid; never for JSON Lines, whose broken lines are
+    /// [`Structure::broken`].
+    pub(crate) fn failed(&self) -> bool {
+        self.structure.error.is_some()
+    }
+
+    /// Whether the value is complete: nothing but its end may follow.
+    pub(crate) fn complete(&self) -> bool {
+        self.expect == Expect::End
+    }
+
+    /// One lexeme through the grammar; what was expected instead when it does not fit.
+    fn step(&mut self, lexeme: &Lexeme) -> Result<(), &'static str> {
         let kind = lexeme.kind;
         if let Kind::Invalid(problem) = kind {
-            return self.fail(lexeme, problem.message());
+            return Err(problem.message());
         }
+        let dialect = self.structure.dialect;
         match (self.expect, kind) {
             (Expect::Value | Expect::ValueOrClose, _) if is_value(kind) => {
-                self.value(lexeme);
+                return self.value(lexeme);
             }
             (Expect::ValueOrClose, Kind::EndArray) | (Expect::KeyOrClose, Kind::EndObject) => {
                 self.close(lexeme);
             }
-            (Expect::KeyOrClose | Expect::Key, Kind::String) => {
+            (Expect::KeyOrClose | Expect::Key, _) if is_key(kind, dialect) => {
                 if let Some(frame) = self.stack.last_mut() {
                     frame.child(lexeme.start);
                 }
@@ -192,8 +243,11 @@ impl Builder {
             }
             (Expect::Colon, Kind::Colon) => self.expect = Expect::Value,
             (Expect::CommaOrClose, Kind::Comma) => {
+                let trailing = dialect.trailing_commas();
                 self.expect = match self.stack.last() {
+                    Some(frame) if frame.object && trailing => Expect::KeyOrClose,
                     Some(frame) if frame.object => Expect::Key,
+                    _ if trailing => Expect::ValueOrClose,
                     _ => Expect::Value,
                 };
             }
@@ -205,11 +259,12 @@ impl Builder {
             {
                 self.close(lexeme);
             }
-            (expect, _) => self.fail(lexeme, expect.message()),
+            (expect, _) => return Err(expect.message()),
         }
+        Ok(())
     }
 
-    fn value(&mut self, lexeme: &Lexeme) {
+    fn value(&mut self, lexeme: &Lexeme) -> Result<(), &'static str> {
         match self.stack.last_mut() {
             Some(frame) if !frame.object => frame.child(lexeme.start),
             Some(_) => {}
@@ -217,7 +272,7 @@ impl Builder {
         }
         if lexeme.kind.is_open() {
             if self.stack.len() >= MAX_DEPTH {
-                return self.fail(lexeme, "nesting too deep");
+                return Err("nesting too deep");
             }
             let object = lexeme.kind == Kind::BeginObject;
             self.stack.push(Frame {
@@ -232,7 +287,7 @@ impl Builder {
             } else {
                 Expect::ValueOrClose
             };
-            return;
+            return Ok(());
         }
         self.structure.record(Entry {
             start: lexeme.start,
@@ -242,6 +297,7 @@ impl Builder {
             anchors: Box::default(),
         });
         self.after_value();
+        Ok(())
     }
 
     fn close(&mut self, lexeme: &Lexeme) {
@@ -281,7 +337,9 @@ impl Builder {
     /// Ends the pass at `eof`, which the lexer reached at `line` and `column`. Containers still
     /// open end where the valid part does, so the tree lists what came before the error.
     pub(crate) fn finish(mut self, eof: u64, line: u64, column: u64) -> Structure {
-        if self.structure.error.is_none() && self.expect != Expect::End {
+        if self.records.is_some() {
+            self.finish_records(eof);
+        } else if self.structure.error.is_none() && self.expect != Expect::End {
             self.structure.error = Some(ParseError {
                 offset: eof,
                 line,
@@ -315,6 +373,11 @@ fn is_value(kind: Kind) -> bool {
         kind,
         Kind::BeginObject | Kind::BeginArray | Kind::String | Kind::Number | Kind::Literal
     )
+}
+
+/// A lexeme that may be a key: a string; in JSON5 also a name without quotes.
+pub(crate) fn is_key(kind: Kind, dialect: Dialect) -> bool {
+    kind == Kind::String || (dialect.json5() && matches!(kind, Kind::Identifier | Kind::Literal))
 }
 
 #[cfg(test)]

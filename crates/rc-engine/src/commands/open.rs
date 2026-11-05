@@ -9,6 +9,9 @@ use std::path::Path;
 use rc_vfs::{BackendId, Entry, EntryKind, VfsError, VfsPath};
 
 use super::panel::resolve_path;
+#[cfg(test)]
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, Outcome, PanelId, archives::opens_on_enter, mcp_questions::check_mcp_pin,
 };
@@ -77,7 +80,9 @@ impl Engine {
             }
         };
         // ShellExecuteW may wait on the shell; never on the engine's caller.
-        let launched = tokio::task::spawn_blocking(move || launch(&file)).await;
+        let launched = tokio::task::spawn_blocking(move || launch(&file))
+            .await
+            .log_panic("engine.open_file");
         if !matches!(launched, Ok(Ok(()))) {
             return Err(EngineError::OpenFailed { name });
         }
@@ -119,8 +124,7 @@ fn launch(file: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 fn launch(file: &Path) -> std::io::Result<()> {
     tests::LAUNCHED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .lock_or_recover("open.launched")
         .push(file.to_path_buf());
     Ok(())
 }

@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer"]
+members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer"]
 
 [workspace.package]
-version = "0.18.1"
+version = "0.19.0"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.99"

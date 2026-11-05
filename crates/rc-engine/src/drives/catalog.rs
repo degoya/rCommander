@@ -12,7 +12,7 @@ use std::{
     collections::HashMap,
     path::PathBuf,
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -25,6 +25,8 @@ use super::{
     Details, Drive, DriveGroup, DriveKind, DriveSource, DriveState, RawDrive, devices::DeviceList,
 };
 use crate::EngineEvent;
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 
 /// How long an answer of a local drive stays good before a list asks again. Network drives are
 /// asked again only on request.
@@ -136,14 +138,11 @@ impl DriveCatalog {
 
     /// The roots of the last drive bar.
     pub(crate) fn roots(&self) -> Vec<(String, PathBuf)> {
-        self.roots
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        self.roots.lock_or_recover("catalog.roots").clone()
     }
 
     pub(crate) fn set_roots(&self, roots: Vec<(String, PathBuf)>) {
-        *self.roots.lock().unwrap_or_else(PoisonError::into_inner) = roots;
+        *self.roots.lock_or_recover("catalog.roots") = roots;
     }
 
     /// The kind of the drive `id` as last listed; `None` for one the list does not have.
@@ -186,7 +185,11 @@ impl DriveCatalog {
                 let _ = events.send(EngineEvent::Drives);
             }
         });
-        if tokio::time::timeout(self.timeout, asked).await.is_err() {
+        if tokio::time::timeout(self.timeout, asked)
+            .await
+            .map(|joined| joined.log_panic("engine.drive_list"))
+            .is_err()
+        {
             tracing::debug!("the drive list did not come in time; the last one stays");
         }
         late.store(true, Ordering::SeqCst);
@@ -214,7 +217,9 @@ impl DriveCatalog {
             let done = done.clone();
             tokio::spawn(async move {
                 let RawDrive { id, root, .. } = drive;
-                let asked = tokio::task::spawn_blocking(move || source.details(&root)).await;
+                let asked = tokio::task::spawn_blocking(move || source.details(&root))
+                    .await
+                    .log_panic("engine.drive_details");
                 let answer = match asked {
                     Ok(Ok(details)) => Answer::Ready(details),
                     Ok(Err(error)) => {
@@ -298,7 +303,7 @@ fn entry(drive: &RawDrive, known: &Known) -> Drive {
 }
 
 fn lock(known: &Mutex<Known>) -> MutexGuard<'_, Known> {
-    known.lock().unwrap_or_else(PoisonError::into_inner)
+    known.lock_or_recover("catalog.known")
 }
 
 #[cfg(test)]

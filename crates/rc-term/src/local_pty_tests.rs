@@ -120,3 +120,160 @@ async fn shutdown_ends_a_running_shell() {
     assert!(session.state().is_exited());
     assert!(session.write(b"x".to_vec()).is_err());
 }
+
+/// `/bin/sh -c script` in a PTY, started in `dir`; the back end and its events.
+fn sh_c(script: &str, dir: &std::path::Path) -> crate::Spawned {
+    let command = LocalCommand {
+        program: PathBuf::from("/bin/sh"),
+        args: vec!["-c".to_owned(), script.to_owned()],
+        cwd: Some(dir.to_path_buf()),
+        env: Vec::new(),
+        end_programs_on_close: true,
+    };
+    spawn_local(&command, TermSize::default()).expect("spawn")
+}
+
+/// The process id the script wrote into `name`, once it is there.
+async fn pid_in(dir: &std::path::Path, name: &str) -> i32 {
+    for _ in 0..1000 {
+        if let Ok(text) = std::fs::read_to_string(dir.join(name))
+            && let Ok(pid) = text.trim().parse()
+        {
+            return pid;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the script never wrote {name}");
+}
+
+/// Reads the events until the channel closes - the reader and the waiter thread have both
+/// ended then, they hold its only senders -, for at most `limit`; whether `Exited` came.
+async fn until_closed(
+    mut events: tokio::sync::mpsc::Receiver<crate::BackendEvent>,
+    limit: Duration,
+) -> bool {
+    let mut exited = false;
+    tokio::time::timeout(limit, async {
+        while let Some(event) = events.recv().await {
+            exited |= matches!(event, crate::BackendEvent::Exited(_));
+        }
+    })
+    .await
+    .expect("the reader and the waiter end in time");
+    exited
+}
+
+/// Whether process `pid` has ended (a zombie waiting for its reaper has).
+fn gone(pid: i32) -> bool {
+    #[cfg(target_os = "linux")]
+    if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+        return stat
+            .rsplit(')')
+            .next()
+            .is_some_and(|rest| rest.trim_start().starts_with('Z'));
+    }
+    nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_err()
+}
+
+/// Waits up to five seconds for process `pid` to end; whether it did.
+async fn ends(pid: i32) -> bool {
+    for _ in 0..500 {
+        if gone(pid) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    false
+}
+
+#[tokio::test]
+async fn a_program_that_ignores_hangup_and_term_is_killed_with_its_group() {
+    let dir = tempfile::tempdir().expect("temp");
+    let spawned = sh_c(
+        "trap '' HUP TERM; sleep 600 & echo $! > bg; sleep 600",
+        dir.path(),
+    );
+    let background = pid_in(dir.path(), "bg").await;
+    let started = std::time::Instant::now();
+    spawned.backend.shutdown();
+    assert!(until_closed(spawned.events, Duration::from_secs(20)).await);
+    assert!(
+        started.elapsed() >= super::ending::END_GRACE * 2,
+        "only SIGKILL ends it, after both graces"
+    );
+    assert!(ends(background).await, "the background job ended with it");
+}
+
+#[tokio::test]
+async fn a_program_that_ends_on_hangup_ends_at_once() {
+    let dir = tempfile::tempdir().expect("temp");
+    let spawned = sh_c("sleep 600 & echo $! > bg; sleep 600", dir.path());
+    let background = pid_in(dir.path(), "bg").await;
+    let started = std::time::Instant::now();
+    spawned.backend.shutdown();
+    assert!(until_closed(spawned.events, Duration::from_secs(10)).await);
+    assert!(
+        started.elapsed() < super::ending::END_GRACE,
+        "no SIGTERM, so no SIGKILL either: {:?}",
+        started.elapsed()
+    );
+    assert!(ends(background).await);
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn sigterm_ends_the_group_but_not_a_detached_process() {
+    let dir = tempfile::tempdir().expect("temp");
+    let spawned = sh_c(
+        "trap '' HUP; setsid sleep 600 </dev/null >/dev/null 2>&1 & echo $! > detached; \
+         sleep 600 & echo $! > bg; sleep 600",
+        dir.path(),
+    );
+    let detached = pid_in(dir.path(), "detached").await;
+    let background = pid_in(dir.path(), "bg").await;
+    spawned.backend.shutdown();
+    assert!(until_closed(spawned.events, Duration::from_secs(20)).await);
+    assert!(ends(background).await, "the background job ended with it");
+    let survived = !gone(detached);
+    let _ = nix::sys::signal::kill(
+        nix::unistd::Pid::from_raw(detached),
+        nix::sys::signal::Signal::SIGKILL,
+    );
+    assert!(survived, "a process detached with setsid runs on");
+}
+
+#[test]
+fn a_full_input_queue_refuses_a_write_rather_than_grow() {
+    let (input, queued) = std::sync::mpsc::sync_channel(crate::INPUT_QUEUE);
+    for _ in 0..crate::INPUT_QUEUE {
+        super::queue(&input, b"x".to_vec()).expect("room");
+    }
+    assert!(matches!(
+        super::queue(&input, b"x".to_vec()),
+        Err(crate::TermError::InputFull)
+    ));
+    queued.recv().expect("the writer takes one");
+    super::queue(&input, b"x".to_vec()).expect("room again");
+    drop(queued);
+    assert!(matches!(
+        super::queue(&input, b"y".to_vec()),
+        Err(crate::TermError::Exited)
+    ));
+}
+
+#[test]
+fn a_program_that_is_not_there_fails_with_its_path() {
+    let command = LocalCommand {
+        program: PathBuf::from("/nowhere/System32/wsl.exe"),
+        args: Vec::new(),
+        cwd: None,
+        env: Vec::new(),
+        end_programs_on_close: true,
+    };
+    match spawn_local(&command, TermSize::default()) {
+        Err(crate::TermError::Pty(message)) => {
+            assert!(message.contains("/nowhere/System32/wsl.exe"), "{message}");
+        }
+        other => panic!("a start error, got {other:?}"),
+    }
+}

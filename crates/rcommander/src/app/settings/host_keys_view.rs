@@ -1,6 +1,6 @@
-//! Drawing the Host keys page: the help line, the search, the table of trusted keys and
-//! certificates - one stop of the focus ring - the question before a removal, and the page's
-//! buttons.
+//! Drawing the Host keys page: the help line, the search, the table of trusted keys,
+//! certificates and revoked keys - one stop of the focus ring - the question before a removal,
+//! and the page's buttons.
 
 use iced::{
     Alignment, Element, Length,
@@ -96,10 +96,10 @@ fn entry_row<'a>(
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let selected = page.selected == Some(stored.item());
-    let host = if stored.hashed() {
-        t!("settings.host_keys.hashed").to_owned()
-    } else {
-        stored.host().to_owned()
+    let host = match stored {
+        Stored::Key(_) if !stored.hashed() => stored.host().to_owned(),
+        Stored::Certificate(_) => stored.host().to_owned(),
+        _ => stored.server(),
     };
     let port = stored
         .port()
@@ -135,6 +135,7 @@ fn entry_row<'a>(
 fn kind_of(stored: &Stored) -> String {
     match stored {
         Stored::Key(key) => key.algorithm.clone(),
+        Stored::Revoked(key) => key.algorithm.clone(),
         Stored::Certificate(_) => t!("settings.host_keys.certificate").to_owned(),
     }
 }
@@ -147,13 +148,18 @@ pub fn shown_time(stored: &str) -> String {
     }
 }
 
-/// The question before a removal: what goes, and that the next connection asks again.
+/// The question before a removal: what goes, and that the next connection asks again - or, for
+/// a revoked key, that it is judged as any other again.
 fn question<'a>(stored: &Stored) -> Element<'a, Message> {
     let text = match stored {
         Stored::Key(_) => t!("settings.host_keys.confirm_key", server = stored.server()),
         Stored::Certificate(_) => t!(
             "settings.host_keys.confirm_certificate",
             server = stored.server()
+        ),
+        Stored::Revoked(key) => t!(
+            "settings.host_keys.confirm_revoked",
+            fingerprint = key.fingerprint_sha256
         ),
     };
     layout::button_row(

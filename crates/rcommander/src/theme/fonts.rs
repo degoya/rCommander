@@ -15,7 +15,7 @@ use std::{
     borrow::Cow,
     collections::BTreeMap,
     ops::RangeInclusive,
-    sync::{Mutex, PoisonError, RwLock},
+    sync::{Mutex, RwLock},
     time::Duration,
 };
 
@@ -36,6 +36,9 @@ use iced::{
 use rc_engine::settings::{MAX_FONT_SIZE, MIN_FONT_SIZE, SettingKind};
 
 use super::{MONO_FONT, TEXT_SIZE, UI_FONT, ellipsis};
+
+use crate::recover::LockOrRecover as _;
+use crate::recover::RwLockOrRecover as _;
 
 /// The most font names kept for `Font::with_name`; a name past them draws in the default.
 pub const MAX_NAMES: usize = 64;
@@ -158,12 +161,12 @@ static FONTS: RwLock<Fonts> = RwLock::new(Fonts::DEFAULT);
 
 /// Puts `fonts` in force; the next frame draws with them.
 pub fn set_fonts(fonts: Fonts) {
-    *FONTS.write().unwrap_or_else(PoisonError::into_inner) = fonts;
+    *FONTS.write_or_recover("fonts.fonts") = fonts;
 }
 
 /// The fonts in force.
 pub fn fonts() -> Fonts {
-    *FONTS.read().unwrap_or_else(PoisonError::into_inner)
+    *FONTS.read_or_recover("fonts.fonts")
 }
 
 /// The file lists' font in force.
@@ -213,9 +216,7 @@ pub fn block_height(font: Font) -> Option<f32> {
         _ => return None,
     };
     let face = {
-        let mut system = font_system()
-            .write()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut system = font_system().write_or_recover("fonts.font_system");
         let db = system.raw().db();
         let id = db.query(&fontdb::Query {
             families: &[family],
@@ -256,7 +257,7 @@ static NAMES: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 /// `name` for `Font::with_name`: kept once for the program's life, at most [`MAX_NAMES`] names;
 /// `None` past them.
 pub fn intern(name: &str) -> Option<&'static str> {
-    let mut names = NAMES.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut names = NAMES.lock_or_recover("fonts.names");
     intern_in(&mut names, name, MAX_NAMES)
 }
 
@@ -284,9 +285,7 @@ pub struct Family {
 pub fn installed() -> Vec<Family> {
     // The names under the lock, the sorting after it (RC-080-53).
     let faces: Vec<(String, bool)> = {
-        let mut system = font_system()
-            .write()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut system = font_system().write_or_recover("fonts.font_system");
         system
             .raw()
             .db()

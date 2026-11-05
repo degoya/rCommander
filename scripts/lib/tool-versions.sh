@@ -25,6 +25,17 @@ RC_GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f24
 # dependencies"), rDownloader's pin.
 # shellcheck disable=SC2034
 RC_WASM_TOOLS_VERSION="1.261.0"
+# Fuzzing and coverage (RC-080-72; docs/development.md, "Fuzzing and coverage"): cargo-fuzz needs
+# a nightly for libFuzzer's sanitizer flags, pinned by date so a finding reproduces; the main
+# workspace stays on rust-toolchain.toml's stable. cargo-llvm-cov runs on that stable with its
+# llvm-tools component.
+# nightly-2026-11-01 stops on russh/ssh-key with E0391 (a query cycle on async drop), 2026-11-05.
+# shellcheck disable=SC2034
+RC_FUZZ_NIGHTLY="nightly-2026-10-01"
+# shellcheck disable=SC2034
+RC_CARGO_FUZZ_VERSION="0.13.2"
+# shellcheck disable=SC2034
+RC_LLVM_COV_VERSION="0.9.1"
 
 # The Rust toolchain checkout $1 pins: rust-toolchain.toml's `channel`.
 rc_rust_version() {

@@ -7,7 +7,9 @@
 //! (`certificate_unknown`, `certificate_changed` or `certificate_expired`, with its SHA-256
 //! fingerprint) and becomes a question for the window. The password goes from the vault into
 //! the configuration and leaves only in `PASS`, after the handshake; anonymous logins touch the
-//! vault not at all.
+//! vault not at all. A plain FTP login with a password asks first (`ftp.ask_plaintext`,
+//! RC-080-67): until a person allowed it, it fails with `ftp_plaintext_unconfirmed` before it
+//! connects.
 //!
 //! In a panel (RC-070-03) the session is kept and registered with the operations queue, as an
 //! SFTP backend is, so F5 and F6 reach the server; it opens in the connection's start directory,
@@ -26,7 +28,7 @@ use crate::{
     AuthMethod, Connection, ConnectionError, ConnectionId, ConnectionKind, Engine, EngineError,
     FtpDataMode, FtpEncoding, SecretKind, SecretRef,
     remote::fold,
-    settings::{FTP_RESOLVE_LINKS_KEY, stored_bool},
+    settings::{FTP_ASK_PLAINTEXT_KEY, FTP_RESOLVE_LINKS_KEY, stored_bool},
 };
 
 /// How often [`Engine::open_ftp`] logs in again when kept sessions were dropped meanwhile.
@@ -106,7 +108,8 @@ impl Engine {
     /// [`crate::EngineEvent::SecretNeeded`] when `announce`), `password_not_stored`, or the [`FtpError`] code
     /// of the failed connect or login (`ftp_login_failed`, ...); a refused certificate as
     /// `certificate_unknown`, `certificate_changed` or `certificate_expired`, after filing its
-    /// question ([`Engine::certificate_refused`]).
+    /// question ([`Engine::certificate_refused`]); a plain FTP login not allowed yet as
+    /// `ftp_plaintext_unconfirmed`, after filing its question.
     ///
     /// [`FtpError`]: rc_remote::FtpError
     pub(crate) async fn connect_ftp(
@@ -131,6 +134,14 @@ impl Engine {
             .await?
         };
         let mut config = ftp_config(&connection, password)?;
+        // Before the socket: "no" sends nothing, neither `USER` nor `PASS`.
+        if connection.kind == ConnectionKind::Ftp
+            && connection.auth_method != AuthMethod::Anonymous
+            && self.asks_plaintext().await
+            && !self.plaintext_allowed(&connection.host, connection.port)
+        {
+            return Err(self.plaintext_refused(&connection.host, connection.port));
+        }
         // Lazily by default: a listing shows links as links (RC-080-46).
         config.resolve_links = match self.db() {
             Ok(db) => stored_bool(db, FTP_RESOLVE_LINKS_KEY).await,
@@ -162,6 +173,14 @@ impl Engine {
                 Err(self.certificate_refused(*rejection).await)
             }
             Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Whether a plain FTP login asks first: the setting, on when it cannot be read.
+    async fn asks_plaintext(&self) -> bool {
+        match self.db() {
+            Ok(db) => stored_bool(db, FTP_ASK_PLAINTEXT_KEY).await,
+            Err(_) => true,
         }
     }
 
@@ -316,3 +335,7 @@ mod live_s2s_tests;
 #[cfg(test)]
 #[path = "ftp_race_tests.rs"]
 mod race_tests;
+
+#[cfg(test)]
+#[path = "ftp_plaintext_tests.rs"]
+mod plaintext_tests;

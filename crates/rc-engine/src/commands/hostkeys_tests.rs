@@ -1,4 +1,4 @@
-//! The trust store in the settings: list, search, remove, import.
+//! The trust store in the settings: list, search, remove, import; the revoked keys.
 
 use rc_db::KnownHostSource;
 use tempfile::TempDir;
@@ -46,6 +46,7 @@ async fn an_import_stores_reports_and_announces() {
     // `neg.example`'s key is the one the file revokes (RC-080-12).
     assert_eq!(report.added, 4);
     assert_eq!(report.unchanged, 0);
+    assert_eq!(report.revoked, 1, "the @revoked line is kept (RC-080-67)");
     assert!(report.conflicts.is_empty());
     assert_eq!(report.skipped.len(), 7);
     assert!(report.path.ends_with("known_hosts"));
@@ -58,7 +59,63 @@ async fn an_import_stores_reports_and_announces() {
     assert!(keys.iter().all(|key| key.source == KnownHostSource::Import));
 
     let again = import(&engine, &root, "known_hosts", PLAIN).await;
-    assert_eq!((again.added, again.unchanged), (0, 4));
+    assert_eq!((again.added, again.unchanged, again.revoked), (0, 4, 0));
+}
+
+async fn revoked(engine: &Engine, filter: Option<&str>) -> Vec<rc_db::RevokedHostKey> {
+    match engine
+        .dispatch(Command::ListRevokedHostKeys {
+            filter: filter.map(str::to_owned),
+        })
+        .await
+        .expect("list")
+    {
+        Outcome::RevokedHostKeys { keys } => keys,
+        other => panic!("revoked keys, got {other:?}"),
+    }
+}
+
+/// RC-080-67: the revoked keys are listed, searched and removed by a person, with the event.
+#[tokio::test]
+async fn revoked_keys_are_listed_searched_and_removed() {
+    let (root, engine) = engine_with_db(&[]).await;
+    import(&engine, &root, "known_hosts", PLAIN).await;
+    let keys = revoked(&engine, None).await;
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].hosts, "revoked.example");
+    assert!(
+        keys[0].source.ends_with("known_hosts"),
+        "{}",
+        keys[0].source
+    );
+    assert_eq!(revoked(&engine, Some("REVOKED.example")).await.len(), 1);
+    assert_eq!(revoked(&engine, Some("ed25519")).await.len(), 1);
+    assert!(revoked(&engine, Some("box.example")).await.is_empty());
+
+    let mut events = engine.subscribe();
+    let Outcome::RevokedHostKeyRemoved { key } = engine
+        .dispatch(Command::RemoveRevokedHostKey { id: keys[0].id })
+        .await
+        .expect("removed")
+    else {
+        panic!("the removed key");
+    };
+    assert_eq!(key, keys[0]);
+    assert_eq!(
+        events.try_recv().expect("an event"),
+        EngineEvent::KnownHostsChanged
+    );
+    assert!(revoked(&engine, None).await.is_empty());
+    let error = engine
+        .dispatch(Command::RemoveRevokedHostKey { id: keys[0].id })
+        .await
+        .expect_err("gone");
+    assert_eq!(error.code(), "known_host_not_found");
+    let refused = engine
+        .dispatch_mcp(Command::RemoveRevokedHostKey { id: keys[0].id })
+        .await
+        .expect_err("a person's decision");
+    assert_eq!(refused.code(), "gui_only");
 }
 
 #[tokio::test]

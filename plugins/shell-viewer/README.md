@@ -31,9 +31,12 @@ rCommander decides from the manifest's `[match]` without running the plugin, the
 
 - **By extension**: `.sh`, `.bash`, `.zsh`, `.ksh`.
 - **Dot files**: rCommander takes what follows a name's last dot as its extension, so
-  `.bashrc`, `.bash_profile`, `.profile` and `.zshrc` match by extension - and so does
-  `/etc/bash.bashrc`. A name without any dot has no extension: `/etc/profile` is not offered
-  unless it starts with a shebang below.
+  `.bashrc`, `.bash_profile`, `.bash_login`, `.bash_logout`, `.bash_aliases`, `.profile`,
+  `.zshrc`, `.zshenv`, `.zprofile`, `.zlogin`, `.zlogout`, `.kshrc` and direnv's `.envrc` match
+  by extension - and so does `/etc/bash.bashrc`. A name without any dot has no extension:
+  `/etc/profile` is not offered unless it starts with a shebang below.
+- **By name** (`[match] names`, rCommander 0.19.0 and later): `PKGBUILD` and `APKBUILD`, the
+  package recipes of Arch Linux and Alpine, before every extension and without regard to case.
 - **By shebang**, for a script without an extension: a file starting with one of `#!/bin/sh`,
   `#!/bin/bash`, `#!/bin/zsh`, `#!/bin/ksh`, `#!/bin/dash`, `#!/usr/bin/bash`, `#!/usr/bin/zsh`,
   `#!/usr/local/bin/bash`, `#!/usr/local/bin/zsh`, `#!/usr/bin/env sh`, `#!/usr/bin/env bash`,

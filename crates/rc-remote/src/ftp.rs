@@ -56,3 +56,30 @@ pub use vfs::FtpVfs;
 /// The filter directive a `log`/`tracing` subscriber must include: suppaftp's `trace` lines
 /// carry the `PASS` command in clear.
 pub const LOG_FILTER: &str = "suppaftp=debug";
+
+/// A raw `MLSD` (`mlsd`) or `LIST` answer as [`FtpVfs`] reads it: split into lines, each decoded
+/// as a server without UTF-8 sends it in `fallback`, the lines that name no safe entry left out.
+/// The fuzz target's way into the private parser (`fuzz/`, RC-080-72); not an API.
+#[doc(hidden)]
+#[must_use]
+pub fn parse_listing(
+    bytes: &[u8],
+    mlsd: bool,
+    fallback: NameEncoding,
+    now: std::time::SystemTime,
+) -> Vec<rc_vfs::Entry> {
+    let wire = encoding::Wire::negotiate(false, fallback);
+    let dialect = if mlsd {
+        listing::Dialect::Mlsd
+    } else {
+        listing::Dialect::List
+    };
+    bytes
+        .split(|&byte| byte == b'\n')
+        .filter_map(|line| listing::parse_line(&wire.decode(line), dialect, now))
+        .collect()
+}
+
+#[cfg(test)]
+#[path = "ftp_tests.rs"]
+mod tests;

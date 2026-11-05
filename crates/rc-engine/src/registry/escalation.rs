@@ -46,6 +46,11 @@ pub const ESCALATIONS: &[Escalation] = &[
         when: "a limit is lowered below the one in force",
     },
     Escalation {
+        id: "file.set_attributes",
+        class: CommandClass::Destructive,
+        when: "the mode makes it writable by its group (g+w)",
+    },
+    Escalation {
         id: "login_scripts.create",
         class: CommandClass::Exec,
         when: "it brings steps",
@@ -125,6 +130,10 @@ impl Command {
             Self::SaveConnection(request) => request.login_script.is_some(),
             Self::CreateLoginScript { script } => !script.steps.is_empty(),
             Self::UpdateLoginScript { patch, .. } => patch.steps.is_some(),
+            // Others may then change the entry - or, for a folder, its contents (RC-080-66).
+            Self::SetFileAttributes { change, .. } => {
+                change.mode.is_some_and(|mode| mode & 0o020 != 0)
+            }
             _ => false,
         }
     }

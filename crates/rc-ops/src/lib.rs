@@ -44,6 +44,7 @@ mod checksum;
 mod conflict;
 mod control;
 mod copy;
+mod copy_dirs;
 mod delete;
 mod dir_size;
 mod error;
@@ -51,6 +52,7 @@ mod event;
 mod extract;
 mod job;
 mod journal;
+mod links;
 pub mod mask;
 mod name;
 mod pack;
@@ -58,6 +60,7 @@ mod persist;
 mod progress;
 mod queue;
 mod read_guard;
+mod recover;
 mod rename;
 mod resume;
 mod runner;
@@ -81,6 +84,7 @@ pub use job::{
     DeleteMode, ErrorPolicy, Failure, JobId, JobKind, JobOptions, JobSnapshot, JobSpec, JobState,
 };
 pub use journal::StepJournal;
+pub use links::CopyLinks;
 pub use name::{check_name, check_target, keeps_windows_rules};
 pub use pack::{PackFormat, PackSettings};
 pub use persist::{FileMark, MARK_MIN_BYTES, SavedJob, TransferStore, is_kept};
@@ -91,6 +95,7 @@ pub use queue::{
     Reorder, Scheduling, check_list_name, is_saveable, per_item,
 };
 pub use read_guard::{ReadGuard, ReadGuards};
+pub use rename::ParkedName;
 pub use resume::{
     DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, Reconnect, RetryPolicy, TAIL_CHECK,
     is_connection_lost,

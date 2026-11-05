@@ -10,6 +10,9 @@
 //! dialog, before another one can be trusted. The keyboard starts on Cancel - Enter alone never
 //! trusts anything.
 //!
+//! A plain FTP connection asks the same way before its password crosses the network unencrypted
+//! (RC-080-67): "Send this time", "Send until rCommander ends" and "Cancel", nothing stored.
+//!
 //! The answers are the engine's `GuiOnly` command `certificates.answer`; the dialog only sends
 //! the choices it shows. While a question is open the dialog has the keys - Tab and the arrows
 //! move between the buttons, Enter chooses, Escape cancels - and the clicks.
@@ -52,7 +55,7 @@ impl Question for CertificateQuestion {
 
     fn buttons(&self, (): ()) -> &'static [Choice] {
         match &self.kind {
-            CertificateQuestionKind::Unknown => {
+            CertificateQuestionKind::Unknown | CertificateQuestionKind::Plaintext => {
                 &[Choice::AcceptOnce, Choice::TrustAndSave, Choice::Cancel]
             }
             CertificateQuestionKind::Expired { .. } => &[Choice::AcceptOnce, Choice::Cancel],
@@ -82,6 +85,8 @@ pub enum CertTrustMsg {
     Finished {
         id: u64,
         server: String,
+        /// A plain FTP connection's question (RC-080-67).
+        plaintext: bool,
         result: Box<Result<Outcome, &'static str>>,
     },
 }
@@ -91,6 +96,8 @@ pub struct CertTrustJob {
     question: u64,
     /// `host:port`, for the status bar: the question may be closed before the reply arrives.
     server: String,
+    /// Whether it is a plain FTP connection's question, for the status bar's words.
+    plaintext: bool,
     answer: CertificateAnswer,
 }
 
@@ -107,6 +114,7 @@ impl CertTrustJob {
         CertTrustMsg::Finished {
             id: self.question,
             server: self.server,
+            plaintext: self.plaintext,
             result: Box::new(result),
         }
     }
@@ -145,8 +153,13 @@ impl App {
                     return self.cert_trust_choice(choice);
                 }
             }
-            CertTrustMsg::Finished { id, server, result } => {
-                self.cert_trust_finished(id, &server, *result);
+            CertTrustMsg::Finished {
+                id,
+                server,
+                plaintext,
+                result,
+            } => {
+                self.cert_trust_finished(id, &server, plaintext, *result);
             }
         }
         Vec::new()
@@ -168,6 +181,7 @@ impl App {
             return Vec::new();
         };
         let id = shown.id;
+        let plaintext = shown.kind == CertificateQuestionKind::Plaintext;
         let server = format!("{}:{}", shown.host, shown.port);
         let answer = match choice {
             Choice::AcceptOnce => CertificateAnswer::AcceptOnce,
@@ -178,6 +192,7 @@ impl App {
         vec![Effect::CertTrust(CertTrustJob {
             question: id,
             server,
+            plaintext,
             answer,
         })]
     }
@@ -188,19 +203,28 @@ impl App {
         &mut self,
         id: u64,
         server: &str,
+        plaintext: bool,
         result: Result<Outcome, &'static str>,
     ) {
-        let result = result.map(|outcome| match outcome {
-            Outcome::CertificateAnswered {
-                answer: CertificateAnswer::AcceptOnce,
-                ..
-            } => t!("certs.info_once", host = server),
-            Outcome::CertificateAnswered {
-                answer: CertificateAnswer::TrustAndSave,
-                ..
-            } => t!("certs.info_saved", host = server),
-            // A cancel, the only answer left.
-            _ => t!("certs.info_cancelled", host = server),
+        let result = result.map(|outcome| {
+            let answer = match outcome {
+                Outcome::CertificateAnswered { answer, .. } => answer,
+                _ => CertificateAnswer::Cancel,
+            };
+            match (plaintext, answer) {
+                (false, CertificateAnswer::AcceptOnce) => t!("certs.info_once", host = server),
+                (false, CertificateAnswer::TrustAndSave) => t!("certs.info_saved", host = server),
+                (false, CertificateAnswer::Cancel) => t!("certs.info_cancelled", host = server),
+                (true, CertificateAnswer::AcceptOnce) => {
+                    t!("certs.plaintext_info_once", host = server)
+                }
+                (true, CertificateAnswer::TrustAndSave) => {
+                    t!("certs.plaintext_info_always", host = server)
+                }
+                (true, CertificateAnswer::Cancel) => {
+                    t!("certs.plaintext_info_cancelled", host = server)
+                }
+            }
         });
         if let Some(info) = self.cert_trust.finished(id, result, QUESTION_GONE) {
             self.info = Some(info);

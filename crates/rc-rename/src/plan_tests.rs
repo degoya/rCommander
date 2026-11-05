@@ -245,6 +245,27 @@ fn conflict_the_new_name_is_taken_by_an_entry_that_stays() {
     assert!(!plan.has_conflicts());
 }
 
+/// RC-080-70: on macOS the new name `\u{c4}.txt` is taken by `A\u{308}.txt` - one name to APFS -
+/// and `b.txt` by `B.TXT`; the plan says so before the run, instead of the run failing.
+#[test]
+fn conflict_the_new_name_is_taken_in_another_normalisation_on_macos() {
+    let cases = [("x.txt", "A\u{308}.txt", "\u{c4}"), ("y.txt", "B.TXT", "b")];
+    for (old, there, mask) in cases {
+        let sources = [file(old)];
+        let existing = [old, there];
+        let rule = rule(mask, "[E]");
+        let macos = planned(&sources, &existing, FsRules::MACOS, &rule).expect("plans");
+        assert_eq!(
+            macos.items[0].conflict,
+            Some(Conflict::TargetExists),
+            "{:?}",
+            lines(&macos)
+        );
+        let linux = planned(&sources, &existing, FsRules::UNIX, &rule).expect("plans");
+        assert!(!linux.has_conflicts(), "{:?}", lines(&linux));
+    }
+}
+
 #[test]
 fn a_name_that_is_renamed_away_is_free_and_one_that_stays_is_not() {
     // A swap: the counter counts down, `1.txt -> 2.txt` and `2.txt -> 1.txt`.

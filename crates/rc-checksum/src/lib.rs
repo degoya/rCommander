@@ -25,6 +25,7 @@ mod create;
 mod error;
 mod format;
 mod names;
+mod recover;
 mod split;
 mod verify;
 

@@ -250,3 +250,68 @@ fn the_text_of_a_large_file_is_written_in_windows() {
     assert_eq!(text.len() as u64, size);
     assert!(viewer.src.largest_read <= OPEN_CHUNK);
 }
+
+/// RC-100-80: a sample of each file the viewer took on by name or extension - shell start files,
+/// direnv's `.envrc`, Arch's `PKGBUILD` and Alpine's `APKBUILD` - and a plain `.sh`, coloured
+/// rather than plain. The file names only choose the plugin (`manifest.toml`); `probe` and the
+/// lexer read the content alone.
+#[test]
+fn the_shell_start_files_and_package_recipes_are_coloured() {
+    use crate::types::TokenClass::{Comment, Function, Key, Keyword};
+    let classes = |text: &str| -> Vec<TokenClass> {
+        crate::test_support::highlighted(text.as_bytes())
+            .into_iter()
+            .flatten()
+            .map(|(class, _)| class)
+            .collect()
+    };
+    let cases: [(&str, &str, &[TokenClass]); 12] = [
+        (
+            ".zshenv",
+            "export PATH=\"$HOME/bin:$PATH\"\n",
+            &[Function, Key],
+        ),
+        (
+            ".zprofile",
+            "if [[ -o login ]]; then echo hi; fi\n",
+            &[Keyword, Function],
+        ),
+        (".zlogin", "fortune # greet\n", &[Comment]),
+        (".zlogout", "clear\nhistory -c\n", &[Function]),
+        (".bash_login", "source ~/.bashrc\n", &[Function]),
+        (
+            ".bash_logout",
+            "[ -x /usr/bin/clear ] && clear\n",
+            &[Function],
+        ),
+        (
+            ".bash_aliases",
+            "alias ll='ls -l'\n",
+            &[Function, TokenClass::String],
+        ),
+        (".kshrc", "set -o vi\nPS1='$ '\n", &[Function, Key]),
+        (".envrc", "export DEBUG=1\n", &[Function, Key]),
+        (
+            "PKGBUILD",
+            "pkgname=demo\npkgver=1.0\nbuild() {\n  make\n}\n",
+            &[Key, Function],
+        ),
+        (
+            "APKBUILD",
+            "pkgname=demo\npackage() {\n  install -Dm755 demo \"$pkgdir\"/usr/bin/demo\n}\n",
+            &[Key, Function, TokenClass::String],
+        ),
+        (
+            "deploy.sh",
+            "#!/bin/sh\necho \"$1\"\n",
+            &[Comment, Function, Key],
+        ),
+    ];
+    for (file, text, expected) in cases {
+        assert!(probe(&mut source(text)), "{file}");
+        let found = classes(text);
+        for class in expected {
+            assert!(found.contains(class), "{file}: {class:?} in {found:?}");
+        }
+    }
+}

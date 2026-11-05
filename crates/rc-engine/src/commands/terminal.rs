@@ -5,7 +5,7 @@
 use std::{
     collections::BTreeMap,
     path::PathBuf,
-    sync::{Arc, MutexGuard, PoisonError},
+    sync::{Arc, MutexGuard},
     time::Duration,
 };
 
@@ -23,6 +23,8 @@ use super::{
     ssh_login::{LoginRunCell, LoginScriptRun},
     ssh_terminal::{server_path, ssh_connection_of},
 };
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{
     ConnectionId, Engine, EngineError, EngineEvent, Outcome, PanelId, PanelView, TerminalChange,
     settings::{END_PROGRAMS_KEY, INTEGRATION_KEY},
@@ -240,10 +242,14 @@ impl Engine {
         let notice = cwd.notice_key().map(str::to_owned);
         // The default spelled out: the same shell, and the session knows the distribution's
         // share for the folders the shell reports.
+        let program = wsl_program(&ShellEnv::from_env());
+        // Asked once per distribution and run: a csh family shell quotes `!` its own way.
+        let syntax = rc_term::wsl_login_syntax(&program, target.as_deref()).await;
         let launch = WslLaunch {
-            program: wsl_program(&ShellEnv::from_env()),
+            program,
             distro: target,
             cwd,
+            syntax,
         };
         let integration = if self.setting_on(INTEGRATION_KEY).await {
             Some(Integration::wsl(&InheritedEnv::from_env()))
@@ -409,10 +415,7 @@ impl Engine {
     }
 
     pub(super) fn terminals(&self) -> MutexGuard<'_, BTreeMap<TermId, Terminal>> {
-        self.inner
-            .terminals
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        self.inner.terminals.lock_or_recover("terminal.terminals")
     }
 
     pub(super) fn terminal(
@@ -474,6 +477,7 @@ async fn off_runtime<T: Send + 'static>(
 ) -> Result<T, TermError> {
     tokio::task::spawn_blocking(start)
         .await
+        .log_panic("engine.terminal_start")
         .unwrap_or_else(|join| Err(TermError::Pty(join.to_string())))
 }
 

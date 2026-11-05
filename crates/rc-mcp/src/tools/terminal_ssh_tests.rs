@@ -171,7 +171,8 @@ async fn screen_with(
 ) -> String {
     let started = Instant::now();
     loop {
-        let screen = call(
+        // Reading the screen asks, as a destructive call does (RC-080-66).
+        let screen = confirmed(
             client,
             "terminal_read_screen",
             json!({ "terminal": terminal, "scrollback": 100 }),

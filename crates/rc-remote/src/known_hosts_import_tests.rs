@@ -148,6 +148,12 @@ async fn read_takes_a_file_and_reports_a_missing_one() {
     std::fs::write(&path, HASHED).expect("write");
     assert_eq!(read(&path).await.expect("read").entries.len(), 2);
     assert!(read(&dir.path().join("missing")).await.is_err());
+
+    // A revoked key read from a file names the file as its source (RC-080-67).
+    std::fs::write(&path, PLAIN).expect("write");
+    let revoked = read(&path).await.expect("read").revoked;
+    assert_eq!(revoked.len(), 1);
+    assert_eq!(revoked[0].source, path.display().to_string());
 }
 
 /// RC-080-12 (X7): a key a `@revoked` line names is imported from no line, before or after it;
@@ -189,4 +195,15 @@ fn a_revoked_key_is_imported_from_no_line() {
             (3, SkipReason::Revoked, Some("late.example")),
         ]
     );
+    // RC-080-67: the revoked key is kept, once, with the line's names as written.
+    assert_eq!(parsed.revoked.len(), 1);
+    assert_eq!(
+        parsed.revoked[0].fingerprint_sha256,
+        key(ED25519).fingerprint
+    );
+    assert_eq!(parsed.revoked[0].public_key, key(ED25519).public_key);
+    assert_eq!(parsed.revoked[0].hosts, "*");
+    assert!(parsed.revoked[0].source.is_empty(), "parse knows no file");
+    let twice = parse(&[text.clone(), line("@revoked ", "again.example", ED25519)].concat());
+    assert_eq!(twice.revoked.len(), 1, "one row per key");
 }

@@ -9,6 +9,7 @@ use anyhow::{Context, Result, bail};
 use base64::Engine as _;
 
 use super::grants::{NET_HTTP, net_http};
+use super::names::validate_names;
 use super::sections::KNOWN_CAPABILITIES;
 use super::settings::validate_settings;
 use super::{
@@ -118,6 +119,10 @@ fn validate_kind(manifest: &PluginManifest) -> Result<()> {
                 }
             }
             validate_match(&manifest.matching)?;
+            validate_names(
+                &manifest.matching.names,
+                manifest.metadata.min_app_version.as_deref(),
+            )?;
             // The viewer world imports no granted interface (docs/plugins.md, "The worlds").
             if let Some(name) = manifest.capabilities.declared.keys().next() {
                 bail!("a viewer plugin cannot be granted the capability `{name}`");
@@ -130,6 +135,7 @@ fn validate_kind(manifest: &PluginManifest) -> Result<()> {
             // It is asked for a connection's secret, never offered a file.
             if manifest.viewer.is_some()
                 || !manifest.matching.extensions.is_empty()
+                || !manifest.matching.names.is_empty()
                 || !manifest.matching.magic.is_empty()
             {
                 bail!("a secret source has no [viewer] section and claims no file in [match]");
@@ -150,8 +156,8 @@ fn validate_kind(manifest: &PluginManifest) -> Result<()> {
 }
 
 fn validate_match(matching: &MatchSection) -> Result<()> {
-    if matching.extensions.is_empty() && matching.magic.is_empty() {
-        bail!("[match] must name an extension or a magic, or no file is ever offered");
+    if matching.extensions.is_empty() && matching.names.is_empty() && matching.magic.is_empty() {
+        bail!("[match] must name an extension, a name or a magic, or no file is ever offered");
     }
     if matching.extensions.len() > MAX_EXTENSIONS {
         bail!("[match] names more than {MAX_EXTENSIONS} extensions");

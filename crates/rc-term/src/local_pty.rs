@@ -11,7 +11,8 @@
 //! Ending: on Windows the program is in a job object of its own (`job.rs`, RC-040-06), so a
 //! closed terminal ends it and what it started, and rCommander's end - however it comes - ends
 //! them too; [`LocalCommand::end_programs_on_close`] says whether what it started is in the job.
-//! Elsewhere the PTY's end hangs the program up.
+//! Elsewhere the close hangs the program up (`SIGHUP`); one that ignores it gets `SIGTERM` and
+//! then `SIGKILL`, each after [`ending::END_GRACE`] (`ending.rs`, `hangup.rs`, RC-080-62).
 //!
 //! Console window: a program started into a pseudo console never gets a window of its own, so
 //! the `NoConsoleWindow` flag of `rc-process` (which only applies to `std`/`tokio` `Command`) is
@@ -21,8 +22,9 @@ use std::{
     io::{Read, Write},
     path::PathBuf,
     sync::{
-        Arc, Mutex, PoisonError,
-        mpsc::{self as std_mpsc, RecvTimeoutError},
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc as std_mpsc,
     },
     thread,
     time::Duration,
@@ -31,8 +33,12 @@ use std::{
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tokio::sync::mpsc;
 
-use crate::{BackendEvent, Spawned, TermBackend, TermError, TermSize};
+use crate::recover::LockOrRecover as _;
+use crate::{BackendEvent, INPUT_QUEUE, Spawned, TermBackend, TermError, TermSize};
 
+mod ending;
+#[cfg(unix)]
+mod hangup;
 #[cfg(windows)]
 mod job;
 #[cfg(not(windows))]
@@ -96,8 +102,15 @@ pub fn default_env() -> Vec<(String, String)> {
 /// # Errors
 ///
 /// [`TermError::Pty`] when the PTY cannot be opened, the program not started or a thread not
-/// spawned.
+/// spawned; for a program named by a full path that is not there, with that path.
 pub fn spawn_local(command: &LocalCommand, size: TermSize) -> Result<Spawned, TermError> {
+    // A system program missing from System32 (RC-080-65) says where it was looked for.
+    if command.program.is_absolute() && !command.program.is_file() {
+        return Err(TermError::Pty(format!(
+            "{} was not found",
+            command.program.display()
+        )));
+    }
     let pair = native_pty_system()
         .openpty(pty_size(size))
         .map_err(pty_error)?;
@@ -115,11 +128,12 @@ pub fn spawn_local(command: &LocalCommand, size: TermSize) -> Result<Spawned, Te
     let process_id = child.process_id();
     // By the process handle, never the id: an id may name another process once this one ended.
     let job = job::Job::of(&*child, command.end_programs_on_close);
-    let killer = Arc::new(Killer {
+    let life = Arc::new(ending::Life::default());
+    let killer = Killer {
         killer: Mutex::new(child.clone_killer()),
-        exited: Mutex::new(false),
-    });
-    let started = start_threads(pair.master, &killer, move || child.wait());
+        life: Arc::clone(&life),
+    };
+    let started = start_threads(pair.master, &life, move || child.wait());
     match started {
         Ok((input, master, events)) => Ok(Spawned {
             backend: Box::new(LocalPty {
@@ -128,6 +142,8 @@ pub fn spawn_local(command: &LocalCommand, size: TermSize) -> Result<Spawned, Te
                 killer,
                 job,
                 process_id,
+                end_programs_on_close: command.end_programs_on_close,
+                closing: AtomicBool::new(false),
             }),
             events,
         }),
@@ -142,7 +158,7 @@ type SharedMaster = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
 
 /// The input sender, the shared master and the event receiver [`start_threads`] hands back.
 type Threads = (
-    std_mpsc::Sender<Vec<u8>>,
+    std_mpsc::SyncSender<Vec<u8>>,
     SharedMaster,
     mpsc::Receiver<BackendEvent>,
 );
@@ -150,21 +166,24 @@ type Threads = (
 /// The reader, writer and waiter threads; what the back end keeps of them.
 fn start_threads(
     master: Box<dyn MasterPty + Send>,
-    killer: &Arc<Killer>,
+    life: &Arc<ending::Life>,
     wait: impl FnOnce() -> std::io::Result<portable_pty::ExitStatus> + Send + 'static,
 ) -> Result<Threads, TermError> {
     let reader = master.try_clone_reader().map_err(pty_error)?;
     let writer = master.take_writer().map_err(pty_error)?;
     let master: SharedMaster = Arc::new(Mutex::new(Some(master)));
     let (events, receiver) = mpsc::channel(OUTPUT_QUEUE);
-    let (input, queued) = std_mpsc::channel::<Vec<u8>>();
-    let (drained, drained_signal) = std_mpsc::channel::<()>();
+    let (input, queued) = std_mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
 
     let output = events.clone();
-    spawn_thread("rc-term-read", move || read_loop(reader, &output, drained))?;
+    let reader_life = Arc::clone(life);
+    spawn_thread("rc-term-read", move || {
+        read_loop(reader, &output);
+        reader_life.mark_drained();
+    })?;
     spawn_thread("rc-term-write", move || write_loop(writer, &queued))?;
     let waiter_master = Arc::clone(&master);
-    let waiter_killer = Arc::clone(killer);
+    let waiter_life = Arc::clone(life);
     spawn_thread("rc-term-wait", move || {
         let code = match wait() {
             Ok(status) => Some(status.exit_code()),
@@ -173,25 +192,18 @@ fn start_threads(
                 None
             }
         };
-        waiter_killer.mark_exited();
+        waiter_life.mark_exited();
         // Closes the pseudo console on Windows, so the reader sees its end of file there.
         drop(lock(&waiter_master).take());
-        match drained_signal.recv_timeout(DRAIN_GRACE) {
-            Ok(()) | Err(RecvTimeoutError::Disconnected) => {}
-            Err(RecvTimeoutError::Timeout) => {
-                tracing::debug!("the terminal's output is still held open after its exit");
-            }
+        if !waiter_life.wait_drained(DRAIN_GRACE) {
+            tracing::debug!("the terminal's output is still held open after its exit");
         }
         let _ = events.blocking_send(BackendEvent::Exited(code));
     })?;
     Ok((input, master, receiver))
 }
 
-fn read_loop(
-    mut reader: Box<dyn Read + Send>,
-    output: &mpsc::Sender<BackendEvent>,
-    drained: std_mpsc::Sender<()>,
-) {
+fn read_loop(mut reader: Box<dyn Read + Send>, output: &mpsc::Sender<BackendEvent>) {
     let mut buffer = vec![0_u8; READ_CHUNK];
     loop {
         match reader.read(&mut buffer) {
@@ -206,7 +218,6 @@ fn read_loop(
             Err(_) => break,
         }
     }
-    let _ = drained.send(());
 }
 
 fn write_loop(mut writer: Box<dyn Write + Send>, queued: &std_mpsc::Receiver<Vec<u8>>) {
@@ -221,6 +232,14 @@ fn write_loop(mut writer: Box<dyn Write + Send>, queued: &std_mpsc::Receiver<Vec
     }
 }
 
+/// Queues `bytes` for the writer thread, never waiting for room (RC-080-65).
+fn queue(input: &std_mpsc::SyncSender<Vec<u8>>, bytes: Vec<u8>) -> Result<(), TermError> {
+    input.try_send(bytes).map_err(|error| match error {
+        std_mpsc::TrySendError::Full(_) => TermError::InputFull,
+        std_mpsc::TrySendError::Disconnected(_) => TermError::Exited,
+    })
+}
+
 fn spawn_thread(name: &str, body: impl FnOnce() + Send + 'static) -> Result<(), TermError> {
     thread::Builder::new()
         .name(name.to_owned())
@@ -233,32 +252,33 @@ fn spawn_thread(name: &str, body: impl FnOnce() + Send + 'static) -> Result<(), 
 /// another process.
 struct Killer {
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
-    exited: Mutex<bool>,
+    life: Arc<ending::Life>,
 }
 
 impl Killer {
     fn kill(&self) {
-        let exited = lock(&self.exited);
-        if !*exited {
+        self.life.unless_exited(|| {
             let _ = lock(&self.killer).kill();
-        }
-    }
-
-    fn mark_exited(&self) {
-        *lock(&self.exited) = true;
+        });
     }
 }
 
 /// The back end of a local program.
 struct LocalPty {
     /// `None` after [`TermBackend::shutdown`].
-    input: Mutex<Option<std_mpsc::Sender<Vec<u8>>>>,
+    input: Mutex<Option<std_mpsc::SyncSender<Vec<u8>>>>,
     /// `None` once the program has ended.
     master: SharedMaster,
-    killer: Arc<Killer>,
+    killer: Killer,
     /// The program's job object (Windows): ended with the terminal, closed with rCommander.
     job: Option<job::Job>,
     process_id: Option<u32>,
+    /// `terminal.end_programs_on_close`: on Unix whether the escalation after the hang-up goes
+    /// to the program's groups or to the program alone (`hangup.rs`).
+    #[cfg_attr(not(unix), allow(dead_code, reason = "read by the Unix escalation"))]
+    end_programs_on_close: bool,
+    /// Set by the first [`TermBackend::shutdown`]; a second one starts nothing.
+    closing: AtomicBool,
 }
 
 impl TermBackend for LocalPty {
@@ -267,7 +287,7 @@ impl TermBackend for LocalPty {
             return Err(TermError::Exited);
         }
         match lock(&self.input).as_ref() {
-            Some(input) => input.send(bytes).map_err(|_| TermError::Exited),
+            Some(input) => queue(input, bytes),
             None => Err(TermError::Exited),
         }
     }
@@ -287,11 +307,42 @@ impl TermBackend for LocalPty {
         if let Some(job) = &self.job {
             job.kill();
         }
+        if !self.closing.swap(true, Ordering::SeqCst) {
+            self.after_hangup();
+        }
     }
 
     fn process_id(&self) -> Option<u32> {
         self.process_id
     }
+}
+
+impl LocalPty {
+    /// Unix: lets the master go now rather than with the waiter, and starts the escalation for
+    /// a program that still runs (RC-080-62).
+    #[cfg(unix)]
+    fn after_hangup(&self) {
+        let master = lock(&self.master).take();
+        // Read before the master goes: the group an interactive shell runs its program in.
+        let foreground = master
+            .as_ref()
+            .and_then(|master| master.process_group_leader());
+        drop(master);
+        if let Some(program) = self.process_id {
+            self.killer.life.unless_exited(|| {
+                hangup::after_hangup(
+                    &self.killer.life,
+                    program,
+                    foreground,
+                    self.end_programs_on_close,
+                );
+            });
+        }
+    }
+
+    /// Windows: the job object has ended the program and what it started.
+    #[cfg(not(unix))]
+    fn after_hangup(&self) {}
 }
 
 impl Drop for LocalPty {
@@ -314,7 +365,7 @@ fn pty_error(error: impl std::fmt::Display) -> TermError {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+    mutex.lock_or_recover("local_pty.mutex")
 }
 
 #[cfg(all(test, unix))]

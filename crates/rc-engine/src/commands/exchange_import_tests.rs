@@ -198,6 +198,29 @@ async fn a_changed_damaged_or_oversized_file_changes_nothing() {
     assert!(names(&engine).await.is_empty());
 }
 
+/// RC-080-68: a seal that asks argon2 for 1 GiB is refused as too costly before anything is
+/// derived - a derivation would have ended in a wrong password, after a gigabyte and seconds.
+#[tokio::test]
+async fn a_seal_asking_for_a_gigabyte_is_refused_before_argon2_runs() {
+    let source = tempfile::tempdir().expect("dir");
+    let path = sealed_export(source.path()).await;
+    let target = tempfile::tempdir().expect("dir");
+    let engine = engine_in(target.path()).await;
+    let text = std::fs::read_to_string(&path).expect("read");
+    let mut file: serde_json::Value = serde_json::from_str(&text).expect("json");
+    file["sealed"]["m_cost_kib"] = serde_json::Value::from(1024 * 1024);
+    let costly = target.path().join("costly.rcexport");
+    std::fs::write(&costly, file.to_string()).expect("written");
+    let started = std::time::Instant::now();
+    let refused = engine
+        .dispatch(import(&costly, Some(EXPORT_PASSWORD), true, None))
+        .await
+        .expect_err("refused");
+    assert_eq!(refused.code(), "exchange_kdf_too_costly");
+    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    assert!(names(&engine).await.is_empty());
+}
+
 #[tokio::test]
 async fn a_bad_row_is_refused_alone_and_no_value_reaches_an_error() {
     let target = tempfile::tempdir().expect("dir");

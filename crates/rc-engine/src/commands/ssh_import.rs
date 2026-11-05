@@ -15,6 +15,7 @@ use std::{
 use rc_db::connections::{ImportCandidate, ImportStatus, ImportTarget};
 use rc_vfs::BackendId;
 
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, FolderId, Outcome, TreeChange, TreeItem,
     import::{
@@ -86,6 +87,7 @@ impl Engine {
         let (found, canonical) =
             tokio::task::spawn_blocking(move || read_config(&path, &user, mcp))
                 .await
+                .log_panic("engine.ssh_config_read")
                 .map_err(|error| EngineError::SshConfigUnreadable {
                     path: shown.clone(),
                     source: io::Error::other(error),

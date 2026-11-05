@@ -146,6 +146,34 @@ async fn a_refused_export_writes_nothing() {
     assert_eq!(std::fs::read_to_string(&path).expect("kept"), "keep");
 }
 
+/// RC-080-68: a file with secrets takes an export password as long as a master password -
+/// seven characters are refused before anything is written; without secrets any password seals.
+#[tokio::test]
+async fn a_short_export_password_is_refused_for_secrets() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (engine, _) = seeded(dir.path()).await;
+    let path = dir.path().join("short.rcexport");
+    let short = engine
+        .dispatch(export(&path, ExportParts::ALL, Some("seven77"), true))
+        .await
+        .expect_err("too short");
+    assert_eq!(short.code(), "exchange_password_short");
+    assert!(!path.exists());
+    let report = written(
+        engine
+            .dispatch(export(&path, ExportParts::ALL, Some("eight888"), true))
+            .await,
+    );
+    assert!(report.encrypted && report.secrets);
+    let settings = dir.path().join("settings.rcexport");
+    let report = written(
+        engine
+            .dispatch(export(&settings, parts(1), Some("pw"), true))
+            .await,
+    );
+    assert!(report.encrypted && !report.secrets);
+}
+
 #[tokio::test]
 async fn the_vault_is_asked_only_for_secrets_and_the_choice_is_kept() {
     let dir = tempfile::tempdir().expect("dir");

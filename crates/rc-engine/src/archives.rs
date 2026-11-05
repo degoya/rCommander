@@ -11,7 +11,7 @@ use std::{
     collections::{BTreeMap, VecDeque},
     path::{Component, Path, PathBuf},
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -23,6 +23,7 @@ use rc_vfs::{
 };
 use serde_json::Value;
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     Engine, EngineError,
     settings::{DECODER_MEMORY_KEY, stored_setting},
@@ -59,7 +60,7 @@ impl Default for ArchiveCatalog {
 
 impl ArchiveCatalog {
     fn lock(&self) -> MutexGuard<'_, VecDeque<(BackendId, Arc<ArchiveFs>)>> {
-        self.open.lock().unwrap_or_else(PoisonError::into_inner)
+        self.open.lock_or_recover("archives.open")
     }
 
     /// The limits an archive opens with: the defaults, the decoder memory as set.

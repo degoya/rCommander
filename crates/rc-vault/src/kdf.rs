@@ -8,6 +8,7 @@ use rand::Rng as _;
 use rc_db::VaultMeta;
 use zeroize::Zeroize as _;
 
+use crate::recover::LogPanic as _;
 use crate::{MasterPassword, Result, VaultError};
 
 /// The bytes of a salt; a new one for every vault and every password change.
@@ -49,6 +50,16 @@ impl KdfParams {
         p_cost: 16,
     };
 
+    /// The most a sealed export may ask for (RC-080-68): a file from elsewhere is anyone's, so
+    /// its cap is lower than the own database's [`KdfParams::MAX`] - four times the default
+    /// memory, eight passes, four lanes. Above it the import is refused before argon2 runs
+    /// ([`VaultError::TooCostly`]).
+    pub const IMPORT_MAX: Self = Self {
+        m_cost_kib: 256 * 1024,
+        t_cost: 8,
+        p_cost: 4,
+    };
+
     /// The least a vault, a password change or a sealed export may use, and a stored row or an
     /// export may name (RC-080-42): OWASP's floor for argon2id, 19 MiB and two passes. Below it
     /// a row is damaged or an attacker's - cheap to guess against - not a vault this program
@@ -59,26 +70,45 @@ impl KdfParams {
         p_cost: 1,
     };
 
-    /// The floor in force: [`KdfParams::MIN`]; in a debug build (the tests, which derive in
-    /// milliseconds with 64 KiB and one pass) argon2's own minimum only.
-    fn floor() -> Self {
+    /// argon2's own least: what the tests derive with, in milliseconds.
+    const ARGON2_LEAST: Self = Self {
+        m_cost_kib: 8,
+        t_cost: 1,
+        p_cost: 1,
+    };
+
+    /// The floor for making a key: [`KdfParams::MIN`]; in a debug build (the tests, which derive
+    /// in milliseconds with 64 KiB and one pass) argon2's own least.
+    fn make_floor() -> Self {
         if cfg!(debug_assertions) {
-            Self {
-                m_cost_kib: 8,
-                t_cost: 1,
-                p_cost: 1,
-            }
+            Self::ARGON2_LEAST
         } else {
             Self::MIN
         }
     }
 
-    /// The parameters of a stored row.
+    /// The floor for reading what this process would have made with `ours` (RC-080-68): never
+    /// above [`KdfParams::MIN`], and below it only as far as `ours` goes in a debug build. A
+    /// release build reads nothing below [`KdfParams::MIN`]; a debug build of the program, which
+    /// makes keys with [`KdfParams::DEFAULT`], neither. Only a process whose own parameters are
+    /// weaker - the tests of every crate, which `#[cfg(test)]` here does not reach - reads keys
+    /// as weak as its own.
+    fn read_floor(ours: Self) -> Self {
+        let least = Self::make_floor();
+        let pick = |min: u32, ours: u32, least: u32| min.min(ours).max(least);
+        Self {
+            m_cost_kib: pick(Self::MIN.m_cost_kib, ours.m_cost_kib, least.m_cost_kib),
+            t_cost: pick(Self::MIN.t_cost, ours.t_cost, least.t_cost),
+            p_cost: pick(Self::MIN.p_cost, ours.p_cost, least.p_cost),
+        }
+    }
+
+    /// The parameters of a stored row, read by a vault that makes its keys with `ours`.
     ///
     /// # Errors
     ///
     /// [`VaultError::BadParameters`]: another row version or KDF, or values out of range.
-    pub(crate) fn from_meta(meta: &VaultMeta) -> Result<Self> {
+    pub(crate) fn from_meta(meta: &VaultMeta, ours: Self) -> Result<Self> {
         if meta.version != crate::vault::VAULT_VERSION || meta.kdf != KDF_NAME {
             return Err(VaultError::BadParameters);
         }
@@ -88,18 +118,37 @@ impl KdfParams {
             t_cost: read(meta.t_cost)?,
             p_cost: read(meta.p_cost)?,
         };
-        params.checked()
+        params.within(Self::read_floor(ours), Self::MAX)
     }
 
-    /// The parameters when none exceeds [`KdfParams::MAX`] and none lies below the floor
-    /// ([`KdfParams::MIN`] in a release build): what a stored row or a sealed export
-    /// (`envelope.rs`) names is read back, and a new key made, only within these bounds.
+    /// The parameters for a new key when none exceeds [`KdfParams::MAX`] and none lies below the
+    /// floor ([`KdfParams::MIN`] in a release build): a vault, a password change and a sealed
+    /// export make keys only within these bounds.
     ///
     /// # Errors
     ///
     /// [`VaultError::BadParameters`] for a value out of its bounds.
     pub(crate) fn checked(self) -> Result<Self> {
-        self.within(Self::floor(), Self::MAX)
+        self.within(Self::make_floor(), Self::MAX)
+    }
+
+    /// The parameters a sealed export names, read by a process that seals with `ours`: refused
+    /// with [`VaultError::TooCostly`] above [`KdfParams::IMPORT_MAX`], before anything is
+    /// derived, and with [`VaultError::BadParameters`] below the read floor.
+    ///
+    /// # Errors
+    ///
+    /// As above.
+    pub(crate) fn checked_import(self, ours: Self) -> Result<Self> {
+        if self.above(Self::IMPORT_MAX) {
+            return Err(VaultError::TooCostly);
+        }
+        self.within(Self::read_floor(ours), Self::IMPORT_MAX)
+    }
+
+    /// Whether any value exceeds its counterpart in `max`.
+    pub(crate) fn above(self, max: Self) -> bool {
+        self.m_cost_kib > max.m_cost_kib || self.t_cost > max.t_cost || self.p_cost > max.p_cost
     }
 
     /// The parameters when each lies between `min` and `max`.
@@ -213,6 +262,7 @@ pub(crate) async fn derive(
     let password = password.duplicate();
     tokio::task::spawn_blocking(move || derive_key(&password, &salt, params))
         .await
+        .log_panic("vault.derive_key")
         .map_err(|_| VaultError::Interrupted)?
 }
 

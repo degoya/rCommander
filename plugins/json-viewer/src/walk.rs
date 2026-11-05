@@ -3,7 +3,7 @@
 
 use crate::lexer::{Kind, Lexer};
 use crate::reader::{Bytes, Reader};
-use crate::structure::Structure;
+use crate::structure::{Structure, is_key};
 use crate::types::{Failure, Source};
 
 /// The window a walk reads through.
@@ -29,14 +29,26 @@ impl<'s, 'a, S: Source> Walker<'s, 'a, S> {
     /// A walk starting at `offset`.
     pub(crate) fn new(src: &'a mut S, structure: &'s Structure, offset: u64) -> Self {
         Self {
-            lexer: Lexer::new(Reader::new(src, offset, WALK_CHUNK)).with_capture(CAPTURE_BYTES),
+            lexer: Lexer::new(Reader::new(src, offset, WALK_CHUNK))
+                .dialect(structure.dialect)
+                .with_capture(CAPTURE_BYTES),
             structure,
         }
     }
 
+    /// The offset of the walk's next byte.
+    pub(crate) fn offset(&mut self) -> u64 {
+        self.lexer.bytes_mut().offset()
+    }
+
+    /// Passes over the rest of the line, its line break included.
+    pub(crate) fn skip_line(&mut self) -> Result<bool, Failure> {
+        self.lexer.bytes_mut().skip_line()
+    }
+
     /// The next byte that is not whitespace and lies in the valid part, without taking it.
     pub(crate) fn peek(&mut self) -> Result<Option<u8>, Failure> {
-        let byte = self.lexer.skip_whitespace(&mut |_, _| {})?;
+        let byte = self.lexer.skip_whitespace(&mut |_, _, _| {})?;
         if self.lexer.bytes_mut().offset() >= self.structure.end {
             return Ok(None);
         }
@@ -117,8 +129,14 @@ impl<'s, 'a, S: Source> Walker<'s, 'a, S> {
                 }
                 Kind::Comma => expect_child |= at_top,
                 Kind::Colon => {}
-                Kind::String | Kind::Number | Kind::Literal | Kind::Invalid(_) => {
-                    if at_top && expect_child && (!object || lexeme.kind == Kind::String) {
+                Kind::String
+                | Kind::Number
+                | Kind::Literal
+                | Kind::Identifier
+                | Kind::Comment
+                | Kind::Invalid(_) => {
+                    let key = is_key(lexeme.kind, self.structure.dialect);
+                    if at_top && expect_child && (!object || key) {
                         count += 1;
                         expect_child = false;
                     }
@@ -129,21 +147,35 @@ impl<'s, 'a, S: Source> Walker<'s, 'a, S> {
     }
 }
 
+/// The quote a string starts with: `"`, or `'` in JSON5.
+fn quote_of(bytes: &[u8]) -> Option<u8> {
+    bytes
+        .first()
+        .copied()
+        .filter(|byte| matches!(byte, b'"' | b'\''))
+}
+
+/// The contents of a string in `quote`s; `whole`: its closing quote is there too.
+fn inside(bytes: &[u8], quote: u8, whole: bool) -> &[u8] {
+    let inner = bytes.get(1..).unwrap_or_default();
+    if whole {
+        inner.strip_suffix(&[quote]).unwrap_or(inner)
+    } else {
+        inner
+    }
+}
+
 /// A scalar as the tree shows it: a string decoded in its quotes, anything else as written; cut
 /// at [`PREVIEW_CHARS`]. `whole`: these are all its bytes.
 pub(crate) fn preview(bytes: &[u8], whole: bool) -> String {
-    if bytes.first() == Some(&b'"') {
-        let inner = bytes.get(1..).unwrap_or_default();
-        let inner = if whole {
-            inner.strip_suffix(b"\"").unwrap_or(inner)
-        } else {
-            inner
-        };
+    if let Some(quote) = quote_of(bytes) {
+        let inner = inside(bytes, quote, whole);
         let text = shorten(decode_string(inner, !whole), PREVIEW_CHARS, !whole);
+        let quote = char::from(quote);
         return if text.ends_with('\u{2026}') {
-            format!("\"{text}")
+            format!("{quote}{text}")
         } else {
-            format!("\"{text}\"")
+            format!("{quote}{text}{quote}")
         };
     }
     shorten(
@@ -153,15 +185,21 @@ pub(crate) fn preview(bytes: &[u8], whole: bool) -> String {
     )
 }
 
-/// A key as a label: decoded, without its quotes, cut at [`PREVIEW_CHARS`].
+/// A key as a label: decoded, without its quotes, cut at [`PREVIEW_CHARS`]; a JSON5 name
+/// without quotes as written.
 pub(crate) fn key_label(bytes: &[u8], whole: bool) -> String {
-    let inner = bytes.get(1..).unwrap_or_default();
-    let inner = if whole {
-        inner.strip_suffix(b"\"").unwrap_or(inner)
-    } else {
-        inner
-    };
-    shorten(decode_string(inner, !whole), PREVIEW_CHARS, !whole)
+    match quote_of(bytes) {
+        Some(quote) => shorten(
+            decode_string(inside(bytes, quote, whole), !whole),
+            PREVIEW_CHARS,
+            !whole,
+        ),
+        None => shorten(
+            String::from_utf8_lossy(bytes).into_owned(),
+            PREVIEW_CHARS,
+            !whole,
+        ),
+    }
 }
 
 /// At most `chars` characters, an ellipsis when cut (or when `cut` already).
@@ -190,6 +228,7 @@ pub(crate) fn decode_string(bytes: &[u8], cut: bool) -> String {
         index += 1;
         let simple = match escape {
             b'"' => Some(b'"'),
+            b'\'' => Some(b'\''),
             b'\\' => Some(b'\\'),
             b'/' => Some(b'/'),
             b'b' => Some(0x08),

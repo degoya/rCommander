@@ -8,14 +8,12 @@
 //!
 //! [`FtpConfig::resolve_links`]: crate::ftp::FtpConfig::resolve_links
 
-use std::{
-    collections::HashMap,
-    sync::{Mutex, PoisonError},
-};
+use std::{collections::HashMap, sync::Mutex};
 
 use rc_vfs::{Entry, EntryKind, TargetKind};
 
 use crate::ftp::{encoding::Wire, error::Failure, pool::Lease};
+use crate::recover::LockOrRecover as _;
 
 /// Links whose target kind a listing looks up at most; the rest stay unresolved.
 const MAX_LINK_PROBES: usize = 64;
@@ -31,7 +29,7 @@ impl Links {
     /// Fills in the links of `entries`, listed in `dir`, from what is known, and notes the
     /// others for a later look-up.
     pub(super) fn fill(&self, dir: &str, entries: &mut [Entry]) {
-        let mut known = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut known = self.0.lock_or_recover("links");
         for entry in entries.iter_mut().filter(|entry| unresolved_link(entry)) {
             let path = crate::wire::child(dir, &entry.name);
             match known.get(&path).copied() {
@@ -53,15 +51,12 @@ impl Links {
 
     /// Whether a listing showed `path` as a link.
     pub(super) fn listed(&self, path: &str) -> bool {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains_key(path)
+        self.0.lock_or_recover("links").contains_key(path)
     }
 
     /// Notes that the link `path` points at `kind`.
     pub(super) fn learn(&self, path: &str, kind: TargetKind) {
-        let mut known = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut known = self.0.lock_or_recover("links");
         if known.len() >= MAX_KNOWN && !known.contains_key(path) {
             known.clear();
         }

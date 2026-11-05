@@ -20,7 +20,7 @@
 //! as siblings. A saved list (RC-010-15) holds each job on its own; loaded, they are no batch.
 
 use std::sync::{
-    Arc, Mutex, MutexGuard, PoisonError, Weak,
+    Arc, Mutex, MutexGuard, Weak,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -31,6 +31,7 @@ use super::{
     lanes::{Lanes, Limits},
     task,
 };
+use crate::recover::LockOrRecover as _;
 use crate::{
     Answer, ConflictChoice, JobId, JobKind, JobSnapshot, JobSpec, OpsError, Question, SavedJob,
     runner::Resumption,
@@ -76,7 +77,7 @@ impl Batch {
     }
 
     fn lock(&self) -> MutexGuard<'_, Siblings> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.lock_or_recover("batch.state")
     }
 
     pub(super) fn join(&self, job: &Arc<JobShared>) {

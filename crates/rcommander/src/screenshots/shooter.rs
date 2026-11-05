@@ -7,7 +7,7 @@
 //! a picture that cannot be written end the run with the reason in the report.
 
 use std::{
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -19,6 +19,8 @@ use super::{
     out::{self, OutDir, Skipped, Taken},
     scenes::{Ask, Capture, Look, Opening, Plan, Step},
 };
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{
     app::{App, Effect, Message, dialog_windows::DialogWindow, settings::SettingsMessage},
     theme::{self, ThemeChoice},
@@ -352,7 +354,8 @@ impl Shooter {
                 let written = tokio::task::spawn_blocking(move || {
                     out::write_png(&path, &picture.rgba, width, height)
                 })
-                .await;
+                .await
+                .log_panic("app.screenshot_write");
                 match written {
                     Ok(Ok(())) => Ok(Taken {
                         file: format!("{name}.png"),
@@ -371,8 +374,7 @@ impl Shooter {
     /// A scene's picture is written: its questions close, the next scene begins.
     fn taken(&mut self, taken: Taken) -> Task<Shot> {
         self.report
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("shooter.report")
             .shots
             .push(taken);
         let mut tasks: Vec<Task<Shot>> = std::mem::take(&mut self.raised)
@@ -392,8 +394,7 @@ impl Shooter {
         self.done = true;
         if let Some(error) = error {
             self.report
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
+                .lock_or_recover("shooter.report")
                 .error
                 .get_or_insert(error);
         }

@@ -33,6 +33,10 @@ pub enum TermError {
     /// Typed input is held: a login script talks to the program until it ends.
     #[error("a login script is running; the terminal takes input when it ends (Ctrl+C stops it)")]
     Busy,
+    /// The program has not read its input for a while: the queue to it is full, these bytes
+    /// were not sent (RC-080-65).
+    #[error("the terminal's program is not reading its input; nothing was sent")]
+    InputFull,
 }
 
 impl TermError {
@@ -46,6 +50,7 @@ impl TermError {
         "wsl_unavailable",
         "wsl_distro_not_found",
         "terminal_busy",
+        "terminal_input_full",
     ];
 
     /// The stable code.
@@ -60,6 +65,7 @@ impl TermError {
             Self::WslUnavailable => "wsl_unavailable",
             Self::UnknownDistro(_) => "wsl_distro_not_found",
             Self::Busy => "terminal_busy",
+            Self::InputFull => "terminal_input_full",
         }
     }
 }

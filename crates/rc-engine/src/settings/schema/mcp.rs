@@ -73,3 +73,31 @@ pub(super) const EXEC_SESSION_MINUTES: SettingSpec = SettingSpec {
     protected: true,
     restart: false,
 };
+
+/// Whether every app start gives the HTTP server a new bearer token (RC-080-66). Off by default
+/// (owner 2026-11-05): an HTTP client configured with the token would break at each start.
+pub const MCP_TOKEN_ROTATE_ON_START_KEY: &str = "mcp.token.rotate_on_start";
+
+pub(super) const TOKEN_ROTATE_ON_START: SettingSpec = SettingSpec {
+    key: MCP_TOKEN_ROTATE_ON_START_KEY,
+    page: SettingPage::Mcp,
+    kind: SettingKind::Bool { default: false },
+    label: "setting.mcp.token.rotate_on_start",
+    help: "setting.mcp.token.rotate_on_start.help",
+    protected: true,
+    restart: true,
+};
+
+/// Whether the gate writes a row per tool call into the MCP audit log (`mcp_audit_log`,
+/// RC-080-66). On by default.
+pub const MCP_AUDIT_LOG_KEY: &str = "mcp.audit_log";
+
+pub(super) const AUDIT_LOG: SettingSpec = SettingSpec {
+    key: MCP_AUDIT_LOG_KEY,
+    page: SettingPage::Mcp,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.mcp.audit_log",
+    help: "setting.mcp.audit_log.help",
+    protected: true,
+    restart: false,
+};

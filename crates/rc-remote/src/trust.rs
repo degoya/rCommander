@@ -1,6 +1,7 @@
 //! The trust store's operations: the verdict on a presented key against `rcommander.db`, and
 //! the three ways a key gets in - a person trusts a first sighting, a person replaces a changed
-//! key by its own action, or an import.
+//! key by its own action, or an import. A key a `known_hosts` file revoked gets in by none of
+//! them, and its verdict is [`Verdict::Revoked`] whatever is stored for the host (RC-080-67).
 //!
 //! [`trust`] is the TOFU dialog's "Trust and save" and only ever stores a first sighting: for
 //! a key that changed it fails with [`TrustError::Changed`], whatever the caller intended.
@@ -27,11 +28,15 @@ pub enum TrustError {
     /// The stored key is not the one the replacement names any more.
     #[error("the stored key changed since it was shown")]
     Stale,
+    /// The key is revoked: it is never trusted.
+    #[error("the key {fingerprint} is revoked")]
+    Revoked { fingerprint: String },
     #[error(transparent)]
     Db(#[from] DbError),
 }
 
-/// The verdict on `offered` for `host` on `port`. A trusted key's `last_seen_at` is updated.
+/// The verdict on `offered` for `host` on `port`. A revoked key is that before anything else; a
+/// trusted key's `last_seen_at` is updated.
 ///
 /// # Errors
 ///
@@ -42,6 +47,9 @@ pub async fn verify(
     port: u16,
     offered: OfferedKey,
 ) -> Result<Verdict, DbError> {
+    if let Some(revoked) = db.revoked_host_key(&offered.fingerprint).await? {
+        return Ok(Verdict::Revoked { revoked, offered });
+    }
     let candidates = db
         .known_host_candidates(&normalize_host(host), port)
         .await?;
@@ -69,7 +77,7 @@ pub async fn stored_types(db: &Db, host: &str, port: u16) -> Result<Vec<String>,
 /// # Errors
 ///
 /// [`TrustError::Changed`] when another key of this type is stored for the host - never
-/// overwritten here - and database failures.
+/// overwritten here -, [`TrustError::Revoked`] for a revoked key, and database failures.
 pub async fn trust(
     db: &Db,
     host: &str,
@@ -79,6 +87,7 @@ pub async fn trust(
     match verify(db, host, port, offered.clone()).await? {
         Verdict::Trusted(stored) => return Ok(stored),
         Verdict::Changed { stored, .. } => return Err(changed(host, port, &stored)),
+        Verdict::Revoked { offered, .. } => return Err(revoked(&offered)),
         Verdict::Unknown(_) => {}
     }
     let new = NewKnownHost {
@@ -96,6 +105,7 @@ pub async fn trust(
     match verify(db, host, port, offered).await? {
         Verdict::Trusted(stored) => Ok(stored),
         Verdict::Changed { stored, .. } => Err(changed(host, port, &stored)),
+        Verdict::Revoked { offered, .. } => Err(revoked(&offered)),
         Verdict::Unknown(_) => Err(TrustError::Stale),
     }
 }
@@ -105,8 +115,8 @@ pub async fn trust(
 ///
 /// # Errors
 ///
-/// [`TrustError::Stale`] when `stored` is gone or carries another key by now, and database
-/// failures.
+/// [`TrustError::Stale`] when `stored` is gone or carries another key by now,
+/// [`TrustError::Revoked`] when `offered` is revoked, and database failures.
 pub async fn replace(
     db: &Db,
     stored: &KnownHost,
@@ -114,6 +124,9 @@ pub async fn replace(
     port: u16,
     offered: &OfferedKey,
 ) -> Result<KnownHost, TrustError> {
+    if db.revoked_host_key(&offered.fingerprint).await?.is_some() {
+        return Err(revoked(offered));
+    }
     let new = NewKnownHost {
         host: normalize_host(host),
         port,
@@ -127,13 +140,29 @@ pub async fn replace(
         .ok_or(TrustError::Stale)
 }
 
-/// Stores the entries of a parsed `known_hosts` file; conflicting keys stay as they are.
+/// What [`import`] stored: the trusted entries, and how many revoked keys are new.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Imported {
+    pub keys: KnownHostsImport,
+    pub revoked: usize,
+}
+
+/// Stores the entries of a parsed `known_hosts` file - conflicting keys stay as they are - and
+/// its revoked keys, those first.
 ///
 /// # Errors
 ///
-/// The database fails; nothing is stored then.
-pub async fn import(db: &Db, parsed: &ParsedKnownHosts) -> Result<KnownHostsImport, DbError> {
-    db.import_known_hosts(&parsed.entries).await
+/// The database fails; the step that failed stores nothing.
+pub async fn import(db: &Db, parsed: &ParsedKnownHosts) -> Result<Imported, DbError> {
+    let revoked = db.add_revoked_host_keys(&parsed.revoked).await?;
+    let keys = db.import_known_hosts(&parsed.entries).await?;
+    Ok(Imported { keys, revoked })
+}
+
+fn revoked(offered: &OfferedKey) -> TrustError {
+    TrustError::Revoked {
+        fingerprint: offered.fingerprint.clone(),
+    }
 }
 
 fn changed(host: &str, port: u16, stored: &KnownHost) -> TrustError {

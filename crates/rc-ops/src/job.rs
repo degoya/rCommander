@@ -49,6 +49,10 @@ pub enum JobKind {
         /// The steps, shared: out of the serde form, which every snapshot of the job carries.
         #[serde(skip)]
         steps: Arc<Vec<RenameStep>>,
+        /// A failing step that leaves entries under temporary names reverses the steps done,
+        /// in the same job (`rename.undo_on_failure`, RC-080-64; [`JobKind::rolling_back`]).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        rollback: bool,
     },
     /// Copies the one entry `source` to `target`, the full path of the copy: Total Commander's
     /// F5 with a new name, Shift+F5 in the same directory. A directory goes with its contents;
@@ -113,7 +117,18 @@ impl JobKind {
             dir,
             count: steps.len(),
             steps: Arc::new(steps),
+            rollback: false,
         }
+    }
+
+    /// A rename job that, when `on`, reverses its own steps after a failing one that left
+    /// entries under temporary names (RC-080-64); any other job as it is.
+    #[must_use]
+    pub fn rolling_back(mut self, on: bool) -> Self {
+        if let Self::Rename { rollback, .. } = &mut self {
+            *rollback = on;
+        }
+        self
     }
 
     /// The backend the job waits for, its lane: the one it writes to - the target's, the
@@ -193,6 +208,10 @@ pub struct JobOptions {
     /// restart (RC-080-42); a caller cannot set it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub read_guarded: bool,
+    /// What a copy or a move does with a link to a folder it cannot rename (Total Commander's
+    /// `CopyLinks` and `IgnoreLinks`, RC-080-63): the engine sets it from `ops.copy_links`.
+    #[serde(skip_serializing_if = "crate::CopyLinks::is_default")]
+    pub copy_links: crate::CopyLinks,
 }
 
 impl Default for JobOptions {
@@ -203,6 +222,7 @@ impl Default for JobOptions {
             verify: false,
             keep_attributes: true,
             read_guarded: false,
+            copy_links: crate::CopyLinks::default(),
         }
     }
 }

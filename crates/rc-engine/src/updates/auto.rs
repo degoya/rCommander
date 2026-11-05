@@ -4,12 +4,13 @@
 //! this gathers what it decides on: the window's last input and its dialogs, the queue, the
 //! terminals and the SSH sessions.
 
-use std::sync::{PoisonError, atomic::Ordering};
+use std::sync::atomic::Ordering;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use rc_update::auto_install::{self, Moment, Wait};
 
 use super::{DownloadState, RUNNING};
+use crate::recover::LockOrRecover as _;
 use crate::{Engine, EngineEvent};
 
 impl Engine {
@@ -25,8 +26,7 @@ impl Engine {
         let terminals = !self
             .inner
             .terminals
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("auto.terminals")
             .is_empty();
         terminals || !self.inner.sessions.statuses().is_empty()
     }

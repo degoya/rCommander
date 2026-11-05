@@ -48,6 +48,18 @@ pub enum BackupError {
     /// build's.
     #[error("{} is not an rCommander database this version can read", path.display())]
     RestoreForeign { path: PathBuf },
+    /// The file holds a table, index, trigger or view the migrations do not create, or one of
+    /// theirs changed (RC-080-68): `kind` is SQLite's type, `name` the object's (at most 64
+    /// characters, no control characters).
+    #[error(
+        "{} holds a {kind} named {name:?} that rCommander does not create; it is not restored",
+        path.display()
+    )]
+    RestoreForeignObject {
+        path: PathBuf,
+        kind: String,
+        name: String,
+    },
     /// The file comes from a newer rCommander, whose schema this build does not know.
     #[error(
         "{} comes from a newer rCommander (schema {found}; this version knows up to {known})",
@@ -87,6 +99,7 @@ impl BackupError {
         "backup_interrupted",
         "restore_not_database",
         "restore_not_rcommander",
+        "restore_foreign_object",
         "restore_newer",
         "restore_swap_failed",
         "restore_rejected",
@@ -107,6 +120,7 @@ impl BackupError {
             Self::Interrupted => "backup_interrupted",
             Self::RestoreNotDatabase { .. } => "restore_not_database",
             Self::RestoreForeign { .. } => "restore_not_rcommander",
+            Self::RestoreForeignObject { .. } => "restore_foreign_object",
             Self::RestoreNewer { .. } => "restore_newer",
             Self::RestoreSwap { .. } => "restore_swap_failed",
             Self::RestoreRejected { .. } => "restore_rejected",

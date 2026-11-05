@@ -19,12 +19,24 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         class: CommandClass::Read,
         summary: "The trusted SSH host keys, optionally filtered by host, key type or fingerprint",
     },
+    CommandSpec {
+        id: "hostkeys.list_revoked",
+        class: CommandClass::Read,
+        summary: "The SSH host keys a known_hosts file revoked, optionally filtered",
+    },
     // A person's decision as `certificates.remove` is: forgetting a changed key turns the stop
     // into a first sighting (RC-080-12).
     CommandSpec {
         id: "hostkeys.remove",
         class: CommandClass::GuiOnly,
         summary: "Forget a trusted SSH host key; the next connection asks again",
+    },
+    // Forgetting a revocation lets a key a known_hosts file revoked be trusted again: a person's
+    // decision (RC-080-67).
+    CommandSpec {
+        id: "hostkeys.remove_revoked",
+        class: CommandClass::GuiOnly,
+        summary: "Remove an SSH host key from the revoked keys; it is judged as any other again",
     },
     CommandSpec {
         id: "hostkeys.replace",
@@ -53,8 +65,17 @@ macro_rules! commands {
                 #[serde(default)]
                 filter: Option<String>,
             },
+            "hostkeys.list_revoked" => ListRevokedHostKeys {
+                /// Only keys whose names, key type or fingerprint contain this, ignoring case.
+                #[serde(default)]
+                filter: Option<String>,
+            },
             "hostkeys.remove" => RemoveHostKey {
                 /// The stored key's id ([`rc_db::KnownHost::id`]).
+                id: i64,
+            },
+            "hostkeys.remove_revoked" => RemoveRevokedHostKey {
+                /// The revoked key's id ([`rc_db::RevokedHostKey::id`]).
                 id: i64,
             },
             "hostkeys.replace" => ReplaceHostKey {

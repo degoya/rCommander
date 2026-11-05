@@ -1,4 +1,5 @@
-//! What a new name must be, and whether the file system tells upper from lower case.
+//! What a new name must be, and whether the file system tells upper from lower case - and, on
+//! macOS, a composed from a decomposed letter.
 //!
 //! A mask and a replacement are untrusted input (they also come over MCP),
 //! so every new name is checked against the Windows rules on every file system: no separator,
@@ -11,6 +12,7 @@
 //! `rc-checksum` (a combined file, split parts, a checksum file) hold a name to.
 
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::turns_direction;
 
@@ -21,6 +23,10 @@ pub struct FsRules {
     pub names: NameRules,
     /// `readme.txt` and `README.txt` are the same entry (NTFS, FAT, exFAT, APFS by default).
     pub case_insensitive: bool,
+    /// A name composed and decomposed (`\u{c4}` and `A\u{308}`) is the same entry: APFS and
+    /// HFS+ compare names normalised (RC-080-70); NTFS and Linux file systems do not.
+    #[serde(default)]
+    pub normalization_insensitive: bool,
     /// The longest full path, in UTF-16 units under [`NameRules::Windows`] and bytes under
     /// [`NameRules::Unix`].
     pub max_path: usize,
@@ -31,6 +37,7 @@ impl FsRules {
     pub const WINDOWS: Self = Self {
         names: NameRules::Windows,
         case_insensitive: true,
+        normalization_insensitive: false,
         max_path: 32_767,
     };
 
@@ -38,6 +45,17 @@ impl FsRules {
     pub const UNIX: Self = Self {
         names: NameRules::Unix,
         case_insensitive: false,
+        normalization_insensitive: false,
+        max_path: 4_095,
+    };
+
+    /// APFS as macOS formats it: case-insensitive and normalisation-insensitive, otherwise as
+    /// [`FsRules::UNIX`] (RC-080-70). The case of a volume formatted case-sensitive comes from
+    /// its backend (`Capabilities::case_sensitive`), which the caller sets over this.
+    pub const MACOS: Self = Self {
+        names: NameRules::Unix,
+        case_insensitive: true,
+        normalization_insensitive: true,
         max_path: 4_095,
     };
 
@@ -46,21 +64,29 @@ impl FsRules {
     pub fn native() -> Self {
         if cfg!(windows) {
             Self::WINDOWS
+        } else if cfg!(target_os = "macos") {
+            Self::MACOS
         } else {
             Self::UNIX
         }
     }
 
-    /// The form two names are compared in: lower case where the file system ignores case.
+    /// The form two names are compared in: NFC where the file system ignores the normalisation,
+    /// lower case where it ignores case.
     ///
     /// Unicode lower case is close to, not identical with, NTFS's upcase table; it differs only
     /// for a few letters no file name in practice depends on.
     #[must_use]
     pub fn key(&self, name: &str) -> String {
-        if self.case_insensitive {
+        let name = if self.case_insensitive {
             name.to_lowercase()
         } else {
             name.to_owned()
+        };
+        if self.normalization_insensitive {
+            name.nfc().collect()
+        } else {
+            name
         }
     }
 }

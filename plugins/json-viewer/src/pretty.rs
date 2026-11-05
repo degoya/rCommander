@@ -20,6 +20,9 @@ pub(crate) struct LayoutState {
     pending_open: bool,
     /// After a value or a close: another value starts a line of its own.
     after_value: bool,
+    /// After a comma: the next lexeme starts a line, unless it closes - a comma before a
+    /// closing bracket (JSONC, JSON5) leaves no empty line.
+    after_comma: bool,
 }
 
 /// What one lexeme becomes.
@@ -56,6 +59,12 @@ impl LayoutState {
     pub(crate) fn feed(&mut self, lexeme: &Lexeme) -> Pieces {
         let mut pieces = Pieces::default();
         let kind = lexeme.kind;
+        if self.after_comma {
+            self.after_comma = false;
+            if !kind.is_close() {
+                pieces.push(Piece::Break(self.depth));
+            }
+        }
         if self.pending_open {
             self.pending_open = false;
             if kind.is_close() {
@@ -84,7 +93,7 @@ impl LayoutState {
             }
             Kind::Comma => {
                 pieces.push(Piece::Lexeme);
-                pieces.push(Piece::Break(self.depth));
+                self.after_comma = true;
                 self.after_value = false;
             }
             Kind::Colon => {
@@ -92,7 +101,13 @@ impl LayoutState {
                 pieces.push(Piece::Space);
                 self.after_value = false;
             }
-            Kind::String | Kind::Number | Kind::Literal | Kind::Invalid(_) => {
+            // A comment never reaches the layout: the lexer of a whole stream skips it.
+            Kind::String
+            | Kind::Number
+            | Kind::Literal
+            | Kind::Identifier
+            | Kind::Comment
+            | Kind::Invalid(_) => {
                 if self.after_value {
                     pieces.push(Piece::Break(self.depth));
                 }

@@ -1,0 +1,7 @@
+{
+  "name": "SQL viewer",
+  "description": "Shows SQL scripts (.sql, .ddl, .dml, .psql, .pgsql, .mysql) coloured like an editor.",
+  "codes": {
+    "01a1aafa-5f73-7283-b0c1-88b39b363fa9.setting.encoding": "Encoding"
+  }
+}

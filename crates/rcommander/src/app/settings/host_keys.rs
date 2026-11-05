@@ -1,11 +1,13 @@
 //! The settings' Host keys page (RC-050-07): the SSH host keys and FTPS certificates rCommander
 //! trusts, in one table - server, port, type, SHA-256 fingerprint, when it was trusted - with a
-//! search, Remove after a question, and the import of the user's own `known_hosts`.
+//! search, Remove after a question, and the import of the user's own `known_hosts`. The keys an
+//! imported file marked `@revoked` are rows of their own, last (RC-080-67): removing one is a
+//! person's decision too, and lets the key be judged as any other again.
 //!
 //! Every action is a registry command run as a [`TrustStoreCall`]: `hostkeys.list` and
 //! `certificates.list` with the search as their filter (so a hashed name is found by its host, as
-//! the engine finds it), `hostkeys.remove` and `certificates.remove`, and
-//! `hostkeys.import_known_hosts`. Nothing here trusts a key: a new or changed one is trusted only
+//! the engine finds it), `hostkeys.list_revoked`, `hostkeys.remove`, `hostkeys.remove_revoked`
+//! and `certificates.remove`, and `hostkeys.import_known_hosts`. Nothing here trusts a key: a new or changed one is trusted only
 //! in the question of the connection that meets it, and an import never replaces a stored key.
 //! The engine's `KnownHostsChanged` and `TrustedCertificatesChanged` read the table again, so a
 //! key trusted or removed elsewhere shows at once.
@@ -13,7 +15,7 @@
 //! Keys while the page is shown: the arrows select a row, Delete asks about removing it; while
 //! the question is open Enter removes and Escape keeps the key.
 
-use rc_db::{KnownHost, TrustedCertificate};
+use rc_db::{KnownHost, RevokedHostKey, TrustedCertificate};
 use rc_engine::{Chord, Command, Engine, EngineEvent, ImportReport, Outcome};
 
 use super::{Page, SettingsMessage, wrap};
@@ -27,13 +29,15 @@ use crate::{
 pub enum Item {
     Key(i64),
     Certificate(i64),
+    Revoked(i64),
 }
 
-/// A row of the table: a trusted SSH host key or FTPS certificate.
+/// A row of the table: a trusted SSH host key or FTPS certificate, or a revoked host key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stored {
     Key(KnownHost),
     Certificate(TrustedCertificate),
+    Revoked(RevokedHostKey),
 }
 
 impl Stored {
@@ -41,21 +45,26 @@ impl Stored {
         match self {
             Self::Key(key) => Item::Key(key.id),
             Self::Certificate(certificate) => Item::Certificate(certificate.id),
+            Self::Revoked(key) => Item::Revoked(key.id),
         }
     }
 
-    /// The server as stored: a name, or a hashed name `|1|salt|hash`.
+    /// The server as stored: a name, or a hashed name `|1|salt|hash`; for a revoked key the
+    /// names of its line.
     pub fn host(&self) -> &str {
         match self {
             Self::Key(key) => &key.host,
             Self::Certificate(certificate) => &certificate.host,
+            Self::Revoked(key) => &key.hosts,
         }
     }
 
-    /// The port; `None` for a hashed name, whose port is inside the hash.
+    /// The port; `None` for a hashed name, whose port is inside the hash, and a revoked key,
+    /// which is refused on every port.
     pub fn port(&self) -> Option<u16> {
         match self {
             Self::Key(key) if key.is_hashed() => None,
+            Self::Revoked(_) => None,
             Self::Key(key) => Some(key.port),
             Self::Certificate(certificate) => Some(certificate.port),
         }
@@ -69,21 +78,27 @@ impl Stored {
         match self {
             Self::Key(key) => &key.fingerprint_sha256,
             Self::Certificate(certificate) => &certificate.fingerprint_sha256,
+            Self::Revoked(key) => &key.fingerprint_sha256,
         }
     }
 
-    /// When it was trusted (UTC, ISO 8601).
+    /// When it was trusted, or revoked (UTC, ISO 8601).
     pub fn added(&self) -> &str {
         match self {
             Self::Key(key) => &key.added_at,
             Self::Certificate(certificate) => &certificate.added_at,
+            Self::Revoked(key) => &key.added_at,
         }
     }
 
-    /// The server as the page names it: `host:port`, or the words for a hashed name.
+    /// The server as the page names it: `host:port`, the words for a hashed name, or that the
+    /// key is revoked with the names of its line.
     pub fn server(&self) -> String {
         match self.port() {
             _ if self.hashed() => t!("settings.host_keys.hashed").to_owned(),
+            _ if matches!(self, Self::Revoked(_)) => {
+                t!("settings.host_keys.revoked", hosts = self.host())
+            }
             Some(port) => format!("{}:{port}", self.host()),
             None => self.host().to_owned(),
         }
@@ -165,7 +180,7 @@ pub enum TrustAnswer {
         filter: String,
         result: Result<Vec<Stored>, &'static str>,
     },
-    Removed(Result<(), &'static str>),
+    Removed(Item, Result<(), &'static str>),
     Imported(Result<ImportReport, &'static str>),
 }
 
@@ -180,8 +195,9 @@ impl TrustStoreCall {
                 let command = match item {
                     Item::Key(id) => Command::RemoveHostKey { id },
                     Item::Certificate(id) => Command::RemoveCertificate { id },
+                    Item::Revoked(id) => Command::RemoveRevokedHostKey { id },
                 };
-                TrustAnswer::Removed(dispatch(&engine, command).await.map(|_| ()))
+                TrustAnswer::Removed(item, dispatch(&engine, command).await.map(|_| ()))
             }
             Self::Import => {
                 let command = Command::ImportKnownHosts { path: None };
@@ -200,7 +216,8 @@ async fn dispatch(engine: &Engine, command: Command) -> Result<Outcome, &'static
     engine.dispatch(command).await.map_err(|error| error.code())
 }
 
-/// The keys, then the certificates matching `filter`, sorted by server, port and type.
+/// The keys, the certificates and the revoked keys matching `filter`, sorted by server, port
+/// and type.
 async fn list(engine: &Engine, filter: &str) -> Result<Vec<Stored>, &'static str> {
     let filter = Some(filter.to_owned()).filter(|filter| !filter.trim().is_empty());
     let keys = match dispatch(
@@ -214,26 +231,40 @@ async fn list(engine: &Engine, filter: &str) -> Result<Vec<Stored>, &'static str
         Outcome::KnownHosts { keys } => keys,
         _ => return Err("database_error"),
     };
-    let certificates = match dispatch(engine, Command::ListCertificates { filter }).await? {
+    let certificates = match dispatch(
+        engine,
+        Command::ListCertificates {
+            filter: filter.clone(),
+        },
+    )
+    .await?
+    {
         Outcome::TrustedCertificates { certificates } => certificates,
+        _ => return Err("database_error"),
+    };
+    let revoked = match dispatch(engine, Command::ListRevokedHostKeys { filter }).await? {
+        Outcome::RevokedHostKeys { keys } => keys,
         _ => return Err("database_error"),
     };
     let mut entries: Vec<Stored> = keys
         .into_iter()
         .map(Stored::Key)
         .chain(certificates.into_iter().map(Stored::Certificate))
+        .chain(revoked.into_iter().map(Stored::Revoked))
         .collect();
     entries.sort_by(|a, b| order(a).cmp(&order(b)));
     Ok(entries)
 }
 
-/// Hashed names last, then by server, port and key type; a certificate before the keys.
-fn order(stored: &Stored) -> (bool, &str, Option<u16>, &str) {
-    let kind = match stored {
-        Stored::Key(key) => key.algorithm.as_str(),
-        Stored::Certificate(_) => "",
+/// Revoked keys last, hashed names before them, then by server, port and key type; a
+/// certificate before the keys.
+fn order(stored: &Stored) -> (bool, bool, &str, Option<u16>, &str) {
+    let (revoked, kind) = match stored {
+        Stored::Key(key) => (false, key.algorithm.as_str()),
+        Stored::Certificate(_) => (false, ""),
+        Stored::Revoked(key) => (true, key.algorithm.as_str()),
     };
-    (stored.hashed(), stored.host(), stored.port(), kind)
+    (revoked, stored.hashed(), stored.host(), stored.port(), kind)
 }
 
 /// The note an import leaves: how many keys came, stayed, differ and were skipped.
@@ -333,15 +364,19 @@ impl App {
                 TrustAnswer::Listed {
                     result: Err(code), ..
                 }
-                | TrustAnswer::Removed(Err(code))
+                | TrustAnswer::Removed(_, Err(code))
                 | TrustAnswer::Imported(Err(code)) => {
                     page.busy = false;
                     dialog.note = Some((error_text(code), true));
                 }
                 // The engine's event reads the table again.
-                TrustAnswer::Removed(Ok(())) => {
+                TrustAnswer::Removed(item, Ok(())) => {
                     page.busy = false;
-                    dialog.note = Some((t!("settings.host_keys.removed").to_owned(), false));
+                    let note = match item {
+                        Item::Revoked(_) => t!("settings.host_keys.unrevoked"),
+                        Item::Key(_) | Item::Certificate(_) => t!("settings.host_keys.removed"),
+                    };
+                    dialog.note = Some((note.to_owned(), false));
                 }
                 TrustAnswer::Imported(Ok(report)) => {
                     page.busy = false;

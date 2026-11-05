@@ -1,6 +1,7 @@
 //! Which plugins claim a file, and in which order they are asked, decided without running one:
-//! `[match]`, the associations before every manifest, the built-in formats first, an extension
-//! before a magic, each by name, at most four (RC-100-27).
+//! `[match]`, the associations before every manifest, the built-in formats first, an exact name
+//! before an extension before a name pattern before a magic (RC-100-80), each by name, at most
+//! four (RC-100-27).
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -235,4 +236,74 @@ fn the_first_of_an_id_wins_and_the_head_covers_every_magic() {
         &bed,
     );
     assert_eq!(magic.head_length(), 64);
+}
+
+/// RC-100-80: a Docker viewer by `names` alone and a config viewer by extensions and `.env.*`,
+/// with a shell viewer claiming `PKGBUILD`.
+fn named() -> ViewerPlugins {
+    set_of(
+        &[
+            Spec {
+                id: "c1",
+                name: "Config viewer",
+                extensions: &["toml", "env"],
+                names: &[".env.*"],
+                ..Spec::default()
+            },
+            Spec {
+                id: "d1",
+                name: "Dockerfile viewer",
+                extensions: &[],
+                names: &[
+                    "Dockerfile",
+                    "Containerfile",
+                    "Dockerfile.*",
+                    "*.dockerfile",
+                ],
+                ..Spec::default()
+            },
+            Spec {
+                id: "e1",
+                name: "Shell script viewer",
+                extensions: &["sh"],
+                names: &["PKGBUILD"],
+                ..Spec::default()
+            },
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn an_exact_name_then_an_extension_then_a_name_pattern() {
+    let set = named();
+    for docker in [
+        "Dockerfile",
+        "dockerfile",
+        "Dockerfile.dev",
+        "app.dockerfile",
+    ] {
+        assert_eq!(
+            claimed(&set, docker, b"FROM alpine\n", 10),
+            ["Dockerfile viewer"],
+            "{docker}"
+        );
+    }
+    assert_eq!(
+        claimed(&set, "Dockerfile.toml", b"[package]\n", 10),
+        ["Config viewer", "Dockerfile viewer"],
+        "the extension toml before the pattern Dockerfile.*"
+    );
+    assert_eq!(claimed(&set, ".env.local", b"A=1\n", 10), ["Config viewer"]);
+    assert_eq!(claimed(&set, ".env", b"A=1\n", 10), ["Config viewer"]);
+    assert_eq!(
+        claimed(&set, "PKGBUILD", b"pkgname=x\n", 10),
+        ["Shell script viewer"]
+    );
+    assert_eq!(
+        claimed(&set, "/home/me/src/Dockerfile", b"", 10),
+        ["Dockerfile viewer"],
+        "the file name of a path"
+    );
+    assert!(claimed(&set, "Dockerfiles", b"", 10).is_empty());
 }

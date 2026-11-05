@@ -3,7 +3,8 @@
 //!
 //! The whole file is read and checked before one row is compared: at most
 //! [`MAX_FILE_BYTES`], this format and version, a sealed one opened with its export password -
-//! a wrong password or a changed byte is refused alike - and every part within its caps. A
+//! a wrong password or a changed byte is refused alike, a seal that asks argon2 for more than
+//! `rc_vault::KdfParams::IMPORT_MAX` before anything is derived - and every part within its caps. A
 //! refusal writes nothing. Then each row on its own: a row that does not hold up (an unknown
 //! setting, a host key that does not parse, a path on a server) is `refused` and the others go
 //! on. A row that changes a trust decision or a protected setting, or points a connection with
@@ -17,8 +18,10 @@
 use rc_vault::{ExposeSecret as _, MasterPassword, VaultError};
 use zeroize::Zeroizing;
 
+use crate::recover::LogPanic as _;
 use crate::{
     ConfigImportRequest, Engine, EngineError, Outcome,
+    commands::exchange_export::EXPORT_KDF,
     exchange::{
         Content, ExchangeError, ExchangeReport, ExchangeRow, ExportFile, ExportParts,
         MAX_FILE_BYTES, RowStatus,
@@ -75,10 +78,11 @@ impl Engine {
                     .filter(|password| !password.is_empty())
                     .ok_or(ExchangeError::PasswordNeeded)?;
                 let password = MasterPassword::from(password.secret().clone());
-                let opened = rc_vault::open_export(&password, &sealed.sealed()?)
+                let opened = rc_vault::open_export(&password, &sealed.sealed()?, EXPORT_KDF)
                     .await
                     .map_err(|error| match error {
                         VaultError::WrongPassword => ExchangeError::PasswordWrong.into(),
+                        VaultError::TooCostly => ExchangeError::KdfTooCostly.into(),
                         VaultError::BadParameters | VaultError::Malformed => {
                             ExchangeError::FileInvalid {
                                 reason: "the seal's parameters are not usable".to_owned(),
@@ -187,6 +191,7 @@ async fn read_file(path: &str) -> Result<Zeroizing<Vec<u8>>, EngineError> {
     let owned = std::path::PathBuf::from(path);
     let read = tokio::task::spawn_blocking(move || read_bounded(&owned, MAX_FILE_BYTES))
         .await
+        .log_panic("engine.import_read")
         .map_err(|error| std::io::Error::other(error.to_string()));
     let error = match read {
         Ok(Ok(bytes)) => return Ok(bytes),

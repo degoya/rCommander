@@ -9,7 +9,11 @@ macro_rules! arms {
             }
             Command::ImportKnownHosts { path } => $self.import_host_keys(path.as_deref()).await,
             Command::ListHostKeys { filter } => $self.list_host_keys(filter.as_deref()).await,
+            Command::ListRevokedHostKeys { filter } => {
+                $self.list_revoked_host_keys(filter.as_deref()).await
+            }
             Command::RemoveHostKey { id } => $self.remove_host_key(id).await,
+            Command::RemoveRevokedHostKey { id } => $self.remove_revoked_host_key(id).await,
             Command::ReplaceHostKey { question } => $self.replace_host_key(question).await,
         } }
     };

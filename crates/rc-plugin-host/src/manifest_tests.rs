@@ -163,6 +163,80 @@ fn match_names_plain_extensions_and_hex_magic() {
     assert!(!matching.matches("big.csv", b"", 101), "over max_size");
 }
 
+/// A viewer claiming `names`, with the release that reads them.
+fn named_manifest(names: &str) -> String {
+    viewer_manifest_text(&["text"], "")
+        .replace("magic = []", &format!("names = {names}\nmagic = []"))
+        .replace(
+            "min_app_version = \"0.1.0\"",
+            "min_app_version = \"0.19.0\"",
+        )
+}
+
+#[test]
+fn match_names_are_read_checked_and_need_their_release() {
+    let docker = named_manifest(r#"["Dockerfile", "Dockerfile.*", "*.dockerfile"]"#)
+        .replace("extensions = [\"csv\", \"tsv\"]", "extensions = []");
+    let manifest = parse(&docker).expect("names alone offer files");
+    assert_eq!(
+        manifest.matching.names,
+        ["Dockerfile", "Dockerfile.*", "*.dockerfile"]
+    );
+    let old = docker.replace(
+        "min_app_version = \"0.19.0\"",
+        "min_app_version = \"0.18.1\"",
+    );
+    assert!(refusal(&old).contains("min_app_version 0.19.0"));
+    let bad = named_manifest(r#"["src/Dockerfile"]"#);
+    assert!(refusal(&bad).contains("[match] name `src/Dockerfile`"));
+    // A manifest without names keeps serializing without the field.
+    let plain = toml::to_string(&viewer_manifest(&["text"]).matching).expect("serialize");
+    assert!(!plain.contains("names"), "{plain}");
+}
+
+#[test]
+fn an_exact_name_beats_an_extension_which_beats_a_name_pattern() {
+    use super::{MatchRank, MatchSection};
+    let docker = MatchSection {
+        names: [
+            "Dockerfile",
+            "Containerfile",
+            "Dockerfile.*",
+            "*.dockerfile",
+        ]
+        .map(str::to_owned)
+        .to_vec(),
+        ..MatchSection::default()
+    };
+    let config = MatchSection {
+        names: vec![".env.*".to_owned()],
+        extensions: ["toml", "env"].map(str::to_owned).to_vec(),
+        ..MatchSection::default()
+    };
+    let rank = |matching: &MatchSection, name: &str| matching.rank(name, b"", 10);
+    assert_eq!(rank(&docker, "Dockerfile"), Some(MatchRank::Name));
+    assert_eq!(rank(&docker, "dockerfile"), Some(MatchRank::Name));
+    assert_eq!(rank(&docker, "Dockerfile.dev"), Some(MatchRank::Pattern));
+    assert_eq!(rank(&docker, "app.dockerfile"), Some(MatchRank::Pattern));
+    assert_eq!(rank(&docker, "Dockerfile.toml"), Some(MatchRank::Pattern));
+    assert_eq!(rank(&config, "Dockerfile.toml"), Some(MatchRank::Extension));
+    assert!(
+        rank(&config, "Dockerfile.toml") < rank(&docker, "Dockerfile.toml"),
+        "a TOML file named Dockerfile.toml stays a TOML file"
+    );
+    assert_eq!(rank(&config, ".env.local"), Some(MatchRank::Pattern));
+    assert_eq!(rank(&docker, ".env.local"), None);
+    assert_eq!(rank(&config, ".env"), Some(MatchRank::Extension));
+    assert_eq!(rank(&docker, "notes.txt"), None);
+    assert!(MatchRank::Name < MatchRank::Extension);
+    assert!(MatchRank::Pattern < MatchRank::Magic);
+    let small = MatchSection {
+        max_size: Some(5),
+        ..docker
+    };
+    assert_eq!(small.rank("Dockerfile", b"", 6), None, "over max_size");
+}
+
 #[test]
 fn settings_are_typed_and_bounded() {
     let separator = "[[settings]]\nkey = \"separator\"\ntype = \"choice\"\nvalues = [\"auto\", \"comma\"]\ndefault = \"auto\"\n";

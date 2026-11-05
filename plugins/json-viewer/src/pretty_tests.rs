@@ -39,7 +39,15 @@ fn invalid_json_is_laid_out_as_well_as_it_can_be() {
     assert_eq!(layout("[1 2]"), "[\n  1\n  2\n]");
     // A close too many keeps depth at zero.
     assert_eq!(layout("[]]"), "[]\n]");
-    assert_eq!(layout("[,]"), "[\n  ,\n  \n]");
+    assert_eq!(layout("[,]"), "[\n  ,\n]");
+}
+
+#[test]
+fn a_comma_before_a_closing_bracket_leaves_no_empty_line() {
+    assert_eq!(
+        layout(r#"{"a":[1,2,],"b":{},}"#),
+        "{\n  \"a\": [\n    1,\n    2,\n  ],\n  \"b\": {},\n}"
+    );
 }
 
 #[test]

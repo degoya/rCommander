@@ -13,6 +13,7 @@ fn one_of_each() -> Vec<TermError> {
         TermError::WslUnavailable,
         TermError::UnknownDistro("x".to_owned()),
         TermError::Busy,
+        TermError::InputFull,
     ];
     for sample in &samples {
         match sample {
@@ -23,7 +24,8 @@ fn one_of_each() -> Vec<TermError> {
             | TermError::Pty(_)
             | TermError::WslUnavailable
             | TermError::UnknownDistro(_)
-            | TermError::Busy => {}
+            | TermError::Busy
+            | TermError::InputFull => {}
         }
     }
     samples

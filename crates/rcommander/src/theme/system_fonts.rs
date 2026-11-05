@@ -15,7 +15,6 @@
 use std::{
     io::Read,
     process::{Child, Command, Stdio},
-    sync::PoisonError,
     thread,
     time::{Duration, Instant},
 };
@@ -24,6 +23,8 @@ use iced::advanced::graphics::text::font_system;
 use rc_process::NoConsoleWindow;
 
 use super::fonts::{self, Family};
+
+use crate::recover::RwLockOrRecover as _;
 
 /// The interface families tried in order when fontconfig names none that is installed.
 pub const SANS_FALLBACKS: [&str; 5] = [
@@ -101,9 +102,7 @@ pub(super) fn apply() {
     if sans.is_none() && mono.is_none() {
         return;
     }
-    let mut system = font_system()
-        .write()
-        .unwrap_or_else(PoisonError::into_inner);
+    let mut system = font_system().write_or_recover("system_fonts.font_system");
     let db = system.raw().db_mut();
     if let Some(name) = sans {
         db.set_sans_serif_family(name);

@@ -62,8 +62,9 @@ pub enum OpsError {
     /// A typed file name that is not one plain name every backend can hold.
     #[error("{name:?} is not a valid file name: {reason}")]
     InvalidName { name: String, reason: &'static str },
-    /// A link to a directory, a dangling link or a special file: nothing a stream can copy.
-    #[error("{}: links to directories and special files are not copied", path.display())]
+    /// A dangling link or a special file: nothing a stream can copy. A link to a directory goes
+    /// by `ops.copy_links` (RC-080-63).
+    #[error("{}: dangling links and special files are not copied", path.display())]
     NotCopyable { path: PathBuf },
     /// A rename job's journal could not record a step; the job stopped before the next one.
     #[error("the rename cannot be recorded for undo: {reason}")]
@@ -103,6 +104,14 @@ pub enum OpsError {
     /// read.
     #[error("{}: its contents never leave through MCP ({reason})", path.display())]
     Sensitive { path: PathBuf, reason: &'static str },
+    /// A link to a folder copied as a link (`ops.copy_links = link`, RC-080-63) onto a target
+    /// that makes no links (FTP, an archive, a drive without them).
+    #[error("{}: the target cannot hold links; the link is not copied", path.display())]
+    LinksUnsupported { path: PathBuf },
+    /// A link to a folder that lies on its own way (a folder above it, or one the copy came
+    /// through): following it would copy without end, so it is not followed (RC-080-63).
+    #[error("{}: the link leads back into its own path; not followed", path.display())]
+    LinkLoop { path: PathBuf },
 }
 
 impl OpsError {
@@ -136,6 +145,8 @@ impl OpsError {
         "job_at_once",
         "rename_undo_failed",
         "sensitive_path",
+        "links_unsupported",
+        "link_loop",
     ];
 
     /// The stable code.
@@ -170,6 +181,8 @@ impl OpsError {
             Self::JobAtOnce { .. } => "job_at_once",
             Self::RenameUndoFailed { .. } => "rename_undo_failed",
             Self::Sensitive { .. } => "sensitive_path",
+            Self::LinksUnsupported { .. } => "links_unsupported",
+            Self::LinkLoop { .. } => "link_loop",
         }
     }
 

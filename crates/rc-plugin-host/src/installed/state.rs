@@ -110,7 +110,14 @@ impl PluginState {
     ///
     /// A stored key or digest does not decode: the state is broken, and nothing is trusted on it.
     pub fn verifier(&self) -> Result<PluginVerifier> {
-        let verifier = PluginVerifier::with_roots(self.development_mode)?;
+        self.verifier_on(PluginVerifier::with_roots(self.development_mode)?)
+    }
+
+    /// [`PluginState::verifier`] on `roots` in place of the compiled-in roots, so the bundled
+    /// packages' sync and its tests check the installed versions as [`super::list`] does. `roots`
+    /// should be a fresh verifier: its clones share the keys added here.
+    pub(crate) fn verifier_on(&self, mut verifier: PluginVerifier) -> Result<PluginVerifier> {
+        verifier.development_mode = self.development_mode;
         for (key_id, public_key) in &self.trusted_keys {
             // A confirmed key never replaces a root of the same id.
             if verifier.trusted_key(key_id)?.is_some() {

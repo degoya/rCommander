@@ -10,6 +10,11 @@
 //! marks again step by step, so an undo cancelled half way can be continued. One run at a time,
 //! claimed atomically (`rename_busy`).
 //!
+//! A run that fails while entries are under temporary names is reversed by its own job with
+//! `rename.undo_on_failure` on (the default, RC-080-64): the undo's steps, each mark cleared as
+//! the undo job clears it, and the job's report says whether every name is as before or which
+//! entries are still parked.
+//!
 //! A new name with a subfolder (`sub/name`, RC-020-02) is held against what that subfolder holds
 //! (each one listed once, at most [`MAX_NESTED_DIRS`]), and an undo looks the nested names of
 //! its run up one by one, since the folder's listing does not show them. A run that went through
@@ -36,7 +41,9 @@ use rc_vfs::{BackendId, Capabilities, Vfs, VfsPath};
 use serde::{Deserialize, Serialize};
 
 use super::panel::resolve_path;
-use crate::{Engine, EngineError, Outcome, PanelId, PanelState};
+use crate::{
+    Engine, EngineError, Outcome, PanelId, PanelState, settings::RENAME_UNDO_ON_FAILURE_KEY,
+};
 
 /// What `multi_rename.preview` and `multi_rename.apply` take.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -198,6 +205,14 @@ impl StepJournal for Journal {
             .await
             .map_err(|error| error.to_string())
     }
+
+    /// The run rolled back by its own job (RC-080-64): only an apply's journal hears it.
+    async fn undone(&self, index: usize) -> Result<(), String> {
+        self.db
+            .mark_rename_step(&self.run, index, false)
+            .await
+            .map_err(|error| error.to_string())
+    }
 }
 
 impl Engine {
@@ -236,8 +251,9 @@ impl Engine {
             run: run.clone(),
             direction: Direction::Apply,
         };
+        let rollback = self.setting_on(RENAME_UNDO_ON_FAILURE_KEY).await;
         let outcome = self
-            .submit_rename(run, dir, schedule.steps, journal)
+            .submit_rename(run, dir, schedule.steps, (journal, rollback))
             .await?;
         // Offered again as "last used"; a rule that cannot be stored is only missing there.
         if let Err(error) = last
@@ -309,7 +325,8 @@ impl Engine {
             run: logged.run.clone(),
             direction: Direction::Undo { applied },
         };
-        self.submit_rename(logged.run, dir, undo, journal).await
+        self.submit_rename(logged.run, dir, undo, (journal, false))
+            .await
     }
 
     /// The plan of `request` against a fresh listing of its folder.
@@ -387,16 +404,17 @@ impl Engine {
     }
 
     /// Queues `steps` in `dir` as one rename job journaled into `run`. A failing step stops it:
-    /// the steps after it rely on it. At once or queued ([`Engine::tool_list`]).
+    /// the steps after it rely on it; with `rollback` the job reverses its steps done when that
+    /// leaves entries under temporary names. At once or queued ([`Engine::tool_list`]).
     async fn submit_rename(
         &self,
         run: String,
         dir: VfsPath,
         steps: Vec<RenameStep>,
-        journal: Journal,
+        (journal, rollback): (Journal, bool),
     ) -> Result<Outcome, EngineError> {
         let spec = JobSpec {
-            kind: JobKind::rename(dir.clone(), steps),
+            kind: JobKind::rename(dir.clone(), steps).rolling_back(rollback),
             options: JobOptions {
                 on_error: ErrorPolicy::Cancel,
                 ..JobOptions::default()
@@ -416,3 +434,7 @@ impl Engine {
 #[cfg(test)]
 #[path = "multi_rename_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "multi_rename_rollback_tests.rs"]
+mod rollback_tests;

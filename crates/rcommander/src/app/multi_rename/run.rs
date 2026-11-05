@@ -4,7 +4,9 @@
 
 use std::collections::HashMap;
 
-use rc_engine::{Change, Command, JobChange, JobId, JobState, SUBFOLDER_SEPARATOR};
+use rc_engine::{
+    Change, Command, JobChange, JobId, JobReport, JobSnapshot, JobState, SUBFOLDER_SEPARATOR,
+};
 
 use super::{Answer, Call, Preview, Queued, Running, Status, failure};
 use crate::{
@@ -12,8 +14,34 @@ use crate::{
         App, Effect,
         file_ops::{FileOpsMsg, FollowUp, Submitted},
     },
-    i18n::t,
+    i18n::{error_text, t},
 };
+
+/// What a run that did not complete says: rolled back by its own job, with the first error; the
+/// entries it left under temporary names, each with the name it was to get (RC-080-64); or that
+/// Undo reverses what was done.
+fn stopped_text(job: Option<&JobSnapshot>) -> String {
+    let report = job.and_then(|job| job.report.as_ref());
+    match report {
+        Some(JobReport::RenameStopped {
+            rolled_back: true, ..
+        }) => {
+            let code = job
+                .and_then(|job| job.failures.last())
+                .map_or("io", |failure| failure.code.as_str());
+            t!("multi_rename.rolled_back", error = error_text(code))
+        }
+        Some(JobReport::RenameStopped { parked, .. }) if !parked.is_empty() => {
+            let names = parked
+                .iter()
+                .map(|name| format!("{} -> {}", name.temp, name.new))
+                .collect::<Vec<_>>()
+                .join(", ");
+            t!("multi_rename.parked", names = names)
+        }
+        _ => t!("multi_rename.stopped").to_owned(),
+    }
+}
 
 impl App {
     /// Start: the run of the previewed input, only without a conflict.
@@ -204,7 +232,8 @@ impl App {
                 dialog.undo_names = Some(running.before);
                 dialog.status = Status::Info(t!("multi_rename.done", count = running.pairs.len()));
             } else {
-                dialog.status = Status::Error(t!("multi_rename.stopped").to_owned());
+                let job = self.engine.ops().job(job).ok();
+                dialog.status = Status::Error(stopped_text(job.as_ref()));
             }
         }
         if !dialog.open {

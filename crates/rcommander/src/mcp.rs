@@ -3,19 +3,22 @@
 //! instance file and forwards to it.
 //!
 //! On unless the setting `mcp.http.enabled` is `false`; the port is `mcp.http.port`, any free one
-//! when it is 0 or unset (`rc_mcp::config`). The settings dialog (RC-010-09) edits both and the
+//! when it is 0 or unset (`rc_mcp::config`); the token new at each app start where
+//! `mcp.token.rotate_on_start` is on ([`launch`]). The settings dialog (RC-010-09) edits both and the
 //! token, and [`restart`]s the server with them at once. A server that cannot start leaves the
 //! app running and says why in the status bar.
 
 use std::{
     net::SocketAddr,
     path::PathBuf,
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
 };
 
 use rc_db::Db;
 use rc_engine::Engine;
 use rc_mcp::{HttpHandle, McpContext, McpHttpConfig, McpToken, config, serve_http};
+
+use crate::recover::LockOrRecover as _;
 
 /// What the status bar says about the server.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +64,21 @@ pub async fn start(
     }
 }
 
+/// [`start`] as the app starts: with a new token first where `mcp.token.rotate_on_start` asks for
+/// one (RC-080-66). A restart from the settings dialog keeps the token.
+pub async fn launch(
+    engine: Engine,
+    db: Db,
+    instance_file: Option<PathBuf>,
+) -> (Option<HttpHandle>, McpStatus) {
+    if config::enabled(&db).await
+        && let Err(error) = McpToken::at_start(&db).await
+    {
+        return (None, McpStatus::Failed(error.to_string()));
+    }
+    start(engine, db, instance_file).await
+}
+
 /// Stops the server in `server`, if one runs, and starts it again as the settings now say: off,
 /// on another port, or with a new token - the old token stops working.
 pub async fn restart(
@@ -69,13 +87,13 @@ pub async fn restart(
     db: Db,
     instance_file: Option<PathBuf>,
 ) -> McpStatus {
-    let running = server.lock().unwrap_or_else(PoisonError::into_inner).take();
+    let running = server.lock_or_recover("mcp.server").take();
     if let Some(running) = running {
         // A server that failed while it ran is replaced all the same.
         let _ = running.shutdown().await;
     }
     let (handle, status) = start(engine, db, instance_file).await;
-    *server.lock().unwrap_or_else(PoisonError::into_inner) = handle;
+    *server.lock_or_recover("mcp.server") = handle;
     status
 }
 

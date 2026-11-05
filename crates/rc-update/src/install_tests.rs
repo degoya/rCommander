@@ -92,3 +92,21 @@ fn a_plan_names_portable_installs_and_plain_versions_only() {
     fixture.journal.plan.target_version = "../2.0.0".to_owned();
     assert!(fixture.journal.plan.validate().is_err());
 }
+
+/// RC-080-69: the plan alone already refuses a program outside the program folder, before the
+/// journal's own check runs.
+#[test]
+fn a_plan_refuses_a_program_outside_the_program_folder() {
+    for executable in ["../x", "a/../x", "/x", "", "a//x", "C:x", "a\\..\\x", ".x"] {
+        let mut fixture = Fixture::zip();
+        fixture.journal.plan.executable = executable.to_owned();
+        assert_eq!(
+            fixture.journal.plan.validate().map_err(|error| error.code),
+            Err("update.plan_invalid"),
+            "{executable:?}"
+        );
+    }
+    let mut fixture = Fixture::zip();
+    fixture.journal.plan.executable = "rCommander.app/Contents/MacOS/rcommander".to_owned();
+    assert!(fixture.journal.plan.validate().is_ok());
+}

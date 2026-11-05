@@ -6,8 +6,8 @@
 //!
 //! - A menu entry `cd <folder>` is an entry, its `pathN` the folder for the other panel; a
 //!   submenu (`-Name` ... `--`) is a folder, a separator (`-`) is left out. Programs, internal
-//!   commands (`cm_*`), FTP and plugin paths, relative paths and unknown `%variables%` are
-//!   skipped with their reason.
+//!   commands (`cm_*`), FTP and plugin paths and relative paths are skipped with their reason; a
+//!   `%variable%` that is not set or not read stays as written.
 //! - The tabs are listed as Total Commander writes them: the inactive ones as `N_path`, the active
 //!   one in `[left]`/`[right]` `path` at the place `activetab` names. A tab is locked by
 //!   `N_locked` (`activelocked` for the active one) other than `0`.
@@ -24,6 +24,8 @@ use super::{
     tc_password::{TcPassword, classify},
 };
 use crate::{ConnectionKind, PanelId};
+
+pub use super::total_commander_path::expand;
 
 /// Resolves a `%variable%`; `None` when it is unknown.
 pub type Lookup<'a> = &'a dyn Fn(&str) -> Option<String>;
@@ -56,7 +58,8 @@ pub enum TcSkip {
     NoCommand,
     /// The folder is not absolute.
     RelativePath,
-    /// The folder names a `%variable%` that is not set.
+    /// The folder names a `%variable%` the import does not read. No longer given since RC-080-71
+    /// (such a name stays as written, as Total Commander keeps one not set); kept for its code.
     UnknownVariable,
     /// The folder holds characters no path has, or is empty.
     InvalidPath,
@@ -174,28 +177,6 @@ pub struct TcConnection {
     pub password: TcPassword,
 }
 
-/// `text` with every `%name%` replaced through `lookup`; `None` when one is unknown.
-#[must_use]
-pub fn expand(text: &str, lookup: Lookup<'_>) -> Option<String> {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(start) = rest.find('%') {
-        out.push_str(&rest[..start]);
-        let after = &rest[start + 1..];
-        let end = after.find('%')?;
-        let name = &after[..end];
-        // Parentheses for `%ProgramFiles(x86)%`.
-        let allowed = |c: char| c.is_alphanumeric() || matches!(c, '_' | '(' | ')');
-        if name.is_empty() || !name.chars().all(allowed) {
-            return None;
-        }
-        out.push_str(&lookup(name)?);
-        rest = &after[end + 1..];
-    }
-    out.push_str(rest);
-    Some(out)
-}
-
 /// A menu name without its `&` accelerators.
 fn menu_name(raw: &str) -> String {
     raw.replace("&&", "\u{0}")
@@ -223,7 +204,8 @@ pub fn folder(raw: &str, lookup: Lookup<'_>) -> Result<String, TcSkip> {
     if raw.starts_with("\\\\\\") {
         return Err(TcSkip::PluginPath);
     }
-    let path = expand(raw, lookup).ok_or(TcSkip::UnknownVariable)?;
+    let path = expand(raw, lookup);
+    let path = super::total_commander_path::without_verbatim_prefix(&path);
     if path.chars().any(char::is_control) {
         return Err(TcSkip::InvalidPath);
     }

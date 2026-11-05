@@ -299,6 +299,39 @@ async fn the_proxy_ends_when_the_running_instance_does() {
 
     running.handle.shutdown().await.expect("stops");
     let ended = tokio::time::timeout(std::time::Duration::from_secs(15), proxy).await;
-    assert!(ended.is_ok(), "the proxy still runs after the app ended");
+    let ended = ended.expect("the proxy still runs after the app ended");
+    assert!(
+        ended.expect("joins").is_err(),
+        "a bridge whose app ended exits with an error"
+    );
     drop(client);
+}
+
+/// RC-080-66: the first failed send ends the proxy with an error, well before the next probe -
+/// it never sends on to a port another process may have taken over.
+#[tokio::test]
+async fn the_proxy_ends_at_the_first_failed_send() {
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").expect("binds");
+    let port = closed.local_addr().expect("address").port();
+    drop(closed);
+    let target = instance::Instance {
+        port,
+        token: "t".repeat(64),
+        pid: std::process::id(),
+    };
+    let (mut client_side, proxy_side) = tokio::io::duplex(64 * 1024);
+    let (read, write) = tokio::io::split(proxy_side);
+    let proxy = tokio::spawn(async move { proxy_io(&target, read, write).await });
+    tokio::io::AsyncWriteExt::write_all(&mut client_side, format!("{INITIALIZE}\n").as_bytes())
+        .await
+        .expect("writes");
+    // The first failure ends it, the send's or the first probe's (at 3 s): Windows takes about
+    // 2 s to refuse a connection to a closed port, so the two may race there. Before RC-080-66
+    // the proxy ran on until a second missed probe, past 6 s.
+    let ended = tokio::time::timeout(std::time::Duration::from_secs(5), proxy).await;
+    let ended = ended.expect("the proxy still runs after a failed send");
+    assert!(
+        ended.expect("joins").is_err(),
+        "a failed send is an error exit"
+    );
 }

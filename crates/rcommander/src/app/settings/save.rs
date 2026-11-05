@@ -14,6 +14,7 @@ use rc_engine::{
 use rc_mcp::{McpToken, Policy};
 
 use super::draft::{Changes, Loaded};
+use crate::recover::LogPanic as _;
 use crate::{
     mcp::{self, McpServer, McpStatus},
     theme::{
@@ -176,6 +177,7 @@ pub async fn alternate_rows(db: Db) -> bool {
 async fn installed_fonts() -> Vec<Family> {
     tokio::task::spawn_blocking(fonts::installed)
         .await
+        .log_panic("app.installed_fonts")
         .unwrap_or_default()
 }
 
@@ -222,6 +224,7 @@ async fn dos_block(db: &Db, font: iced::Font) -> Option<f32> {
     }
     tokio::task::spawn_blocking(move || fonts::block_height(font))
         .await
+        .log_panic("app.font_block_height")
         .ok()
         .flatten()
 }

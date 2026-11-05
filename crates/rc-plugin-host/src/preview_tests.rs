@@ -88,10 +88,11 @@ fn an_update_names_what_it_adds() {
     };
     let new = Permissions {
         extensions: vec!["csv".to_owned(), "tsv".to_owned()],
+        names: vec!["Dockerfile".to_owned()],
         capabilities: vec!["net_http".to_owned()],
         ..Permissions::default()
     };
-    assert_eq!(old.added_by(&new), ["net_http", ".tsv"]);
+    assert_eq!(old.added_by(&new), ["net_http", ".tsv", "Dockerfile"]);
     assert!(new.added_by(&old).is_empty());
 }
 

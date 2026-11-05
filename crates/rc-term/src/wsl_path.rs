@@ -138,7 +138,9 @@ pub enum ShellPaths {
 ///
 /// Windows: `/C:/x` (OSC 7), `C:\x` and `C:/x` are `C:\x`, `\\server\share\x` stays. WSL:
 /// `/mnt/c/x` is `C:\x`, every other path is in the distribution's share,
-/// `\\wsl.localhost\<distro>\...`. Unix: an absolute path as it is.
+/// `\\wsl.localhost\<distro>\...` - and none when a name of the result is empty, `.` or `..`:
+/// a Linux name may hold a backslash, a separator in Windows (RC-080-65). Unix: an absolute
+/// path as it is.
 #[must_use]
 pub fn shell_to_panel_path(reported: &str, paths: &ShellPaths) -> Option<PathBuf> {
     match paths {
@@ -167,23 +169,38 @@ pub fn shell_to_panel_path(reported: &str, paths: &ShellPaths) -> Option<PathBuf
             if !reported.starts_with('/') {
                 return None;
             }
-            let mut parts = reported.split('/').filter(|part| !part.is_empty());
+            let parts = reported.split('/').filter(|part| !part.is_empty());
             let mut probe = parts.clone();
             if probe.next() == Some("mnt")
                 && let Some(drive) = probe.next()
                 && let [letter] = drive.as_bytes()
                 && letter.is_ascii_alphabetic()
             {
-                return Some(drive_folder(char::from(*letter), probe));
+                let folder = drive_folder(char::from(*letter), probe);
+                let below = folder.to_str()?.get(3..)?;
+                return plain_names(below).then_some(folder);
             }
-            let mut share = format!(r"\\wsl.localhost\{}", distro.as_deref()?);
-            for part in parts.by_ref() {
-                share.push('\\');
-                share.push_str(part);
+            let prefix = format!(r"\\wsl.localhost\{}", distro.as_deref()?);
+            let below = parts.collect::<Vec<_>>().join("\\");
+            if !plain_names(&below) {
+                return None;
             }
-            Some(PathBuf::from(share))
+            Some(PathBuf::from(if below.is_empty() {
+                prefix
+            } else {
+                format!(r"{prefix}\{below}")
+            }))
         }
     }
+}
+
+/// Whether every name of `below`, a translated path below its root, is one: none empty, `.` or
+/// `..`. An empty `below` is the root itself.
+fn plain_names(below: &str) -> bool {
+    below.is_empty()
+        || below
+            .split('\\')
+            .all(|name| !name.is_empty() && name != "." && name != "..")
 }
 
 /// `X:\a\b` from a drive letter and the folder names below its root.

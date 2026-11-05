@@ -5,7 +5,7 @@ use std::{
     fmt,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, PoisonError,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -15,6 +15,8 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 use crate::ChecksumError;
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 
 /// Why the file at a path must not be read in a run, or `None` when it may
 /// ([`Control::with_guard`]).
@@ -149,11 +151,7 @@ impl Control {
     /// before the first.
     #[must_use]
     pub fn current_file(&self) -> Option<PathBuf> {
-        self.counts
-            .file
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        self.counts.file.lock_or_recover("control.file").clone()
     }
 
     /// The bytes of [`Control::current_file`] read so far; 0 again with each file.
@@ -203,11 +201,7 @@ impl Control {
 
     /// The file at `path` of `size` bytes is read next: its own bytes start at 0.
     pub(crate) fn begin_file(&self, path: &Path, size: u64) {
-        let mut file = self
-            .counts
-            .file
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut file = self.counts.file.lock_or_recover("control.file");
         self.counts.file_bytes_done.store(0, Ordering::Relaxed);
         self.counts.file_bytes_total.store(size, Ordering::Relaxed);
         *file = Some(path.to_path_buf());
@@ -221,7 +215,9 @@ impl Control {
             return Ok(());
         };
         let owned = path.to_path_buf();
-        let judged = tokio::task::spawn_blocking(move || guard(&owned)).await;
+        let judged = tokio::task::spawn_blocking(move || guard(&owned))
+            .await
+            .log_panic("checksum.read_guard");
         let reason = match judged {
             Ok(reason) => reason,
             // The blocking pool is shutting down: judged here, as it always was.

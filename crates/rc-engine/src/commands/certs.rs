@@ -48,7 +48,8 @@ impl Engine {
     }
 
     /// `certificates.answer`: the dialog's answer. A changed certificate takes no yes - its
-    /// question stays open - and an expired one only "accept once".
+    /// question stays open - and an expired one only "accept once". For a plain FTP connection
+    /// "trust and save" allows its password in clear until rCommander ends; nothing is stored.
     pub(crate) async fn answer_certificate(
         &self,
         id: u64,
@@ -73,6 +74,12 @@ impl Engine {
             }
             (CertificateQuestionKind::Unknown, CertificateAnswer::TrustAndSave) => {
                 Some(self.store_certificate(&question).await?)
+            }
+            (CertificateQuestionKind::Plaintext, CertificateAnswer::TrustAndSave) => {
+                self.inner
+                    .remotes
+                    .allow_plaintext(&question.host, question.port);
+                None
             }
         };
         self.inner.certificates.close(id);

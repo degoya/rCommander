@@ -56,6 +56,8 @@ pub mod codes {
     pub const PLUGIN_HTTP_FAILED: &str = "plugin_http_failed";
     /// An HTTP answer larger than the manifest's `max_response_bytes`.
     pub const PLUGIN_HTTP_TOO_LARGE: &str = "plugin_http_too_large";
+    /// One call's HTTP requests took longer than `runtime::HTTP_TIME_BUDGET` together.
+    pub const PLUGIN_HTTP_TIME_BUDGET: &str = "plugin_http_time_budget";
 }
 
 /// Longest trap reason kept as a parameter: one line, never a backtrace.
@@ -92,6 +94,15 @@ pub(crate) fn stopped(error: Option<&wasmtime::Error>, cancelled: bool) -> Failu
 
 /// A stable code and one line: the trap reason matters to the person, the backtrace does not.
 fn describe(error: &wasmtime::Error) -> (&'static str, String) {
+    if error
+        .downcast_ref::<crate::runtime::HttpTimeBudget>()
+        .is_some()
+    {
+        return (
+            codes::PLUGIN_HTTP_TIME_BUDGET,
+            "HTTP time budget exhausted".to_owned(),
+        );
+    }
     if let Some(trap) = error.downcast_ref::<wasmtime::Trap>() {
         return match trap {
             wasmtime::Trap::OutOfFuel => (

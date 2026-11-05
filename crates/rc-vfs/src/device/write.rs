@@ -11,7 +11,7 @@ use std::{
     path::PathBuf,
     pin::Pin,
     sync::{
-        Arc, Mutex, PoisonError,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     task::{Context, Poll, ready},
@@ -20,6 +20,8 @@ use std::{
 use tokio::{io::AsyncWrite, task::JoinHandle};
 
 use super::{Session, cache::ObjectCache};
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{Result, VfsError, WriteStream};
 
 /// Where a written file goes once it is complete.
@@ -56,8 +58,7 @@ impl Target {
             );
         }
         self.cache
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("write.cache")
             .put(self.path, object);
         Ok(())
     }
@@ -156,7 +157,7 @@ impl AsyncWrite for SpoolWriter {
                     }
                 }
                 State::Uploading(task) => {
-                    let joined = ready!(Pin::new(task).poll(cx));
+                    let joined = ready!(Pin::new(task).poll(cx)).log_panic("vfs.device_upload");
                     this.state = State::Closed;
                     return Poll::Ready(match joined {
                         Ok(uploaded) => uploaded.map_err(VfsError::into_io),

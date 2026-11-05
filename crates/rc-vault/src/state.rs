@@ -8,12 +8,13 @@
 //! [`MAX_UNLOCKED_KEY`] hours after it was unlocked.
 
 use std::{
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 use serde::{Deserialize, Serialize};
 
+use crate::recover::LockOrRecover as _;
 use crate::{Result, VaultError, kdf::VaultKey};
 
 /// The setting that holds the idle lock in minutes; `0` never locks.
@@ -68,7 +69,7 @@ impl ManualClock {
 
     /// Moves the time forward by `by`.
     pub fn advance(&self, by: Duration) {
-        *self.offset.lock().unwrap_or_else(PoisonError::into_inner) += by;
+        *self.offset.lock_or_recover("state.offset") += by;
     }
 }
 
@@ -80,7 +81,7 @@ impl Default for ManualClock {
 
 impl Clock for ManualClock {
     fn now(&self) -> Instant {
-        self.start + *self.offset.lock().unwrap_or_else(PoisonError::into_inner)
+        self.start + *self.offset.lock_or_recover("state.offset")
     }
 }
 

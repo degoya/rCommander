@@ -8,7 +8,8 @@
 //! session ended) is replaced on the next use, which opens the session again. One unused for the
 //! session's idle time is dropped, so the session can close ([`kept`]). A locked vault is
 //! announced only for the window, never for an MCP call (`announce`). Whether the server folds
-//! case is probed when the backend opens, unless `sftp.case_sensitivity` says (RC-080-60).
+//! case is probed when the backend opens, unless `sftp.case_sensitivity` says (RC-080-60). A
+//! completed upload gets the rights `sftp.upload_rights` names (RC-080-67).
 
 mod kept;
 
@@ -27,7 +28,7 @@ use crate::{
     ConnectionId, ConnectionKind, Engine, EngineError,
     remote::{fold, location, strip_scheme},
     sessions::{ChannelLease, SessionChannel},
-    settings::{SFTP_CASE_KEY, stored_setting},
+    settings::{SFTP_CASE_KEY, SFTP_UPLOAD_RIGHTS_KEY, stored_setting},
 };
 
 /// The scheme of an SFTP location.
@@ -42,6 +43,15 @@ pub fn sftp_location(name: &str, path: &Path) -> String {
 /// `target` without its `sftp://`, ignoring ASCII case; `None` when it is no SFTP location.
 pub(crate) fn strip_sftp_scheme(target: &str) -> Option<&str> {
     strip_scheme(target, SFTP_SCHEME)
+}
+
+/// The rights of the setting `sftp.upload_rights`: its octal value, the default for anything
+/// else.
+fn upload_mode(value: Option<&str>) -> u32 {
+    value
+        .and_then(|value| u32::from_str_radix(value, 8).ok())
+        .filter(|mode| *mode <= 0o777)
+        .unwrap_or(rc_remote::sftp::DEFAULT_UPLOAD_MODE)
 }
 
 /// The case rule of the setting `sftp.case_sensitivity`: probed (`auto`, and anything else), or
@@ -89,12 +99,19 @@ impl Engine {
         let idle = names.lease.idle_close();
         let used = Use::new();
         let leases = Leases::new(vec![names.lease, files.lease], Arc::clone(&used));
-        let case = match self.db() {
-            Ok(db) => stored_setting(db, SFTP_CASE_KEY).await,
-            Err(_) => None,
+        let (case, rights) = match self.db() {
+            Ok(db) => (
+                stored_setting(db, SFTP_CASE_KEY).await,
+                stored_setting(db, SFTP_UPLOAD_RIGHTS_KEY).await,
+            ),
+            Err(_) => (None, None),
         };
         let case = case_rule(case.as_ref().and_then(serde_json::Value::as_str));
-        let opened = SftpVfs::connect_as(names.channel, files.channel, SftpLimits::default(), case)
+        let limits = SftpLimits {
+            upload_mode: upload_mode(rights.as_ref().and_then(serde_json::Value::as_str)),
+            ..SftpLimits::default()
+        };
+        let opened = SftpVfs::connect_as(names.channel, files.channel, limits, case)
             .await?
             .ending_with(gone)
             .holding(Box::new(leases));
@@ -263,3 +280,8 @@ mod paths_tests;
 #[cfg(test)]
 #[path = "sftp_case_tests.rs"]
 mod case_tests;
+
+// Unix modes: a Windows directory served knows only read-only.
+#[cfg(all(test, unix))]
+#[path = "sftp_rights_tests.rs"]
+mod rights_tests;

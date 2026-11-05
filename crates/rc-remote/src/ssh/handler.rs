@@ -12,7 +12,7 @@
 //! tries to open towards the client - agent, X11, forwarded or direct TCP/IP, Unix sockets, a
 //! session - is refused here. russh would accept them by default.
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use russh::{
     Channel, ChannelOpenFailure,
@@ -21,6 +21,7 @@ use russh::{
 };
 use tokio::sync::watch;
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     OfferedKey, describe,
     ssh::{HostKeyGate, SshError},
@@ -62,7 +63,7 @@ impl client::Handler for ClientHandler {
             },
         };
         let accepted = decision.is_ok();
-        *self.decision.lock().unwrap_or_else(PoisonError::into_inner) = Some(decision);
+        *self.decision.lock_or_recover("handler.decision") = Some(decision);
         Ok(accepted)
     }
 
@@ -189,8 +190,5 @@ impl Drop for ClientHandler {
 
 /// Takes what the check decided.
 pub(super) fn take(decision: &Decision) -> Option<Result<OfferedKey, SshError>> {
-    decision
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .take()
+    decision.lock_or_recover("handler.decision").take()
 }

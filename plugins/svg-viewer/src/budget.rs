@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use roxmltree::{Document, ParsingOptions};
 
+use crate::depth::{MAX_DEPTH, tree_within};
 use crate::expand;
 
 /// The most elements a document may have with its `<use>` references expanded: far beyond a
@@ -23,12 +24,18 @@ pub const MAX_EXPANDED_ELEMENTS: u64 = 1 << 20;
 /// What `svgtypes` 0.16 skips as spaces (`Stream::skip_spaces`, `src/stream.rs:49-51`).
 const SPACES: [char; 4] = [' ', '\t', '\n', '\r'];
 
-/// How a document is parsed, here and by usvg (`Tree::from_str`, `src/parser/mod.rs:159-164`):
-/// with DTDs, whose entities roxmltree expands under its own limits and never fetches.
+/// The most nodes roxmltree builds of one document - each element and the text after it, and the
+/// root: the element budget, held while the document is parsed (RC-080-69), not only counted
+/// after it.
+pub const MAX_PARSED_NODES: u32 = (1 << 21) + 1;
+
+/// How a document is parsed here: without DTDs (`crate::doctype` blanks the declaration first;
+/// RC-080-69) and with at most [`MAX_PARSED_NODES`] nodes.
 #[must_use]
 pub fn parsing<'input>() -> ParsingOptions<'input> {
     ParsingOptions {
-        allow_dtd: true,
+        allow_dtd: false,
+        nodes_limit: MAX_PARSED_NODES,
         ..ParsingOptions::default()
     }
 }
@@ -57,9 +64,11 @@ impl Remaining {
         self.exceeded.load(Ordering::Relaxed)
     }
 
-    /// Whether usvg may read `data` as the SVG it would make of it, its elements taken from what
-    /// is left. Bytes that are no UTF-8 or no XML take nothing: usvg fails on them as well
-    /// (`Tree::from_data`, `src/parser/mod.rs:105-120`).
+    /// Whether usvg may read `data` (its DOCTYPE blanked, `crate::doctype`) as the SVG it would
+    /// make of it, its elements taken from what is left. Bytes that are no UTF-8 or no XML take
+    /// nothing: usvg fails on them as well (`Tree::from_data`, `src/parser/mod.rs:105-120`). A
+    /// DTD the blanking missed, more than [`MAX_PARSED_NODES`] nodes or a tree nested beyond
+    /// [`MAX_DEPTH`] is not read: usvg would read them without these limits (RC-080-69).
     pub fn take_svg(&self, data: &[u8]) -> bool {
         if self.exceeded() {
             return false;
@@ -67,9 +76,18 @@ impl Remaining {
         let Ok(text) = std::str::from_utf8(data) else {
             return true;
         };
-        let Ok(document) = Document::parse_with_options(text, parsing()) else {
-            return true;
+        let document = match Document::parse_with_options(text, parsing()) {
+            Ok(document) => document,
+            Err(roxmltree::Error::DtdDetected) => return false,
+            Err(roxmltree::Error::NodesLimitReached) => {
+                self.exceeded.store(true, Ordering::Relaxed);
+                return false;
+            }
+            Err(_) => return true,
         };
+        if !tree_within(&document, MAX_DEPTH) {
+            return false;
+        }
         // usvg reads the embedded documents one after another, on the one thread of the guest:
         // nothing takes a share between this load and the store below.
         let left = self.left.load(Ordering::Relaxed);

@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse famille C",
+  "description": "Affiche le code source C, C++, C#, Java, Kotlin, Go et Rust en couleurs, comme un éditeur.",
+  "codes": {
+    "01a1aafa-df23-7a2d-aa5e-82bf3f2359dd.setting.encoding": "Encodage"
+  }
+}

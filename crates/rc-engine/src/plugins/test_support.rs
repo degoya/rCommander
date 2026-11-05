@@ -22,6 +22,8 @@ pub(crate) struct Spec<'a> {
     pub(crate) id: &'a str,
     pub(crate) name: &'a str,
     pub(crate) extensions: &'a [&'a str],
+    /// `[match] names` (RC-100-80); a manifest with any states `min_app_version = "0.19.0"`.
+    pub(crate) names: &'a [&'a str],
     /// Hex of a magic at offset 0, if any.
     pub(crate) magic: Option<&'a str>,
     pub(crate) max_size: Option<u64>,
@@ -38,6 +40,7 @@ impl Default for Spec<'_> {
             id: "a1",
             name: "Test bed",
             extensions: &["csv"],
+            names: &[],
             magic: None,
             max_size: None,
             outputs: &["text"],
@@ -64,6 +67,14 @@ pub(crate) fn manifest(spec: &Spec<'_>) -> PluginManifest {
         .max_size
         .map(|max| format!("max_size = {max}"))
         .unwrap_or_default();
+    let (names, min_app_version) = if spec.names.is_empty() {
+        (String::new(), String::new())
+    } else {
+        (
+            format!("names = [{}]", list(spec.names)),
+            "min_app_version = \"0.19.0\"".to_owned(),
+        )
+    };
     let limits = if spec.limits.is_empty() {
         String::new()
     } else {
@@ -82,6 +93,7 @@ public_key = "{PUBLIC_KEY}"
 
 [match]
 extensions = [{extensions}]
+{names}
 magic = [{magic}]
 {max_size}
 
@@ -93,6 +105,7 @@ outputs = [{outputs}]
 [metadata]
 description = "A component the viewer adapter's tests run."
 author = "rCommander"
+{min_app_version}
 {limits}
 "#,
         id = spec.id,

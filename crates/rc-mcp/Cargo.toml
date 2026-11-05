@@ -17,6 +17,8 @@ chrono.workspace = true
 rand.workspace = true
 rc-db = { path = "../rc-db" }
 rc-engine = { path = "../rc-engine" }
+# The roll-back of an update leaves the database alone while this server holds it (RC-080-69).
+rc-update = { path = "../rc-update" }
 rc-vault = { path = "../rc-vault" }
 reqwest.workspace = true
 rmcp.workspace = true

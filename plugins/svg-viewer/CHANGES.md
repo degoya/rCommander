@@ -1,5 +1,13 @@
 # Changes
 
+## 0.1.4
+
+A DOCTYPE no longer expands entities: the usual `<!DOCTYPE svg PUBLIC ...>` line is ignored and
+the picture draws, while a picture that uses an entity its DOCTYPE declares shows an error instead
+of the picture. A few kilobytes of such entities could fill the plugin's memory before. The
+nesting limit is checked once more on the parsed document, and the parser stops at the element
+limit instead of building everything first.
+
 ## 0.1.3
 
 The limit against SVG bombs counts what the renderer really builds. An SVG embedded as a `data:`

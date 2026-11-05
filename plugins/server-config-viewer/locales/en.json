@@ -1,0 +1,7 @@
+{
+  "name": "Server config viewer",
+  "description": "Shows nginx, Apache (.htaccess), OpenSSH, crontab and hosts files coloured like an editor.",
+  "codes": {
+    "01a1aafa-5f75-7144-a75e-b91bc95937f1.setting.encoding": "Encoding"
+  }
+}

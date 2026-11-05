@@ -292,3 +292,75 @@ async fn close_ends_every_idle_connection_and_keeps_none_after() {
     assert!(pool.idle().is_empty(), "nothing is kept after the close");
     sessions_reach(&server, 0).await;
 }
+
+/// RC-080-67: the keepalive asks every idle connection at once. One whose server holds its
+/// `NOOP` back keeps no other waiting - the one that answers is back at once - and is closed after
+/// the check's time, its seat free again.
+#[tokio::test]
+async fn a_hanging_connection_holds_up_no_other_keepalive() {
+    let server = TestServer::start(Options::default()).await;
+    let hanging = TestServer::start(Options {
+        hold: Some(("200 NOOP", Duration::from_secs(30))),
+        ..Options::default()
+    })
+    .await;
+    let mut healthy = config(&server);
+    healthy.timeout = Duration::from_secs(2);
+    let pool = Pool::open(healthy).await.expect("open");
+    let mut stuck = config(&hanging);
+    stuck.timeout = Duration::from_secs(2);
+    let (connection, _) = Connection::open(&stuck, None, None)
+        .await
+        .expect("the hanging server logs in");
+    let seat = Arc::clone(&pool.seats)
+        .try_acquire_owned()
+        .expect("a free seat");
+    let free_before = pool.seats.available_permits();
+    // The answering one is due for its check too: a fresh one is not checked at all.
+    for idle in pool.idle().iter_mut() {
+        idle.checked = ago(STALE_AFTER);
+    }
+    // The stuck one waits first in line, as a serial check would meet it.
+    pool.idle().insert(
+        0,
+        Idle {
+            connection,
+            seat,
+            used: Instant::now(),
+            checked: ago(STALE_AFTER),
+        },
+    );
+
+    let started = Instant::now();
+    let refresh = pool.refresh();
+    tokio::pin!(refresh);
+    let mut done = false;
+    // Polled before the first look: its first poll takes every idle connection out.
+    loop {
+        tokio::select! {
+            () = &mut refresh => done = true,
+            () = tokio::time::sleep(Duration::from_millis(20)) => {}
+        }
+        if done || !pool.idle().is_empty() {
+            break;
+        }
+    }
+    assert!(!done, "the round still waits for the hanging one");
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "the answering one is back at once: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(pool.idle().len(), 1);
+    refresh.await;
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "one check's time"
+    );
+    assert_eq!(pool.idle().len(), 1, "the hanging one is closed");
+    assert_eq!(
+        pool.seats.available_permits(),
+        free_before + 1,
+        "its seat is free again"
+    );
+}

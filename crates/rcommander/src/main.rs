@@ -20,6 +20,7 @@ mod mcp;
 mod native_window;
 mod platform;
 mod plugin_cli;
+mod recover;
 mod term;
 mod theme;
 mod update_cli;

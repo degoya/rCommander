@@ -1,0 +1,7 @@
+# cargo-fuzz's own output; scripts/fuzz.sh keeps its corpus and findings under target/fuzz/
+# instead, and copies Cargo.lock in from the main workspace before every run.
+/target/
+/corpus/
+/artifacts/
+/coverage/
+/Cargo.lock

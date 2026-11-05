@@ -5,6 +5,202 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-05
+
+### Added
+
+- **Viewer plugins by file name, and a Dockerfile viewer** (RC-100-80): a plugin's manifest
+  claims whole file names beside extensions (`[match] names`: case-insensitive, `*` the only
+  wildcard, the file name only; a manifest with names needs `min_app_version` 0.19.0). An exact
+  name is asked before every extension, a name pattern after them, so `Dockerfile` and
+  `Dockerfile.dev` open in the new bundled Dockerfile viewer 0.1.0 (instructions, flags,
+  variables, directives, continued lines, heredocs, the shell form in the shell viewer's colours)
+  while `Dockerfile.toml` stays TOML. The config viewer 0.2.0 takes `.env.*`, systemd units,
+  `.gitmodules`, `.npmrc` and `.dockerignore`; the shell script viewer 0.2.0 the start files of
+  zsh, bash and ksh, `.envrc`, `PKGBUILD` and `APKBUILD`. `plugins_list`, the install preview and
+  an update's added permissions show the names.
+- **The JSON viewer reads JSONC, JSON5 and JSON Lines** (RC-100-80, `json-viewer` 0.3.0): by
+  the extension, `.jsonc` with `//` and `/* */` comments and a comma before a closing bracket,
+  `.json5` with those and its bare keys, single-quoted strings and numbers, `.jsonl` and
+  `.ndjson` a value per line, each line checked and coloured for itself and the tree a list of
+  the lines' values. Comments get the comment colour, also on the lines inside a `/* */`;
+  `pretty` lays out the values without the comments and no longer leaves an empty line after a
+  comma before a closing bracket.
+- **Three bundled viewers: SQL, Makefiles and server configuration** (RC-100-81), each built as
+  the Python viewer is (one streamed pass, a line index within 16 MiB, `highlighted` only,
+  nothing granted, the setting `encoding`, locales en, de, fr, es, native unit tests, the 100 MiB
+  case `#[ignore]`d). `plugins/sql-viewer/` (`rc-plugin-sql-viewer` 0.1.0) for `.sql`, `.ddl`,
+  `.dml`, `.psql`, `.pgsql`, `.mysql`: one keyword table for ANSI, PostgreSQL, MySQL, SQLite and
+  T-SQL, types, literals, functions called, strings with `''` and prefixes, quoted names
+  (`"..."`, `` `...` ``, `[...]`), variables and parameters, nested block comments and
+  PostgreSQL's dollar-quoted bodies over lines; a `.mysql` file or a MySQL/MariaDB dump reads `#`
+  comments, `"..."` strings and backslash escapes. `plugins/make-viewer/` (`rc-plugin-make-viewer`
+  0.1.0), claimed by `[match] names` (`Makefile`, `makefile`, `GNUmakefile`, `*.mk`;
+  `min_app_version = "0.19.0"`) and `.mk`: targets, special targets, every assignment flavour,
+  references and function calls (nesting bounded at 32, no recursion), directives, `define`
+  bodies, continued lines, tab recipes with the shell viewer's colours as far as they need no
+  grammar. `plugins/server-config-viewer/` (`rc-plugin-server-config-viewer` 0.1.0), claimed by
+  name (`nginx.conf`, `*.nginx`, `httpd.conf`, `apache2.conf`, `.htaccess`, `ssh_config`,
+  `sshd_config`, `crontab`, `hosts`, `*.conf`) and `.nginx`, `.htaccess`: a grammar each for nginx,
+  Apache, OpenSSH, crontab and hosts; `*.conf` is a pattern, asked after the config viewer's
+  extension claim: the config viewer declines a nginx- or Apache-like `.conf` (RC-100-80) and this
+  plugin takes it by its first line that is no comment (a block, a `;` without `=`, a tag, an
+  Apache directive), declining an INI-like one.
+- **The bundled C-family viewer** (RC-100-82): `plugins/c-family-viewer/`
+  (`rc-plugin-c-family-viewer` 0.1.0), one plugin and one lexer for C (`.c`), C++ (`.cpp`, `.cc`,
+  `.cxx`, `.hpp`, `.hh`, `.hxx`, `.h`, `.ino`), C# (`.cs`, `.csx`), Java, Kotlin (`.kt`, `.kts`),
+  Go and Rust, the language by the extension of the name the host gives (`source-info`), never
+  by the content; output `highlighted` only, nothing granted, the setting `encoding` as the
+  Python viewer's. Per language a sorted table of keywords, types and constants and the rules
+  that differ: the C/C++ preprocessor (`#include <path>`, `#define NAME`, backslash splices of
+  directives, `//` comments and strings), C++ raw strings `R"d(...)d"`, C#'s `#region`, verbatim
+  `@"..."`, interpolated `$"{x:N2}"` and raw `$$"""..."""` strings, Java/Kotlin annotations and
+  text blocks, Kotlin templates `$x`/`${...}`, Go raw strings, Rust lifetimes (a type's part,
+  never a character), raw/byte/C strings, attributes, macros `name!` and raw names `r#type`,
+  nested comments in Rust and Kotlin. A lexer without backtracking, a streamed line index within
+  16 MiB; a sample test per language, a 5 MiB file within the manifest's time limit; locales en,
+  de, fr, es.
+- **The MCP gate keeps a call log; reading a terminal's screen asks** (RC-080-66): every tool
+  call is a row of `mcp_audit_log` (migration 0023, retained 10 000 rows / 30 days) - session,
+  tool, class, decision, the answer's code, the arguments masked and cut to 2 KiB, never an
+  answer - while `mcp.audit_log` is on (default); Settings > MCP lists it by session and clears
+  it, and no MCP tool reads it. `terminal_read_screen` is destructive now and asks, with "allow
+  for this session" on that terminal; `mcp.token.rotate_on_start` (default off) gives every
+  start a new token; the stdio bridge ends with an error at its first failure; `queue_load`
+  refuses a list saved again after its class was judged (`queue_changed`); `files_set_attributes`
+  with a group-writable mode asks.
+- **Fuzzing of the parsers of outside data and a coverage measurement** (RC-080-72): six
+  cargo-fuzz targets in `fuzz/`, a workspace of its own on a pinned nightly (FTP `LIST`/`MLSD`,
+  `known_hosts`, tar/zip/7z listings, Total Commander's INI files, the terminal's OSC sequences,
+  plugin manifests), run by `scripts/fuzz.sh` (60 s per target, corpus seeded from the test data)
+  and 5 min per target by the nightly local run; `scripts/coverage.sh` measures the line and
+  function coverage per crate with `cargo llvm-cov nextest`.
+
+### Changed
+
+- **The secret canary sweep drives the riskiest paths too** (RC-080-61): the sweep
+  (`rc-mcp/tests/secret_canary/`, split from `secret_canary_sweep.rs`) makes each tool's
+  arguments from its input schema and fails on a tool it cannot fill; it runs over the
+  Streamable HTTP transport as well, with `mcp.token` a canary of the answers, the HTTP server's
+  own refusals, the events and the logs; a last pass redeems the confirmation codes, so
+  `ssh_exec`, `terminal_send_input`, `terminal_read_screen` and `workspaces_apply` reach their
+  core against the in-process SSH server (counted), never against the machine. Canaries are
+  looked for as hex in both cases, base64 from offsets 0/1/2, URL-encoded and UTF-16 LE/BE too,
+  each form with its counter-check, and in every value of every table the database has.
+- **Semver-compatible updates before 0.19.0**: svgtypes 0.16.2, trash 5.3.0, winnow 1.0.5.
+- **CI: `taiki-e/install-action` 2.87.32 -> 2.89.1** (public PR #18, Dependabot), pinned by
+  commit in `ci.yml` and `release.yml`; the SHA checked against the upstream tag.
+
+### Fixed
+
+- **Bundled plugins come back after a change of the signing key** (RC-100-79): an installation
+  whose bundled viewers were installed under the development key - not a root of a release build
+  since 0.18.0 - kept them, unloadable, because `sync_bundled` leaves an installed version alone.
+  At the start an installed bundled version refused as `plugin_key_untrusted` or
+  `plugin_key_mismatch` is now replaced by the bundled package of the same id and version
+  (staged, the old one moved aside, renamed in); its switch, version choice and settings stay. A
+  version that verifies, one a person installed, and one withdrawn or changed on disk are left as
+  they are; each replacement writes a warning line (id, version, old code). The Plugins page no
+  longer calls such a package "unsigned": a plugin none of whose versions verifies shows its
+  manifest's name, version and kind (read for display, never run) and the reason ("key not
+  trusted", else the refusal's text); `plugins_list` carries the code as `refused`
+  (`installed/bundled.rs`, `installed.rs`, `plugin_admin/listing.rs`).
+- **A closed terminal's program ends even when it ignores the hang-up** (RC-080-62, Linux and
+  macOS): `trap '' HUP`, `nohup` or a daemon kept running, and with it two threads per closed
+  terminal. The close now lets the PTY's master go at once; a program still running 2 s after
+  the `SIGHUP` gets `SIGTERM`, 2 s later `SIGKILL`, to its process group and the terminal's
+  foreground group (`nix`, no own `unsafe`; `local_pty/ending.rs`, `hangup.rs`). A program that
+  ends on the hang-up gets neither, a process detached with `setsid` is in neither group; with
+  `terminal.end_programs_on_close` off only the program itself is signalled. Windows is
+  unchanged (job object).
+- **Terminal limits, the clipboard, system programs and WSL shells** (RC-080-65, audit
+  2026-11-03): the OSC scanner now gates the parser - an OSC sequence longer than 64 KiB (OSC 52:
+  1 MiB of text) is dropped whole before `vte` buffers it; titles lose bidi and control
+  characters and keep 256 characters; the local and SSH input queues (1024 writes, a full one
+  refuses with `terminal_input_full`) and the terminal's requests to the session are bounded. A
+  program's OSC 52 copy reaches the clipboard only from the terminal a panel shows, at most
+  1 MiB, with a status line naming the terminal; the new setting `terminal.osc52_remote` (on, as
+  in Windows Terminal) lets SSH terminals copy too. `wsl.exe`, `cmd.exe` and Windows PowerShell
+  are started by their System32 path only (`SystemRoot` only when absolute, else `C:\Windows`;
+  `rc_vfs::system32`), a missing one fails with its path. A WSL distribution's login shell is
+  asked once per run; `csh`/`tcsh` get `!` quoted as `\!`. A login script's tap that falls behind
+  ends the run with `login_script_output_overflow`; a folder a WSL shell reports is refused when
+  its translation has an empty, `.` or `..` name.
+- **SSH, SFTP and FTP: revoked host keys, upload rights, the plain-FTP question, keepalive**
+  (RC-080-67): a `known_hosts` import keeps its `@revoked` keys (`revoked_host_keys`, migration
+  0024) and a server presenting one stops with `host_key_revoked`, before and without any trust
+  question; the Host keys page lists them last and removes one after a yes (GuiOnly), MCP lists
+  them (`hostkeys_revoked`). An FTPS certificate question shows the certificate of its own
+  handshake (a refusal slot per control connection, emptied before each handshake). An SFTP
+  upload is created `0600` and gets `sftp.upload_rights` (644) once complete. A plain FTP login
+  with a password asks before `USER`/`PASS` (`ftp.ask_plaintext`, on: once or until rCommander
+  closes). The FTP keepalive asks every idle connection at once, 10 s each.
+- **File operations and VFS: the rest of the 2026-11-03 audit** (RC-080-70): a file downloaded or
+  unpacked keeps at most 0775 of its mode and nothing the process's umask
+  takes away (0775 under umask 022 is 0755; `rc_vfs::umask`, read once). A copy within one FTP
+  server holds the turn to open its two streams only while it opens them and per server, so a
+  paused one no longer stops every other such copy. A device call after a timeout waits for the
+  one still running instead of running beside it. A pack without "overwrite" never replaces an
+  archive that took the name while it ran (`rename_no_replace`). A `.rcpart` that is a link is
+  started over, never continued, and appending opens with `O_NOFOLLOW` on Unix. On macOS the
+  multi-rename's name keys are NFC and case-folded (`FsRules::MACOS`), so `\u{c4}` and
+  `A\u{308}` collide in the preview. A long listing still arriving merges each batch into the
+  sorted rest instead of sorting all of it per flush; the archive pipe reuses its chunks and
+  unpack-to-temp copies through 256 KiB.
+- **Links to folders are copied and moved** (RC-080-63): F5 and F6 of a symbolic link or a
+  junction to a folder ended in `not_copyable`. As Total Commander's `CopyLinks` and
+  `IgnoreLinks`, the new setting `ops.copy_links` decides: `contents` (the default) copies the
+  folder it leads to as a plain folder, and a move to another file system then removes only the
+  link, once everything below it arrived; `link` makes the link anew at the target with its
+  target unchanged (`links_unsupported` where the target makes none); `skip` passes it over and
+  counts it as skipped. A move within one file system renames the link itself, whatever the
+  setting says. A link that leads back into its own path is not followed (`link_loop`), so a copy
+  never runs without end (`rc-ops` `links.rs`, `copy_dirs.rs`).
+- **A failed multi-rename leaves nothing under a hidden name** (RC-080-64): a run that fails in
+  the middle of a swap or a ring left an entry under its temporary name `.rc-rename-*`, hidden on
+  Unix. Such a run is now reversed by its own job (setting `rename.undo_on_failure`, on), and the
+  dialog says so with the first error; off, or when the reversal fails too, the dialog lists each
+  parked entry with the name it was to get, the job's report (`rename_stopped`, also in
+  `ops_list`) carries the list and the error log the same. Each step now renames with
+  `rename_no_replace`, so a name taken in the moment before the rename is never overwritten.
+- **Vault and database: export password, KDF caps, file permissions, restore** (RC-080-68, the
+  low vault findings of the 2026-11-03 audit): an export with passwords and keys needs an export
+  password of eight characters (`exchange_password_short`); a sealed export asking argon2 for
+  more than 256 MiB, 8 passes or 4 lanes is refused before anything is derived
+  (`exchange_kdf_too_costly`, `KdfParams::IMPORT_MAX`; the own database keeps 1 GiB); parameters
+  below the release floor are refused on read in a debug build too - only a process that makes
+  keys as weak itself, the tests, reads them (`open_export` takes the reader's own parameters).
+  On Unix the database, its `-wal`, `-shm` and `-journal` are `0600` from their creation and
+  tightened at every start. A restore refuses a backup with a table, index, trigger or view its
+  migrations do not create, or with their trigger changed (`restore_foreign_object`); the copy
+  is written through its owner-only handle instead of `fs::copy`, which gave it the source's
+  permissions; the digest is read through the handle of the file that is renamed, which must
+  still have its name, before and after the swap.
+- **Update and plugin hardening from the audit of 2026-11-03** (RC-080-69): the update plan
+  itself refuses a program outside the program folder (`Plan::validate`, not only the journal's
+  check); a roll-back puts the database copy back only once no window and no headless
+  `rcommander mcp` holds the new `update/database.lock` (10 s), else the program files roll back
+  alone and the start shows `update.instance_running`; a plugin key confirmed at install is
+  stored only after the package verified in full, compile included; host HTTP time is credited
+  back to a plugin call at most per request's limit and 60 s per call (`plugin_http_time_budget`);
+  the SVG viewer blanks the DOCTYPE so no entity expands, counts the nesting on the parsed tree
+  too and stops the parse at its node budget (SVG viewer plugin 0.1.4); `lru`'s unsound
+  advisory under iced is documented (`docs/security/dependencies.md`).
+- **A slow shell extension no longer freezes the window; panics and poisoned locks reach the
+  error log** (RC-080-71): the Explorer context menu invokes its entries with
+  `CMIC_MASK_ASYNCOK`, as the Explorer does, so a handler may finish on a thread of its own.
+  Every place that awaits a task or joins a thread logs a task that died of a panic as `error`
+  (target `panic`, the task's name, the place); every lock a panic poisoned is taken through the
+  crate's `recover.rs` (`lock_or_recover`, `read_or_recover`, `write_or_recover`), which writes
+  one `warn` with the lock's name, clears the poison and goes on with the state as before - 126
+  call sites, no silent `PoisonError::into_inner` left (`repo_lints/poison.rs`).
+- **The Total Commander import keeps `%` as Total Commander does** (RC-080-71): a `%variable%`
+  that is not set stays as written instead of the entry being skipped (`unknown_variable`), one
+  set to nothing becomes nothing, the names after it are still replaced, and a `%` that opens no
+  name (`C:\100% done`) is text. Only the variables Total Commander puts into paths are read
+  (RC-080-35); any other name stays as written, so no secret reaches the report. `\\?\` before a
+  drive or a share is dropped (`\\?\C:\x` is `C:\x`), a volume path keeps it.
+
 ## [0.18.1] - 2026-11-04
 
 ### Fixed

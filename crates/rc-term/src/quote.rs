@@ -3,7 +3,8 @@
 //! A folder name is data, never code: whatever it holds (quotes, `;`, `&`, `|`, `$(...)`,
 //! backticks, `%VAR%`) must reach the shell as the name and run nothing. Each syntax quotes it
 //! the way its shell reads a literal; a name that cannot be quoted that safely - a control
-//! character in any shell, `"`, `%` or `!` in `cmd` - gets no line at all.
+//! character in any shell, `"`, `%` or `!` in `cmd`, a relative path in `csh` - gets no line at
+//! all.
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +18,9 @@ pub enum ShellSyntax {
     PowerShell,
     /// `cmd.exe`: double quotes; `%` expands even inside them.
     Cmd,
+    /// `csh` and `tcsh` (a WSL distribution's login shell, RC-080-65): single quotes, but `!`
+    /// is history even inside them and is written `\!`.
+    Csh,
 }
 
 impl ShellSyntax {
@@ -61,6 +65,14 @@ pub fn cd_line(syntax: ShellSyntax, path: &str) -> Option<String> {
                 return None;
             }
             format!(" cd /d \"{path}\"")
+        }
+        // No `--`, which not every csh takes: an absolute path cannot be read as an option.
+        ShellSyntax::Csh => {
+            if !path.starts_with('/') {
+                return None;
+            }
+            let quoted = path.replace('\'', r"'\''").replace('!', r"\!");
+            format!(" cd '{quoted}'")
         }
     };
     Some(line + "\r")

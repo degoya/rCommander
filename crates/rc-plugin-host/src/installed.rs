@@ -22,11 +22,12 @@ mod sweep;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::{Mutex, PoisonError},
+    sync::Mutex,
 };
 
 use anyhow::Result;
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     PluginManifest, VersionRole, format_package_digest, key_fingerprint,
     package::{VerifiedPackage, VerifyError},
@@ -133,13 +134,27 @@ pub struct VersionEntry {
     pub manifest: Option<PluginManifest>,
     /// Why it does not, when it does not: a [`crate::Refusal`] code, or `plugin_key_untrusted`.
     pub refused: Option<&'static str>,
+    /// What a version that does not verify says about itself, when its manifest reads: shown,
+    /// never trusted or run (RC-100-79).
+    pub label: Option<UnverifiedLabel>,
     /// Where it stands among the plugin's versions that verify.
     pub role: Option<VersionRole>,
+    /// It carries a signature: one that holds when `refused` is `None`, else `refused` says why
+    /// not. `false` is a package development mode accepted unsigned, or one without a signature.
     pub signed: bool,
     /// The signing key's fingerprint.
     pub fingerprint: Option<String>,
     /// [`crate::package_digest`] in hex.
     pub digest: Option<String>,
+}
+
+/// The name, version and kind an unverified manifest claims, for the Plugins page only.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnverifiedLabel {
+    pub name: String,
+    pub version: String,
+    /// The plugin kind: `viewer`, `secrets`.
+    pub kind: String,
 }
 
 /// Every installed version with its standing under `state`, by plugin id and newest first. Checks
@@ -186,16 +201,30 @@ fn entry(dir: PathBuf, verifier: &PluginVerifier) -> VersionEntry {
         .map(|(manifest, component, _, locales)| {
             format_package_digest(&crate::package_digest(manifest, component, locales))
         });
+    let has_signature = parts
+        .as_ref()
+        .is_ok_and(|(_, _, signature, _)| signature.is_some());
+    // Kept for the label of a version that does not verify; a manifest is small.
+    let manifest_bytes = parts.as_ref().ok().map(|(manifest, ..)| manifest.clone());
     let checked = parts
         .map_err(VerifyError::from)
         .and_then(|parts| verifier.verify_contents(parts))
         .and_then(|package| in_its_folder(&dir, package).map_err(VerifyError::from));
-    let (manifest, refused, signed) = match checked {
+    let (manifest, refused, signed, label) = match checked {
         Ok(package) => {
             let signed = package.signature.is_some();
-            (Some(package.manifest), None, signed)
+            (Some(package.manifest), None, signed, None)
         }
-        Err(error) => (None, Some(error.code()), false),
+        Err(error) => {
+            let label = manifest_bytes
+                .and_then(|bytes| crate::parse_manifest(&bytes).ok())
+                .map(|claimed| UnverifiedLabel {
+                    kind: claimed.plugin_type.as_str().to_owned(),
+                    name: claimed.name,
+                    version: claimed.version,
+                });
+            (None, Some(error.code()), has_signature, label)
+        }
     };
     let fingerprint = manifest
         .as_ref()
@@ -210,6 +239,7 @@ fn entry(dir: PathBuf, verifier: &PluginVerifier) -> VersionEntry {
         version_dir: dir,
         manifest,
         refused,
+        label,
         role: None,
         signed,
         fingerprint,
@@ -259,7 +289,7 @@ pub struct InUse {
 /// Holds `version_dir` (an [`InstalledPlugin::version_dir`]) for as long as the guard lives.
 #[must_use]
 pub fn hold(version_dir: &Path) -> InUse {
-    let mut held = IN_USE.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut held = IN_USE.lock_or_recover("installed.in_use");
     *held.entry(version_dir.to_path_buf()).or_default() += 1;
     InUse {
         version_dir: version_dir.to_path_buf(),
@@ -270,14 +300,13 @@ pub fn hold(version_dir: &Path) -> InUse {
 #[must_use]
 pub fn in_use(version_dir: &Path) -> bool {
     IN_USE
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .lock_or_recover("installed.in_use")
         .contains_key(version_dir)
 }
 
 impl Drop for InUse {
     fn drop(&mut self) {
-        let mut held = IN_USE.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut held = IN_USE.lock_or_recover("installed.in_use");
         if let Some(count) = held.get_mut(&self.version_dir) {
             *count -= 1;
             if *count == 0 {

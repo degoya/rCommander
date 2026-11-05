@@ -59,6 +59,32 @@ fn probe_takes_text_utf16_and_of_lock_files_cargo_lock_only() {
     assert!(probe(&mut named(b"[[package]]\n", "Cargo.lock")));
 }
 
+/// RC-100-80 with RC-100-81: an nginx- or Apache-like `.conf` is declined, so the server config
+/// viewer asked after this one shows it; an INI-like `.conf` stays here.
+#[test]
+fn probe_leaves_server_like_conf_files_to_the_next_viewer() {
+    for server in [
+        "# nginx\nuser www-data;\nworker_processes auto;\n",
+        "\n\nserver {\n    listen 80;\n}\n",
+        "# Apache\n<VirtualHost *:80>\n  ServerName example.net\n</VirtualHost>\n",
+    ] {
+        assert!(
+            !probe(&mut named(server.as_bytes(), "site.conf")),
+            "{server}"
+        );
+        // The same text under another extension is not judged.
+        assert!(probe(&mut named(server.as_bytes(), "site.cfg")), "{server}");
+    }
+    for ini in [
+        "; settings\n[main]\nname = value\n",
+        "# comment\nkey=value;\n",
+        "[server]\nport = 8080\n",
+        "",
+    ] {
+        assert!(probe(&mut named(ini.as_bytes(), "app.conf")), "{ini}");
+    }
+}
+
 #[test]
 fn the_format_comes_from_the_name() {
     for (name, format) in [
@@ -77,11 +103,77 @@ fn the_format_comes_from_the_name() {
         ("Cargo.lock", Format::Toml),
         (".gitignore", Format::Lines),
         (".gitattributes", Format::Lines),
+        // RC-100-80.
+        (".env.production", Format::Env),
+        ("app.service", Format::Ini),
+        ("backup.timer", Format::Ini),
+        ("docker.socket", Format::Ini),
+        ("home.mount", Format::Ini),
+        ("watch.path", Format::Ini),
+        ("multi-user.target", Format::Ini),
+        (".gitmodules", Format::Ini),
+        (".npmrc", Format::Ini),
+        (".dockerignore", Format::Lines),
     ] {
         assert_eq!(Format::from_name(name), format, "{name}");
     }
     let viewer = open(named(b"a = 1\n", "Cargo.toml"), None);
     assert_eq!(viewer.format(), Format::Toml);
+}
+
+/// The classes of the tokens of every line of `text` opened as `name`.
+fn classes(name: &str, text: &str) -> Vec<Vec<TokenClass>> {
+    let mut viewer = open(named(text.as_bytes(), name), None);
+    let count = u32::try_from(viewer.line_count()).expect("a few lines");
+    let lines = viewer.tokens(0, count).expect("tokens");
+    lines
+        .iter()
+        .map(|line| line.iter().map(|token| token.class).collect())
+        .collect()
+}
+
+/// RC-100-80: a sample of each file type the viewer took on, coloured rather than plain.
+#[test]
+fn the_new_file_types_are_coloured() {
+    let unit = classes(
+        "app.service",
+        "[Unit]\nDescription=My app\n\n[Service]\nExecStart=/usr/bin/app\n# note\n",
+    );
+    assert_eq!(unit[0], [Keyword]);
+    assert_eq!(unit[1][..2], [Key, Punctuation]);
+    assert_eq!(unit[3], [Keyword]);
+    assert_eq!(unit[5], [TokenClass::Comment]);
+    let timer = classes("backup.timer", "[Timer]\nOnCalendar=daily\n");
+    assert_eq!(timer[0], [Keyword]);
+    assert_eq!(timer[1][..2], [Key, Punctuation]);
+    let modules = classes(
+        ".gitmodules",
+        "[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n",
+    );
+    assert_eq!(modules[0], [Keyword]);
+    assert_eq!(modules[1][..2], [Key, Punctuation]);
+    let npmrc = classes(".npmrc", "registry=https://registry.npmjs.org/\n; c\n");
+    assert_eq!(npmrc[0][..2], [Key, Punctuation]);
+    assert_eq!(npmrc[1], [TokenClass::Comment]);
+    let ignore = classes(".dockerignore", "# build output\ntarget/\n!target/keep\n");
+    assert_eq!(ignore[0], [TokenClass::Comment]);
+    assert_eq!(ignore[1], [Key]);
+    assert_eq!(ignore[2], [Key]);
+    let env = classes(".env.local", "API_URL=http://localhost\nexport DEBUG=1\n");
+    assert_eq!(env[0][..2], [Key, Punctuation]);
+    assert_eq!(env[1][..2], [Keyword, Key]);
+}
+
+/// The two types the job names besides the new ones (RC-100-80): `.toml` and `.env`, coloured.
+#[test]
+fn toml_and_env_files_are_coloured() {
+    let toml = classes("Cargo.toml", "[package]\nname = \"rc\"\nversion = 1\n");
+    assert_eq!(toml[0][0], Keyword);
+    assert_eq!(toml[1][0], Key);
+    assert!(toml[1].contains(&Str));
+    let env = classes(".env", "# db\nexport DB_HOST=localhost\n");
+    assert_eq!(env[0], [TokenClass::Comment]);
+    assert_eq!(env[1], [Keyword, Key, Punctuation, Str]);
 }
 
 #[test]

@@ -13,9 +13,11 @@
 
 use std::{
     collections::VecDeque,
-    sync::{Mutex, MutexGuard, PoisonError},
+    sync::{Mutex, MutexGuard},
     time::{Duration, Instant},
 };
+
+use crate::recover::LockOrRecover as _;
 
 /// How many questions wait at most; the oldest goes when another comes.
 pub(crate) const MAX_QUESTIONS: usize = 32;
@@ -58,7 +60,7 @@ impl<Q> Default for QuestionDesk<Q> {
 
 impl<Q: Question> QuestionDesk<Q> {
     fn lock(&self) -> MutexGuard<'_, Desk<Q>> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.inner.lock_or_recover("question_desk.inner")
     }
 
     /// Files `question` under the next id, or returns the open one that asks the same.

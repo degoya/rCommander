@@ -4,7 +4,9 @@
 use rc_db::{Db, NewPluginExecution};
 use rc_plugin_host::{
     key_fingerprint, sha256_hex,
-    test_support::{signing_key, viewer_package},
+    test_support::{
+        component_importing_http, signing_key, viewer_package, viewer_package_unchecked,
+    },
 };
 use serde_json::json;
 
@@ -141,4 +143,33 @@ async fn the_setting_refuses_more_than_its_maximum() {
         .await
         .expect_err("above the maximum");
     assert_eq!(refused.code(), "setting_invalid");
+}
+
+/// RC-080-69: a confirmed key is stored only once the package verified in full; a component the
+/// host refuses to compile leaves no trusted key behind.
+#[tokio::test]
+async fn a_package_that_does_not_compile_leaves_no_trusted_key() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let engine = test_support::headless(root.path()).await;
+    let db = Db::open_in_memory().await.expect("db");
+    assert!(engine.attach_db(db.clone()));
+    assert!(engine.attach_plugins(root.path().join("data"), None));
+    let key = signing_key(9);
+    let path = root.path().join("broken-1.0.0.rcplug");
+    let bytes =
+        viewer_package_unchecked(ID, "1.0.0", "author-v9", &key, &component_importing_http());
+    std::fs::write(&path, &bytes).expect("write");
+    let refused = engine
+        .dispatch(Command::InstallPlugin {
+            path: path.display().to_string(),
+            fingerprint: Some(key_fingerprint(&key.verifying_key())),
+            digest: sha256_hex(&bytes),
+        })
+        .await
+        .expect_err("a viewer importing http does not compile");
+    assert_ne!(refused.code(), "plugin_key_untrusted");
+    assert!(
+        db.plugin_keys().await.expect("keys").is_empty(),
+        "the key is not trusted"
+    );
 }

@@ -7,13 +7,14 @@
 //! limits are the queue's, not a list's (RC-010-15): the jobs of every list wait in one lane per
 //! backend, and a stopped list's jobs let the others pass like paused ones.
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use rc_vfs::BackendId;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
 use super::JobShared;
+use crate::recover::LockOrRecover as _;
 use crate::{JobId, OpsError, staging::is_remote};
 
 /// Where [`crate::Queue::reorder`] moves a waiting job among the waiting jobs of its lane.
@@ -86,7 +87,7 @@ impl Lanes {
     }
 
     fn lock(&self) -> MutexGuard<'_, Board> {
-        self.board.lock().unwrap_or_else(PoisonError::into_inner)
+        self.board.lock_or_recover("lanes.board")
     }
 
     /// New limits; jobs already running keep running, waiting ones start where there is room.

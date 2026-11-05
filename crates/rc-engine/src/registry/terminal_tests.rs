@@ -28,7 +28,7 @@ fn a_terminal_command_reads_with_defaults() {
 }
 
 /// A command that starts or feeds a process is `exec`, so MCP always asks first; ending one is
-/// `destructive`.
+/// `destructive`, and so is reading a screen.
 #[test]
 fn terminal_commands_have_the_classes_their_effects_need() {
     let class = |id: &str| spec(id).expect("a row").class;
@@ -38,5 +38,6 @@ fn terminal_commands_have_the_classes_their_effects_need() {
     assert_eq!(class("terminal.send_input"), CommandClass::Exec);
     assert_eq!(class("terminal.close"), CommandClass::Destructive);
     assert_eq!(class("terminal.list"), CommandClass::Read);
-    assert_eq!(class("terminal.read_screen"), CommandClass::Read);
+    // The screen shows what was typed there: MCP asks before reading it (RC-080-66).
+    assert_eq!(class("terminal.read_screen"), CommandClass::Destructive);
 }

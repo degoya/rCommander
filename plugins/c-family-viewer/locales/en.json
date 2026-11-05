@@ -1,0 +1,7 @@
+{
+  "name": "C-family viewer",
+  "description": "Shows C, C++, C#, Java, Kotlin, Go and Rust source coloured like an editor.",
+  "codes": {
+    "01a1aafa-df23-7a2d-aa5e-82bf3f2359dd.setting.encoding": "Encoding"
+  }
+}

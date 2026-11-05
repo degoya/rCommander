@@ -14,11 +14,12 @@
 //! nine with the digits as their access keys; the system's menu wants ids that live as long as
 //! the bar, so each workspace's id is made once a run ([`interned`]).
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use rc_engine::{Command, Keymap, WorkspaceId, workspace_key, workspace_key_name};
 
 use super::{Action, Entry};
+use crate::recover::LockOrRecover as _;
 use crate::{i18n::t, platform::menu_bar::BarItem};
 
 /// The command whose palette rows a list makes.
@@ -152,7 +153,7 @@ static IDS: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 /// `name` as an id that lives as long as the bar: the one made before, or a new one kept for the
 /// rest of the run - one per workspace seen, so they stay few.
 fn interned(name: String) -> &'static str {
-    let mut ids = IDS.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut ids = IDS.lock_or_recover("workspaces.ids");
     if let Some(id) = ids.iter().copied().find(|id| *id == name) {
         return id;
     }

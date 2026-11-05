@@ -17,6 +17,7 @@ fn launch(distro: Option<&str>, cwd: WslCwd) -> WslLaunch {
         program: PathBuf::from("wsl.exe"),
         distro: distro.map(Into::into),
         cwd,
+        syntax: crate::ShellSyntax::Posix,
     }
 }
 
@@ -192,7 +193,7 @@ fn every_detected_distribution_is_a_profile_on_windows_only() {
         assert_eq!(profile.label_key, "terminal.shell.wsl");
         assert_eq!(profile.distro.as_deref(), Some(name));
         assert_eq!(profile.args, ["-d", name]);
-        assert_eq!(profile.program, PathBuf::from("wsl.exe"));
+        assert_eq!(profile.program, default_wsl_exe());
     }
     assert!(wsl_profiles(Platform::Windows, &env, &[]).is_empty());
     assert!(wsl_profiles(Platform::Unix, &env, &distros).is_empty());
@@ -214,7 +215,20 @@ fn wsl_exe_is_taken_from_system32_before_path() {
     assert_eq!(wsl_program(&env), elsewhere.join("wsl.exe"));
     fs::write(system32.join("wsl.exe"), b"").expect("write");
     assert_eq!(wsl_program(&env), system32.join("wsl.exe"));
-    assert_eq!(wsl_program(&ShellEnv::default()), PathBuf::from("wsl.exe"));
+    assert_eq!(wsl_program(&ShellEnv::default()), default_wsl_exe());
+    // A relative `SystemRoot` is no system folder (RC-080-65).
+    let relative = ShellEnv {
+        system_root: Some(PathBuf::from("Windows")),
+        ..ShellEnv::default()
+    };
+    assert_eq!(wsl_program(&relative), default_wsl_exe());
+}
+
+/// `wsl.exe` in the default system folder: what is started when no `wsl.exe` was found.
+fn default_wsl_exe() -> PathBuf {
+    PathBuf::from(rc_vfs::DEFAULT_SYSTEM_ROOT)
+        .join("System32")
+        .join("wsl.exe")
 }
 
 #[cfg(not(windows))]

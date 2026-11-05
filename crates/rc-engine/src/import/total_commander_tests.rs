@@ -70,7 +70,8 @@ fn expected_menu() -> Vec<TcMenuItem> {
         skipped(8, "FTP server", &[], TcSkip::ServerPath),
         skipped(9, "Plugin", &[], TcSkip::PluginPath),
         skipped(10, "Relative", &[], TcSkip::RelativePath),
-        skipped(11, "Unknown variable", &[], TcSkip::UnknownVariable),
+        // A variable the import does not read stays as written: a relative path here.
+        skipped(11, "Unknown variable", &[], TcSkip::RelativePath),
         entry(12, "Home &more", &[], HOME, None),
     ]
 }
@@ -160,12 +161,58 @@ fn folders_are_absolute_and_variables_known() {
     );
     assert_eq!(folder("", &lookup), Err(TcSkip::InvalidPath));
     assert_eq!(folder("C:\\a\u{7}b", &lookup), Err(TcSkip::InvalidPath));
+    assert_eq!(expand("%TC_TEST_HOME%\\x", &lookup), format!("{HOME}\\x"));
+}
+
+/// RC-080-71, as Total Commander (`history.txt`, 9.21 RC2): a variable that is not set stays as
+/// written, and so does a `%` that opens no name; the names after one are still replaced.
+#[test]
+fn an_unset_variable_and_a_lone_percent_stay_as_written() {
+    assert_eq!(expand("100%", &lookup), "100%");
+    assert_eq!(expand("%a b%", &lookup), "%a b%");
     assert_eq!(
-        expand("%TC_TEST_HOME%\\x", &lookup),
-        Some(format!("{HOME}\\x"))
+        expand("%NO_SUCH_VARIABLE_HERE%\\%TC_TEST_HOME%", &lookup),
+        format!("%NO_SUCH_VARIABLE_HERE%\\{HOME}")
     );
-    assert_eq!(expand("100%", &lookup), None);
-    assert_eq!(expand("%a b%", &lookup), None);
+    assert_eq!(
+        expand("C:\\50% off\\%TC_TEST_HOME%", &lookup),
+        format!("C:\\50% off\\{HOME}")
+    );
+    assert_eq!(
+        folder("C:\\100% done", &lookup).as_deref(),
+        Ok("C:\\100% done")
+    );
+    // COMMANDER_PATH is one Total Commander puts into paths; here it is not set.
+    assert_eq!(
+        folder("%COMMANDER_PATH%\\x", &lookup),
+        Err(TcSkip::RelativePath)
+    );
+    assert_eq!(
+        folder("C:\\%commander_path%\\x", &lookup).as_deref(),
+        Ok("C:\\%commander_path%\\x")
+    );
+    let ini = tc_ini::parse("[DirMenu]\nmenu1=Done\ncmd1=cd C:\\100% done\n");
+    assert_eq!(
+        hotlist(&ini, &lookup),
+        vec![entry(1, "Done", &[], "C:\\100% done", None)]
+    );
+}
+
+/// RC-080-71: `\\?\` before a drive or a share is the same folder - Total Commander adds the
+/// prefix to a long path itself; a volume and `\\.\` keep what they are.
+#[test]
+fn a_verbatim_prefix_before_a_drive_or_a_share_is_dropped() {
+    assert_eq!(
+        folder("\\\\?\\C:\\Windows", &lookup).as_deref(),
+        Ok("C:\\Windows")
+    );
+    assert_eq!(
+        folder("\\\\?\\unc\\host\\share\\x", &lookup).as_deref(),
+        Ok("\\\\host\\share\\x")
+    );
+    let volume = "\\\\?\\Volume{0b1c2d3e-0000-0000-0000-000000000000}\\";
+    assert_eq!(folder(volume, &lookup).as_deref(), Ok(volume));
+    assert_eq!(folder("\\\\.\\C:\\", &lookup).as_deref(), Ok("\\\\.\\C:\\"));
 }
 
 fn connection(section: &str, kind: Result<ConnectionKind, TcSkip>, host: &str) -> TcConnection {

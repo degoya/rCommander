@@ -1,4 +1,5 @@
 use rc_db::Db;
+use rc_engine::settings::MCP_TOKEN_ROTATE_ON_START_KEY;
 
 use super::{McpToken, TOKEN_KEY};
 
@@ -36,4 +37,20 @@ fn the_proof_binds_token_port_and_nonce() {
     assert_ne!(proof, token.proof(4000, "00fe"));
     assert_ne!(proof, McpToken::from_text("abc124").proof(4000, "00ff"));
     assert!(!proof.to_hex().contains("abc123"));
+}
+
+/// RC-080-66: off (the default) a start keeps the stored token; on, every start stores a new one.
+#[tokio::test]
+async fn a_start_renews_the_token_only_where_the_setting_asks() {
+    let db = Db::open_in_memory().await.expect("db");
+    let first = McpToken::at_start(&db).await.expect("token");
+    assert_eq!(McpToken::at_start(&db).await.expect("token"), first);
+
+    db.set(MCP_TOKEN_ROTATE_ON_START_KEY, &true)
+        .await
+        .expect("stores");
+    let renewed = McpToken::at_start(&db).await.expect("token");
+    assert_ne!(renewed, first);
+    assert_eq!(McpToken::load_or_create(&db).await.expect("token"), renewed);
+    assert_ne!(McpToken::at_start(&db).await.expect("token"), renewed);
 }

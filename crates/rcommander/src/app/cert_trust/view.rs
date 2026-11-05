@@ -1,7 +1,8 @@
 //! Drawing the certificate dialogs: a medium card over the dimmed window that takes every click,
 //! or a window of its own (RC-080-23, `dialog_windows/questions.rs`). The changed-certificate and
-//! the expired-certificate warnings carry a red border and, on the card, a red title. The button
-//! the keyboard is on is the primary one: Enter takes it.
+//! the expired-certificate warnings carry a red border and, on the card, a red title, as does the
+//! question before a password crosses the network in clear (RC-080-67). The button the keyboard
+//! is on is the primary one: Enter takes it.
 
 use iced::{
     Element, Length,
@@ -38,6 +39,7 @@ impl App {
             CertificateQuestionKind::Unknown => t!("certs.unknown_title"),
             CertificateQuestionKind::Changed { .. } => t!("certs.changed_title"),
             CertificateQuestionKind::Expired { .. } => t!("certs.expired_title"),
+            CertificateQuestionKind::Plaintext => t!("certs.plaintext_title"),
         })
     }
 
@@ -54,8 +56,14 @@ impl App {
             CertificateQuestionKind::Unknown => t!("certs.unknown_text"),
             CertificateQuestionKind::Changed { .. } => t!("certs.changed_text"),
             CertificateQuestionKind::Expired { .. } => t!("certs.expired_text"),
+            CertificateQuestionKind::Plaintext => t!("certs.plaintext_text"),
         };
         let content: Column<'_, Message> = column![prose(body), details(question, tokens)];
+        let label = if question.kind == CertificateQuestionKind::Plaintext {
+            plaintext_label
+        } else {
+            label
+        };
         let content = finish(
             content,
             dialogs,
@@ -73,6 +81,10 @@ impl App {
 fn details<'a>(question: &'a CertificateQuestion, tokens: &'static Tokens) -> Element<'a, Message> {
     let server = format!("{}:{}", question.host, question.port);
     let mut details = column![detail(t!("certs.server"), server, tokens)].spacing(6);
+    // A plain FTP connection has no certificate to show.
+    if question.kind == CertificateQuestionKind::Plaintext {
+        return details.width(Length::Fill).into();
+    }
     match &question.kind {
         CertificateQuestionKind::Changed { stored } => {
             details = details
@@ -88,7 +100,9 @@ fn details<'a>(question: &'a CertificateQuestion, tokens: &'static Tokens) -> El
                     tokens,
                 ));
         }
-        CertificateQuestionKind::Unknown | CertificateQuestionKind::Expired { .. } => {
+        CertificateQuestionKind::Unknown
+        | CertificateQuestionKind::Expired { .. }
+        | CertificateQuestionKind::Plaintext => {
             details = details.push(detail(
                 t!("certs.fingerprint"),
                 &question.fingerprint,
@@ -133,6 +147,15 @@ fn detail<'a>(
         text::Wrapping::WordOrGlyph,
         tokens,
     )
+}
+
+/// A button's icon and words in the question before a password in clear.
+fn plaintext_label(choice: Choice) -> (Option<Icon>, &'static str) {
+    match choice {
+        Choice::AcceptOnce => (Some(Icon::Connect), t!("certs.plaintext_once")),
+        Choice::TrustAndSave => (Some(Icon::Connect), t!("certs.plaintext_always")),
+        Choice::Cancel => (Some(Icon::Close), t!("certs.cancel")),
+    }
 }
 
 /// A button's icon and words.

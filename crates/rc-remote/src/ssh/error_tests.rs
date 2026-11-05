@@ -36,6 +36,7 @@ fn one_of_each() -> Vec<SshError> {
         host_key(HostKeyRefusal::Changed {
             stored_fingerprint: "SHA256:y".to_owned(),
         }),
+        host_key(HostKeyRefusal::Revoked),
         host_key(HostKeyRefusal::Failed {
             reason: "x".to_owned(),
         }),

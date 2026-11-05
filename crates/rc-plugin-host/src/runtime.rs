@@ -17,6 +17,10 @@
 //!   then the epoch).
 //! - No resolver state (domains, identity, redactions, wait budget): a viewer reaches no network
 //!   and no secret; a secret source reaches one loopback port ([`HttpGrant`], RC-100-33).
+//! - **Host HTTP time is credited within a budget** (RC-080-69): one request at most its own
+//!   time limit, one call at most [`HTTP_TIME_BUDGET`] in all; past it the call ends with
+//!   `plugin_http_time_budget` at the next tick, so many slow requests cannot hold a call open
+//!   for good.
 
 use std::{
     sync::{
@@ -52,6 +56,14 @@ pub(crate) const EPOCH_TICK: Duration = Duration::from_millis(10);
 pub(crate) const MAX_TABLE_ELEMENTS: usize = 10_000;
 /// How long a cancelled call may still run to answer `should-stop` itself.
 pub const CANCEL_GRACE: Duration = Duration::from_millis(200);
+/// The most host HTTP time one plugin call is credited back in all (RC-080-69).
+pub(crate) const HTTP_TIME_BUDGET: Duration = Duration::from_secs(60);
+
+/// What ends a call whose host HTTP time ran past [`HTTP_TIME_BUDGET`]: the epoch callback's
+/// error, told apart by `failure::stopped`.
+#[derive(Debug, thiserror::Error)]
+#[error("the plugin's HTTP time budget is exhausted")]
+pub(crate) struct HttpTimeBudget;
 
 /// The state of one store, reached only through the host functions linked for its kind.
 pub(crate) struct PluginStoreState {
@@ -72,6 +84,10 @@ pub(crate) struct PluginStoreState {
     /// What `http` may reach: a secret source's loopback port (RC-100-33); `None` for every
     /// other store.
     pub(crate) http: Option<HttpGrant>,
+    /// The host HTTP time the running call was credited so far.
+    http_credited: Duration,
+    /// The running call went past [`HTTP_TIME_BUDGET`]: it ends at the next tick.
+    http_over_budget: bool,
 }
 
 impl PluginStoreState {
@@ -79,6 +95,29 @@ impl PluginStoreState {
     /// not the plugin thinking (rDownloader's RA-HOST-05). Fuel still runs out on a spinning one.
     pub(crate) fn credit_host_time(&mut self, elapsed: Duration) {
         self.execution_deadline += elapsed;
+    }
+
+    /// Whether the running call may still send an HTTP request: it has budget left.
+    pub(crate) fn http_time_left(&mut self) -> bool {
+        if self.http_credited >= HTTP_TIME_BUDGET {
+            self.http_over_budget = true;
+        }
+        !self.http_over_budget
+    }
+
+    /// Credits one HTTP request's time, at most `per_request` (its time limit) and at most what
+    /// is left of [`HTTP_TIME_BUDGET`]; whether the call stays within it. Past it, the call ends
+    /// at the next tick (`plugin_http_time_budget`).
+    pub(crate) fn credit_http_time(&mut self, elapsed: Duration, per_request: Duration) -> bool {
+        let wanted = elapsed.min(per_request);
+        let left = HTTP_TIME_BUDGET.saturating_sub(self.http_credited);
+        let credit = wanted.min(left);
+        self.credit_host_time(credit);
+        self.http_credited += credit;
+        if wanted > left {
+            self.http_over_budget = true;
+        }
+        !self.http_over_budget
     }
 
     /// Whether the caller asked the running call to stop.
@@ -175,6 +214,8 @@ impl SandboxEngine {
             streams: Streams::default(),
             settings: Vec::new(),
             http: None,
+            http_credited: Duration::ZERO,
+            http_over_budget: false,
         };
         let mut store = Store::new(self.engine(), state);
         store.limiter(|state| &mut state.limits);
@@ -187,6 +228,9 @@ impl SandboxEngine {
                     return Ok(UpdateDeadline::Interrupt);
                 }
             }
+            if state.http_over_budget {
+                return Err(wasmtime::Error::new(HttpTimeBudget));
+            }
             if now >= state.execution_deadline {
                 return Ok(UpdateDeadline::Interrupt);
             }
@@ -195,8 +239,8 @@ impl SandboxEngine {
         Ok(store)
     }
 
-    /// Starts one call of `operation` in `store`: its fuel, its deadline, its log budget and its
-    /// stream credit; no sink of an earlier call stays.
+    /// Starts one call of `operation` in `store`: its fuel, its deadline, its HTTP time budget,
+    /// its log budget and its stream credit; no sink of an earlier call stays.
     pub(crate) fn begin_call(
         &self,
         store: &mut Store<PluginStoreState>,
@@ -209,6 +253,8 @@ impl SandboxEngine {
         let state = store.data_mut();
         state.execution_deadline = Instant::now() + self.timeout;
         state.cancel_deadline = None;
+        state.http_credited = Duration::ZERO;
+        state.http_over_budget = false;
         state.log_budget.begin(operation);
         state.streams.begin_call();
         Ok(())

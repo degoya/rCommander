@@ -14,6 +14,7 @@ use rc_update::install::{
 };
 
 use super::{DownloadState, RUNNING, UpdateRefusal};
+use crate::recover::LogPanic as _;
 use crate::{Engine, EngineError, EngineEvent, Outcome};
 
 /// How often a running download reports its bytes.
@@ -217,6 +218,7 @@ impl Engine {
         let copy_for_digest = copy.clone();
         let blake3 = tokio::task::spawn_blocking(move || steps::blake3_of(&copy_for_digest))
             .await
+            .log_panic("engine.update_digest")
             .map_err(|error| UpdateRefusal::new("update.failed", error.to_string()))?
             .map_err(|error| UpdateRefusal::new("update.failed", format!("{error:#}")))?;
         let plan = Plan {

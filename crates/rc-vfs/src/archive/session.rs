@@ -13,7 +13,7 @@
 use std::{
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError, Weak,
+        Arc, Mutex, MutexGuard, Weak,
         atomic::{AtomicU64, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError, Sender},
     },
@@ -25,6 +25,7 @@ use super::{
     Stamp,
     pipe::{self, PipeWriter, Pumped, Watch},
 };
+use crate::recover::LockOrRecover as _;
 use crate::{ReadStream, Result, VfsError};
 
 /// How long a parked producer waits for the next read before it ends.
@@ -241,7 +242,7 @@ impl Feed {
 }
 
 fn lock(slot: &Mutex<Option<Parked>>) -> MutexGuard<'_, Option<Parked>> {
-    slot.lock().unwrap_or_else(PoisonError::into_inner)
+    slot.lock_or_recover("session.slot")
 }
 
 /// The error of an entry that is not where the format looked.

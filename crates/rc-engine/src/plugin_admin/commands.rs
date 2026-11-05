@@ -17,6 +17,7 @@ use rc_plugin_host::{
 };
 
 use super::{PluginAdminError, PluginInfo, PluginsOutcome, listing::setting_key};
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, EngineEvent, Outcome,
     settings::{DEFAULT_RECENT_CALLS_SHOWN, RECENT_CALLS_SHOWN_KEY, stored_setting},
@@ -137,13 +138,20 @@ impl Engine {
                 fingerprint: shown,
                 ..
             }) if fingerprint.is_some_and(|confirmed| confirmed.eq_ignore_ascii_case(&shown)) => {
+                // Trusted for this check only: the key is stored once the package verified in
+                // full, its component compiled included - a package that fails leaves no
+                // trusted key behind (RC-080-69).
+                let mut trial = state.clone();
+                trial
+                    .trusted_keys
+                    .insert(key_id.clone(), public_key.clone());
+                let package = verify(&trial, &installed_keys, bytes)
+                    .await?
+                    .map_err(PluginAdminError::from_verify)?;
                 self.db()?
                     .trust_plugin_key(&key_id, &public_key, &shown)
                     .await?;
-                let state = self.plugin_state().await?;
-                verify(&state, &installed_keys, bytes)
-                    .await?
-                    .map_err(PluginAdminError::from_verify)?
+                package
             }
             Err(error) => return Err(PluginAdminError::from_verify(error).into()),
         };
@@ -163,6 +171,7 @@ impl Engine {
         );
         tokio::task::spawn_blocking(move || installer.install_verified(&package, false))
             .await
+            .log_panic("engine.plugin_install")
             .map_err(PluginAdminError::from)?
             .map_err(|error| PluginAdminError::from_host(&error))?;
         let db = self.db()?;
@@ -246,6 +255,7 @@ impl Engine {
             installer.remove_version(&owned_id, &owned_version)
         })
         .await
+        .log_panic("engine.plugin_remove")
         .map_err(PluginAdminError::from)?
         .map_err(|error| PluginAdminError::from_host(&error))?;
         if !removed {
@@ -339,6 +349,7 @@ impl Engine {
         Ok(
             tokio::task::spawn_blocking(move || InstalledKeys::read(&data_dir))
                 .await
+                .log_panic("engine.plugin_keys_read")
                 .map_err(PluginAdminError::from)?
                 .map_err(|error| PluginAdminError::from_host(&error))?,
         )
@@ -361,6 +372,7 @@ impl Engine {
 async fn read_package(path: PathBuf) -> Result<Vec<u8>, PluginAdminError> {
     tokio::task::spawn_blocking(move || read_bounded(&path))
         .await
+        .log_panic("engine.plugin_package_read")
         .map_err(PluginAdminError::from)?
 }
 
@@ -395,7 +407,11 @@ async fn verify(
         .verifier()
         .map_err(|error| PluginAdminError::from_host(&error))?
         .with_installed_keys(installed.clone());
-    Ok(tokio::task::spawn_blocking(move || verifier.verify_bytes(&bytes)).await?)
+    Ok(
+        tokio::task::spawn_blocking(move || verifier.verify_bytes(&bytes))
+            .await
+            .log_panic("engine.plugin_verify")?,
+    )
 }
 
 #[cfg(test)]

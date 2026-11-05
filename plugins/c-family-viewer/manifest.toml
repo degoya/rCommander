@@ -1,0 +1,45 @@
+# rCommander's bundled viewer for the C family (RC-100-82): C, C++, C#, Java, Kotlin, Go and
+# Rust. The fields every bundled plugin shares are in plugins/metadata.toml;
+# `scripts/build-plugins.sh` writes them into the manifest it packages. A failure code starts
+# with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `encoding`.
+api_version = "0.3.0"
+id = "01a1aafa-df23-7a2d-aa5e-82bf3f2359dd"
+name = "C-family viewer"
+version = "0.1.0"
+
+[match]
+# The language is the extension's (src/lang.rs, `Lang::from_name`): C; C and C++ headers and
+# C++ (`.h` is read as C++, whose words hold C's), Arduino sketches; C# and C# scripts; Java;
+# Kotlin and Kotlin scripts; Go; Rust. No magic: the content never names the language.
+extensions = ["c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx", "ino", "cs", "csx", "java", "kt", "kts", "go", "rs"]
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured; the outline of a source file is not this plugin's (RC-100-82).
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows C, C++, C#, Java, Kotlin, Go and Rust source coloured like an editor."
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs), the 1 MiB windows `open` and `text` read and write through, and one line of at
+# most 1 MiB with its text.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+# How the file's bytes are read: `auto` takes the encoding of a byte-order mark (UTF-8, UTF-16),
+# else UTF-8 when the start of the file is valid UTF-8 - what every compiler of the family reads
+# by default - else Windows-1252, for an old file saved in the ANSI code page.
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "utf-16le", "windows-1252"]
+default = "auto"

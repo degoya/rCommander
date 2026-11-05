@@ -148,6 +148,21 @@ fn reported_folders_translate_back_to_panel_paths() {
         ("/mnt/c/x", &unnamed, Some(r"C:\x")),
         ("/home/x", &unnamed, None),
         ("C:\\x", &ubuntu, None),
+        // RC-080-65: a backslash in a Linux name is a separator in Windows; a `..`, `.` or
+        // empty name it makes is refused, in the share and below a drive.
+        (r"/home/a\..\..\Debian", &ubuntu, None),
+        (r"/home/a\.\b", &ubuntu, None),
+        (r"/home/a\\b", &ubuntu, None),
+        (r"/home/a\", &ubuntu, None),
+        (r"/mnt/c/a\..\..\Windows", &ubuntu, None),
+        (r"/mnt/c/x\\y", &ubuntu, None),
+        // A `..` the shell reported itself is refused too; dots inside a name are no `..`.
+        ("/home/../etc", &ubuntu, None),
+        (
+            "/home/a..b/.c",
+            &ubuntu,
+            Some(r"\\wsl.localhost\Ubuntu\home\a..b\.c"),
+        ),
     ];
     for (reported, paths, expected) in cases {
         assert_eq!(

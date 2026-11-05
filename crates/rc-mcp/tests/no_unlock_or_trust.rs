@@ -42,6 +42,7 @@ const PINNED_GUI_ONLY: &[&str] = &[
     "hostkeys.answer",
     "hostkeys.import_known_hosts",
     "hostkeys.remove",
+    "hostkeys.remove_revoked",
     "hostkeys.replace",
     "import.total_commander_passwords",
     "login_scripts.clear_secret",

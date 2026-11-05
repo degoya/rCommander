@@ -46,6 +46,11 @@ pub(crate) async fn harness() -> Harness {
         })
         .await
         .expect("vault created");
+    // The FTP tests on this harness log in to the plain test server; the question before a
+    // password in clear is `ftp_plaintext_tests.rs`'s (RC-080-67).
+    db.set(crate::settings::FTP_ASK_PLAINTEXT_KEY, &false)
+        .await
+        .expect("no plaintext question");
     let mut serve = SftpServe::new(served.path());
     serve.home = "/home/tester".to_owned();
     let server = TestServer::start(ServerOptions {

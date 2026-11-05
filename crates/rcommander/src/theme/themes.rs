@@ -19,7 +19,7 @@ mod slots;
 mod workspace;
 
 use std::sync::{
-    Mutex, PoisonError, RwLock,
+    Mutex, RwLock,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -30,6 +30,9 @@ pub use connections::{Assigned, of_connection, of_distro, of_path, set_assigned}
 pub use slots::{KEYS, flatten, hex_of, seen, slot};
 
 use super::{Tokens, builtin, colours::parse_hex, dark, light};
+
+use crate::recover::LockOrRecover as _;
+use crate::recover::RwLockOrRecover as _;
 
 /// The look of `theme`, with `system` the system's accent for its mode.
 #[must_use]
@@ -63,7 +66,7 @@ static MADE: Mutex<Vec<(Theme, Color, &'static Tokens)>> = Mutex::new(Vec::new()
 /// for the rest of the run.
 pub fn look(theme: &Theme) -> &'static Tokens {
     let system = super::system_accent()[usize::from(theme.dark)];
-    let mut made = MADE.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut made = MADE.lock_or_recover("themes.made");
     if let Some((.., tokens)) = made
         .iter()
         .find(|(was, accent, _)| was == theme && *accent == system)
@@ -107,7 +110,7 @@ pub fn set_state(state: &ThemesState) {
         }),
         chosen_ids: themes.map(|theme| theme.map(|theme| theme.id)),
     };
-    *DRAWN.write().unwrap_or_else(PoisonError::into_inner) = Some(drawn);
+    *DRAWN.write_or_recover("themes.drawn") = Some(drawn);
     // An active workspace's theme may have changed with them (RC-100-68).
     workspace::resolve(tokens_of);
 }
@@ -126,7 +129,7 @@ pub fn set_workspace_themes(themes: [Option<String>; 2]) -> bool {
 /// else the active workspace's theme of it (RC-100-68), else the chosen theme's; `None` before
 /// the themes are read.
 pub fn current(dark: bool) -> Option<&'static Tokens> {
-    let preview = PREVIEW.read().unwrap_or_else(PoisonError::into_inner)[usize::from(dark)];
+    let preview = PREVIEW.read_or_recover("themes.preview")[usize::from(dark)];
     if let Some((_, preview)) = preview {
         return Some(preview);
     }
@@ -134,8 +137,7 @@ pub fn current(dark: bool) -> Option<&'static Tokens> {
         return Some(tokens);
     }
     DRAWN
-        .read()
-        .unwrap_or_else(PoisonError::into_inner)
+        .read_or_recover("themes.drawn")
         .as_ref()
         .map(|drawn| drawn.chosen[usize::from(dark)])
 }
@@ -148,7 +150,7 @@ pub fn preview_owner() -> u64 {
 /// The theme the editor `owner` edits, as the preview of its mode from now on.
 pub fn set_preview(owner: u64, theme: &Theme) {
     let preview = look(theme);
-    let mut previews = PREVIEW.write().unwrap_or_else(PoisonError::into_inner);
+    let mut previews = PREVIEW.write_or_recover("themes.preview");
     // A theme is of one mode: an editor's preview of the other ends.
     for slot in previews.iter_mut() {
         if slot.is_some_and(|(drawn, _)| drawn == owner) {
@@ -160,7 +162,7 @@ pub fn set_preview(owner: u64, theme: &Theme) {
 
 /// The editor `owner` closed: its preview, if it is the one drawn, is taken away.
 pub fn end_preview(owner: u64) {
-    let mut previews = PREVIEW.write().unwrap_or_else(PoisonError::into_inner);
+    let mut previews = PREVIEW.write_or_recover("themes.preview");
     for slot in previews.iter_mut() {
         if slot.is_some_and(|(drawn, _)| drawn == owner) {
             *slot = None;
@@ -173,8 +175,7 @@ pub fn end_preview(owner: u64) {
 /// does not know or a theme of the other mode.
 pub fn tokens_of(id: &str, dark: bool) -> Option<&'static Tokens> {
     let theme = DRAWN
-        .read()
-        .unwrap_or_else(PoisonError::into_inner)
+        .read_or_recover("themes.drawn")
         .as_ref()?
         .themes
         .iter()
@@ -187,8 +188,7 @@ pub fn tokens_of(id: &str, dark: bool) -> Option<&'static Tokens> {
 /// read.
 pub fn chosen_id(dark: bool) -> Option<String> {
     DRAWN
-        .read()
-        .unwrap_or_else(PoisonError::into_inner)
+        .read_or_recover("themes.drawn")
         .as_ref()
         .and_then(|drawn| drawn.chosen_ids[usize::from(dark)].clone())
 }
@@ -197,8 +197,7 @@ pub fn chosen_id(dark: bool) -> Option<String> {
 /// connection can choose (RC-100-51).
 pub fn of_mode(dark: bool) -> Vec<Theme> {
     DRAWN
-        .read()
-        .unwrap_or_else(PoisonError::into_inner)
+        .read_or_recover("themes.drawn")
         .as_ref()
         .map(|drawn| {
             drawn

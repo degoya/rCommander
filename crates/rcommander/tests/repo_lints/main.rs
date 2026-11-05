@@ -7,6 +7,7 @@
 //! * `catalogues` - every translation has `en.json`'s keys and placeholders, no empty text.
 //! * `focus_ring` - every checkbox, toggler, pick list, radio group, slider and hand-drawn
 //!   button of a dialog is a stop of its focus ring.
+//! * `poison` - a poisoned lock is taken only through a crate's `recover.rs`, which logs it.
 //!
 //! `scan` is what they read of a source: the code without comments and texts, calls and the
 //! statements they stand in.
@@ -19,6 +20,7 @@ mod focus_ring;
 mod i18n_keys;
 mod no_console_window;
 mod no_german;
+mod poison;
 mod scan;
 
 fn workspace_root() -> PathBuf {

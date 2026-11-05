@@ -14,4 +14,14 @@ pub trait StepJournal: Send + Sync {
     /// Why the step cannot be recorded; the job stops as failed (`journal_failed`) before the
     /// next step.
     async fn done(&self, index: usize) -> Result<(), String>;
+
+    /// Step `index`, carried out before, is reversed again: the job rolls a failed run back
+    /// (RC-080-64). Nothing by default.
+    ///
+    /// # Errors
+    ///
+    /// Why the reversal cannot be recorded; the roll-back stops there.
+    async fn undone(&self, _index: usize) -> Result<(), String> {
+        Ok(())
+    }
 }

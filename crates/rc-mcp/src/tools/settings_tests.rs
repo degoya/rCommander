@@ -48,7 +48,12 @@ async fn settings_read_and_change_without_the_token() {
     let all = call(&setup, "settings_get", json!({})).await;
     let rendered = all.to_string();
     assert!(!rendered.contains(token.expose()), "no token: {rendered}");
-    assert!(!rendered.contains(TOKEN_KEY), "no token row: {rendered}");
+    // No row of the token itself (`mcp.token.rotate_on_start` is a switch, not the token).
+    let rows = all["settings"].as_array().expect("rows");
+    assert!(
+        rows.iter().all(|row| row["setting"] != TOKEN_KEY),
+        "no token row: {rendered}"
+    );
     assert!(rendered.contains("appearance.theme"), "{rendered}");
 
     let changed = call(

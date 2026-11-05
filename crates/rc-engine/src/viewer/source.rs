@@ -13,7 +13,7 @@ use std::{
     io::SeekFrom,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, PoisonError,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::SystemTime,
@@ -21,6 +21,8 @@ use std::{
 
 use rc_vfs::{EntryKind, ReadStream, TargetKind, Vfs, VfsError};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+use crate::recover::LockOrRecover as _;
 
 /// The unit the cache keeps.
 pub const BLOCK_SIZE: usize = 64 * 1024;
@@ -254,7 +256,7 @@ impl FileWindow {
     }
 
     fn cache(&self) -> std::sync::MutexGuard<'_, BlockCache> {
-        self.cache.lock().unwrap_or_else(PoisonError::into_inner)
+        self.cache.lock_or_recover("source.cache")
     }
 }
 

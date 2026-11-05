@@ -1,0 +1,7 @@
+{
+  "name": "Visor de SQL",
+  "description": "Muestra scripts SQL (.sql, .ddl, .dml, .psql, .pgsql, .mysql) en color, como un editor.",
+  "codes": {
+    "01a1aafa-5f73-7283-b0c1-88b39b363fa9.setting.encoding": "Codificación"
+  }
+}

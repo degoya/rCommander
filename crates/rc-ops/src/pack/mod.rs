@@ -12,7 +12,8 @@
 //!
 //! The archive is written under a temporary name beside the target and renamed onto it only when
 //! complete, so a cancelled or failed pack leaves nothing under the target's name - and an
-//! overwritten archive stays whole until the new one replaces it. With `delete_sources` the
+//! overwritten archive stays whole until the new one replaces it. Without "overwrite" that rename
+//! never replaces (`rename_no_replace`): an archive that took the name while the pack ran stays. With `delete_sources` the
 //! packed files are removed only after their archive is in place (Total Commander's "move to
 //! archive"); the dialog and the MCP confirmation code ask before.
 //!
@@ -34,11 +35,12 @@ use std::{
     sync::Arc,
 };
 
-use rc_vfs::{EntryKind, VfsError, VfsPath, long_path};
+use rc_vfs::{EntryKind, LocalFs, Vfs, VfsError, VfsPath, long_path};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use self::write::{Feed, Member, Spec};
+use crate::recover::LogPanic as _;
 use crate::{
     Failure, JobState, OpsError,
     runner::{Runner, Step, Stop, attempt},
@@ -352,16 +354,19 @@ impl Runner {
                 }
             }
         };
-        let written = match joined {
+        let written = match joined.log_panic("ops.pack") {
             Ok(written) => written,
-            // A panic in an archive crate fails this archive; the app goes on.
             Err(_) => Err(write::panicked()),
         };
-        let renamed = match written {
-            Ok(()) => tokio::fs::rename(&temp, &dest).await,
-            Err(error) => Err(error),
+        let failed = match written {
+            Ok(()) => place(&temp, &group.dest, settings.overwrite).await.err(),
+            // A panic in an archive crate fails this archive; the app goes on.
+            Err(error) if write::is_panic(&error) => Some(OpsError::PackFailed {
+                path: group.dest.clone(),
+            }),
+            Err(error) => Some(OpsError::from_io(error, &group.dest)),
         };
-        if let Err(error) = renamed {
+        if let Some(error) = failed {
             if let Err(left) = tokio::fs::remove_file(&temp).await
                 && left.kind() != std::io::ErrorKind::NotFound
             {
@@ -373,13 +378,7 @@ impl Runner {
             if self.job.control.is_cancelled() {
                 return Err(Step::Stop(Stop::Cancelled));
             }
-            if write::is_panic(&error) {
-                return Err(OpsError::PackFailed {
-                    path: group.dest.clone(),
-                }
-                .into());
-            }
-            return Err(OpsError::from_io(error, &group.dest).into());
+            return Err(error.into());
         }
         Ok(self.without_grown(items, &grown.take()))
     }
@@ -408,6 +407,22 @@ impl Runner {
             }
         }
         Ok(())
+    }
+}
+
+/// The complete archive `temp` under its target's name `dest`: replacing what is there with
+/// `overwrite`, else never - an archive that took the name since the look before the packing
+/// stays, and the pack fails with `already_exists` (RC-080-70).
+async fn place(temp: &Path, dest: &Path, overwrite: bool) -> Result<(), OpsError> {
+    if overwrite {
+        tokio::fs::rename(long_path(temp), long_path(dest))
+            .await
+            .map_err(|error| OpsError::from_io(error, dest))
+    } else {
+        LocalFs::new()
+            .rename_no_replace(temp, dest)
+            .await
+            .map_err(OpsError::from)
     }
 }
 

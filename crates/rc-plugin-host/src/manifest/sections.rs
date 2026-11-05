@@ -1,5 +1,5 @@
-//! The sections of a manifest: the plugin type, `[match]`, `[viewer]`, `[capabilities]`,
-//! `[metadata]` and `[[settings]]`.
+//! The sections of a manifest: the plugin type, `[match]` (its `names` in `names.rs`),
+//! `[viewer]`, `[capabilities]`, `[metadata]` and `[[settings]]`.
 //!
 //! Copied and adapted from rDownloader's `crates/rd-plugin-host/src/manifest/sections.rs` at
 //! commit 26c8592a6: `[metadata]` and the capture of unknown capabilities as they were;
@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 
 use rc_plugin_api::viewer::Output;
 use serde::{Deserialize, Serialize};
+
+use super::names;
 
 /// What a plugin is. The type decides which world it is instantiated against.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,6 +72,10 @@ pub struct MatchSection {
     /// Lower-case extensions without the dot.
     #[serde(default)]
     pub extensions: Vec<String>,
+    /// Whole file names, case-insensitive, `*` the only wildcard (RC-100-80, `names.rs`):
+    /// `Dockerfile`, `Dockerfile.*`, `.env.*`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub names: Vec<String>,
     /// Leading bytes, any one of which claims the file.
     #[serde(default)]
     pub magic: Vec<MagicManifest>,
@@ -119,28 +125,71 @@ impl MatchSection {
             .unwrap_or(0)
     }
 
-    /// Whether a file named `file_name` of `size` bytes, starting with `head`, is offered: an
-    /// extension or a magic matches, and it is not larger than `max_size`.
+    /// Whether a file named `file_name` of `size` bytes, starting with `head`, is offered: a
+    /// name, an extension or a magic matches, and it is not larger than `max_size`.
     #[must_use]
     pub fn matches(&self, file_name: &str, head: &[u8], size: u64) -> bool {
+        self.rank(file_name, head, size).is_some()
+    }
+
+    /// How strongly the file is claimed, the best of the plugin's matches; `None` when it is not
+    /// offered at all (nothing matches, or it is larger than `max_size`).
+    #[must_use]
+    pub fn rank(&self, file_name: &str, head: &[u8], size: u64) -> Option<MatchRank> {
         if self.max_size.is_some_and(|max| size > max) {
-            return false;
+            return None;
         }
+        let named = |pattern: bool| {
+            self.names
+                .iter()
+                .filter(|name| names::is_pattern(name) == pattern)
+                .any(|name| names::name_matches(name, file_name))
+        };
         let extension = file_name
             .rsplit_once('.')
             .map(|(_, extension)| extension.to_ascii_lowercase());
-        let by_extension = extension
-            .as_deref()
-            .is_some_and(|extension| self.extensions.iter().any(|known| known == extension));
-        by_extension
-            || self.magic.iter().any(|magic| {
+        let by_extension = || {
+            extension
+                .as_deref()
+                .is_some_and(|extension| self.extensions.iter().any(|known| known == extension))
+        };
+        let by_magic = || {
+            self.magic.iter().any(|magic| {
                 let (Some(bytes), Ok(offset)) = (magic.bytes(), usize::try_from(magic.offset))
                 else {
                     return false;
                 };
                 head.get(offset..offset.saturating_add(bytes.len())) == Some(bytes.as_slice())
             })
+        };
+        if named(false) {
+            Some(MatchRank::Name)
+        } else if by_extension() {
+            Some(MatchRank::Extension)
+        } else if named(true) {
+            Some(MatchRank::Pattern)
+        } else if by_magic() {
+            Some(MatchRank::Magic)
+        } else {
+            None
+        }
     }
+}
+
+/// How a plugin claims a file, strongest first: the order in which the plugins are asked
+/// (RC-100-80). An exact name beats every extension, an extension every name pattern, so
+/// `Dockerfile` and `Dockerfile.dev` go to the plugin naming them while `Dockerfile.toml`
+/// stays with the one claiming `toml`.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum MatchRank {
+    /// A name without `*`.
+    Name,
+    /// `[match] extensions`.
+    Extension,
+    /// A name with `*`.
+    Pattern,
+    /// `[match] magic`.
+    Magic,
 }
 
 /// `[viewer]`: the outputs the plugin may offer; `open` naming another is refused.

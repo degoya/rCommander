@@ -64,7 +64,7 @@ impl Fixture {
     }
 
     /// A backend with `limits` on a session of its own, which the caller keeps.
-    async fn vfs_with(&self, limits: SftpLimits) -> (SftpVfs, SshSession) {
+    pub(crate) async fn vfs_with(&self, limits: SftpLimits) -> (SftpVfs, SshSession) {
         let session = self.session().await;
         let names = session.open_channel().await.expect("channel");
         let files = session.open_channel().await.expect("channel");

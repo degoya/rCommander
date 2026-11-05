@@ -30,17 +30,17 @@ pub use schema::drives::{
     FOLLOW_ON_OWN_DRIVE_KEY, FOLLOW_OTHER_PANEL_KEY, PORTABLE_DEVICES_KEY, REFRESH_ON_FOCUS_KEY,
     REFRESH_ON_FOCUS_NETWORK_KEY,
 };
-pub use schema::ftp::FTP_RESOLVE_LINKS_KEY;
+pub use schema::ftp::{FTP_ASK_PLAINTEXT_KEY, FTP_RESOLVE_LINKS_KEY};
 pub use schema::layout::{
     DATE_WIDTH_KEY, EXT_WIDTH_KEY, MENU_BAR_KEY, MENU_BAR_STYLE_KEY, OWNER_COLUMN_KEY,
     OWNER_WIDTH_KEY, PACKED_WIDTH_KEY, PANEL_SPLIT_KEY, RIGHTS_WIDTH_KEY, SIZE_WIDTH_KEY,
 };
 pub use schema::login_scripts::WARN_SECRET_PROMPT_KEY;
-pub use schema::sftp::SFTP_CASE_KEY;
+pub use schema::sftp::{SFTP_CASE_KEY, SFTP_UPLOAD_RIGHTS_KEY};
 pub use schema::sort::{SORT_NAMES_KEY, SORT_NUMBERS_KEY};
 pub use schema::terminal::{
     COPY_CTRL_C_KEY, COPY_ON_SELECT_KEY, COPY_RIGHT_CLICK_KEY, END_PROGRAMS_KEY, OSC52_COPY_KEY,
-    PASTE_CTRL_V_KEY, PASTE_IMAGE_KEY, SHIFT_SELECTS_KEY,
+    OSC52_REMOTE_KEY, PASTE_CTRL_V_KEY, PASTE_IMAGE_KEY, SHIFT_SELECTS_KEY,
 };
 pub use schema::viewer::{
     DOS_EXTENSIONS_DEFAULT, DOS_EXTENSIONS_KEY, DOS_TIGHT_LINES_KEY, MARKDOWN_PREVIEW_KEY,
@@ -55,8 +55,9 @@ pub use schema::wsl_themes::{
 pub use schema::{ALTERNATE_ROWS_KEY, EDITOR_KEY, FKEY_BAR_KEY, MKDIR_PREFILL_KEY, VIEWER_KEY};
 pub use schema::{
     ARCHIVE_ENTER_KEY, Choice, FILE_ICONS_KEY, FOLLOW_PANEL_KEY, INTEGRATION_KEY, LEFT_START_KEY,
-    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_EXEC_SESSION_MINUTES_KEY, MCP_HEADLESS_CODE_KEY,
-    PANEL_FOLLOWS_KEY, QUICK_SEARCH_ANYWHERE_KEY, QUICK_SEARCH_CASE_KEY, QUICK_SEARCH_FILTERS_KEY,
+    MCP_ASK_OUTSIDE_PANELS_KEY, MCP_AUDIT_LOG_KEY, MCP_EXEC_SESSION_MINUTES_KEY,
+    MCP_HEADLESS_CODE_KEY, MCP_TOKEN_ROTATE_ON_START_KEY, PANEL_FOLLOWS_KEY,
+    QUICK_SEARCH_ANYWHERE_KEY, QUICK_SEARCH_CASE_KEY, QUICK_SEARCH_FILTERS_KEY,
     QUICK_SEARCH_KEYS_KEY, RIGHT_START_KEY, SELECT_FOLDERS_KEY, SETTINGS, SHELL_KEY,
     SPACE_MOVES_DOWN_KEY, SettingKind, SettingPage, SettingSpec, THEME_KEY, is_protected, setting,
 };
@@ -76,6 +77,7 @@ pub use schema::{
     QUEUE_WINDOW_OWN_KEY, STRIP_ROWS_KEY, UNDERLINE_ACCESS_KEYS_KEY,
 };
 pub use schema::{CONNECTION_THEMES_KEY, THEME_DARK_KEY, THEME_LIGHT_KEY};
+pub use schema::{COPY_LINKS_KEY, RENAME_UNDO_ON_FAILURE_KEY};
 pub use schema::{
     DEFAULT_FONT_SIZE, LIST_FONT_KEY, LIST_FONT_SIZE_KEY, MARK_HIDDEN_KEY, MAX_FONT_SIZE,
     MIN_FONT_SIZE, NAME_CUT_KEY, NAME_TIP_DELAY_KEY, TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY,
@@ -376,6 +378,19 @@ impl Engine {
             attempts: u32::try_from(attempts).unwrap_or(u32::MAX),
             delay: std::time::Duration::from_secs(u64::try_from(delay_secs).unwrap_or(1)),
         });
+    }
+
+    /// What a copy or a move does with a link to a folder (`ops.copy_links`, RC-080-63): stored,
+    /// or the default when nothing valid is stored or no database is attached.
+    pub(crate) async fn copy_links(&self) -> rc_ops::CopyLinks {
+        let value = match self.db() {
+            Ok(db) => stored_setting(db, COPY_LINKS_KEY).await,
+            Err(_) => setting(COPY_LINKS_KEY).map(SettingSpec::default_value),
+        };
+        value
+            .as_ref()
+            .and_then(Value::as_str)
+            .map_or_else(rc_ops::CopyLinks::default, rc_ops::CopyLinks::from_setting)
     }
 
     /// The value of the switch `key` (a `Bool` row): stored, or its default when nothing is

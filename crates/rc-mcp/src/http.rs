@@ -32,6 +32,7 @@ use rmcp::transport::{
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
+use crate::recover::LogPanic as _;
 use crate::{
     McpContext, McpToken, RcMcpServer,
     instance::{self, Instance},
@@ -90,7 +91,7 @@ impl HttpHandle {
         self.stop.cancel();
         if let Some(mut task) = self.task.take() {
             match tokio::time::timeout(grace, &mut task).await {
-                Ok(joined) => joined??,
+                Ok(joined) => joined.log_panic("mcp.http_server")??,
                 Err(_) => {
                     tracing::debug!(
                         ?grace,

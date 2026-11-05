@@ -7,7 +7,8 @@
 //! the time the service took credited back to the plugin. Not taken: domains, value templates,
 //! cookies, the account's secrets - a loopback bridge such as `bw serve` needs none of them, and
 //! the first plugin that does brings them with its own checks (`docs/plugins.md`, "Capabilities
-//! and rights").
+//! and rights"). The credit is bounded (RC-080-69): one request at most its time limit, one call
+//! at most `runtime::HTTP_TIME_BUDGET` in all.
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -51,6 +52,8 @@ const RESERVED_HEADERS: [&str; 6] = [
 pub(crate) struct HttpGrant {
     port: u16,
     max_response_bytes: u64,
+    /// One request's time limit: the most of its time credited back.
+    timeout: Duration,
     client: reqwest::Client,
 }
 
@@ -82,6 +85,7 @@ impl HttpGrant {
         Ok(Self {
             port,
             max_response_bytes,
+            timeout,
             client,
         })
     }
@@ -208,10 +212,22 @@ impl http::Host for PluginStoreState {
                 codes::PLUGIN_HTTP_DENIED,
             )));
         };
-        // The service is waiting, not the plugin thinking (rDownloader's RA-HOST-05).
+        let over_budget = || {
+            to_wit_failure(failure::coded(
+                FailureKind::Other,
+                codes::PLUGIN_HTTP_TIME_BUDGET,
+            ))
+        };
+        if !self.http_time_left() {
+            return Err(over_budget());
+        }
+        // The service is waiting, not the plugin thinking (rDownloader's RA-HOST-05) - within
+        // the request's time limit and the call's budget (RC-080-69).
         let started = Instant::now();
         let answer = grant.request(&method, &url, &headers, body).await;
-        self.credit_host_time(started.elapsed());
+        if !self.credit_http_time(started.elapsed(), grant.timeout) {
+            return Err(over_budget());
+        }
         answer.map_err(to_wit_failure)
     }
 }

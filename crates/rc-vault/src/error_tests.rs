@@ -14,6 +14,7 @@ fn one_of_each() -> Vec<VaultError> {
         VaultError::Malformed,
         VaultError::Undecryptable,
         VaultError::BadParameters,
+        VaultError::TooCostly,
         VaultError::Interrupted,
         VaultError::InUse { secrets: 1 },
         VaultError::Changed,
@@ -29,6 +30,7 @@ fn one_of_each() -> Vec<VaultError> {
             | VaultError::Malformed
             | VaultError::Undecryptable
             | VaultError::BadParameters
+            | VaultError::TooCostly
             | VaultError::Interrupted
             | VaultError::InUse { .. }
             | VaultError::Changed

@@ -25,7 +25,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::ExitCode,
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -41,6 +41,7 @@ use self::{
     shooter::Report,
 };
 use super::Setup;
+use crate::recover::LockOrRecover as _;
 use crate::{
     app::{
         drive_bar::DriveBarLayout,
@@ -91,7 +92,7 @@ fn run(scenes: &Path, out: &Path, demo_root: Option<&Path>) -> Result<()> {
     }
     let report = Arc::new(Mutex::new(Report::default()));
     let shot = shoot(scenes, &out, demo_root, &report);
-    let mut report = std::mem::take(&mut *report.lock().unwrap_or_else(PoisonError::into_inner));
+    let mut report = std::mem::take(&mut *report.lock_or_recover("screenshots.report"));
     if let Err(error) = shot {
         report.error.get_or_insert_with(|| format!("{error:#}"));
     }
@@ -171,8 +172,7 @@ fn shoot(
                 );
             }
             report
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
+                .lock_or_recover("screenshots.report")
                 .skipped
                 .clone_from(&plan.skipped);
             shooter::show(setup, plan, out.clone(), Arc::clone(report))

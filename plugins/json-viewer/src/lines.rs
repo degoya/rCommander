@@ -24,6 +24,8 @@ pub(crate) struct Checkpoint {
     pub(crate) offset: u64,
     /// Pretty: the printer's state before that lexeme.
     pub(crate) state: LayoutState,
+    /// As-is: the line starts inside a `/* */` comment (JSONC, JSON5).
+    pub(crate) in_comment: bool,
 }
 
 #[derive(Debug)]
@@ -42,6 +44,7 @@ impl LineIndex {
                 line: 0,
                 offset,
                 state: LayoutState::default(),
+                in_comment: false,
             }],
             every_lines: FIRST_EVERY_LINES,
             every_bytes: FIRST_EVERY_BYTES,
@@ -49,8 +52,15 @@ impl LineIndex {
         }
     }
 
-    /// Line `line` starts at `offset` with the printer in `state`; lines arrive in order.
-    pub(crate) fn line_start(&mut self, line: u64, offset: u64, state: LayoutState) {
+    /// Line `line` starts at `offset` with the printer in `state`, inside a comment when
+    /// `in_comment`; lines arrive in order.
+    pub(crate) fn line_start(
+        &mut self,
+        line: u64,
+        offset: u64,
+        state: LayoutState,
+        in_comment: bool,
+    ) {
         let Some(last) = self.points.last() else {
             return;
         };
@@ -61,6 +71,7 @@ impl LineIndex {
             line,
             offset,
             state,
+            in_comment,
         });
         if self.points.len() >= MAX_CHECKPOINTS {
             self.thin();

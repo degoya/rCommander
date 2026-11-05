@@ -189,3 +189,35 @@ fn a_plain_name_keeps_the_windows_rules_and_255_bytes() {
         Some(InvalidName::NameTooLong)
     );
 }
+
+/// RC-080-70: on macOS a composed and a decomposed umlaut are one name, and so are `a` and `A`
+/// on a volume that ignores case; NTFS and Linux keep the two forms apart.
+#[test]
+fn the_macos_key_folds_the_normalisation_and_the_case() {
+    let (composed, decomposed) = ("\u{c4}rger.txt", "A\u{308}rger.txt");
+    let macos = FsRules::MACOS;
+    assert_eq!(macos.key(composed), macos.key(decomposed));
+    assert_eq!(macos.key(composed), "\u{e4}rger.txt");
+    assert_eq!(macos.key("a.txt"), macos.key("A.TXT"));
+    let case_sensitive = FsRules {
+        case_insensitive: false,
+        ..FsRules::MACOS
+    };
+    assert_eq!(case_sensitive.key(composed), case_sensitive.key(decomposed));
+    assert_ne!(case_sensitive.key("a.txt"), case_sensitive.key("A.txt"));
+    for other in [FsRules::UNIX, FsRules::WINDOWS] {
+        assert_ne!(other.key(composed), other.key(decomposed), "{other:?}");
+    }
+    if cfg!(target_os = "macos") {
+        assert_eq!(FsRules::native(), FsRules::MACOS);
+    }
+}
+
+/// Rules stored before RC-080-70 read on, normalisation-sensitive.
+#[test]
+fn rules_without_the_normalisation_read_as_sensitive() {
+    let json = r#"{"names":"unix","case_insensitive":true,"max_path":4095}"#;
+    let rules: FsRules = serde_json::from_str(json).expect("reads");
+    assert!(!rules.normalization_insensitive);
+    assert!(rules.case_insensitive);
+}

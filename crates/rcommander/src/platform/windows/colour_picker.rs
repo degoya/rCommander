@@ -8,6 +8,8 @@ use std::{num::NonZeroIsize, sync::Mutex};
 use iced::{Task, window};
 use winsafe::{self as w, co};
 
+use crate::recover::LogPanic as _;
+
 /// White, the custom colours' start.
 const WHITE: [u8; 3] = [0xFF; 3];
 
@@ -25,6 +27,7 @@ pub fn task(initial: Option<[u8; 3]>) -> Task<Option<[u8; 3]>> {
             Task::future(async move {
                 tokio::task::spawn_blocking(move || pick(owner, initial))
                     .await
+                    .log_panic("app.colour_picker")
                     .ok()
                     .flatten()
             })

@@ -24,7 +24,11 @@ pub(super) fn one_of_each() -> Vec<Command> {
         Command::ListHostKeys {
             filter: Some("box".into()),
         },
+        Command::ListRevokedHostKeys {
+            filter: Some("box".into()),
+        },
         Command::RemoveHostKey { id: 1 },
+        Command::RemoveRevokedHostKey { id: 1 },
         Command::ReplaceHostKey { question: 1 },
         Command::OpsAnswer {
             job: 1,

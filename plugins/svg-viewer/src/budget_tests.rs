@@ -170,3 +170,18 @@ fn what_usvg_cannot_read_as_svg_takes_nothing() {
     assert!(read_as_svg("image/svg+xml") && read_as_svg("text/plain"));
     assert!(!read_as_svg("image/png") && !read_as_svg("application/xml"));
 }
+
+/// RC-080-69: the parse allows no DTD and stops at the node budget; an SVG in a `data:` URL with
+/// a DTD still in it (the blanking reads only a prolog it knows) or nested beyond the depth budget
+/// on its tree is not read, and spends nothing.
+#[test]
+fn an_embedded_svg_beyond_the_parse_limits_is_not_read() {
+    let options = parsing();
+    assert!(!options.allow_dtd);
+    assert_eq!(options.nodes_limit, MAX_PARSED_NODES);
+    let remaining = Remaining::new(MAX_EXPANDED_ELEMENTS);
+    assert!(!remaining.take_svg(b"<!DOCTYPE svg [<!ENTITY e \"x\">]><svg>&e;</svg>"));
+    assert!(!remaining.take_svg(nested(crate::depth::MAX_DEPTH + 1).as_bytes()));
+    assert!(!remaining.exceeded());
+    assert!(remaining.take_svg(nested(8).as_bytes()));
+}

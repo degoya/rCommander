@@ -35,7 +35,7 @@ pub mod steps;
 pub mod trash;
 
 pub use journal::{Journal, Phase, Plan};
-pub use locks::{InstanceLock, UpdaterLock, updater_running};
+pub use locks::{DatabaseLock, InstanceLock, UpdaterLock, database_free, updater_running};
 
 /// Below the data directory: what an update keeps between the window and the updater.
 pub const UPDATE_DIR: &str = "update";
@@ -45,6 +45,11 @@ pub const JOURNAL_FILE: &str = "journal.json";
 pub const LOCK_FILE: &str = "updater.lock";
 /// Inside [`UPDATE_DIR`]: held, shared, by every window for as long as it runs.
 pub const INSTANCE_LOCK_FILE: &str = "instance.lock";
+/// Inside [`UPDATE_DIR`]: held, shared, by `rcommander mcp` while it serves headless (RC-080-69).
+pub const DATABASE_LOCK_FILE: &str = "database.lock";
+/// How long a roll-back waits for the windows and headless servers to let go of the database
+/// before it leaves the database as it is (`update.instance_running`).
+pub const DATABASE_WAIT_SECS: u64 = 10;
 /// Inside [`UPDATE_DIR`]: the verified downloads.
 pub const DOWNLOAD_DIR: &str = "download";
 /// Inside [`UPDATE_DIR`]: the database copies written before an update.
@@ -113,6 +118,7 @@ pub const INSTALL_CODES: &[&str] = &[
     "update.updater_did_not_start",
     "update.interrupted",
     "update.rollback_failed",
+    "update.instance_running",
 ];
 
 /// Refuses an install that cannot succeed: a program folder this process may not write, or a

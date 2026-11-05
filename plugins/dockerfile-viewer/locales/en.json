@@ -1,0 +1,4 @@
+{
+  "name": "Dockerfile viewer",
+  "description": "Shows Dockerfiles and Containerfiles coloured like an editor."
+}

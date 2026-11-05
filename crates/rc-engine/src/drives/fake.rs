@@ -7,7 +7,7 @@ use std::{
     io,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, PoisonError,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
@@ -16,6 +16,8 @@ use std::{
 use rc_vfs::{DeviceHub, PortableDevice, Vfs};
 
 use super::{Details, DriveKind, DriveSource, DriveSpace, RawDrive, devices::NoDevices};
+
+use crate::recover::LockOrRecover as _;
 
 #[derive(Default)]
 pub(crate) struct FakeDrives {
@@ -41,16 +43,13 @@ pub(crate) struct FakeDrives {
 impl FakeDrives {
     /// A drive `id` (also its label) of `kind` at `root`.
     pub(crate) fn with(self, id: &str, kind: DriveKind, root: impl Into<PathBuf>) -> Self {
-        self.drives
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(RawDrive {
-                id: id.to_owned(),
-                label: id.to_owned(),
-                kind,
-                root: root.into(),
-                remote: None,
-            });
+        self.drives.lock_or_recover("fake.drives").push(RawDrive {
+            id: id.to_owned(),
+            label: id.to_owned(),
+            kind,
+            root: root.into(),
+            remote: None,
+        });
         self
     }
 
@@ -107,16 +106,14 @@ impl FakeDrives {
     /// The drive `id` is gone.
     pub(crate) fn unplug(&self, id: &str) {
         self.drives
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("fake.drives")
             .retain(|drive| drive.id != id);
     }
 
     /// How often `id` was asked.
     pub(crate) fn asked(&self, id: &str) -> usize {
         self.asked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("fake.asked")
             .iter()
             .filter(|asked| *asked == id)
             .count()
@@ -139,10 +136,7 @@ impl DriveSource for FakeDrives {
             .find(|drive| drive.root == root)
             .map(|drive| drive.id)
             .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
-        self.asked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(id.clone());
+        self.asked.lock_or_recover("fake.asked").push(id.clone());
         if let Some(delay) = self.slow.get(&id) {
             std::thread::sleep(*delay);
         }
@@ -249,5 +243,5 @@ impl DeviceHub for FakeHub {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+    mutex.lock_or_recover("fake.mutex")
 }

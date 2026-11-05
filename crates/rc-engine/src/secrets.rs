@@ -24,10 +24,7 @@
 mod fingerprints;
 mod key_path;
 
-use std::{
-    fmt,
-    sync::{MutexGuard, PoisonError},
-};
+use std::{fmt, sync::MutexGuard};
 
 use rc_vault::{ExposeSecret as _, FieldRef, MasterPassword, SecretString, Use, VaultError};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -36,6 +33,7 @@ use zeroize::Zeroize as _;
 pub use rc_db::{SecretFlags, SecretKind, SecretOwner, StoredKey};
 pub use rc_remote::{KeyFormat, KeyInfo, MAX_KEY_BYTES};
 
+use crate::recover::LockOrRecover as _;
 use crate::{ConnectionId, Engine, EngineError, EngineEvent};
 
 pub(crate) use fingerprints::Fingerprints;
@@ -285,8 +283,7 @@ impl Engine {
     fn known_secrets(&self) -> MutexGuard<'_, Fingerprints> {
         self.inner
             .known_secrets
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .lock_or_recover("secrets.known_secrets")
     }
 }
 

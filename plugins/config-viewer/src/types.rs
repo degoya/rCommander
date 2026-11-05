@@ -139,8 +139,9 @@ pub fn encoding_setting(value: Option<&str>) -> Option<Encoding> {
 /// The syntax a file is read in, chosen by its name.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Format {
-    /// `.ini`, `.inf`, `.cfg`, `.conf`, `.editorconfig`, `.gitconfig`: `[section]`, `key = value`,
-    /// `;` and `#` comments.
+    /// `.ini`, `.inf`, `.cfg`, `.conf`, `.editorconfig`, `.gitconfig`, `.gitmodules`, `.npmrc`,
+    /// systemd units (`.service`, `.timer`, ...): `[section]`, `key = value`, `;` and `#`
+    /// comments.
     #[default]
     Ini,
     /// A Windows registry export, `.reg`: `[HKEY_...]` keys, `"name"=` and `@=` values typed
@@ -152,7 +153,7 @@ pub enum Format {
     Properties,
     /// TOML, `Cargo.lock` too.
     Toml,
-    /// `.gitignore` and `.gitattributes`: a pattern a line, attributes after it.
+    /// `.gitignore`, `.gitattributes` and `.dockerignore`: a pattern a line, attributes after it.
     Lines,
 }
 
@@ -172,7 +173,7 @@ impl Format {
             Some("env") => Self::Env,
             Some("properties") => Self::Properties,
             Some("toml") => Self::Toml,
-            Some("gitignore" | "gitattributes") => Self::Lines,
+            Some("gitignore" | "gitattributes" | "dockerignore") => Self::Lines,
             _ => Self::Ini,
         }
     }

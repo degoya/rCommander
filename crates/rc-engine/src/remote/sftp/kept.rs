@@ -6,7 +6,7 @@
 
 use std::{
     sync::{
-        Arc, Mutex, PoisonError, Weak,
+        Arc, Mutex, Weak,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -15,6 +15,7 @@ use std::{
 use rc_remote::SftpVfs;
 
 use super::backend;
+use crate::recover::LockOrRecover as _;
 use crate::{ConnectionId, Engine, Inner, sessions::ChannelLease};
 
 /// The references the engine itself holds to a kept backend: the SFTP map, the open backends
@@ -41,11 +42,11 @@ impl Use {
 
     /// Notes a use now.
     pub(crate) fn touch(&self) {
-        *self.at.lock().unwrap_or_else(PoisonError::into_inner) = Instant::now();
+        *self.at.lock_or_recover("kept.at") = Instant::now();
     }
 
     fn at(&self) -> Instant {
-        *self.at.lock().unwrap_or_else(PoisonError::into_inner)
+        *self.at.lock_or_recover("kept.at")
     }
 }
 

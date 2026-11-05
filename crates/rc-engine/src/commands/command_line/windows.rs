@@ -5,10 +5,10 @@ use std::{os::windows::process::CommandExt, path::PathBuf, process::Command};
 
 use super::cmd_arguments;
 
-/// `cmd.exe` in the system folder, not one found on the search path.
+/// `cmd.exe` in the system folder, not one found on the search path; `SystemRoot` only when
+/// absolute (`rc_vfs::system32`, RC-080-65).
 fn cmd_exe() -> PathBuf {
-    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
-    PathBuf::from(root).join("System32").join("cmd.exe")
+    rc_vfs::system32_from_env().join("cmd.exe")
 }
 
 /// cmd running `line`; with `keep_open` its window stays after the line ends.

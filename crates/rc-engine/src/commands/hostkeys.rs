@@ -1,5 +1,6 @@
-//! The `hostkeys.*` commands: the trust store in the settings (list, search, remove, import)
-//! and the answers to the questions of `crate::hostkeys`.
+//! The `hostkeys.*` commands: the trust store in the settings (list, search, remove, import),
+//! the keys a `known_hosts` file revoked (list, remove; RC-080-67) and the answers to the
+//! questions of `crate::hostkeys`.
 
 use std::{io, path::PathBuf};
 
@@ -20,6 +21,9 @@ pub struct ImportReport {
     pub added: usize,
     /// Keys stored already.
     pub unchanged: usize,
+    /// Keys of `@revoked` lines that were not revoked yet; their connections stop from now on.
+    #[serde(default)]
+    pub revoked: usize,
     /// Names stored with another key of the type, left as they are.
     pub conflicts: Vec<ImportConflict>,
     /// Lines and names that were not imported, and why.
@@ -68,6 +72,36 @@ impl Engine {
         Ok(Outcome::KnownHostRemoved { key })
     }
 
+    /// `hostkeys.list_revoked`: every revoked key, or those whose names, type or fingerprint
+    /// contain `filter` (ignoring case).
+    pub(crate) async fn list_revoked_host_keys(
+        &self,
+        filter: Option<&str>,
+    ) -> Result<Outcome, EngineError> {
+        let mut keys = self.db()?.revoked_host_keys().await?;
+        if let Some(filter) = filter.map(str::trim).filter(|filter| !filter.is_empty()) {
+            let needle = filter.to_lowercase();
+            keys.retain(|key| {
+                [&key.hosts, &key.algorithm, &key.fingerprint_sha256]
+                    .iter()
+                    .any(|field| field.to_lowercase().contains(&needle))
+            });
+        }
+        Ok(Outcome::RevokedHostKeys { keys })
+    }
+
+    /// `hostkeys.remove_revoked`: a person forgets a revocation; the key is judged as any other
+    /// again.
+    pub(crate) async fn remove_revoked_host_key(&self, id: i64) -> Result<Outcome, EngineError> {
+        let key = self
+            .db()?
+            .remove_revoked_host_key(id)
+            .await?
+            .ok_or(EngineError::KnownHostNotFound { id })?;
+        self.publish(EngineEvent::KnownHostsChanged);
+        Ok(Outcome::RevokedHostKeyRemoved { key })
+    }
+
     /// `hostkeys.import_known_hosts`: the keys of an OpenSSH `known_hosts` file, the user's
     /// own when `path` is `None`.
     pub(crate) async fn import_host_keys(
@@ -91,14 +125,16 @@ impl Engine {
                 source,
             }
         })?;
-        let summary = trust::import(db, &parsed).await?;
-        if summary.added > 0 {
+        let imported = trust::import(db, &parsed).await?;
+        let summary = imported.keys;
+        if summary.added > 0 || imported.revoked > 0 {
             self.publish(EngineEvent::KnownHostsChanged);
         }
         Ok(Outcome::KnownHostsImported(ImportReport {
             path: shown,
             added: summary.added,
             unchanged: summary.unchanged,
+            revoked: imported.revoked,
             conflicts: summary
                 .conflicts
                 .into_iter()
@@ -141,6 +177,7 @@ impl Engine {
                             stored_fingerprint, ..
                         }) => return Err(changed_error(&question, &stored_fingerprint)),
                         Err(TrustError::Stale) => return Err(EngineError::HostKeyStale),
+                        Err(TrustError::Revoked { .. }) => return Err(revoked_error(&question)),
                         Err(TrustError::Db(error)) => return Err(error.into()),
                     };
                 self.publish(EngineEvent::KnownHostsChanged);
@@ -174,6 +211,7 @@ impl Engine {
         {
             Ok(key) => key,
             Err(TrustError::Db(error)) => return Err(error.into()),
+            Err(TrustError::Revoked { .. }) => return Err(revoked_error(&question)),
             Err(TrustError::Stale | TrustError::Changed { .. }) => {
                 return Err(EngineError::HostKeyStale);
             }
@@ -193,6 +231,16 @@ impl Engine {
     fn close_question(&self, id: u64) {
         self.inner.host_keys.close(id);
         self.publish(EngineEvent::HostKeyQuestionClosed { question: id });
+    }
+}
+
+/// A question filed before its key was revoked: the yes is refused, the question stays.
+fn revoked_error(question: &HostKeyQuestion) -> EngineError {
+    EngineError::HostKeyRevoked {
+        host: question.host.clone(),
+        port: question.port,
+        algorithm: question.offered.algorithm.clone(),
+        fingerprint: question.offered.fingerprint.clone(),
     }
 }
 

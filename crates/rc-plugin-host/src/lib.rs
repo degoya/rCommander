@@ -40,6 +40,7 @@ mod manifest;
 mod package;
 mod packager;
 mod preview;
+mod recover;
 mod revocation;
 mod runtime;
 mod secrets;
@@ -93,9 +94,10 @@ pub use log_budget::MAX_LOG_LINES_PER_CALL;
 pub use manifest::{
     COMPLETED_MARKER, Capabilities, KNOWN_CAPABILITIES, MANIFEST_VERSION, MAX_MANIFEST_BYTES,
     MAX_SETTING_LINE_CHARS, MAX_SETTING_TEXT_CHARS, MagicManifest, ManifestDefaults,
-    ManifestRejection, MatchSection, NET_HTTP, NetHttp, PluginManifest, PluginMetadata, PluginType,
-    SUPPORTED_API_VERSIONS, SettingKind, SettingManifest, ViewerSection, check_app_version,
-    complete_manifest, net_http, parse_manifest,
+    ManifestRejection, MatchRank, MatchSection, NAMES_MIN_APP_VERSION, NET_HTTP, NetHttp,
+    PluginManifest, PluginMetadata, PluginType, SUPPORTED_API_VERSIONS, SettingKind,
+    SettingManifest, ViewerSection, check_app_version, complete_manifest, name_matches, net_http,
+    parse_manifest,
 };
 pub use package::{
     COMPONENT_MEMBER, MANIFEST_MEMBER, MAX_COMPONENT_BYTES, MAX_PACKAGE_BYTES, MAX_SIGNATURE_BYTES,

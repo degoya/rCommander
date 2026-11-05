@@ -9,6 +9,8 @@ use rc_plugin_host::{
 };
 
 use super::{PluginAdminError, PluginInfo, PluginSettingInfo, VersionInfo};
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{Engine, EngineError};
 
 /// The rCommander setting of a plugin's own setting `name`.
@@ -27,6 +29,7 @@ impl Engine {
         Ok(
             tokio::task::spawn_blocking(move || installed::inventory(&data_dir, &state))
                 .await
+                .log_panic("engine.plugin_inventory")
                 .map_err(PluginAdminError::from)?
                 .map_err(|error| PluginAdminError::from_host(&error))?,
         )
@@ -55,6 +58,9 @@ impl Engine {
             // What the plugin is: the version that runs, else the newest that verifies.
             let shown = running.or_else(|| entries.iter().find(|entry| entry.manifest.is_some()));
             let manifest = shown.and_then(|entry| entry.manifest.as_ref());
+            // None verifies: the newest version, with what its manifest claims - shown, never run.
+            let unverified = shown.is_none().then(|| entries.first()).flatten();
+            let label = unverified.and_then(|entry| entry.label.as_ref());
             let mut settings = Vec::new();
             for declared in manifest.map_or(&[][..], |manifest| &manifest.settings[..]) {
                 let setting = setting_key(&id, &declared.key);
@@ -83,17 +89,22 @@ impl Engine {
                 });
             }
             plugins.push(PluginInfo {
-                name: manifest.map_or_else(|| id.clone(), |manifest| manifest.name.clone()),
-                kind: text(manifest, |manifest| {
-                    manifest.plugin_type.as_str().to_owned()
-                }),
+                name: manifest
+                    .map(|manifest| manifest.name.clone())
+                    .or_else(|| label.map(|label| label.name.clone()))
+                    .unwrap_or_else(|| id.clone()),
+                kind: manifest.map_or_else(
+                    || label.map(|label| label.kind.clone()).unwrap_or_default(),
+                    |manifest| manifest.plugin_type.as_str().to_owned(),
+                ),
                 description: text(manifest, |manifest| manifest.metadata.description.clone()),
                 author: text(manifest, |manifest| manifest.metadata.author.clone()),
                 version: running.map(|entry| entry.version.clone()),
                 enabled: state.enabled(&id),
                 suspended: self.plugin_suspended(&id),
-                bundled: shown.is_some_and(|entry| entry.bundled),
-                signed: shown.is_some_and(|entry| entry.signed),
+                bundled: shown.or(unverified).is_some_and(|entry| entry.bundled),
+                signed: shown.or(unverified).is_some_and(|entry| entry.signed),
+                refused: unverified.and_then(|entry| entry.refused.map(str::to_owned)),
                 key_id: text(manifest, |manifest| manifest.key_id.clone()),
                 key_fingerprint: shown.and_then(|entry| entry.fingerprint.clone()),
                 permissions: manifest.map(Permissions::of).unwrap_or_default(),
@@ -113,8 +124,7 @@ impl Engine {
     fn plugin_suspended(&self, id: &str) -> bool {
         self.inner.plugins.get().is_some_and(|desk| {
             desk.health
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_or_recover("listing.health")
                 .get(id)
                 .is_some_and(|health| health.is_suspended())
         })
@@ -142,3 +152,7 @@ fn version_info(entry: &VersionEntry, pending: Option<&str>) -> VersionInfo {
         in_use: entry.in_use,
     }
 }
+
+#[cfg(test)]
+#[path = "listing_tests.rs"]
+mod tests;

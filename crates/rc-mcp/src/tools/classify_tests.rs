@@ -11,6 +11,7 @@ fn least(tool: &str) -> Value {
         "login_scripts_update" => json!({ "id": 1 }),
         "diagnostics_set_retention" => json!({ "table": "error_log" }),
         "queue_load" => json!({ "saved": 1 }),
+        "files_set_attributes" => json!({ "paths": [] }),
         _ => json!({}),
     }
 }

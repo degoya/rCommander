@@ -1,9 +1,12 @@
 use std::sync::{Arc, atomic::AtomicBool};
 use std::time::{Duration, Instant};
 
-use super::{MAX_TABLE_ELEMENTS, SandboxEngine, allowed_imports, settings_granted};
+use super::{
+    HTTP_TIME_BUDGET, MAX_TABLE_ELEMENTS, SandboxEngine, allowed_imports, settings_granted,
+};
 use crate::{
     PluginLimits,
+    failure::{self, codes},
     test_fixtures::{SETTINGS, viewer_manifest, viewer_manifest_0_2, viewer_manifest_text},
 };
 
@@ -154,5 +157,82 @@ async fn a_table_cannot_grow_past_its_element_cap() {
     assert!(
         grow.call_async(&mut store, 1).await.is_err(),
         "growing past the cap must trap"
+    );
+}
+
+/// RC-080-69: one request is credited at most its own time limit, one call at most the budget
+/// in all - a plugin making 100 slow requests ends at it - and the next call starts afresh.
+#[test]
+fn http_time_is_credited_within_the_request_limit_and_the_call_budget() {
+    let sandbox = sandbox(PluginLimits::default());
+    let mut store = store(&sandbox);
+    sandbox.begin_call(&mut store, "list").expect("begin");
+    let before = store.data().execution_deadline;
+    let per_request = Duration::from_secs(5);
+    assert!(
+        store
+            .data_mut()
+            .credit_http_time(Duration::from_secs(30), per_request)
+    );
+    assert_eq!(store.data().execution_deadline - before, per_request);
+
+    let mut answered = 1;
+    while answered < 100 && store.data_mut().http_time_left() {
+        store
+            .data_mut()
+            .credit_http_time(Duration::from_secs(1), per_request);
+        answered += 1;
+    }
+    assert!(answered < 100, "the budget ends the slow requests");
+    assert!(!store.data_mut().http_time_left());
+    assert_eq!(
+        store.data().execution_deadline - before,
+        HTTP_TIME_BUDGET,
+        "never more than the budget"
+    );
+
+    sandbox.begin_call(&mut store, "list").expect("begin");
+    assert!(store.data_mut().http_time_left());
+}
+
+/// `(module (func (export "spin") (loop br 0)))`: runs until something stops it.
+const SPINNER: &[u8] = &[
+    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, // magic, version
+    0x01, 0x04, 0x01, 0x60, 0x00, 0x00, // type: () -> ()
+    0x03, 0x02, 0x01, 0x00, // function 0 has type 0
+    0x07, 0x08, 0x01, 0x04, b's', b'p', b'i', b'n', 0x00, 0x00, // export "spin"
+    0x0a, 0x09, 0x01, 0x07, 0x00, // code: one body, no locals
+    0x03, 0x40, 0x0c, 0x00, 0x0b, 0x0b, // loop, br 0, end, end
+];
+
+/// Past the budget the call ends at the next tick with its own code, long before its time limit.
+#[tokio::test]
+async fn a_call_past_its_http_budget_ends_with_its_code() {
+    let sandbox = sandbox(PluginLimits::default());
+    let module = wasmtime::Module::new(sandbox.engine(), SPINNER).expect("module");
+    let mut store = store(&sandbox);
+    sandbox.begin_call(&mut store, "list").expect("begin");
+    let instance = wasmtime::Instance::new_async(&mut store, &module, &[])
+        .await
+        .expect("instance");
+    let spin = instance
+        .get_typed_func::<(), ()>(&mut store, "spin")
+        .expect("spin export");
+    assert!(!store.data_mut().credit_http_time(
+        HTTP_TIME_BUDGET + Duration::from_secs(1),
+        HTTP_TIME_BUDGET * 2
+    ));
+    let started = Instant::now();
+    let error = spin
+        .call_async(&mut store, ())
+        .await
+        .expect_err("the budget stops it");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "before the time limit"
+    );
+    assert_eq!(
+        failure::stopped(Some(&error), false).code(),
+        Some(codes::PLUGIN_HTTP_TIME_BUDGET)
     );
 }

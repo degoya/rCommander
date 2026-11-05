@@ -7,8 +7,12 @@
 //! [`VfsError::from_io`] gets back) and marks the backend closed - so the operations queue knows
 //! the connection went, keeps the part file and resumes on a new session. Any other error passes
 //! unchanged; the server's own texts stay out of it as before.
+//!
+//! An upload that created its file owner-only gives it its rights when it shuts down cleanly
+//! ([`Settle`], RC-080-67); one that breaks off leaves the part owner-only.
 
 use std::{
+    future::Future,
     io,
     path::PathBuf,
     pin::Pin,
@@ -16,13 +20,36 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    task::{Context, Poll},
+    task::{Context, Poll, ready},
 };
 
-use russh_sftp::client::{error::Error, fs::File};
+use russh_sftp::{
+    client::{RawSftpSession, error::Error, fs::File},
+    protocol::FileAttributes,
+};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use super::error::SftpError;
+
+/// What a completed upload still owes its file: the rights it gets once it is whole.
+pub(super) struct Settle {
+    pub raw: Arc<RawSftpSession>,
+    pub wire: String,
+    pub mode: u32,
+}
+
+impl Settle {
+    /// `SETSTAT` with the rights; a refusal leaves the file owner-only, the safe side.
+    async fn run(self) {
+        let change = FileAttributes {
+            permissions: Some(self.mode),
+            ..FileAttributes::empty()
+        };
+        if self.raw.setstat(self.wire, change).await.is_err() {
+            tracing::debug!("the server kept an upload owner-only");
+        }
+    }
+}
 
 /// A file of the server, read or written by a transfer.
 pub(super) struct TransferFile {
@@ -31,6 +58,11 @@ pub(super) struct TransferFile {
     /// The backend's "closed" flag, set when the stream finds the session gone.
     lost: Arc<AtomicBool>,
     timeout_secs: u64,
+    /// The rights to give an upload's file after its clean close.
+    settle: Option<Settle>,
+    settling: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
+    /// The file's own close is done; a later poll only finishes the settling.
+    closed: bool,
 }
 
 impl TransferFile {
@@ -40,7 +72,16 @@ impl TransferFile {
             path,
             lost,
             timeout_secs,
+            settle: None,
+            settling: None,
+            closed: false,
         }
+    }
+
+    /// The stream with `settle` to run after its clean close.
+    pub(super) fn settling_with(mut self, settle: Option<Settle>) -> Self {
+        self.settle = settle;
+        self
     }
 
     /// `error` typed: a lost or stalled session as the backend's error, anything else as it is.
@@ -106,10 +147,20 @@ impl AsyncWrite for TransferFile {
 
     fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
         let this = self.get_mut();
-        match Pin::new(&mut this.file).poll_shutdown(context) {
-            Poll::Ready(Err(error)) => Poll::Ready(Err(this.typed(error))),
-            other => other,
+        if !this.closed {
+            match ready!(Pin::new(&mut this.file).poll_shutdown(context)) {
+                Ok(()) => this.closed = true,
+                Err(error) => return Poll::Ready(Err(this.typed(error))),
+            }
         }
+        if let Some(settle) = this.settle.take() {
+            this.settling = Some(Box::pin(settle.run()));
+        }
+        if let Some(settling) = this.settling.as_mut() {
+            ready!(settling.as_mut().poll(context));
+            this.settling = None;
+        }
+        Poll::Ready(Ok(()))
     }
 }
 

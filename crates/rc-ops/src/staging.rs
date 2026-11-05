@@ -16,8 +16,9 @@
 //! back after a restart continues the part of the file it was writing without asking.
 //!
 //! What the file keeps of its source: the modification time, and the Unix mode where the source
-//! has one and the target can hold one (never on Windows); else only the read-only flag. The
-//! job's `keep_attributes` turns all of it off.
+//! has one and the target can hold one (never on Windows) - of a foreign source only what
+//! [`kept_mode`] lets through; else only the read-only flag. The job's `keep_attributes` turns
+//! all of it off.
 
 use std::{path::Path, time::Duration};
 
@@ -84,20 +85,32 @@ pub(crate) async fn open_part(vfs: &dyn Vfs, part: &Path) -> Result<WriteStream,
     }
 }
 
-/// The permission bits a file from another backend keeps: the owner's, group's and others'
-/// read and execute, the owner's and group's write.
+/// The permission bits a file from another backend keeps at most: the owner's, group's and
+/// others' read and execute, the owner's and group's write.
 pub(crate) const FOREIGN_MODE_MASK: u32 = 0o775;
 
 /// The mode a copy keeps of a source's `bits` on `src`: all of a file on this machine's disks;
-/// of a server's, a device's or an archive's, no set-uid, set-gid or sticky bit and nothing
-/// everyone may write - a download would otherwise be a set-uid program of the person's, or a
-/// file every account may change (`sftp get -p` masks too).
+/// of a server's, a device's or an archive's, no set-uid, set-gid or sticky bit, nothing
+/// everyone may write, and nothing the process's umask takes away - a download would otherwise
+/// be a set-uid program of the person's, or a file another account may change, though `chmod`
+/// itself applies no umask (`sftp get -p` and `tar` mask too, RC-080-70).
 pub(crate) fn kept_mode(bits: u32, src: &BackendId) -> u32 {
     if *src == BackendId::Local {
         bits
     } else {
-        bits & FOREIGN_MODE_MASK
+        foreign_mode(bits)
     }
+}
+
+/// What a file from another backend keeps of the mode `bits` ([`kept_mode`]); unpacking holds an
+/// archive's entries to it as well.
+pub(crate) fn foreign_mode(bits: u32) -> u32 {
+    foreign_mode_under(bits, rc_vfs::umask())
+}
+
+/// [`foreign_mode`] under the umask `umask`.
+pub(crate) fn foreign_mode_under(bits: u32, umask: u32) -> u32 {
+    bits & FOREIGN_MODE_MASK & !umask
 }
 
 /// How far apart two modification times may be and still count as one: a server keeps whole

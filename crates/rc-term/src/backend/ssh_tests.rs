@@ -183,3 +183,30 @@ async fn shutdown_closes_the_channel_and_keeps_the_connection() {
     shows(&again, "$").await;
     assert_eq!(server.accepts(), 1, "both terminals on one TCP connection");
 }
+
+#[test]
+fn a_full_input_queue_refuses_a_write_rather_than_grow() {
+    use crate::{INPUT_QUEUE, TermBackend};
+    // A writer that never takes anything: a server that stopped reading.
+    let (input, _queued) = tokio::sync::mpsc::channel(INPUT_QUEUE);
+    let (close, _) = tokio::sync::watch::channel(false);
+    let backend = super::SshBackend {
+        input,
+        close,
+        ended: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    };
+    for _ in 0..INPUT_QUEUE {
+        backend.write(b"x".to_vec()).expect("room");
+    }
+    assert!(matches!(
+        backend.write(b"x".to_vec()),
+        Err(TermError::InputFull)
+    ));
+    // The end does not need room in the queue.
+    backend.shutdown();
+    assert!(*backend.close.borrow());
+    assert!(matches!(
+        backend.write(b"x".to_vec()),
+        Err(TermError::Exited)
+    ));
+}

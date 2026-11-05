@@ -27,6 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from settings_reference_rust import Evaluator, Lexer, RustError, World  # noqa: E402
 
 SCHEMA = "crates/rc-engine/src/settings/schema.rs"
+# The schema's types (`SettingKind`, `SettingPage`), split from SCHEMA to keep it under 500 lines.
+TYPES = "crates/rc-engine/src/settings/schema/types.rs"
 LOOKUP = "crates/rc-engine/src/settings/schema/lookup.rs"
 DIALOG = "crates/rcommander/src/app/settings.rs"
 VIEW = "crates/rcommander/src/app/settings/view.rs"
@@ -276,6 +278,8 @@ def render(root: Path) -> str:
     except ValueError as error:
         raise DataError(f"{CATALOGUE}: {error}") from error
     schema_text = read(root, SCHEMA)
+    if (root / TYPES).is_file():
+        schema_text += "\n" + read(root, TYPES)
     known = variants(schema_text, "SettingKind", SCHEMA)
     unknown = sorted(set(known) - set(KINDS))
     if unknown:

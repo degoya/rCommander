@@ -4,11 +4,14 @@
 //! container of more than [`PAGE`] children is shown as ranges (`[0..999]`, ...), nested so no
 //! level holds more than [`PAGE`] nodes; a range is the one node kept in a table, up to
 //! [`MAX_RANGES`] of them. An invalid file adds a first node naming the line and column of its
-//! first error; what came before it is listed as usual.
+//! first error; what came before it is listed as usual. A JSON Lines file lists its lines'
+//! values (`records`).
+
+mod records;
 
 use std::collections::HashMap;
 
-use crate::structure::{PAGE, Structure};
+use crate::structure::{Entry, PAGE, Structure};
 use crate::types::{Failure, FailureKind, Source, TreeNode};
 use crate::walk::{Shape, Walker, key_label};
 
@@ -19,6 +22,9 @@ pub const MAX_RANGES: usize = 1 << 16;
 
 /// Marks a range id; offsets stay below it.
 const RANGE_BIT: u64 = 1 << 63;
+/// The container of a range over the lines of a JSON Lines file: the list has no offset of its
+/// own (its first value may start where it does).
+const RECORDS: u64 = RANGE_BIT - 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Range {
@@ -52,6 +58,8 @@ impl Tree {
                     .ok_or_else(|| Failure::of(FailureKind::NotFound))?;
                 self.list(src, structure, range)
             }
+            // A broken line of JSON Lines has nothing to unfold.
+            Some(offset) if structure.broken_at(offset).is_some() => Ok(Vec::new()),
             Some(offset) => {
                 let shape = Walker::new(src, structure, offset)
                     .value()?
@@ -89,6 +97,15 @@ impl Tree {
                 has_children: false,
             });
         }
+        if let Some(list) = &structure.records {
+            let range = Range {
+                container: RECORDS,
+                lo: 0,
+                hi: list.count,
+            };
+            nodes.extend(self.list(src, structure, range)?);
+            return Ok(nodes);
+        }
         let Some(root) = structure.root else {
             return Ok(nodes);
         };
@@ -123,6 +140,9 @@ impl Tree {
     ) -> Result<Vec<TreeNode>, Failure> {
         let Range { container, lo, hi } = range;
         let total = hi.saturating_sub(lo);
+        if total <= PAGE && container == RECORDS {
+            return records::items(src, structure, lo, hi);
+        }
         if total <= PAGE {
             return items(src, structure, range);
         }
@@ -179,13 +199,9 @@ fn items<S: Source>(
     range: Range,
 ) -> Result<Vec<TreeNode>, Failure> {
     let Range { container, lo, hi } = range;
-    let anchored = structure.entry(container).and_then(|entry| {
-        let slot = usize::try_from(lo / entry.anchor_step)
-            .ok()?
-            .checked_sub(1)?;
-        let offset = *entry.anchors.get(slot)?;
-        Some((offset, (slot as u64 + 1) * entry.anchor_step))
-    });
+    let anchored = structure
+        .entry(container)
+        .and_then(|entry| anchor(entry, lo));
     let object = src.read_at(container, 1)?.first() == Some(&b'{');
     let (offset, mut index) = anchored.unwrap_or((container + 1, 0));
     let mut walker = Walker::new(src, structure, offset);
@@ -239,6 +255,15 @@ fn items<S: Source>(
         index += 1;
     }
     Ok(nodes)
+}
+
+/// The anchor at or before child `lo` of `entry`: its offset and the child's index.
+fn anchor(entry: &Entry, lo: u64) -> Option<(u64, u64)> {
+    let slot = usize::try_from(lo / entry.anchor_step)
+        .ok()?
+        .checked_sub(1)?;
+    let offset = *entry.anchors.get(slot)?;
+    Some((offset, (slot as u64 + 1) * entry.anchor_step))
 }
 
 fn node(id: u64, label: String, shape: Shape) -> TreeNode {

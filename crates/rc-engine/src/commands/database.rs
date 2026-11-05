@@ -9,6 +9,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, Outcome,
     settings::{BACKUP_KEEP_KEY, stored_setting},
@@ -30,6 +31,7 @@ impl Engine {
         let pruned = match db.backup_dir() {
             Ok(dir) => tokio::task::spawn_blocking(move || rc_db::prune_backups(&dir, keep))
                 .await
+                .log_panic("engine.prune_backups")
                 .map_err(|_| "the pruning task ended early".to_owned())
                 .and_then(|pruned| pruned.map_err(|error| error.to_string())),
             Err(error) => Err(error.to_string()),

@@ -19,7 +19,7 @@ mod task;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -42,6 +42,7 @@ pub use restore::is_saveable;
 pub(crate) use shared::JobShared;
 use task::run;
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     Answer, DeleteMode, EventSink, JobChange, JobId, JobKind, JobSnapshot, JobSpec, OpsError,
     journal::StepJournal, persist::TransferStore, resume::Reconnect, runner::Resumption,
@@ -74,7 +75,7 @@ struct Hooks {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+    mutex.lock_or_recover("queue.mutex")
 }
 
 impl Queue {

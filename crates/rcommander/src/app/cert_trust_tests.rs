@@ -1,6 +1,7 @@
 //! The certificate dialogs through `apply`, against an engine over a database: the question a
 //! refused handshake files opens the dialog, the keyboard starts on Cancel, a changed
-//! certificate takes no yes and an expired one no "trust and save".
+//! certificate takes no yes and an expired one no "trust and save"; a plain FTP login's question
+//! before its password in clear (RC-080-67) opens the same dialog.
 
 use rc_db::{Db, NewTrustedCertificate};
 use rc_engine::{EngineError, PanelId};
@@ -212,4 +213,47 @@ async fn missed_questions_are_read_again() {
 #[test]
 fn dates_read_as_utc() {
     assert_eq!(date(1_577_836_800), "2020-01-01 00:00 UTC");
+}
+
+/// RC-080-67: a plain FTP login's question shows the server and no certificate, starts on
+/// Cancel, and "send until rCommander ends" lets the next login go without a question.
+#[tokio::test]
+async fn a_plain_ftp_login_asks_before_its_password_goes_in_clear() {
+    let root = TempDir::new().expect("temp dir");
+    let mut harness = Harness::with_db(root.path()).await;
+    let error = harness.app.engine().plaintext_refused("Files.Example", 21);
+    harness.settle().await;
+    assert_eq!(error.code(), "ftp_plaintext_unconfirmed");
+    let dialogs = &harness.app.cert_trust;
+    let question = dialogs.shown().expect("the dialog");
+    assert_eq!(question.kind, rc_engine::CertificateQuestionKind::Plaintext);
+    assert_eq!(question.host, "files.example");
+    assert!(question.info.is_none());
+    assert_eq!(
+        harness.app.cert_trust_title(),
+        Some(crate::i18n::t!("certs.plaintext_title"))
+    );
+    assert_eq!(
+        dialogs.buttons(),
+        [Choice::AcceptOnce, Choice::TrustAndSave, Choice::Cancel]
+    );
+    assert_eq!(dialogs.focused(), Some(Choice::Cancel));
+
+    choose(&mut harness, Choice::TrustAndSave).await;
+    assert!(harness.app.cert_trust.shown().is_none());
+    let info = harness.app.info.clone().expect("a status line");
+    assert_eq!(
+        info,
+        crate::i18n::t!("certs.plaintext_info_always", host = "files.example:21")
+    );
+    let listed = harness
+        .app
+        .engine()
+        .dispatch(rc_engine::Command::ListCertificates { filter: None })
+        .await
+        .expect("list");
+    assert!(
+        matches!(listed, rc_engine::Outcome::TrustedCertificates { certificates } if certificates.is_empty()),
+        "nothing stored"
+    );
 }

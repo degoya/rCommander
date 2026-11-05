@@ -25,6 +25,7 @@ WIKI="$SCRATCH/wiki"
 # shellcheck disable=SC2034  # read by the conditions expect_true evaluates
 PAGE="$WIKI/reference/settings.md"
 SCHEMA="$TREE/crates/rc-engine/src/settings/schema.rs"
+TYPES="$TREE/crates/rc-engine/src/settings/schema/types.rs"
 AREAS="$TREE/crates/rc-engine/src/settings/schema"
 CATALOGUE="$TREE/crates/rcommander/locales/en.json"
 DIALOG="crates/rcommander/src/app/settings"
@@ -119,11 +120,11 @@ expect_status "a constant another crate no longer has is refused" 2
 expect_output "the row and the constant are named" "(plugins::CRASH_LIMIT): "
 restore "$TREE/crates/rc-plugin-host/src/health.rs"
 
-sed -i 's/^pub enum SettingKind {$/pub enum SettingKind {\n    Gradient { default: \&'"'"'static str },/' "$SCHEMA"
+sed -i 's/^pub enum SettingKind {$/pub enum SettingKind {\n    Gradient { default: \&'"'"'static str },/' "$TYPES"
 run_status python3 -B "$SCRIPT" "$TREE" "$WIKI" --check
 expect_status "a kind of value without words is refused" 2
 expect_output "the kind is named" "SettingKind::Gradient has no words"
-restore "$SCHEMA"
+restore "$TYPES"
 
 sed -i '/"setting.appearance.theme": /d' "$CATALOGUE"
 run_status python3 -B "$SCRIPT" "$TREE" "$WIKI" --check

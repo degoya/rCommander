@@ -12,8 +12,8 @@ use rustls::{
 };
 
 use super::{
-    CertificateRejection, CertificateTrust, RefuseUnknown, TlsSetup, TrustDecision, Verifier,
-    fingerprint,
+    CertificateRejection, CertificateTrust, FtpError, RefuseUnknown, TlsSession, TlsSetup,
+    TrustDecision, Verifier, VerifierParts, fingerprint,
 };
 use crate::ftp::PinnedCertificates;
 
@@ -40,7 +40,7 @@ fn by_default_the_system_roots_decide() {
 #[test]
 fn a_handshake_without_a_refusal_is_a_plain_tls_error() {
     let setup = TlsSetup::new("localhost", 21, Arc::new(RefuseUnknown)).expect("TLS setup");
-    let error = setup.handshake_error("handshake eof".to_owned());
+    let error = setup.session().handshake_error("handshake eof".to_owned());
     assert_eq!(error.code(), "ftp_tls_failed");
 }
 
@@ -49,7 +49,7 @@ fn every_control_connection_gets_its_own_resumption_store() {
     let setup = TlsSetup::new("localhost", 21, Arc::new(RefuseUnknown)).expect("TLS setup");
     let (first, second) = (setup.session(), setup.session());
     assert!(
-        !Arc::ptr_eq(first.config(), second.config()),
+        !Arc::ptr_eq(first.connector.config(), second.connector.config()),
         "a configuration, and with it a resumption store, of its own"
     );
 }
@@ -210,4 +210,57 @@ fn an_expired_pinned_certificate_is_not_accepted_silently() {
         check(&roots, once, &der, "nas.example").0,
         "accepted once, on purpose"
     );
+}
+
+/// The certificate check of one handshake of `session`, by a verifier as its connector holds:
+/// the setup's parts over the session's refusal slot.
+fn handshake(setup: &TlsSetup, session: &TlsSession, der: &CertificateDer<'_>) -> bool {
+    let verifier = setup.parts.verifier(Arc::clone(&session.rejected));
+    let name = ServerName::try_from("nas.example".to_owned()).expect("name");
+    verifier
+        .verify_server_cert(der, &[], &name, &[], UnixTime::now())
+        .is_ok()
+}
+
+/// The fingerprint a failed handshake of `session` reports; `None` for a plain TLS error.
+fn reported(session: &TlsSession) -> Option<String> {
+    match session.handshake_error("handshake eof".to_owned()) {
+        FtpError::CertificateUnknown(rejection) => Some(rejection.fingerprint),
+        _ => None,
+    }
+}
+
+/// RC-080-67: a refusal is reported for the handshake it happened in - never for another
+/// control connection's, nor for a later handshake of the same one.
+#[test]
+fn a_refusal_reported_is_always_the_current_handshakes() {
+    let roots = roots();
+    let setup = TlsSetup::with_parts(VerifierParts {
+        system: Some(Arc::clone(&roots.system)),
+        provider: Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
+        trust: Arc::new(RefuseUnknown),
+        host: "nas.example".to_owned(),
+        port: 990,
+    })
+    .expect("TLS setup");
+    let (old, new) = (leaf(None, false), leaf(None, false));
+    let control = setup.session();
+    // A data connection of `control` is refused `old`; nobody reads that refusal.
+    assert!(!handshake(&setup, &control, &old));
+
+    // Another control connection whose handshake fails otherwise reports no certificate.
+    let other = setup.session();
+    assert_eq!(reported(&other), None);
+
+    // The next handshake of `control` starts empty, and reports its own certificate.
+    control.begin_handshake();
+    assert_eq!(reported(&control), None, "the earlier refusal is gone");
+    assert!(!handshake(&setup, &control, &old));
+    control.begin_handshake();
+    assert!(!handshake(&setup, &control, &new));
+    assert_eq!(reported(&control), Some(fingerprint(new.as_ref())));
+    // A certificate the roots vouch for leaves the slot empty.
+    control.begin_handshake();
+    assert!(handshake(&setup, &control, &leaf(Some(&roots), false)));
+    assert_eq!(reported(&control), None);
 }

@@ -17,15 +17,17 @@ use crate::PluginLimits;
 
 mod complete;
 mod grants;
+mod names;
 mod sections;
 mod settings;
 mod validate;
 
 pub use complete::{COMPLETED_MARKER, ManifestDefaults, complete_manifest};
 pub use grants::{NET_HTTP, NetHttp, net_http};
+pub use names::{NAMES_MIN_APP_VERSION, name_matches};
 pub use sections::{
-    Capabilities, KNOWN_CAPABILITIES, MagicManifest, MatchSection, PluginMetadata, PluginType,
-    SettingKind, SettingManifest, ViewerSection,
+    Capabilities, KNOWN_CAPABILITIES, MagicManifest, MatchRank, MatchSection, PluginMetadata,
+    PluginType, SettingKind, SettingManifest, ViewerSection,
 };
 pub(crate) use settings::resolve_settings;
 pub use settings::{MAX_SETTING_LINE_CHARS, MAX_SETTING_TEXT_CHARS};

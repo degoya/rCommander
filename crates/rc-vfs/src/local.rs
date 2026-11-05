@@ -29,6 +29,7 @@ use std::{
 use async_trait::async_trait;
 use tokio::io::AsyncSeekExt;
 
+use crate::recover::LogPanic as _;
 use crate::{
     Capabilities, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange, ReadStream,
     Result, SeekStream, SetAttributes, Vfs, VfsError, WriteMode, WriteStream, long_path,
@@ -45,6 +46,21 @@ impl LocalFs {
     }
 }
 
+/// The process's umask, the permission bits a new file of this process does not get: what a file
+/// from a server or an archive is held to as well (`rc-ops`, RC-080-70). 0 where there is none
+/// (Windows).
+#[must_use]
+pub fn umask() -> u32 {
+    #[cfg(unix)]
+    {
+        unix::umask()
+    }
+    #[cfg(not(unix))]
+    {
+        0
+    }
+}
+
 /// Runs blocking file-system work off the async threads.
 async fn blocking<T, F>(path: &Path, work: F) -> Result<T>
 where
@@ -53,6 +69,7 @@ where
 {
     tokio::task::spawn_blocking(work)
         .await
+        .log_panic("vfs.local_work")
         .map_err(|join| VfsError::Io {
             path: path.to_path_buf(),
             source: io::Error::other(join),
@@ -141,6 +158,12 @@ impl Vfs for LocalFs {
             WriteMode::Truncate => options.write(true).create(true).truncate(true),
             WriteMode::Append => options.append(true).create(true),
         };
+        // A part file continued is never a link put in its place: appending does not follow
+        // one (RC-080-70), the resume starts the file over instead.
+        #[cfg(unix)]
+        if mode == WriteMode::Append {
+            options.custom_flags(nix::libc::O_NOFOLLOW);
+        }
         let file = options.open(long_path(path)).await.map_err(io_err(path))?;
         Ok(Box::new(file))
     }

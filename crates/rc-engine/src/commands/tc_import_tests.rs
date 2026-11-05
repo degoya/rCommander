@@ -201,9 +201,9 @@ async fn an_import_writes_once_and_a_second_one_adds_nothing() {
         assert_eq!(*status_of(&first, key), TcRowStatus::Created, "{key}");
     }
     // `%TC_TEST_HOME%` is the parser tests' variable (`import/total_commander_tests.rs`); the
-    // engine reads the real environment, where it is not set.
+    // engine does not read it, so it stays as written - a relative path (RC-080-71).
     let unknown = TcRowStatus::Skipped {
-        reason: "unknown_variable".to_owned(),
+        reason: "relative_path".to_owned(),
     };
     assert_eq!(*status_of(&first, "menu12"), unknown);
     let hotlist = engine.db().expect("db").hotlist().await.expect("hotlist");

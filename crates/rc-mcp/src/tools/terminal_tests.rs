@@ -55,6 +55,33 @@ async fn send_input_wants_a_code_for_this_tool_and_this_terminal_once() {
     code_of(&again);
 }
 
+/// The screen shows what was typed there: reading it wants a code like a destructive call
+/// (RC-080-66), once, for this terminal.
+#[tokio::test]
+async fn reading_a_screen_wants_a_code_for_this_terminal_once() {
+    let (context, _root) = context().await;
+    let client = connect(&context).await;
+    let screen = |terminal: u64, code: Option<&str>| {
+        let mut arguments = json!({ "terminal": terminal });
+        if let Some(code) = code {
+            arguments["confirmation"] = json!(code);
+        }
+        arguments
+    };
+    let asked = call(&client, "terminal_read_screen", screen(999, None)).await;
+    assert_eq!(asked["class"], "destructive", "{asked}");
+    let code = code_of(&asked);
+    code_of(&call(&client, "terminal_read_screen", screen(998, Some(&code))).await);
+
+    let code = code_of(&call(&client, "terminal_read_screen", screen(999, None)).await);
+    let read = call(&client, "terminal_read_screen", screen(999, Some(&code))).await;
+    assert_eq!(
+        read["code"], "terminal_not_found",
+        "the code let it run: {read}"
+    );
+    code_of(&call(&client, "terminal_read_screen", screen(999, Some(&code))).await);
+}
+
 #[tokio::test]
 async fn reading_tools_need_no_code() {
     let (context, _root) = context().await;
@@ -66,8 +93,6 @@ async fn reading_tools_need_no_code() {
             .as_array()
             .is_some_and(|shells| !shells.is_empty())
     );
-    let missing = call(&client, "terminal_read_screen", json!({ "terminal": 999 })).await;
-    assert_eq!(missing["code"], "terminal_not_found", "{missing}");
     let not_shown = call(&client, "terminal_show", json!({ "terminal": 999 })).await;
     assert_eq!(not_shown["code"], "terminal_not_found", "{not_shown}");
     let files = call(&client, "show_files", json!({ "panel": "right" })).await;
@@ -169,10 +194,18 @@ async fn a_credential_on_the_screen_is_masked() {
     }
     assert!(shown, "the shell printed the canary");
 
+    let code = code_of(
+        &call(
+            &client,
+            "terminal_read_screen",
+            json!({ "terminal": terminal.0 }),
+        )
+        .await,
+    );
     let screen = call(
         &client,
         "terminal_read_screen",
-        json!({ "terminal": terminal.0 }),
+        json!({ "terminal": terminal.0, "confirmation": code }),
     )
     .await;
     let rendered = screen.to_string();

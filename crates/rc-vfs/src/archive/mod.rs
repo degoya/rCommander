@@ -34,7 +34,7 @@ mod zip_format;
 use std::{
     io,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex},
     time::SystemTime,
 };
 
@@ -53,6 +53,8 @@ use self::{
     source::Source,
     tree::{RawEntry, Tree},
 };
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{
     Capabilities, Entry, ReadStream, Result, SetAttributes, Vfs, VfsError, WriteMode, WriteStream,
 };
@@ -310,7 +312,7 @@ impl ArchiveFs {
     }
 
     fn slot(&self) -> std::sync::MutexGuard<'_, Option<Cached>> {
-        self.cache.lock().unwrap_or_else(PoisonError::into_inner)
+        self.cache.lock_or_recover("archive.cache")
     }
 }
 
@@ -351,6 +353,7 @@ where
 {
     tokio::task::spawn_blocking(work)
         .await
+        .log_panic("vfs.archive_work")
         .map_err(|join| VfsError::Io {
             path: path.to_path_buf(),
             source: io::Error::other(join),

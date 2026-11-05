@@ -19,6 +19,7 @@ use rc_vfs::BackendId;
 
 pub use rc_checksum::ReadGuard;
 
+use crate::recover::LogPanic as _;
 use crate::{
     JobSpec, OpsError,
     runner::{Runner, Step, Stop, attempt},
@@ -80,7 +81,9 @@ impl Runner {
         };
         let fallback = Arc::clone(&guard);
         let owned: PathBuf = path.to_path_buf();
-        let judged = tokio::task::spawn_blocking(move || guard(&owned)).await;
+        let judged = tokio::task::spawn_blocking(move || guard(&owned))
+            .await
+            .log_panic("ops.read_guard");
         let reason = match judged {
             Ok(reason) => reason,
             // The blocking pool is shutting down: judged here.

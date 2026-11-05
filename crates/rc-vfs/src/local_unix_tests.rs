@@ -161,3 +161,30 @@ async fn entries_name_their_owner() {
     let stat = fs.stat(&path).await.expect("stat");
     assert_eq!(stat.owner, Some(owner));
 }
+
+/// RC-080-70: the umask is read from `/proc/<pid>/status`, octal, permission bits only.
+#[test]
+fn the_umask_line_of_the_status_is_read_in_octal() {
+    use crate::local::unix::parse_umask;
+
+    let status = "Name:\trcommander\nUmask:\t0022\nState:\tS (sleeping)\n";
+    assert_eq!(parse_umask(status), Some(0o022));
+    assert_eq!(parse_umask("Umask:\t0077\n"), Some(0o077));
+    assert_eq!(parse_umask("Name:\tx\n"), None);
+    assert_eq!(parse_umask("Umask:\tzz\n"), None);
+    assert_eq!(crate::umask() & !0o777, 0, "permission bits only");
+}
+
+/// RC-080-70: appending never follows a link put where a part file was: the file behind it
+/// stays as it was.
+#[tokio::test]
+async fn appending_does_not_follow_a_link() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let fs = LocalFs::new();
+    let victim = dir.path().join("victim");
+    std::fs::write(&victim, b"mine").expect("write");
+    let part = dir.path().join("a.rcpart");
+    symlink(&victim, &part).expect("symlink");
+    assert!(fs.open_write(&part, WriteMode::Append).await.is_err());
+    assert_eq!(std::fs::read(&victim).expect("read"), b"mine");
+}

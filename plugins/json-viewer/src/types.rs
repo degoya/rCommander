@@ -105,6 +105,8 @@ impl Failure {
 pub trait Source {
     /// `info(src).size`.
     fn size(&self) -> u64;
+    /// `info(src).name`: the file's name, never its folder; its extension picks the dialect.
+    fn name(&self) -> String;
     /// `read-at`: at most `length` bytes (at most 1 MiB) from `offset`; fewer only at the end.
     fn read_at(&mut self, offset: u64, length: u32) -> Result<Vec<u8>, Failure>;
     /// `should-stop`: the person moved on; the running call ends with `cancelled`.

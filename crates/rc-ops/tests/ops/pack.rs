@@ -229,6 +229,43 @@ async fn sources_go_only_after_a_complete_archive() {
     assert_eq!(read_inside(&archive, "src/a.txt").await, b"alpha\n");
 }
 
+/// RC-080-70: without "overwrite" a pack never replaces an archive, also one that took the name
+/// while the pack ran - after the look before it began: the late file stays, the pack fails
+/// with `already_exists` and leaves no temporary file.
+#[tokio::test]
+async fn a_pack_never_replaces_an_archive_that_arrived_meanwhile() {
+    let root = tempfile::tempdir().expect("tempdir");
+    fs::write(root.path().join("big.bin"), payload(4 << 20, 3)).expect("write");
+    let archive = root.path().join("late.zip");
+    let harness = Harness::start();
+    harness.local();
+    let late = archive.clone();
+    harness.on_event(move |_queue, event| {
+        if let JobChange::Progress { progress } = &event.change
+            && progress.bytes_done > 0
+            && !late.exists()
+        {
+            fs::write(&late, b"theirs").expect("write the late archive");
+        }
+    });
+    let mut spec = pack(
+        &[root.path().join("big.bin")],
+        &archive,
+        PackSettings::default(),
+    );
+    spec.options.on_error = rc_ops::ErrorPolicy::Skip;
+    let done = harness.run(spec).await;
+    assert_eq!(done.failures.len(), 1, "{done:?}");
+    assert_eq!(done.failures[0].code, "already_exists");
+    assert_eq!(fs::read(&archive).expect("read"), b"theirs", "not replaced");
+    let left: Vec<_> = fs::read_dir(root.path())
+        .expect("root")
+        .flatten()
+        .map(|entry| entry.file_name())
+        .collect();
+    assert_eq!(left.len(), 2, "no temporary archive is left: {left:?}");
+}
+
 /// A backend on which `/log.txt` grows between its count and its read.
 struct Growing(rc_vfs::MemoryFs);
 

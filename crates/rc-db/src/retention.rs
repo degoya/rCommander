@@ -4,13 +4,15 @@
 //! [`RETAINED_TABLES`] names each growing table with its limits; [`DURABLE_TABLES`] names every
 //! other table with the reason it may keep what it holds. `retention_tests` fails when a table
 //! of the migrations is in neither list, so a new table cannot grow unnoticed. [`Db::prune`]
-//! (`retention/prune.rs`) keeps the retained tables within their limits.
+//! (`retention/prune.rs`) keeps the retained tables within their limits; the list of them is
+//! `retention/retained.rs`.
 //!
 //! The limits are settings (`retention.<table>.max_rows`, `retention.<table>.max_age_days`),
 //! read anew on every sweep. A person can lower them, or raise them up to a ceiling, but never
 //! switch one off: each lies between the table's floor and ceiling.
 
 mod prune;
+mod retained;
 
 use std::collections::BTreeMap;
 
@@ -19,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Db, Result};
 
 pub use prune::{PRUNE_BATCH, PruneReport};
+pub use retained::RETAINED_TABLES;
 
 /// A row and an age limit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,112 +50,6 @@ pub struct RetainedTable {
     /// The highest limits a setting may give: there is no "keep forever".
     pub ceiling: RetentionLimits,
 }
-
-/// Every table that grows with use. A new one (history, the rename undo log, finished
-/// transfers, an MCP audit) adds its row here with its migration.
-pub const RETAINED_TABLES: &[RetainedTable] = &[
-    // The warn and error lines of the tracing layer (RC-010-11).
-    RetainedTable {
-        table: "error_log",
-        time_column: "recorded_at",
-        rows_key: "retention.error_log.max_rows",
-        age_key: "retention.error_log.max_age_days",
-        defaults: RetentionLimits {
-            max_rows: 5_000,
-            max_age_days: 30,
-        },
-        floor: RetentionLimits {
-            max_rows: 100,
-            max_age_days: 1,
-        },
-        ceiling: RetentionLimits {
-            max_rows: 50_000,
-            max_age_days: 365,
-        },
-    },
-    // The multi-rename undo log (RC-020-01): one row per step. The defaults are
-    // `rc_rename::UNDO_LOG_MAX_STEPS` and `UNDO_LOG_MAX_AGE_DAYS`; an undo reverses the latest run
-    // only, so the floor still holds a large one.
-    RetainedTable {
-        table: "rename_log",
-        time_column: "recorded_at",
-        rows_key: "retention.rename_log.max_rows",
-        age_key: "retention.rename_log.max_age_days",
-        defaults: RetentionLimits {
-            max_rows: 100_000,
-            max_age_days: 30,
-        },
-        floor: RetentionLimits {
-            max_rows: 1_000,
-            max_age_days: 1,
-        },
-        ceiling: RetentionLimits {
-            max_rows: 1_000_000,
-            max_age_days: 365,
-        },
-    },
-    // The transfer jobs to and from servers that have not ended (RC-060-07): a row per job while it
-    // runs, gone when it ends; what stays is a job the app left in the middle, which the next
-    // start puts back to resume. One nobody resumes is dropped after a month.
-    RetainedTable {
-        table: "transfer_jobs",
-        time_column: "recorded_at",
-        rows_key: "retention.transfer_jobs.max_rows",
-        age_key: "retention.transfer_jobs.max_age_days",
-        defaults: RetentionLimits {
-            max_rows: 200,
-            max_age_days: 30,
-        },
-        floor: RetentionLimits {
-            max_rows: 10,
-            max_age_days: 1,
-        },
-        ceiling: RetentionLimits {
-            max_rows: 5_000,
-            max_age_days: 365,
-        },
-    },
-    // Every plugin call (RC-100-09): plugin, version, export, outcome, code, duration - codes,
-    // never a plugin's words. A viewer in Quick View calls on every cursor move, so the default
-    // keeps a busy day.
-    RetainedTable {
-        table: "plugin_executions",
-        time_column: "recorded_at",
-        rows_key: "retention.plugin_executions.max_rows",
-        age_key: "retention.plugin_executions.max_age_days",
-        defaults: RetentionLimits {
-            max_rows: 10_000,
-            max_age_days: 30,
-        },
-        floor: RetentionLimits {
-            max_rows: 100,
-            max_age_days: 1,
-        },
-        ceiling: RetentionLimits {
-            max_rows: 100_000,
-            max_age_days: 365,
-        },
-    },
-    // The panels' folder history (RC-010-03).
-    RetainedTable {
-        table: "dir_history",
-        time_column: "saved_at",
-        rows_key: "retention.dir_history.max_rows",
-        age_key: "retention.dir_history.max_age_days",
-        defaults: RetentionLimits {
-            max_rows: 2_000,
-            max_age_days: 90,
-        },
-        floor: RetentionLimits {
-            max_rows: 100,
-            max_age_days: 1,
-        },
-        ceiling: RetentionLimits {
-            max_rows: 20_000,
-            max_age_days: 365,
-        },
-    },
-];
 
 /// Every table that keeps what it holds, with the reason it does not grow with use.
 pub const DURABLE_TABLES: &[(&str, &str)] = &[
@@ -206,6 +103,11 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
     (
         "plugins",
         "one row per installed plugin: its switch and version choices, removed with the plugin",
+    ),
+    (
+        "revoked_host_keys",
+        "one row per SSH host key a known_hosts import marked @revoked (RC-080-67); a key \
+         revoked again keeps its row, only a person removes one",
     ),
     (
         "saved_queue_entries",

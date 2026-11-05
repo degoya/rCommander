@@ -16,12 +16,13 @@
 //! 26c8592a6: no MSI; the new version proves itself while the updater still waits.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::Result;
 
 use super::{
-    Journal, Phase, TEST_FAIL_START_ENV, durable::remove_any, portable, steps, trash,
-    updater_running,
+    DATABASE_WAIT_SECS, Journal, Phase, TEST_FAIL_START_ENV, database_free, durable::remove_any,
+    portable, steps, trash, updater_running,
 };
 
 /// What the start does next.
@@ -159,15 +160,53 @@ pub fn update_proven(data: &Path, running_version: &str) -> bool {
 /// Rolls the switch back, the database copy with it if the new version ran, and ends the journal;
 /// a failure ends it as `update.rollback_failed` and is returned.
 pub(crate) fn take_back(journal: &mut Journal, code: &str, detail: &str) -> Result<()> {
+    take_back_waiting(
+        journal,
+        code,
+        detail,
+        Duration::from_secs(DATABASE_WAIT_SECS),
+    )
+}
+
+/// [`take_back`], waiting up to `database_wait` for the database to be free. While a window or a
+/// headless `rcommander mcp` still has it open after that, the program files roll back and the
+/// database stays as it is: the journal ends as `update.instance_running`, and the copy stays in
+/// `update/pre-update` for the manual recovery (RC-080-69).
+pub(crate) fn take_back_waiting(
+    journal: &mut Journal,
+    code: &str,
+    detail: &str,
+    database_wait: Duration,
+) -> Result<()> {
     journal.phase = Phase::RollingBack;
     journal.write()?;
+    let data = journal.plan.data_dir.clone();
+    let mut database_kept = false;
     let result = portable::roll_back(journal).and_then(|()| {
-        if journal.new_started {
-            steps::restore_database(&journal.plan)?;
+        if journal.new_started && journal.plan.database_copy.is_some() {
+            if database_free(&data, database_wait)? {
+                steps::restore_database(&journal.plan)?;
+            } else {
+                database_kept = true;
+            }
         }
         Ok(())
     });
     match result {
+        Ok(()) if database_kept => {
+            tracing::error!(
+                "the database is in use by another rCommander process; it is not put back"
+            );
+            journal.end(
+                Phase::RolledBack,
+                "update.instance_running",
+                format!(
+                    "{detail}; the database was not put back: another rCommander process still \
+                     had it open after {} seconds",
+                    database_wait.as_secs()
+                ),
+            )
+        }
         Ok(()) => journal.end(Phase::RolledBack, code, detail),
         Err(error) => {
             journal.end(

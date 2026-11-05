@@ -253,3 +253,63 @@ async fn two_copies_within_one_ftp_server_at_once_both_finish() {
         assert_eq!(y, payload(256 * 1024, n));
     }
 }
+
+/// RC-080-70: a copy within one FTP server that is paused in the middle of a file holds its two
+/// connections, not the turn to open them: a copy within another FTP server runs meanwhile.
+#[tokio::test]
+async fn a_paused_ftp_copy_does_not_hold_one_on_another_server() {
+    const OTHER: BackendId = BackendId::Ftp { connection_id: 4 };
+    let (one, two) = (Ftp::start().await, Ftp::start().await);
+    let harness = Harness::start();
+    harness
+        .queue
+        .register(FTP, Backend::new(Arc::new(one.vfs.clone())));
+    harness
+        .queue
+        .register(OTHER, Backend::new(Arc::new(two.vfs.clone())));
+    for (server, n) in [(&one, 1_u8), (&two, 2)] {
+        fs::create_dir_all(server.on_disk("/in")).expect("mkdir");
+        fs::write(server.on_disk("/in/f.bin"), payload(BIG, n)).expect("write");
+    }
+    let paused = Arc::new(AtomicBool::new(false));
+    let pausing = Arc::clone(&paused);
+    harness.on_event(move |queue, event| {
+        if let rc_ops::JobChange::Progress { progress } = &event.change
+            && progress.bytes_done > 0
+            && progress.bytes_done < progress.bytes_total
+            && !pausing.swap(true, Ordering::SeqCst)
+        {
+            queue.pause(event.job).expect("pause");
+        }
+    });
+    let first = harness
+        .queue
+        .submit(copy(at(&FTP, "/in/f.bin"), at(&FTP, "/out")))
+        .expect("accepted")
+        .id;
+    for _ in 0..400 {
+        if harness.queue.job(first).expect("known").state == JobState::Paused {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(
+        harness.queue.job(first).expect("known").state,
+        JobState::Paused
+    );
+    let second = harness
+        .run(copy(at(&OTHER, "/in/f.bin"), at(&OTHER, "/out")))
+        .await;
+    assert_eq!(second.state, JobState::Completed, "{second:?}");
+    assert_eq!(
+        fs::read(two.on_disk("/out/f.bin")).expect("read"),
+        payload(BIG, 2)
+    );
+    harness.queue.resume(first).expect("resume");
+    let first = harness.finish(first).await;
+    assert_eq!(first.state, JobState::Completed, "{first:?}");
+    assert_eq!(
+        fs::read(one.on_disk("/out/f.bin")).expect("read"),
+        payload(BIG, 1)
+    );
+}

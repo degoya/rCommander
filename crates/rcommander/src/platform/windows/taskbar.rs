@@ -20,11 +20,7 @@
               holds"
 )]
 
-use std::{
-    ffi::c_void,
-    mem::ManuallyDrop,
-    sync::{Mutex, PoisonError},
-};
+use std::{ffi::c_void, mem::ManuallyDrop, sync::Mutex};
 
 use windows::{
     Win32::{
@@ -42,6 +38,7 @@ use windows::{
 
 use super::context_menu::{Com, wide};
 use crate::platform::taskbar::{self, DISPLAY_NAME};
+use crate::recover::LockOrRecover as _;
 
 /// The format of the `System.AppUserModel.*` keys (`propkey.h`).
 const APP_USER_MODEL: GUID = GUID::from_u128(0x9f4c_2855_9f79_4b39_a8d0_e1d4_2de1_d5f3);
@@ -76,7 +73,7 @@ pub fn join(window: *mut c_void) {
         return;
     };
     // Kept before the first value: whatever of it is set is removed again.
-    let mut joined = JOINED.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut joined = JOINED.lock_or_recover("taskbar.joined");
     if !joined.contains(&window.expose_provenance()) {
         joined.push(window.expose_provenance());
     }
@@ -97,7 +94,7 @@ pub fn join(window: *mut c_void) {
 /// Takes the properties off the live `window` before it closes, on the thread that owns it.
 pub fn leave(window: *mut c_void) {
     let address = window.expose_provenance();
-    let mut joined = JOINED.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut joined = JOINED.lock_or_recover("taskbar.joined");
     let Some(index) = joined.iter().position(|&held| held == address) else {
         return;
     };
@@ -109,7 +106,7 @@ pub fn leave(window: *mut c_void) {
 /// Takes the properties off every window still joined, on the windows' thread, before iced ends
 /// and destroys them.
 pub fn leave_all() {
-    let windows = std::mem::take(&mut *JOINED.lock().unwrap_or_else(PoisonError::into_inner));
+    let windows = std::mem::take(&mut *JOINED.lock_or_recover("taskbar.joined"));
     for address in windows {
         clear(std::ptr::with_exposed_provenance_mut(address));
     }

@@ -12,7 +12,9 @@
 //! connection the server closed (a restart, a firewall's idle cut) is seen on its socket and
 //! replaced before it is used; one idle for longer than [`STALE_AFTER`] is also checked with
 //! `NOOP`, because servers close idle sessions (`421`) without telling; while it waits, a `NOOP` every
-//! [`KEEPALIVE`] keeps it open, and after [`IDLE_TIMEOUT`] unused it is closed.
+//! [`KEEPALIVE`] keeps it open, and after [`IDLE_TIMEOUT`] unused it is closed. The keepalive asks
+//! every idle connection at once, each for at most [`KEEPALIVE_CHECK`], and each goes back as soon
+//! as it answered: one that hangs holds up no other and keeps its seat no longer (RC-080-67).
 //!
 //! Every connection holds a seat ([`Pool::seats`]): one for the commands and one per transfer
 //! at most, fewer once the server refused a session as one too many (`seats.rs`).
@@ -24,7 +26,7 @@ use std::{
     io,
     path::PathBuf,
     sync::{
-        Arc, Mutex, PoisonError, Weak,
+        Arc, Mutex, Weak,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
@@ -45,10 +47,15 @@ use super::{
     tls::TlsSetup,
 };
 
+use crate::recover::LockOrRecover as _;
+
 /// An idle connection older than this is checked before it is used again.
 const STALE_AFTER: Duration = Duration::from_secs(15);
 /// How often the idle connections are kept open with `NOOP`; below the 60 s many servers allow.
 const KEEPALIVE: Duration = Duration::from_secs(30);
+/// How long the keepalive waits for one connection's answer to `NOOP` (or the configured timeout,
+/// when that is shorter); one that does not answer by then is closed.
+const KEEPALIVE_CHECK: Duration = Duration::from_secs(10);
 /// An idle connection unused for this long is closed; the next call logs in again.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 /// How long a closing session waits for its connections' answers to `QUIT`, all together.
@@ -185,7 +192,7 @@ impl Pool {
     }
 
     fn idle(&self) -> std::sync::MutexGuard<'_, Vec<Idle>> {
-        self.idle.lock().unwrap_or_else(PoisonError::into_inner)
+        self.idle.lock_or_recover("pool.idle")
     }
 
     fn give_back(&self, connection: Connection, seat: OwnedSemaphorePermit) {
@@ -230,29 +237,22 @@ impl Pool {
     }
 
     /// One round of the keepalive: an idle connection unused for [`IDLE_TIMEOUT`] is closed,
-    /// every other one gets a `NOOP` and stays if it answers.
+    /// every other one gets a `NOOP`, all at once, and goes back as soon as it answered; one
+    /// that has not after [`KEEPALIVE_CHECK`] is closed, its seat free again.
     async fn refresh(&self) {
         let waiting = std::mem::take(&mut *self.idle());
-        for Idle {
-            mut connection,
-            seat,
-            used,
-            ..
-        } in waiting
-        {
-            if used.elapsed() >= IDLE_TIMEOUT {
-                continue;
-            }
-            let alive = tokio::time::timeout(self.config.timeout, connection.noop()).await;
-            if matches!(alive, Ok(Ok(()))) {
-                self.keep(Idle {
-                    connection,
-                    seat,
-                    used,
-                    checked: Instant::now(),
-                });
-            }
-        }
+        let wait = self.config.timeout.min(KEEPALIVE_CHECK);
+        let checks = waiting
+            .into_iter()
+            .filter(|idle| idle.used.elapsed() < IDLE_TIMEOUT)
+            .map(|mut idle| async move {
+                let alive = tokio::time::timeout(wait, idle.connection.noop()).await;
+                if matches!(alive, Ok(Ok(()))) {
+                    idle.checked = Instant::now();
+                    self.keep(idle);
+                }
+            });
+        futures_util::future::join_all(checks).await;
     }
 }
 

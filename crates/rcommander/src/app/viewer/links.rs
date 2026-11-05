@@ -5,6 +5,10 @@
 //! opens; the status line says so and names the target. The About page's published addresses
 //! open through the same gate (RC-100-64).
 
+#[cfg(test)]
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
+
 /// The longest link that opens; a longer one is refused.
 const MAX_URL: usize = 2048;
 /// The characters of a link the status line and the tooltips show.
@@ -46,7 +50,9 @@ pub async fn open(url: String) -> bool {
         return false;
     }
     matches!(
-        tokio::task::spawn_blocking(move || launch(&url)).await,
+        tokio::task::spawn_blocking(move || launch(&url))
+            .await
+            .log_panic("app.open_link"),
         Ok(Ok(()))
     )
 }
@@ -61,8 +67,7 @@ fn launch(url: &str) -> std::io::Result<()> {
 #[cfg(test)]
 fn launch(url: &str) -> std::io::Result<()> {
     tests::LAUNCHED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .lock_or_recover("links.launched")
         .push(url.to_owned());
     Ok(())
 }

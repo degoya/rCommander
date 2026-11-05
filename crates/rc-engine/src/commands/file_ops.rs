@@ -24,6 +24,9 @@ use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
 use super::{archive::refuse_archive_change, ops::sources_of, panel::resolve_path};
+#[cfg(test)]
+use crate::recover::LockOrRecover as _;
+use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, EngineEvent, Outcome, PanelId,
     settings::{EDITOR_KEY, VIEWER_KEY, stored_setting},
@@ -232,7 +235,9 @@ impl Engine {
             }
         };
         // The system's shell may wait; never on the engine's caller.
-        let launched = tokio::task::spawn_blocking(move || launch(&file, program.as_deref())).await;
+        let launched = tokio::task::spawn_blocking(move || launch(&file, program.as_deref()))
+            .await
+            .log_panic("engine.open_with");
         if !matches!(launched, Ok(Ok(()))) {
             return Err(EngineError::OpenFailed { name });
         }
@@ -314,8 +319,7 @@ fn launch(file: &Path, program: Option<&str>) -> std::io::Result<()> {
 #[cfg(test)]
 fn launch(file: &Path, program: Option<&str>) -> std::io::Result<()> {
     tests::LAUNCHED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .lock_or_recover("file_ops.launched")
         .push((file.to_path_buf(), program.map(str::to_owned)));
     Ok(())
 }

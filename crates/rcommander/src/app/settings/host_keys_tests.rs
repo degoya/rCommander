@@ -17,8 +17,9 @@ const PLAIN: &str = include_str!("../../../../rc-remote/tests/fixtures/known_hos
 const HASHED: &str =
     include_str!("../../../../rc-remote/tests/fixtures/known_hosts/hashed_known_hosts");
 
-/// The keys of both fixtures (four plain, two hashed) and one FTPS certificate.
-const ALL: usize = 7;
+/// The keys of both fixtures (four plain, two hashed), one FTPS certificate and the key the
+/// plain fixture revokes (RC-080-67).
+const ALL: usize = 8;
 
 async fn harness(root: &TempDir) -> Harness {
     let db = Db::open_in_memory().await.expect("db");
@@ -83,7 +84,7 @@ async fn send(harness: &mut Harness, message: HostKeysMsg) {
 }
 
 #[tokio::test]
-async fn the_page_lists_keys_and_certificates_by_server_hashed_names_last() {
+async fn the_page_lists_keys_and_certificates_by_server_hashed_names_and_revoked_keys_last() {
     let root = TempDir::new().expect("temp dir");
     let harness = shown(&root).await;
     let entries = entries(&harness);
@@ -98,7 +99,15 @@ async fn the_page_lists_keys_and_certificates_by_server_hashed_names_last() {
         .iter()
         .position(Stored::hashed)
         .expect("a hashed name");
-    assert!(entries[hashed..].iter().all(Stored::hashed), "hashed last");
+    let (last, before) = entries.split_last().expect("rows");
+    assert!(matches!(last, Stored::Revoked(_)), "revoked last: {last:?}");
+    assert_eq!(last.port(), None);
+    assert!(
+        last.server().contains("revoked.example"),
+        "{}",
+        last.server()
+    );
+    assert!(before[hashed..].iter().all(Stored::hashed), "hashed before");
     assert_eq!(entries[hashed].port(), None);
     assert!(
         entries
@@ -204,8 +213,52 @@ async fn a_certificate_is_removed_after_a_yes() {
     assert!(
         entries(&harness)
             .iter()
-            .all(|stored| matches!(stored, Stored::Key(_)))
+            .all(|stored| !matches!(stored, Stored::Certificate(_)))
     );
+}
+
+/// RC-080-67: a revoked key is a row of its own; removing it takes a yes, says what it means,
+/// and the key is judged as any other again.
+#[tokio::test]
+async fn a_revoked_key_is_shown_and_removed_after_a_yes() {
+    let root = TempDir::new().expect("temp dir");
+    let mut harness = shown(&root).await;
+    let revoked = entries(&harness)
+        .iter()
+        .find(|stored| matches!(stored, Stored::Revoked(_)))
+        .cloned()
+        .expect("the revoked key");
+    assert!(matches!(revoked.item(), Item::Revoked(_)));
+    send(&mut harness, HostKeysMsg::Select(revoked.item())).await;
+    send(&mut harness, HostKeysMsg::Remove).await;
+    assert_eq!(page(&harness).asking, Some(revoked.item()));
+    assert_eq!(entries(&harness).len(), ALL, "nothing goes without a yes");
+    send(&mut harness, HostKeysMsg::ConfirmRemove).await;
+    assert_eq!(entries(&harness).len(), ALL - 1);
+    assert!(
+        entries(&harness)
+            .iter()
+            .all(|stored| !matches!(stored, Stored::Revoked(_)))
+    );
+    let (note, error) = harness
+        .app
+        .settings
+        .as_ref()
+        .and_then(|dialog| dialog.note.clone())
+        .expect("a note");
+    assert!(!error);
+    assert_eq!(note, crate::i18n::t!("settings.host_keys.unrevoked"));
+    let left = match harness
+        .app
+        .engine()
+        .dispatch(Command::ListRevokedHostKeys { filter: None })
+        .await
+        .expect("list")
+    {
+        Outcome::RevokedHostKeys { keys } => keys,
+        other => panic!("revoked keys, got {other:?}"),
+    };
+    assert!(left.is_empty());
 }
 
 #[tokio::test]

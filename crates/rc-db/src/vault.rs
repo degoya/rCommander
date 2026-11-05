@@ -13,10 +13,11 @@
 //! key it holds ([`Db::hold_vault_key`]), and every write of a secret column checks it against
 //! `vault_meta` inside its own transaction ([`DbError::VaultChanged`]) - RC-080-11.
 
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 
 use sqlx::{AssertSqlSafe, Connection as _, SqliteConnection};
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     CREDENTIALS_TABLE, Db, DbError, Result, SECRETS_ROW_ID, SECRETS_TABLE,
     login_scripts::{SCRIPT_SECRET_COLUMN, SCRIPT_SECRETS_TABLE},
@@ -245,10 +246,7 @@ impl Db {
     /// Secret writes from now on require `vault_meta.salt` to be `salt`, the salt of the key the
     /// vault holds; `None` (no vault, or no key yet) checks nothing.
     pub fn hold_vault_key(&self, salt: Option<Vec<u8>>) {
-        *self
-            .vault_key
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = salt;
+        *self.vault_key.lock_or_recover("vault.vault_key") = salt;
     }
 
     /// [`DbError::VaultChanged`] when this process holds a vault key and `vault_meta` no longer
@@ -256,11 +254,7 @@ impl Db {
     /// IMMEDIATE`, so no password change of another process can come between the check and the
     /// write.
     pub(crate) async fn check_vault_key(&self, connection: &mut SqliteConnection) -> Result<()> {
-        let held = self
-            .vault_key
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone();
+        let held = self.vault_key.lock_or_recover("vault.vault_key").clone();
         let Some(held) = held else {
             return Ok(());
         };

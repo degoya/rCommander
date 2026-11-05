@@ -53,3 +53,20 @@ fn an_unclosed_end_counts_what_was_seen() {
     assert!(depth_within(b"<svg><!-- never closed <g><g>", 1));
     assert!(depth_within(b"", 0));
 }
+
+/// The parsed tree is counted too (RC-080-69): what the parser built is what usvg walks.
+#[test]
+fn the_parsed_tree_is_held_to_the_same_budget() {
+    let shallow = nested(MAX_DEPTH);
+    let document =
+        Document::parse_with_options(&shallow, crate::budget::parsing()).expect("parses");
+    assert!(tree_within(&document, MAX_DEPTH));
+    let deep = nested(10_000);
+    let document = Document::parse_with_options(&deep, crate::budget::parsing()).expect("parses");
+    assert!(!tree_within(&document, MAX_DEPTH));
+    assert!(tree_within(&document, 10_000));
+    // Siblings do not add up; an element without content counts nothing.
+    let siblings = Document::parse(r"<svg><g><g/></g><g><g/></g><g/></svg>").expect("parses");
+    assert!(tree_within(&siblings, 2));
+    assert!(!tree_within(&siblings, 1));
+}

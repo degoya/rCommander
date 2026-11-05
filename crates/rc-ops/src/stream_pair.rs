@@ -15,21 +15,26 @@
 //! rename the complete part; a cancel stops both.
 //!
 //! A copy within one FTP server holds two of its transfer connections, one per stream; such
-//! copies open their streams one at a time ([`Runner::one_ftp_pair`]), else two of them could
-//! each hold one connection and wait for a second for ever.
+//! copies of one server open their streams one at a time ([`Runner::one_ftp_pair`]), else two of
+//! them could each hold one connection and wait for a second for ever. The turn is held only
+//! while the two streams open, not while they run (RC-080-70): a paused copy keeps its two
+//! connections, never the turn - one on another server, or on this one with connections to
+//! spare, goes on.
 
 use std::{
+    collections::HashMap,
     io,
     path::Path,
-    sync::{Arc, PoisonError},
+    sync::{Arc, LazyLock},
 };
 
 use rc_vfs::{BackendId, VfsError, VfsPath};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::{Mutex, MutexGuard, mpsc},
+    sync::{Mutex, OwnedMutexGuard, mpsc},
 };
 
+use crate::recover::LockOrRecover as _;
 use crate::{
     OpsError,
     control::Control,
@@ -40,8 +45,17 @@ use crate::{
 /// Buffers between the read and the write side: with the queue's 256 KiB, one MiB in flight.
 pub(crate) const DEPTH: usize = 4;
 
-/// Held while both streams of a copy within one FTP server are open.
-static FTP_PAIR: Mutex<()> = Mutex::const_new(());
+/// The turn to open both streams of a copy within one FTP server, one per server (its
+/// connection id); a turn nobody holds or waits for is dropped when the next one is asked for.
+static FTP_TURNS: LazyLock<std::sync::Mutex<HashMap<i64, Arc<Mutex<()>>>>> =
+    LazyLock::new(Default::default);
+
+/// The turn of the FTP server `connection_id`, to wait for.
+fn ftp_turn(connection_id: i64) -> Arc<Mutex<()>> {
+    let mut turns = FTP_TURNS.lock_or_recover("stream_pair.ftp_turns");
+    turns.retain(|id, turn| *id == connection_id || Arc::strong_count(turn) > 1);
+    Arc::clone(turns.entry(connection_id).or_default())
+}
 
 /// The buffers the files of one job take turns with (RC-080-45): a stream pair takes its
 /// buffers here and leaves them here when it ends, so a job of 100 000 small files makes its
@@ -65,7 +79,7 @@ impl Buffers {
     }
 
     fn kept(&self) -> std::sync::MutexGuard<'_, Vec<Vec<u8>>> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.0.lock_or_recover("stream_pair")
     }
 }
 
@@ -235,19 +249,22 @@ impl Runner {
         both(read, write).await
     }
 
-    /// One file's streams to their end, the same for a fresh copy and a continued part: the
+    /// One file's streams to their end, the same for a fresh copy and a continued part: the FTP
+    /// turn (`pair`, [`Runner::one_ftp_pair`]) let go now that both streams are open, the
     /// [`Runner::pump`], the writer shut down - after a failure too, whose error then counts -,
-    /// both streams and the FTP pair (`pair`, [`Runner::one_ftp_pair`]) let go, and
-    /// [`Runner::check_copy`] on what landed at `to`, where `before` bytes were already.
+    /// both streams let go, and [`Runner::check_copy`] on what landed at `to`, where `before`
+    /// bytes were already.
     pub(crate) async fn land(
         &mut self,
         item: &Item,
         streams: (rc_vfs::ReadStream, rc_vfs::WriteStream),
-        pair: Option<MutexGuard<'static, ()>>,
+        pair: Option<OwnedMutexGuard<()>>,
         to: &Path,
         hasher: blake3::Hasher,
         before: u64,
     ) -> Result<(), Step> {
+        // Both streams hold their connections: the next copy may open its own (RC-080-70).
+        drop(pair);
         let (mut reader, mut writer) = streams;
         let pumped = match self
             .pump(&mut reader, &mut writer, &item.path, to, hasher)
@@ -264,7 +281,6 @@ impl Runner {
         };
         drop(writer);
         drop(reader);
-        drop(pair);
         let (hash, written) = pumped?;
         self.check_copy(item, to, &hash, before + written).await
     }
@@ -322,14 +338,17 @@ impl Runner {
     }
 
     /// Before a copy within one FTP server opens its two streams: waits until no other such copy
-    /// has its streams open. `None` for every other copy; a cancel meanwhile stops the job.
-    pub(crate) async fn one_ftp_pair(&self) -> Result<Option<MutexGuard<'static, ()>>, Step> {
-        let within_ftp = matches!(self.src_id, BackendId::Ftp { .. })
-            && self.dst_id.as_ref() == Some(&self.src_id);
-        if !within_ftp {
+    /// of that server is opening its own. `None` for every other copy; a cancel meanwhile stops
+    /// the job.
+    pub(crate) async fn one_ftp_pair(&self) -> Result<Option<OwnedMutexGuard<()>>, Step> {
+        let BackendId::Ftp { connection_id } = self.src_id else {
+            return Ok(None);
+        };
+        if self.dst_id.as_ref() != Some(&self.src_id) {
             return Ok(None);
         }
-        Ok(Some(self.job.control.or_cancel(FTP_PAIR.lock()).await?))
+        let turn = ftp_turn(connection_id);
+        Ok(Some(self.job.control.or_cancel(turn.lock_owned()).await?))
     }
 }
 

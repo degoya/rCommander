@@ -183,3 +183,73 @@ fn a_capped_line_drops_the_token_the_cap_may_have_cut() {
         3
     );
 }
+
+fn spans_with(line: &str, options: LineOptions) -> Vec<(&str, TokenClass)> {
+    spans_of(
+        line,
+        tokenize_line_with(line.as_bytes(), false, false, options),
+    )
+}
+
+#[test]
+fn a_jsonc_comment_is_a_comment_and_a_key_looks_past_one() {
+    let options = LineOptions {
+        dialect: Dialect::Jsonc,
+        ..LineOptions::default()
+    };
+    assert_eq!(
+        spans_with(r#"{"a" /* c */ : 1} // end"#, options),
+        vec![
+            ("{", Punctuation),
+            ("\"a\"", Key),
+            ("/* c */", TokenClass::Comment),
+            (":", Punctuation),
+            ("1", Number),
+            ("}", Punctuation),
+            ("// end", TokenClass::Comment),
+        ]
+    );
+    let inside = LineOptions {
+        in_comment: true,
+        ..options
+    };
+    assert_eq!(
+        spans_with("still */ 1", inside),
+        vec![("still */", TokenClass::Comment), ("1", Number)]
+    );
+    assert!(ends_in_comment(b"1 /* open", Dialect::Jsonc, false));
+    assert!(ends_in_comment(b"still", Dialect::Jsonc, true));
+    assert!(!ends_in_comment(b"still */", Dialect::Jsonc, true));
+    assert!(!ends_in_comment(b"1 /* open", Dialect::Json, false));
+}
+
+#[test]
+fn a_checked_line_is_invalid_from_its_first_error() {
+    let check = LineOptions {
+        check: true,
+        ..LineOptions::default()
+    };
+    assert_eq!(
+        spans_with(r#"{"a": 1} 2"#, check),
+        vec![
+            ("{", Punctuation),
+            ("\"a\"", Key),
+            (":", Punctuation),
+            ("1", Number),
+            ("}", Punctuation),
+            ("2", Invalid),
+        ]
+    );
+    // Cut short: its last token.
+    assert_eq!(
+        spans_with(r#"{"a": true"#, check),
+        vec![
+            ("{", Punctuation),
+            ("\"a\"", Key),
+            (":", Punctuation),
+            ("true", Invalid),
+        ]
+    );
+    // Unchecked, the same line is coloured as its lexemes are.
+    assert_eq!(spans(r#"{"a": true"#)[3], ("true", Literal));
+}

@@ -33,7 +33,8 @@ use windows::{
             Shell::{
                 CMF_CANRENAME, CMF_NORMAL, CMIC_MASK_PTINVOKE, CMINVOKECOMMANDINFO,
                 CMINVOKECOMMANDINFOEX, Common::ITEMIDLIST, GCS_VERBW, IContextMenu, IContextMenu2,
-                IContextMenu3, IShellFolder, SEE_MASK_UNICODE, SHBindToObject, SHParseDisplayName,
+                IContextMenu3, IShellFolder, SEE_MASK_ASYNCOK, SEE_MASK_UNICODE, SHBindToObject,
+                SHParseDisplayName,
             },
             WindowsAndMessaging::HMENU as ComMenu,
         },
@@ -233,7 +234,10 @@ fn invoke(
     let info = CMINVOKECOMMANDINFOEX {
         cbSize: size_of::<CMINVOKECOMMANDINFOEX>() as u32,
         // SEE_MASK_UNICODE is CMIC_MASK_UNICODE: the wide fields are the ones to read.
-        fMask: SEE_MASK_UNICODE | CMIC_MASK_PTINVOKE,
+        // SEE_MASK_ASYNCOK is CMIC_MASK_ASYNCOK (shobjidl_core.h), as the Explorer passes it: a
+        // handler may hand the work to a thread of its own and return, so a slow extension does
+        // not hold the UI thread (RC-080-71).
+        fMask: SEE_MASK_UNICODE | SEE_MASK_ASYNCOK | CMIC_MASK_PTINVOKE,
         hwnd: com::HWND(hwnd),
         // MAKEINTRESOURCE: the entry's offset in place of a verb's name.
         lpVerb: PCSTR(ptr::without_provenance(offset as usize)),

@@ -6,8 +6,8 @@
 //! 26c8592a6: the same archive the installer reads, the signature proven against the key its own
 //! manifest names - so the publisher shown is the one that signed it - and the trust decision
 //! reported instead of made. Nothing is written and no component compiled. Adapted: shown in the
-//! window's dialog instead of a REST answer; rCommander's permissions (claimed extensions and
-//! magics, the viewer's outputs, granted capabilities) instead of the repository index's.
+//! window's dialog instead of a REST answer; rCommander's permissions (claimed extensions, names
+//! and magics, the viewer's outputs, granted capabilities) instead of the repository index's.
 
 use std::io::Cursor;
 
@@ -47,6 +47,9 @@ pub enum KeyStatus {
 pub struct Permissions {
     /// The extensions it claims (`[match] extensions`).
     pub extensions: Vec<String>,
+    /// The file names it claims (`[match] names`, RC-100-80).
+    #[serde(default)]
+    pub names: Vec<String>,
     /// How many leading-byte patterns it claims files by.
     pub magics: usize,
     /// A viewer's outputs (`text`, `highlighted`, ...).
@@ -62,6 +65,7 @@ impl Permissions {
     pub fn of(manifest: &PluginManifest) -> Self {
         Self {
             extensions: manifest.matching.extensions.clone(),
+            names: manifest.matching.names.clone(),
             magics: manifest.matching.magic.len(),
             outputs: manifest
                 .viewer
@@ -100,6 +104,13 @@ impl Permissions {
                 .iter()
                 .filter(|extension| !self.extensions.contains(extension))
                 .map(|extension| format!(".{extension}")),
+        );
+        added.extend(
+            newer
+                .names
+                .iter()
+                .filter(|name| !self.names.contains(name))
+                .cloned(),
         );
         added
     }

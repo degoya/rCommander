@@ -19,7 +19,7 @@ mod spec;
 mod store;
 mod view;
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 pub use error::WorkspaceError;
 pub use spec::{
@@ -28,6 +28,7 @@ pub use spec::{
     clean_name,
 };
 
+use crate::recover::LockOrRecover as _;
 use crate::{Engine, settings::themes::ThemeMode};
 
 /// The setting that says what applying a workspace does to the tabs a panel has: `replace_keep_locked`
@@ -48,11 +49,11 @@ pub(crate) struct WorkspaceDesk {
 
 impl WorkspaceDesk {
     fn active(&self) -> Option<WorkspaceId> {
-        *self.active.lock().unwrap_or_else(PoisonError::into_inner)
+        *self.active.lock_or_recover("workspaces.active")
     }
 
     fn set_active(&self, id: Option<WorkspaceId>) {
-        *self.active.lock().unwrap_or_else(PoisonError::into_inner) = id;
+        *self.active.lock_or_recover("workspaces.active") = id;
     }
 }
 

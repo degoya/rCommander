@@ -282,6 +282,51 @@ async fn dispatch_mcp_refuses_the_human_decisions() {
     ));
 }
 
+/// RC-080-67: a key a `known_hosts` file revoked fails with `host_key_revoked` and files no
+/// question; a question filed before the import takes no yes.
+#[tokio::test]
+async fn a_revoked_key_stops_hard_and_takes_no_yes() {
+    let (root, engine) = engine_with_db(&[]).await;
+    let mut events = engine.subscribe();
+    let _ = engine.check_host_key("box.example", 22, key(ED25519)).await;
+    let before = asked(&mut events);
+    let path = root.path().join("known_hosts");
+    std::fs::write(&path, format!("@revoked box.example {ED25519}")).expect("write");
+    engine
+        .dispatch(Command::ImportKnownHosts {
+            path: Some(path.display().to_string()),
+        })
+        .await
+        .expect("imported");
+    let error = engine
+        .check_host_key("Other.Example", 2222, key(ED25519))
+        .await
+        .expect_err("revoked");
+    assert_eq!(error.code(), "host_key_revoked");
+    assert!(error.to_string().contains(&key(ED25519).fingerprint));
+    assert!(
+        std::iter::from_fn(|| events.try_recv().ok())
+            .all(|event| !matches!(event, EngineEvent::HostKeyQuestion { .. })),
+        "no question for a revoked key"
+    );
+    let refused = answer(&engine, before.id, HostKeyAnswer::TrustAndSave)
+        .await
+        .expect_err("a revoked key is never trusted");
+    assert_eq!(refused.code(), "host_key_revoked");
+    assert!(
+        engine
+            .db()
+            .expect("db")
+            .known_hosts()
+            .await
+            .expect("list")
+            .is_empty()
+    );
+    // Another key of the host is judged as before.
+    let other = engine.check_host_key("box.example", 22, key(OTHER)).await;
+    assert_eq!(other.expect_err("unknown").code(), "host_key_unknown");
+}
+
 /// RC-080-12 (X3): an unknown key of another type for a host already trusted is a first sighting
 /// that says so - the dialog names the stored types - and the key exchange asks for them first.
 #[tokio::test]

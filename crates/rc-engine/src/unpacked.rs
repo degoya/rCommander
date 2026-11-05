@@ -17,6 +17,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::recover::LogPanic as _;
+
 #[cfg(windows)]
 mod windows;
 
@@ -69,6 +71,7 @@ fn own_root(root: &Path) -> io::Result<()> {
 pub(crate) async fn new_folder() -> io::Result<PathBuf> {
     tokio::task::spawn_blocking(create_folder)
         .await
+        .log_panic("engine.unpack_folder")
         .map_err(io::Error::other)?
 }
 

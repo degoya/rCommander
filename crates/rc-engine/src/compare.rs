@@ -18,6 +18,7 @@ use tokio::io::AsyncReadExt as _;
 use tokio_util::sync::CancellationToken;
 
 use crate::EngineError;
+use crate::recover::LogPanic as _;
 pub use binary::BinaryDifference;
 pub use text::{
     DiffRow, Encoding, Line, LineEnding, LinePosition, RowKind, TextDiff, TextFile, TextOptions,
@@ -182,6 +183,7 @@ async fn diff_bytes(
     let options = *options;
     tokio::task::spawn_blocking(move || TextDiff::compute(left_text, right_text, &options))
         .await
+        .log_panic("engine.compare_diff")
         .map(Some)
         .map_err(|error| {
             if error.is_panic() {

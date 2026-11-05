@@ -10,6 +10,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use crate::recover::LogPanic as _;
+
 /// The start of a session folder's name in the system's temporary folder.
 pub const PREFIX: &str = "rcommander-drag-";
 /// A session folder this old belongs to a session that is long gone.
@@ -65,13 +67,18 @@ impl Drop for TempArea {
 /// Removes a session folder ([`TempArea::take_session`]) with its contents on the blocking pool,
 /// not on the window's thread. A folder that cannot be removed now is swept by a later session.
 pub async fn remove_off_thread(folder: PathBuf) {
-    let _ = tokio::task::spawn_blocking(move || remove(&folder)).await;
+    let _ = tokio::task::spawn_blocking(move || remove(&folder))
+        .await
+        .log_panic("app.drag_temp_remove");
 }
 
 /// [`make_session`] in the system's temporary folder, on the blocking pool.
 pub async fn make_session_off_thread() -> Result<PathBuf, String> {
     let root = std::env::temp_dir();
-    match tokio::task::spawn_blocking(move || make_session(&root)).await {
+    match tokio::task::spawn_blocking(move || make_session(&root))
+        .await
+        .log_panic("app.drag_temp_make")
+    {
         Ok(made) => made.map_err(|error| error.to_string()),
         Err(error) => Err(error.to_string()),
     }

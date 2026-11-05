@@ -226,10 +226,12 @@ impl Runner {
     }
 
     /// Where the part file of `item` continues: its length, when the source is unchanged, the
-    /// part no longer than it and its tail the source's; else 0, from the start.
+    /// part no longer than it and its tail the source's; else 0, from the start. A part that is
+    /// a link is never continued (RC-080-70): writing through it would change the file it leads
+    /// to; starting over removes the link ([`open_part`]).
     async fn resume_offset(&mut self, item: &Item, part: &Path) -> Result<u64, Step> {
         let existing = match self.dst.stat(part).await {
-            Ok(existing) if !existing.is_dir_like() => existing,
+            Ok(existing) if !existing.is_dir_like() && !is_link(&existing) => existing,
             Ok(_) | Err(VfsError::NotFound { .. }) => return Ok(0),
             Err(error) => return Err(error.into()),
         };
@@ -349,6 +351,11 @@ impl Runner {
         let mark = FileMark::new(&item.path, &item.entry, &placement.dest, replace);
         store.mark(record, &mark).await;
     }
+}
+
+/// Whether `entry` is a link: a part file under that name is not one this job wrote.
+fn is_link(entry: &rc_vfs::Entry) -> bool {
+    matches!(entry.kind, rc_vfs::EntryKind::Symlink { .. })
 }
 
 /// `None` for a refusal (the file starts over), the error for a lost connection.

@@ -7,13 +7,14 @@ use iced::Color;
 
 use super::{Tokens, hex, syntax, terminal};
 
+use crate::recover::RwLockOrRecover as _;
+
 /// The Mac's fonts behind [`super::UI_FONT`] and [`super::MONO_FONT`], the generic sans-serif
 /// and monospace families: San Francisco (/System/Library/Fonts/SFNS.ttf) and Menlo. Set before
 /// the first text is shaped; without them the families are cosmic-text's defaults, as on Linux.
 pub(super) fn fonts() {
-    let mut system = iced::advanced::graphics::text::font_system()
-        .write()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut system =
+        iced::advanced::graphics::text::font_system().write_or_recover("mac.font_system");
     let db = system.raw().db_mut();
     db.set_sans_serif_family("System Font");
     db.set_monospace_family("Menlo");

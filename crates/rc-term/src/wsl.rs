@@ -36,6 +36,8 @@ pub struct WslLaunch {
     pub distro: Option<String>,
     /// The folder it starts in.
     pub cwd: WslCwd,
+    /// How its login shell reads the `cd` the app types ([`crate::wsl_login_syntax`]).
+    pub syntax: ShellSyntax,
 }
 
 impl WslLaunch {
@@ -67,7 +69,7 @@ impl WslLaunch {
 }
 
 /// Whether `name` can reach `wsl.exe` as a distribution's name and nothing else.
-fn plausible_name(name: &str) -> bool {
+pub(crate) fn plausible_name(name: &str) -> bool {
     !name.is_empty()
         && !name.starts_with('-')
         && !name
@@ -75,17 +77,18 @@ fn plausible_name(name: &str) -> bool {
             .any(|c| c.is_control() || c.is_whitespace() || c == '"')
 }
 
-/// `wsl.exe` in `%SystemRoot%\System32`, else on `PATH`, else the bare name. A full path keeps
-/// a `wsl.exe` in the current folder from being started instead.
+/// `wsl.exe` in `%SystemRoot%\System32` (`SystemRoot` only when absolute, else `C:\Windows`),
+/// else in an absolute `PATH` folder, else the System32 path all the same - never the bare name
+/// (RC-080-65), so a `wsl.exe` in the current folder is never started instead, and a missing
+/// one fails with its path.
 #[must_use]
 pub fn wsl_program(env: &ShellEnv) -> PathBuf {
     let platform = Platform::Windows;
-    env.system_root
-        .as_ref()
-        .map(|root| root.join("System32").join(WSL_EXE))
-        .filter(|candidate| is_program(platform, candidate))
-        .or_else(|| on_path(platform, env, WSL_EXE))
-        .unwrap_or_else(|| PathBuf::from(WSL_EXE))
+    let in_system32 = rc_vfs::system32(env.system_root.as_deref()).join(WSL_EXE);
+    if is_program(platform, &in_system32) {
+        return in_system32;
+    }
+    on_path(platform, env, WSL_EXE).unwrap_or(in_system32)
 }
 
 /// One profile "WSL: <name>" per detected distribution, in the order detection lists them;
@@ -180,8 +183,8 @@ impl TermSession {
     }
 
     /// [`Self::open_wsl`] with the shell integration's variables when given; the session
-    /// follows the panel as a POSIX shell with the distribution's paths. `end_programs` is
-    /// [`LocalCommand::end_programs_on_close`].
+    /// follows the panel in the launch's syntax with the distribution's paths. `end_programs`
+    /// is [`LocalCommand::end_programs_on_close`].
     ///
     /// # Errors
     ///
@@ -213,10 +216,7 @@ impl TermSession {
             },
         );
         let mut sync = session.sync();
-        sync.configure(
-            ShellSyntax::of(WSL_SHELL),
-            ShellPaths::Wsl(launch.distro.clone()),
-        );
+        sync.configure(Some(launch.syntax), ShellPaths::Wsl(launch.distro.clone()));
         sync.require_nonce(integration.map(|integration| integration.nonce.clone()));
         drop(sync);
         Ok(session)

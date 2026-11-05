@@ -13,7 +13,6 @@
 use std::{
     io,
     net::SocketAddr,
-    pin::Pin,
     task::{Context, Poll, Waker},
     time::Duration,
 };
@@ -25,18 +24,22 @@ use suppaftp::{
     types::{Features, FileType, Response},
 };
 use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf},
+    io::ReadBuf,
     net::{TcpListener, TcpStream},
 };
-use tokio_rustls::{TlsConnector, client::TlsStream};
 
 use super::{
-    active::{self, close_data},
+    active,
     config::{Encryption, FtpConfig},
     error::{FtpError, reply_text},
     passive,
-    tls::{TlsSetup, connect_data},
+    tls::{TlsSession, TlsSetup, connect_data},
 };
+
+mod transfer;
+
+use transfer::Data;
+pub(crate) use transfer::Transfer;
 
 /// What a server said about itself at the first login (`FEAT`, `SYST`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -73,8 +76,9 @@ impl ServerInfo {
 /// An established, logged-in control connection.
 pub(crate) enum Connection {
     Plain(Box<AsyncFtpStream>),
-    /// With its connector: verifier and resumption store, for its active data connections.
-    Secure(Box<AsyncRustlsFtpStream>, TlsConnector),
+    /// With its TLS session: verifier, refusal slot and resumption store, for its data
+    /// connections.
+    Secure(Box<AsyncRustlsFtpStream>, TlsSession),
 }
 
 /// Dispatches one method over both stream types; the arms differ only in the receiver's type.
@@ -155,10 +159,15 @@ impl Connection {
                     .await
                     .map_err(early)?;
                 let secure = plain
-                    .into_secure(AsyncRustlsConnector::from(session.clone()), &config.host)
+                    .into_secure(
+                        AsyncRustlsConnector::from(session.connector.clone()),
+                        &config.host,
+                    )
                     .await
                     .map_err(|error| match error {
-                        suppaftp::FtpError::SecureError(message) => tls.handshake_error(message),
+                        suppaftp::FtpError::SecureError(message) => {
+                            session.handshake_error(message)
+                        }
                         suppaftp::FtpError::UnexpectedResponse(_) => FtpError::TlsRefused,
                         other => early(other),
                     })?;
@@ -168,12 +177,12 @@ impl Connection {
                 let session = tls.session();
                 let mut secure = AsyncRustlsFtpStream::connect_secure_implicit(
                     address,
-                    AsyncRustlsConnector::from(session.clone()),
+                    AsyncRustlsConnector::from(session.connector.clone()),
                     &config.host,
                 )
                 .await
                 .map_err(|error| match error {
-                    suppaftp::FtpError::SecureError(message) => tls.handshake_error(message),
+                    suppaftp::FtpError::SecureError(message) => session.handshake_error(message),
                     other => early(other),
                 })?;
                 // `connect_secure_implicit` leaves the data channel to the caller.
@@ -400,7 +409,7 @@ impl Connection {
     }
 
     /// The data connection on `socket`: TLS over FTPS, with this control connection's
-    /// connector - its verifier and its resumption store.
+    /// session - its verifier and its resumption store.
     async fn data_over(
         &self,
         socket: TcpStream,
@@ -422,72 +431,6 @@ impl Connection {
     async fn transfer_reply(&mut self) -> FtpResult<()> {
         let expected = [Status::ClosingDataConnection, Status::RequestedFileActionOk];
         dispatch!(self, stream => stream.read_response_in(&expected).await).map(|_| ())
-    }
-}
-
-/// An open data connection: read a download, write an upload, then [`Transfer::finish`].
-pub(crate) struct Transfer {
-    /// The command it carries the data of (`RETR`, `STOR`, `APPE`, `MLSD`, `LIST`), whose
-    /// completion reply ends it.
-    pub command: &'static str,
-    data: Data,
-}
-
-enum Data {
-    Plain(TcpStream),
-    Secure(Box<TlsStream<TcpStream>>),
-}
-
-impl Transfer {
-    /// Closes the data connection and reads the server's completion reply on `connection`, the
-    /// control connection that opened it. It is closed with `close_notify` (TLS) and drained
-    /// first (`close_data`), so no unread session ticket turns the close into a reset.
-    pub async fn finish(mut self, connection: &mut Connection) -> FtpResult<()> {
-        let closed = close_data(&mut self).await;
-        drop(self);
-        let reply = connection.transfer_reply().await;
-        closed.map_err(suppaftp::FtpError::ConnectionError)?;
-        reply
-    }
-}
-
-impl AsyncRead for Transfer {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        context: &mut Context<'_>,
-        buffer: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        match &mut self.get_mut().data {
-            Data::Plain(stream) => Pin::new(stream).poll_read(context, buffer),
-            Data::Secure(stream) => Pin::new(stream.as_mut()).poll_read(context, buffer),
-        }
-    }
-}
-
-impl AsyncWrite for Transfer {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        context: &mut Context<'_>,
-        bytes: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        match &mut self.get_mut().data {
-            Data::Plain(stream) => Pin::new(stream).poll_write(context, bytes),
-            Data::Secure(stream) => Pin::new(stream.as_mut()).poll_write(context, bytes),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match &mut self.get_mut().data {
-            Data::Plain(stream) => Pin::new(stream).poll_flush(context),
-            Data::Secure(stream) => Pin::new(stream.as_mut()).poll_flush(context),
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match &mut self.get_mut().data {
-            Data::Plain(stream) => Pin::new(stream).poll_shutdown(context),
-            Data::Secure(stream) => Pin::new(stream.as_mut()).poll_shutdown(context),
-        }
     }
 }
 

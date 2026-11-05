@@ -26,6 +26,7 @@ use tokio::{
     time::{self, MissedTickBehavior},
 };
 
+use crate::recover::LogPanic as _;
 use crate::{
     McpContext, RcMcpServer,
     instance::{self, Instance},
@@ -47,6 +48,12 @@ pub async fn run_stdio() -> anyhow::Result<()> {
     let db = Db::open(Db::default_path()?).await?;
     // Warn and error lines into the error log, the console on stderr (stdout is MCP's).
     rc_db::install_diagnostics(&db);
+    // Held shared while this server runs: an update's roll-back then leaves the database alone
+    // (RC-080-69). A named binding, so the lock lives until the function returns.
+    let _database = db
+        .path()
+        .and_then(std::path::Path::parent)
+        .and_then(|data| rc_update::install::DatabaseLock::share(data).ok().flatten());
     if !crate::config::enabled(&db).await {
         anyhow::bail!(crate::config::DISABLED_MESSAGE);
     }
@@ -82,11 +89,8 @@ where
     Ok(())
 }
 
-/// How often the proxy asks whether the running instance is still there.
+/// How often the proxy asks whether the running instance is still there; the first miss ends it.
 const ALIVE_EVERY: Duration = Duration::from_secs(3);
-
-/// Probes in a row the instance must miss before the proxy ends; one may be a busy moment.
-const ALIVE_MISSES: u32 = 2;
 
 /// One upstream send, in the order the client sent it, with the id to answer a failure to.
 type QueuedSend = (
@@ -97,18 +101,22 @@ type QueuedSend = (
 /// Forwards a byte stream pair to a running instance's HTTP endpoint until either side ends.
 ///
 /// rmcp's HTTP client does not notice an instance that went away, so the proxy probes it every
-/// [`ALIVE_EVERY`] and ends after [`ALIVE_MISSES`] misses: an `rcommander mcp` left running
-/// would reach nothing - a new instance has a new port and token - and would hold the
-/// program's file, which then cannot be replaced (owner 2026-10-25).
+/// [`ALIVE_EVERY`]: an `rcommander mcp` left running would reach nothing - a new instance has a
+/// new port (and, with `mcp.token.rotate_on_start`, a new token) - and would hold the program's
+/// file, which then cannot be replaced (owner 2026-10-25).
+///
+/// The first failure ends the proxy with an error (RC-080-66): a probe the instance misses, a
+/// send it does not take, its connection closing. Sending on would hand the bearer token to
+/// whatever took the port over after a crash. A request that failed is answered with an error
+/// first rather than left hanging.
 ///
 /// Messages pass as JSON-RPC, unchanged; rmcp's HTTP client keeps the MCP session. Sends go
 /// upstream one at a time in the client's order on their own task, so answers keep flowing
-/// back while a request is still being posted. A request the instance did not take is answered
-/// with an error rather than left hanging.
+/// back while a request is still being posted.
 ///
 /// # Errors
 ///
-/// Writing to the client fails.
+/// Writing to the client fails, or the running instance fails as above.
 pub async fn proxy_io<R, W>(running: &Instance, read: R, write: W) -> anyhow::Result<()>
 where
     R: AsyncRead + Send + Unpin + 'static,
@@ -120,19 +128,18 @@ where
             .auth_header(running.token.clone()),
     );
     let (queue, mut queued) = mpsc::unbounded_channel::<QueuedSend>();
-    let (failures, mut failed) = mpsc::unbounded_channel::<(RequestId, String)>();
+    let (failures, mut failed) = mpsc::unbounded_channel::<(Option<RequestId>, String)>();
     let sender = tokio::spawn(async move {
         while let Some((id, send)) = queued.recv().await {
-            if let Err(error) = send.await
-                && let Some(id) = id
-            {
+            if let Err(error) = send.await {
+                // Nothing after a failed send goes out: the proxy ends on it.
                 let _ = failures.send((id, error));
+                break;
             }
         }
     });
     let mut alive = time::interval_at(time::Instant::now() + ALIVE_EVERY, ALIVE_EVERY);
     alive.set_missed_tick_behavior(MissedTickBehavior::Delay);
-    let mut misses = 0;
     let result = loop {
         tokio::select! {
             message = client.receive() => {
@@ -145,38 +152,48 @@ where
                 let send: Pin<Box<dyn Future<Output = Result<(), String>> + Send>> =
                     Box::pin(async move { send.await.map_err(|error| error.to_string()) });
                 if queue.send((id, send)).is_err() {
-                    break Ok(());
+                    break Err(anyhow::anyhow!(
+                        "the running rCommander did not take a message; this bridge ends"
+                    ));
                 }
             }
             message = upstream.receive() => {
-                let Some(message) = message else { break Ok(()) };
+                let Some(message) = message else {
+                    break Err(anyhow::anyhow!(
+                        "the connection to the running rCommander closed; this bridge ends"
+                    ));
+                };
                 if let Err(error) = client.send(message).await {
                     break Err(anyhow::Error::from(error));
                 }
             }
             _ = alive.tick() => {
-                misses = if instance::probe(running).await { 0 } else { misses + 1 };
-                if misses >= ALIVE_MISSES {
-                    eprintln!("rcommander mcp: the running rCommander ended; so does this bridge");
-                    break Ok(());
+                if !instance::probe(running).await {
+                    break Err(anyhow::anyhow!(
+                        "the running rCommander does not answer; this bridge ends"
+                    ));
                 }
             }
             Some((id, error)) = failed.recv() => {
-                let answer = ServerJsonRpcMessage::error(
-                    rmcp::ErrorData::internal_error(
-                        format!("the running rCommander did not take the request: {error}"),
-                        None,
-                    ),
-                    Some(id),
-                );
-                if let Err(error) = client.send(answer).await {
-                    break Err(anyhow::Error::from(error));
+                if let Some(id) = id {
+                    let answer = ServerJsonRpcMessage::error(
+                        rmcp::ErrorData::internal_error(
+                            format!("the running rCommander did not take the request: {error}"),
+                            None,
+                        ),
+                        Some(id),
+                    );
+                    // The bridge ends either way; the answer only spares the client a wait.
+                    let _ = client.send(answer).await;
                 }
+                break Err(anyhow::anyhow!(
+                    "the running rCommander did not take a message ({error}); this bridge ends"
+                ));
             }
         }
     };
     drop(queue);
-    let _ = sender.await;
+    let _ = sender.await.log_panic("mcp.stdio_sender");
     let _ = upstream.close().await;
     let _ = client.close().await;
     result

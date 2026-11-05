@@ -4,7 +4,7 @@
 //! is free text from the other side. No variant holds a secret; a host key is public.
 
 use crate::{
-    HOST_KEY_CHANGED, HOST_KEY_UNKNOWN, KeyError, OfferedKey, PrivateKeyError,
+    HOST_KEY_CHANGED, HOST_KEY_REVOKED, HOST_KEY_UNKNOWN, KeyError, OfferedKey, PrivateKeyError,
     ssh::{AuthKind, Stage},
 };
 
@@ -34,6 +34,8 @@ pub enum HostKeyRefusal {
     Unknown,
     /// Another key of this type is stored: a hard stop.
     Changed { stored_fingerprint: String },
+    /// The key is revoked (`@revoked` in an imported `known_hosts`): a hard stop, no question.
+    Revoked,
     /// The check could not be made.
     Failed { reason: String },
 }
@@ -96,6 +98,7 @@ impl SshError {
         CANCELLED,
         HOST_KEY_UNKNOWN,
         HOST_KEY_CHANGED,
+        HOST_KEY_REVOKED,
         SSH_HOST_KEY_CHECK_FAILED,
         VAULT_LOCKED,
         "key_format_unknown",
@@ -117,6 +120,7 @@ impl SshError {
             Self::HostKey { refusal, .. } => match refusal {
                 HostKeyRefusal::Unknown => HOST_KEY_UNKNOWN,
                 HostKeyRefusal::Changed { .. } => HOST_KEY_CHANGED,
+                HostKeyRefusal::Revoked => HOST_KEY_REVOKED,
                 HostKeyRefusal::Failed { .. } => SSH_HOST_KEY_CHECK_FAILED,
             },
             Self::HostKeyUnreadable(error) => error.code(),

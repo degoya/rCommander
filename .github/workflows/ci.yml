@@ -168,7 +168,7 @@ jobs:
             packages+=(-p "$(sed -n '/^name = /{s/^name = "\(.*\)"/\1/p;q}' "${manifest}")")
           done
           cargo clippy --locked --target wasm32-unknown-unknown "${packages[@]}" -- -D warnings
-      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      - uses: taiki-e/install-action@682ce6c3c696a4cd5168a05f98e51aa02b877941 # v2.89.1
         with:
           tool: wasm-tools@1.261.0
       - name: The plugins, unsigned, with their conformance check

@@ -155,6 +155,9 @@ pub enum Format {
     Toml,
     /// `.gitignore`, `.gitattributes` and `.dockerignore`: a pattern a line, attributes after it.
     Lines,
+    /// A Visual Studio solution, `.sln`: `Project(...)` and `GlobalSection(...)` blocks and the
+    /// `key = value` lines inside them.
+    Solution,
 }
 
 impl Format {
@@ -174,6 +177,7 @@ impl Format {
             Some("properties") => Self::Properties,
             Some("toml") => Self::Toml,
             Some("gitignore" | "gitattributes" | "dockerignore") => Self::Lines,
+            Some("sln") => Self::Solution,
             _ => Self::Ini,
         }
     }

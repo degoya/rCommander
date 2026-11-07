@@ -1,0 +1,7 @@
+{
+  "name": "Visor de HCL",
+  "description": "Muestra archivos Terraform y HCL (.tf, .tfvars, .hcl) en color, como un editor.",
+  "codes": {
+    "01a1aafa-1ce6-783f-b838-664eed7d6ab0.setting.encoding": "Codificación"
+  }
+}

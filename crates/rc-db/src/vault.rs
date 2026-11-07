@@ -20,6 +20,7 @@ use sqlx::{AssertSqlSafe, Connection as _, SqliteConnection};
 use crate::recover::LockOrRecover as _;
 use crate::{
     CREDENTIALS_TABLE, Db, DbError, Result, SECRETS_ROW_ID, SECRETS_TABLE,
+    inventory::{INVENTORY_SECRET_COLUMN, INVENTORY_SECRETS_TABLE},
     login_scripts::{SCRIPT_SECRET_COLUMN, SCRIPT_SECRETS_TABLE},
 };
 
@@ -37,7 +38,8 @@ pub struct SecretColumn {
 
 /// Every column that holds secrets, re-encrypted when the master password changes: a
 /// connection's password, private key and passphrase (migration 0006), a login script's own
-/// secrets (migration 0009) and a shared credential's (migration 0018).
+/// secrets (migration 0009), a shared credential's (migration 0018) and the one-time code seeds
+/// of both (migration 0025).
 pub const SECRET_COLUMNS: &[SecretColumn] = &[
     SecretColumn {
         table: SECRETS_TABLE,
@@ -73,6 +75,22 @@ pub const SECRET_COLUMNS: &[SecretColumn] = &[
         table: CREDENTIALS_TABLE,
         column: "passphrase_enc",
         row_id: SECRETS_ROW_ID,
+    },
+    SecretColumn {
+        table: SECRETS_TABLE,
+        column: "totp_seed_enc",
+        row_id: SECRETS_ROW_ID,
+    },
+    SecretColumn {
+        table: CREDENTIALS_TABLE,
+        column: "totp_seed_enc",
+        row_id: SECRETS_ROW_ID,
+    },
+    // An inventory source's API token and other slots (RC-100-39).
+    SecretColumn {
+        table: INVENTORY_SECRETS_TABLE,
+        column: INVENTORY_SECRET_COLUMN,
+        row_id: "id",
     },
 ];
 

@@ -1,5 +1,6 @@
 //! A connection's SSH session settings (`connection_session_prefs`, migration 0010): the order of
-//! the authentication methods, the one agent key to offer, the keepalive and the idle close.
+//! the authentication methods, the one agent key to offer, the keepalive and the idle close; and
+//! the pattern of the question for a one-time code (migration 0025, RC-060-08).
 //!
 //! This layer stores what the engine checked; it does not parse the order (its methods are
 //! `rc-remote`'s). A connection without a row takes the engine's defaults, and its row goes with
@@ -23,6 +24,10 @@ pub struct StoredSessionPrefs {
     pub keepalive_secs: u32,
     /// 0: a session without channels stays open.
     pub idle_close_secs: u32,
+    /// The pattern of the `keyboard-interactive` question that asks for the one-time code; the
+    /// default when `None` (RC-060-08).
+    #[serde(default)]
+    pub totp_prompt: Option<String>,
 }
 
 impl Db {
@@ -33,7 +38,7 @@ impl Db {
     /// The read fails.
     pub async fn session_prefs(&self, id: ConnectionId) -> Result<Option<StoredSessionPrefs>> {
         Ok(sqlx::query_as(
-            "SELECT auth_order, agent_fingerprint, keepalive_secs, idle_close_secs \
+            "SELECT auth_order, agent_fingerprint, keepalive_secs, idle_close_secs, totp_prompt \
              FROM connection_session_prefs WHERE connection_id = ?",
         )
         .bind(id.0)
@@ -63,11 +68,13 @@ impl Db {
         }
         sqlx::query(
             "INSERT INTO connection_session_prefs \
-             (connection_id, auth_order, agent_fingerprint, keepalive_secs, idle_close_secs) \
-             VALUES (?, ?, ?, ?, ?) \
+             (connection_id, auth_order, agent_fingerprint, keepalive_secs, idle_close_secs, \
+             totp_prompt) \
+             VALUES (?, ?, ?, ?, ?, ?) \
              ON CONFLICT (connection_id) DO UPDATE SET auth_order = excluded.auth_order, \
              agent_fingerprint = excluded.agent_fingerprint, \
              keepalive_secs = excluded.keepalive_secs, idle_close_secs = excluded.idle_close_secs, \
+             totp_prompt = excluded.totp_prompt, \
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
         )
         .bind(id.0)
@@ -75,6 +82,7 @@ impl Db {
         .bind(&prefs.agent_fingerprint)
         .bind(prefs.keepalive_secs)
         .bind(prefs.idle_close_secs)
+        .bind(&prefs.totp_prompt)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;

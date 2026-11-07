@@ -1,0 +1,45 @@
+# rCommander's bundled viewer for markup (RC-100-83): reStructuredText, LaTeX and BibTeX. The
+# fields every bundled plugin shares are in plugins/metadata.toml; `scripts/build-plugins.sh`
+# writes them into the manifest it packages. A failure code starts with the plugin's id
+# (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `encoding`.
+api_version = "0.4.0"
+id = "01a1b57c-cbd2-77a4-a5f6-fffa5d998657"
+name = "Markup viewer"
+version = "0.1.0"
+
+[match]
+# The format is the extension's (src/lang.rs, `Lang::from_name`): reStructuredText (`.rst`),
+# LaTeX (`.tex`, `.sty`), BibTeX (`.bib`). No magic: the content never names the format.
+extensions = ["rst", "tex", "sty", "bib"]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured; a rendered document or an outline is not this plugin's.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows reStructuredText, LaTeX and BibTeX files coloured like an editor."
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs), the 1 MiB windows `open` and `text` read and write through, and two lines of at
+# most 1 MiB with their text (reStructuredText's titles look at the next line).
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+# How the file's bytes are read: `auto` takes the encoding of a byte-order mark (UTF-8, UTF-16),
+# else UTF-8 when the start of the file is valid UTF-8, else Windows-1252, for an old document
+# saved in the ANSI code page.
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "utf-16le", "windows-1252"]
+default = "auto"

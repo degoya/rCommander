@@ -37,7 +37,13 @@ it, so a gzip bomb costs no more. A document nested deeper than 256 elements
 (`depth::MAX_DEPTH`) is refused before anything parses it, since the parser and the renderer
 recurse once per level; an SVG inside a `data:` URL too. A document whose `<use>` references would expand to more than
 1,048,576 elements (`budget::MAX_EXPANDED_ELEMENTS`) is refused before it is built, counted in one
-pass without expanding anything. What is left ends at the host's limits (`manifest.toml`: 256
+pass without expanding anything; markers count per vertex and patterns per painted shape. The
+same pass counts the curves the arcs are cut into: more than 1,048,576 in all
+(`budget::MAX_ARC_CURVES`), or more than 64 for one arc of a path (`budget::MAX_CURVES_PER_ARC`,
+a radius of some 6e9 units), and the document is refused. Before anything is drawn, the canvases
+the renderer will take besides the picture are summed: pattern tiles up to 16 M pixels
+(`pixels::MAX_PATTERN_PIXELS`), the canvases of groups with an opacity, a filter, a mask or a
+clip path, and of embedded SVGs, up to 64 M pixels (`pixels::MAX_LAYER_PIXELS`). What is left ends at the host's limits (`manifest.toml`: 256
 MiB of memory, 30 s, ten times the default fuel) as a notice, never a hang.
 
 ## What is here
@@ -46,7 +52,10 @@ MiB of memory, 30 s, ten times the default fuel) as a notice, never a hang.
   promises at the top; the viewer world's types are the XML viewer's
 - `src/load.rs` - the file read in windows, `.svgz` inflated under the limit, the bytes as a
   source for the XML viewer
-- `src/depth.rs`, `src/budget.rs` - the nesting budget and the `<use>` budget
+- `src/depth.rs`, `src/budget.rs`, `src/expand.rs`, `src/segments.rs` - the nesting budget and
+  the element and arc curve budget
+- `src/pixels.rs`, `src/layers.rs` - the pixel budgets of the pattern tiles and the intermediate
+  canvases
 - `src/render.rs` - usvg's options (the font, `data:` only), the canvas, straight RGBA out
 - `src/settings.rs` - `size` and `background`
 - `fonts/` - Lato Regular and its licence

@@ -87,6 +87,7 @@ mod flat;
 mod hostkeys;
 mod hotlist;
 pub mod import;
+pub mod inventory;
 mod keymap;
 mod login_scripts;
 mod mask;

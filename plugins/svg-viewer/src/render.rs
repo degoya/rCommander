@@ -6,12 +6,12 @@ use std::sync::Arc;
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg::{self, FontResolver, ImageHrefResolver, Options, fontdb};
 
-use crate::budget::{self, MAX_EXPANDED_ELEMENTS, Remaining, read_as_svg};
+use crate::budget::{self, Cost, Remaining, read_as_svg};
 use crate::code;
 use crate::depth::{MAX_DEPTH, depth_within, tree_within};
 use crate::doctype::{data_without_doctype, without_doctype};
 use crate::load::is_gzip;
-use crate::pixels::{MAX_PATTERN_PIXELS, pattern_pixels};
+use crate::pixels::{Pixels, canvas_pixels};
 use crate::settings::Settings;
 use crate::types::{Failure, FailureKind, Sink};
 
@@ -94,8 +94,9 @@ fn without_images(fontdb: Arc<fontdb::Database>) -> Options<'static> {
 /// The picture of `svg` (UTF-8, a leading byte-order mark allowed) at `settings`: `not_svg` for
 /// a document usvg cannot read, one using an entity of its DTD or one without a size,
 /// `too_complex` nested beyond the depth budget (told before parsing and on the tree), beyond
-/// the parse's node budget, beyond the element budget (`<use>`, markers, patterns and
-/// embedded SVGs) or with pattern tiles beyond [`MAX_PATTERN_PIXELS`].
+/// the parse's node budget, beyond the element or arc curve budget (`<use>`, markers, patterns
+/// and embedded SVGs; [`Cost::LIMIT`]), or with pattern tiles or intermediate canvases beyond
+/// the pixel budgets ([`Pixels::LIMIT`]).
 pub fn render(svg: &[u8], settings: Settings) -> Result<Pixmap, Failure> {
     let text = std::str::from_utf8(svg).map_err(|_| not_svg())?;
     let text = without_doctype(text.strip_prefix(BOM).unwrap_or(text));
@@ -116,11 +117,14 @@ pub fn render(svg: &[u8], settings: Settings) -> Result<Pixmap, Failure> {
     if !tree_within(&document, MAX_DEPTH) {
         return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
     }
-    let count = budget::expanded_elements(&document, MAX_EXPANDED_ELEMENTS);
-    if count > MAX_EXPANDED_ELEMENTS {
+    let count = budget::expanded(&document, Cost::LIMIT);
+    if count.exceeds(Cost::LIMIT) {
         return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
     }
-    let remaining = Arc::new(Remaining::new(MAX_EXPANDED_ELEMENTS - count));
+    let remaining = Arc::new(Remaining::new(Cost {
+        elements: Cost::LIMIT.elements - count.elements,
+        curves: Cost::LIMIT.curves - count.curves,
+    }));
     let tree = usvg::Tree::from_xmltree(&document, &options(Arc::clone(&remaining)))
         .map_err(|_| not_svg())?;
     drop(document);
@@ -131,7 +135,7 @@ pub fn render(svg: &[u8], settings: Settings) -> Result<Pixmap, Failure> {
     let (width, height) =
         fit(size.width(), size.height(), settings.size.longest()).ok_or_else(not_svg)?;
     let scale = Transform::from_scale(width as f32 / size.width(), height as f32 / size.height());
-    if pattern_pixels(&tree, scale, MAX_PATTERN_PIXELS) > MAX_PATTERN_PIXELS {
+    if canvas_pixels(&tree, (width, height), scale, Pixels::LIMIT).exceeds(Pixels::LIMIT) {
         return Err(Failure::coded(FailureKind::BadData, code::TOO_COMPLEX));
     }
     let mut pixmap = Pixmap::new(width, height).ok_or_else(not_svg)?;

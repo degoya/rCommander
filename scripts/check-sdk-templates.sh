@@ -52,6 +52,7 @@ api_first_release() {
         0.1.0) echo 0.1.0 ;;
         0.2.0) echo 0.2.0 ;;
         0.3.0) echo 0.3.1 ;;
+        0.4.0) echo 0.20.0 ;;
     esac
 }
 

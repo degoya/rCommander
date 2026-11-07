@@ -81,10 +81,7 @@ impl Permissions {
                 .capabilities
                 .declared
                 .keys()
-                .map(|name| match crate::net_http(manifest) {
-                    Ok(Some(grant)) if name == crate::NET_HTTP => grant.describe(),
-                    _ => name.clone(),
-                })
+                .map(|name| crate::describe_capability(manifest, name))
                 .collect(),
         }
     }

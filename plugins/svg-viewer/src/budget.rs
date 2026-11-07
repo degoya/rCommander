@@ -7,8 +7,10 @@
 //!
 //! The count follows usvg 0.49's own rules (`usvg-0.49.0/src/parser/svgtree/parse.rs`): the ids
 //! as it maps them, the `href` it follows, the reference as `svgtypes` reads it; and since
-//! RC-100-77 the markers and patterns it instantiates (`expand.rs`). What resvg then draws
-//! of the patterns has a budget of its own, in pixels (`pixels.rs`).
+//! RC-100-77 the markers and patterns it instantiates (`expand.rs`). Since RC-100-78 the same
+//! pass counts the cubic curves kurbo cuts the arcs into ([`MAX_ARC_CURVES`],
+//! [`MAX_CURVES_PER_ARC`], `segments.rs`). What resvg then draws of the patterns and into its
+//! intermediate canvases has a budget of its own, in pixels (`pixels.rs`).
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -20,6 +22,42 @@ use crate::expand;
 /// The most elements a document may have with its `<use>` references expanded: far beyond a
 /// diagram or a map, far below what fills the store's memory.
 pub const MAX_EXPANDED_ELEMENTS: u64 = 1 << 20;
+
+/// The most cubic curves kurbo may cut the arcs of one picture into, every element as often as
+/// usvg builds it: every `A` of a `d`, the four quarter arcs of every circle, ellipse and rounded
+/// rect, and the path a `textPath` follows (RC-100-78). An ordinary arc makes one to five, so
+/// this is as far beyond a drawing as the element budget, and each curve costs tiny-skia some
+/// 25 bytes and the drawing its flattening.
+pub const MAX_ARC_CURVES: u64 = 1 << 20;
+
+/// The most cubic curves one `A` of a `d` may make. svgtypes 0.16 buffers an arc's curves and
+/// hands them out one by one with `Vec::remove(0)` (`SimplifyingPathParser`, `svgtypes-0.16.2/
+/// src/path.rs:753-756, 960-990, 1051`), so an arc costs the square of its curves; kurbo makes 64
+/// of a whole ellipse of radius 6e9 user units, far beyond a drawing. With [`MAX_ARC_CURVES`] the
+/// buffer moves at most 32 curves per curve.
+pub const MAX_CURVES_PER_ARC: u64 = 1 << 6;
+
+/// What usvg builds of a document: its elements, `<use>`, markers and patterns expanded, and the
+/// cubic curves of its arcs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Cost {
+    pub elements: u64,
+    pub curves: u64,
+}
+
+impl Cost {
+    /// The budget of one picture, the SVGs it embeds included.
+    pub const LIMIT: Self = Self {
+        elements: MAX_EXPANDED_ELEMENTS,
+        curves: MAX_ARC_CURVES,
+    };
+
+    /// Whether either part is beyond `limit`.
+    #[must_use]
+    pub fn exceeds(self, limit: Self) -> bool {
+        self.elements > limit.elements || self.curves > limit.curves
+    }
+}
 
 /// What `svgtypes` 0.16 skips as spaces (`Stream::skip_spaces`, `src/stream.rs:49-51`).
 const SPACES: [char; 4] = [' ', '\t', '\n', '\r'];
@@ -45,15 +83,17 @@ pub fn parsing<'input>() -> ParsingOptions<'input> {
 /// the picture is refused as too complex.
 #[derive(Debug)]
 pub struct Remaining {
-    left: AtomicU64,
+    elements: AtomicU64,
+    curves: AtomicU64,
     exceeded: AtomicBool,
 }
 
 impl Remaining {
     #[must_use]
-    pub fn new(left: u64) -> Self {
+    pub fn new(left: Cost) -> Self {
         Self {
-            left: AtomicU64::new(left),
+            elements: AtomicU64::new(left.elements),
+            curves: AtomicU64::new(left.curves),
             exceeded: AtomicBool::new(false),
         }
     }
@@ -65,7 +105,7 @@ impl Remaining {
     }
 
     /// Whether usvg may read `data` (its DOCTYPE blanked, `crate::doctype`) as the SVG it would
-    /// make of it, its elements taken from what is left. Bytes that are no UTF-8 or no XML take
+    /// make of it, its elements and arc curves taken from what is left. Bytes that are no UTF-8 or no XML take
     /// nothing: usvg fails on them as well (`Tree::from_data`, `src/parser/mod.rs:105-120`). A
     /// DTD the blanking missed, more than [`MAX_PARSED_NODES`] nodes or a tree nested beyond
     /// [`MAX_DEPTH`] is not read: usvg would read them without these limits (RC-080-69).
@@ -90,13 +130,19 @@ impl Remaining {
         }
         // usvg reads the embedded documents one after another, on the one thread of the guest:
         // nothing takes a share between this load and the store below.
-        let left = self.left.load(Ordering::Relaxed);
-        let count = expanded_elements(&document, left);
-        if count > left {
+        let left = Cost {
+            elements: self.elements.load(Ordering::Relaxed),
+            curves: self.curves.load(Ordering::Relaxed),
+        };
+        let count = expanded(&document, left);
+        if count.exceeds(left) {
             self.exceeded.store(true, Ordering::Relaxed);
             return false;
         }
-        self.left.store(left - count, Ordering::Relaxed);
+        self.elements
+            .store(left.elements - count.elements, Ordering::Relaxed);
+        self.curves
+            .store(left.curves - count.curves, Ordering::Relaxed);
         true
     }
 }
@@ -111,10 +157,11 @@ pub fn read_as_svg(mime: &str) -> bool {
 }
 
 /// The elements of `doc` as usvg builds them - every `<use>` as what it references, every
-/// marker as often as it is drawn, every pattern as often as it is copied (`expand.rs`) -
-/// up to `limit + 1`: a result above `limit` means "too many".
+/// marker as often as it is drawn, every pattern as often as it is copied (`expand.rs`) - and
+/// the cubic curves of the arcs of those elements, each part up to its `limit + 1`: a result
+/// that [`Cost::exceeds`] `limit` means "too many".
 #[must_use]
-pub fn expanded_elements(doc: &Document, limit: u64) -> u64 {
+pub fn expanded(doc: &Document, limit: Cost) -> Cost {
     expand::count(doc, limit)
 }
 

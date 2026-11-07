@@ -112,6 +112,12 @@ impl Engine {
         {
             ready.push(Ready::Value(SecretKind::Password, password));
         }
+        // The copy logs in to the same account: its second factor goes with it (RC-060-08).
+        if flags.has_totp_seed
+            && let Some(seed) = read(SecretKind::TotpSeed).await?
+        {
+            ready.push(Ready::Value(SecretKind::TotpSeed, seed));
+        }
         let passphrase = if flags.has_passphrase {
             read(SecretKind::Passphrase).await?
         } else {

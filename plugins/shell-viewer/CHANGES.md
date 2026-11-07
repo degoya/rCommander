@@ -1,5 +1,9 @@
 # Changes
 
+## 0.2.1
+
+Built against plugin contract 0.4.0; nothing else changed.
+
 ## 0.2.0
 
 More files: the start files of zsh (`.zshenv`, `.zprofile`, `.zlogin`, `.zlogout`), bash

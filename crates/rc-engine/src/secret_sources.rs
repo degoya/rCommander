@@ -63,12 +63,24 @@ pub fn note_mcp_port(port: u16) {
     MCP_PORT.store(port, Ordering::Relaxed);
 }
 
+/// The loopback ports no plugin reaches: the MCP server's, while one runs. An inventory's
+/// entered address is held to it too (RC-100-39).
+pub(crate) fn refused_ports() -> Vec<u16> {
+    match MCP_PORT.load(Ordering::Relaxed) {
+        0 => Vec::new(),
+        port => vec![port],
+    }
+}
+
 /// The plugin field a secret of `kind` is read from.
 fn field(kind: SecretKind) -> SecretField {
     match kind {
         SecretKind::Password => SecretField::Password,
         SecretKind::Key => SecretField::PrivateKey,
         SecretKind::Passphrase => SecretField::Passphrase,
+        // Never asked: a reference for a seed is refused (`commands.rs`). A manager hands out
+        // the code, not the seed - the licensed path of RC-060-08, still open.
+        SecretKind::TotpSeed => SecretField::Totp,
     }
 }
 
@@ -161,6 +173,13 @@ impl Engine {
     /// The installed, enabled secrets plugins, each with its manifest; none while
     /// `plugins.enabled` is off or before the engine knows its plugins.
     pub(crate) async fn installed_sources(&self) -> Vec<InstalledPlugin> {
+        self.installed_of(PluginType::Secrets).await
+    }
+
+    /// The installed, enabled plugins of `kind` (a secret source, an inventory - RC-100-39),
+    /// each with its manifest; none while `plugins.enabled` is off or before the engine knows
+    /// its plugins.
+    pub(crate) async fn installed_of(&self, kind: PluginType) -> Vec<InstalledPlugin> {
         let settings = PluginSettings::read(self.db().ok()).await;
         let Some(data_dir) = self
             .plugins_data_dir()
@@ -175,9 +194,7 @@ impl Engine {
         {
             Ok(Ok(packages)) => packages
                 .into_iter()
-                .filter(|package| {
-                    package.enabled && package.manifest.plugin_type == PluginType::Secrets
-                })
+                .filter(|package| package.enabled && package.manifest.plugin_type == kind)
                 .collect(),
             Ok(Err(error)) => {
                 tracing::warn!(error = %format!("{error:#}"), "the installed plugins could not be listed");
@@ -244,10 +261,7 @@ impl Engine {
                 &package.manifest.settings,
             )
             .await,
-            refused_ports: match MCP_PORT.load(Ordering::Relaxed) {
-                0 => Vec::new(),
-                port => vec![port],
-            },
+            refused_ports: refused_ports(),
         };
         let name = package.manifest.name.clone();
         let built = tokio::task::spawn_blocking(move || {

@@ -53,6 +53,11 @@ tracing-subscriber.workspace = true
 # A fresh plugin's id in `rcommander plugin new` (RC-100-12).
 uuid.workspace = true
 
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+# WM_TRANSIENT_FOR and the dialog window type of a dialog's window under X11
+# (platform/x11_dialog.rs, RC-080-73).
+x11rb.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 # The accent colour from the registry (theme/system/windows.rs).
 winreg.workspace = true

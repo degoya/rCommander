@@ -2,7 +2,7 @@
 name = "rc-plugin-shell-viewer"
 description = "rCommander's bundled shell script viewer plugin: sh, bash, zsh and ksh coloured, for files of any size"
 # The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
-version = "0.2.0"
+version = "0.2.1"
 edition.workspace = true
 rust-version.workspace = true
 # Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").

@@ -92,6 +92,11 @@ pub(crate) fn check_reference(reference: &SecretSourceRef) -> Result<(), EngineE
     if !named {
         return invalid("the source is not a plugin or the Windows credential manager");
     }
+    // The seed of the one-time codes is read from the vault only; a code from a password
+    // manager (field `totp`) is the licensed source's, not wired yet (RC-060-08).
+    if reference.kind == SecretKind::TotpSeed {
+        return invalid("a one-time code seed is kept in the vault only");
+    }
     let id_chars = reference.entry_id.chars().count();
     if id_chars == 0 || id_chars > MAX_SOURCE_ENTRY_ID_CHARS {
         return invalid("the entry id is empty or too long");

@@ -11,6 +11,16 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.20.0
+
+- Install and restart now downloads the update first when needed, so there is no separate Download step any more.
+- Updates now install by themselves when you quit rCommander; switch it off under Settings > Updates. Quitting never waits for a download.
+- Dialogs stay in front of the main window on Linux, and confirming a dialog or closing the Lister no longer sends rCommander behind other programs.
+- SSH logins that ask for a one-time code: store the seed with the connection and rCommander answers with the current code; login scripts can send it too.
+- Server inventories: an inventory plugin keeps a folder of connections in step with NetBox, Proxmox or another system.
+- New viewers colour Terraform/HCL, Protocol Buffers, GraphQL, Ruby, Perl, Lua, VBScript, reStructuredText, LaTeX and BibTeX; Visual Studio solutions open in the config viewer with a tree.
+- SVG files with huge arcs or deeply layered effects are refused as too complex at once instead of hanging the viewer.
+
 ## 0.19.0
 
 - New viewers colour Dockerfiles, SQL, Makefiles, server configuration (nginx, Apache, SSH, crontab, hosts) and C, C++, C#, Java, Kotlin, Go and Rust in the Lister and Quick View.

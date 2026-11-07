@@ -3,7 +3,8 @@
 //!
 //! The gate is [`Engine::check_host_key`]: a key that is not trusted files the question for a
 //! person and refuses. The credentials are [`Engine::resolve_secret`]'s, read one at a time when
-//! their method's turn comes. For MCP (`announce` off) a locked vault is not announced, so no
+//! their method's turn comes; the one-time code is made from the connection's seed when the
+//! server asks for it, unless `connections.totp_autofill` is off (RC-060-08). For MCP (`announce` off) a locked vault is not announced, so no
 //! unlock dialog opens for an agent's call: the answer is `vault_locked`, nothing more.
 
 use async_trait::async_trait;
@@ -13,7 +14,9 @@ use rc_remote::{
 };
 use rc_vault::SecretString;
 
-use crate::{ConnectionId, Engine, EngineError, SecretKind, SecretRef};
+use crate::{
+    ConnectionId, Engine, EngineError, SecretKind, SecretRef, settings::TOTP_AUTOFILL_KEY,
+};
 
 /// The trust store, with its questions for a person.
 pub(crate) struct EngineGate {
@@ -91,6 +94,16 @@ impl Credentials for EngineCredentials {
         };
         let passphrase = self.secret(SecretKind::Passphrase).await?;
         Ok(Some(KeyMaterial { key, passphrase }))
+    }
+
+    async fn totp_code(&self) -> Result<Option<SecretString>, CredentialError> {
+        if !self.engine.setting_on(TOTP_AUTOFILL_KEY).await {
+            return Ok(None);
+        }
+        self.engine
+            .totp_code(self.connection, self.announce)
+            .await
+            .map_err(credential_error)
     }
 }
 

@@ -7,10 +7,12 @@
 //! ([`SessionChange::Lost`]) and dropped from the pool, and the next use connects again: the
 //! secrets come from the vault again, without a question while it is unlocked.
 //!
-//! The settings of a connection ([`SessionPrefs`]: auth order, agent key, keepalive, idle close)
-//! live in `rcommander.db` (migration 0010); a connection without them takes the defaults.
+//! The settings of a connection ([`SessionPrefs`]: auth order, agent key, keepalive, idle close,
+//! the pattern of the question for a one-time code) live in `rcommander.db` (migrations 0010,
+//! 0025); a connection without them takes the defaults.
 
 mod sources;
+mod totp;
 
 use std::{
     collections::HashMap,
@@ -24,7 +26,8 @@ use std::{
 use rc_db::StoredSessionPrefs;
 use rc_remote::{
     OfferedKey, SshSession,
-    ssh::{AuthKind, AuthUsed, SshChannel, format_order, parse_order},
+    login_script::Pattern,
+    ssh::{AuthKind, AuthUsed, SshChannel, default_totp_prompt, format_order, parse_order},
 };
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
@@ -33,6 +36,7 @@ use crate::recover::LockOrRecover as _;
 use crate::{ConnectionId, EngineError};
 
 pub(crate) use sources::{EngineCredentials, EngineGate};
+pub(crate) use totp::check_seed;
 
 /// The keepalive interval of a connection without its own, in seconds.
 pub const DEFAULT_KEEPALIVE_SECS: u32 = 30;
@@ -58,6 +62,10 @@ pub struct SessionPrefs {
     /// 0 keeps an unused session open; at most [`MAX_IDLE_CLOSE_SECS`].
     #[serde(default = "default_idle_close")]
     pub idle_close_secs: u32,
+    /// The pattern of the `keyboard-interactive` question answered with the one-time code of the
+    /// connection's seed (RC-060-08); `rc_remote::totp::DEFAULT_PROMPT` when `None`.
+    #[serde(default)]
+    pub totp_prompt: Option<String>,
 }
 
 fn default_order() -> Vec<AuthKind> {
@@ -79,6 +87,7 @@ impl Default for SessionPrefs {
             agent_fingerprint: None,
             keepalive_secs: DEFAULT_KEEPALIVE_SECS,
             idle_close_secs: DEFAULT_IDLE_CLOSE_SECS,
+            totp_prompt: None,
         }
     }
 }
@@ -110,12 +119,32 @@ impl SessionPrefs {
         if fingerprint.is_some_and(|fingerprint| !is_fingerprint(fingerprint)) {
             return Err(invalid("agent_fingerprint is a SHA256: fingerprint"));
         }
+        // Blank is the default; anything else is a pattern within the login scripts' limits.
+        let totp_prompt = self
+            .totp_prompt
+            .as_deref()
+            .filter(|pattern| !pattern.trim().is_empty());
+        if totp_prompt.is_some_and(|pattern| Pattern::new(pattern).is_err()) {
+            return Err(invalid(
+                "totp_prompt is a regular expression of at most 512 characters",
+            ));
+        }
         Ok(StoredSessionPrefs {
             auth_order: stored_order,
             agent_fingerprint: fingerprint.map(str::to_owned),
             keepalive_secs: self.keepalive_secs,
             idle_close_secs: self.idle_close_secs,
+            totp_prompt: totp_prompt.map(str::to_owned),
         })
+    }
+
+    /// The compiled pattern of the question for a one-time code: the connection's own, the
+    /// default when it has none or its stored one no longer compiles.
+    pub(crate) fn totp_pattern(&self) -> Pattern {
+        self.totp_prompt
+            .as_deref()
+            .and_then(|pattern| Pattern::new(pattern).ok())
+            .unwrap_or_else(default_totp_prompt)
     }
 
     /// The stored settings; an order that no longer parses falls back to the default.
@@ -129,6 +158,7 @@ impl SessionPrefs {
             agent_fingerprint: stored.agent_fingerprint,
             keepalive_secs: stored.keepalive_secs.clamp(1, MAX_KEEPALIVE_SECS),
             idle_close_secs: stored.idle_close_secs.min(MAX_IDLE_CLOSE_SECS),
+            totp_prompt: stored.totp_prompt,
         }
     }
 }

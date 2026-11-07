@@ -138,6 +138,11 @@ fn buttons(credentials: bool) -> Vec<(Option<Icon>, &'static str, ConnMsg)> {
             t!("rdm_import.open"),
             ConnMsg::RdmImport(RdmImportMsg::Open),
         ),
+        (
+            None,
+            t!("inventory.open"),
+            ConnMsg::Inventory(crate::app::connections::inventory::InventoryMsg::Open),
+        ),
         (None, t!("connections.login_scripts"), ConnMsg::LoginScripts),
     ]);
     buttons

@@ -181,3 +181,41 @@ timeout_milliseconds = 1000
 pub(crate) fn secrets_manifest(loopback: Option<u16>) -> PluginManifest {
     parse_manifest(secrets_manifest_text(loopback, "").as_bytes()).expect("a valid manifest")
 }
+
+/// A valid inventory's manifest (RC-100-39): `net_http = { entered = true }` and the slot
+/// `api_token` when `http`, nothing granted otherwise; `extra` follows (tables only).
+pub(crate) fn inventory_manifest_text(http: bool, extra: &str) -> String {
+    let grants = if http {
+        "net_http = { entered = true }\nsecrets = [\"api_token\"]"
+    } else {
+        ""
+    };
+    format!(
+        r#"
+manifest_version = 1
+plugin_type = "inventory"
+api_version = "{api}"
+id = "019d0000-0000-7000-8000-0000000000c1"
+name = "Test inventory"
+version = "1.0.0"
+key_id = "example-release-v1"
+public_key = "{PUBLIC_KEY}"
+
+[capabilities]
+{grants}
+
+[metadata]
+description = "An inventory the host's tests run."
+author = "rCommander"
+
+[limits]
+timeout_milliseconds = 1000
+{extra}"#,
+        api = rc_plugin_api::API_VERSION,
+    )
+}
+
+/// [`inventory_manifest_text`] parsed.
+pub(crate) fn inventory_manifest(http: bool) -> PluginManifest {
+    parse_manifest(inventory_manifest_text(http, "").as_bytes()).expect("a valid manifest")
+}

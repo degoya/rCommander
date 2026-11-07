@@ -3,10 +3,10 @@
 plugin_type = "viewer"
 # Built against `rcommander:plugin@0.2.0` (RC-100-14). The plugin declares no `[[settings]]` and
 # never calls the `settings` interface, so its component does not import it.
-api_version = "0.3.0"
+api_version = "0.4.0"
 id = "01a15989-2e1a-70ff-bfc2-09726a035968"
 name = "Shell script viewer"
-version = "0.2.0"
+version = "0.2.1"
 
 [match]
 # rCommander takes what follows the last dot of a name as its extension, so `.bashrc` and

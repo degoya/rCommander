@@ -139,6 +139,11 @@ impl Engine {
                 {
                     return Err(EngineError::SecretEmpty);
                 }
+                // A seed that makes no code is refused before anything is stored (RC-060-08).
+                SecretChange::Set {
+                    kind: SecretKind::TotpSeed,
+                    value,
+                } => crate::sessions::check_seed(value.secret())?,
                 // A share is never opened: on Windows that alone sends the person's credentials.
                 SecretChange::ImportKey { path, .. } if !local_key_path(path) => {
                     return Err(EngineError::KeyPathRefused { path: path.clone() });

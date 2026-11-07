@@ -5,7 +5,9 @@
 //! written and checked (`rc_db` backup into `<data>/update/pre-update/`, its BLAKE3 into the
 //! journal - always, the way back must never be missing), the journal in phase `handed`, the
 //! updater started from a copy of this program. A running, waiting or paused job never is
-//! interrupted: the install waits for the empty queue and the window asks again.
+//! interrupted: the install waits for the empty queue and the window asks again. Without the
+//! verified download, `update.install` downloads first and installs once it is there
+//! (`requested.rs`, RC-100-84).
 
 use chrono::Utc;
 use rc_update::install::{
@@ -28,13 +30,20 @@ impl Engine {
         self.update_status_outcome().await
     }
 
-    /// `update.install`: hands the downloaded offer to the updater and asks the window to end.
+    /// `update.install`: hands the downloaded offer to the updater and asks the window to end;
+    /// without the verified download it starts the download and installs once it is ready.
     pub(crate) async fn install_update(&self) -> Result<Outcome, EngineError> {
         if self.jobs_unfinished() {
             return Err(Self::update_refused(UpdateRefusal::new(
                 "update.queue_busy",
                 "jobs run or wait in the queue; the update installs once it is empty",
             )));
+        }
+        let downloaded = matches!(self.desk_state().download, DownloadState::Ready { .. });
+        if !downloaded {
+            self.install_after_download()
+                .map_err(Self::update_refused)?;
+            return self.update_status_outcome().await;
         }
         self.hand_over_update(true)
             .await
@@ -113,7 +122,7 @@ impl Engine {
                     }
                 }
             };
-            {
+            let install = {
                 let mut state = engine.desk_state();
                 state.progress = None;
                 state.download = match result {
@@ -122,13 +131,19 @@ impl Engine {
                     },
                     Err(error) => {
                         tracing::warn!(code = error.code(), %error, "the update download failed");
+                        // A failed download drops a requested install: the person asks again.
+                        state.install_requested = false;
                         DownloadState::Failed {
                             code: error.code().to_owned(),
                         }
                     }
                 };
-            }
+                state.install_requested
+            };
             engine.publish(EngineEvent::Update);
+            if install {
+                engine.finish_requested_install().await;
+            }
         });
         Ok(())
     }
@@ -158,16 +173,7 @@ impl Engine {
     /// The hand-over: preflight, database copy, journal, updater. `start_new` is false for
     /// "install when quitting": the next start a person makes proves the new version.
     pub(crate) async fn hand_over_update(&self, start_new: bool) -> Result<(), UpdateRefusal> {
-        let started = self.started()?;
-        if started.installation.kind != rc_update::InstallKind::Portable {
-            return Err(UpdateRefusal::new(
-                started
-                    .installation
-                    .reason
-                    .unwrap_or("update.install_unsupported"),
-                "this installation does not update itself",
-            ));
-        }
+        let started = self.installs_itself()?;
         let (offer, handed) = {
             let state = self.desk_state();
             (state.stored.offer.clone(), state.handed)
@@ -243,7 +249,7 @@ impl Engine {
         journal
             .write()
             .map_err(|error| UpdateRefusal::new("update.failed", format!("{error:#}")))?;
-        if let Err(error) = process::launch_updater(&journal) {
+        if let Err(error) = self.launch_updater(&journal) {
             let detail = format!("{error:#}");
             let _ = journal.end(Phase::Failed, "update.updater_did_not_start", &detail);
             return Err(UpdateRefusal::new("update.updater_did_not_start", detail));
@@ -252,6 +258,32 @@ impl Engine {
         tracing::info!(version = %offer.version, start_new, "the update is handed to the updater");
         self.publish(EngineEvent::Update);
         Ok(())
+    }
+
+    /// The installation once the window started the self-update, when it replaces itself:
+    /// portable only; a package manager's and an unknown one are refused with their reason.
+    pub(super) fn installs_itself(&self) -> Result<&super::Started, UpdateRefusal> {
+        let started = self.started()?;
+        if started.installation.kind != rc_update::InstallKind::Portable {
+            return Err(UpdateRefusal::new(
+                started
+                    .installation
+                    .reason
+                    .unwrap_or("update.install_unsupported"),
+                "this installation does not update itself",
+            ));
+        }
+        Ok(started)
+    }
+
+    /// Starts the updater; the tests count it instead.
+    fn launch_updater(&self, journal: &Journal) -> anyhow::Result<()> {
+        #[cfg(test)]
+        if let Some(launches) = self.desk().launches.get() {
+            launches.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            return Ok(());
+        }
+        process::launch_updater(journal)
     }
 }
 

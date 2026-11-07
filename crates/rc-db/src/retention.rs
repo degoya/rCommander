@@ -81,6 +81,15 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
         "one row per hotlist entry or folder a person made; a person removes them",
     ),
     (
+        "inventory_source_secrets",
+        "at most one row per inventory source and secret slot a person stored; replaced when \
+         changed, deleted with its source (RC-100-39)",
+    ),
+    (
+        "inventory_sources",
+        "one row per server inventory a person set up; a person removes them (RC-100-39)",
+    ),
+    (
         "known_hosts",
         "one row per SSH host key a person trusted; replaced, never appended",
     ),

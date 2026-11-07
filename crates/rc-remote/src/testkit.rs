@@ -19,10 +19,10 @@ use std::sync::{
 
 use async_trait::async_trait;
 use russh::keys::{HashAlg, PrivateKey, PublicKey, decode_secret_key};
-use secrecy::SecretString;
+use secrecy::{ExposeSecret as _, SecretString};
 
 pub use exec::ExecRuns;
-pub use server::{ServerOptions, TestServer, silent_server};
+pub use server::{SecondFactor, ServerOptions, TestServer, silent_server};
 pub use sftp::SftpServe;
 pub use shell::{PtyRequest, SUDO_PROMPT, ShellServer, shell_word};
 
@@ -154,6 +154,8 @@ pub struct MemoryCredentials {
     pub password: Option<String>,
     pub key: Option<String>,
     pub passphrase: Option<String>,
+    /// A one-time code seed (RC-060-08): Base32 or an `otpauth://` URI.
+    pub totp_seed: Option<String>,
     pub locked: bool,
     /// How many secrets were asked for; public so a test can build one with `..default()`.
     pub asks: AtomicUsize,
@@ -187,6 +189,19 @@ impl Credentials for MemoryCredentials {
         };
         let passphrase = self.passphrase.as_deref().map(SecretString::from);
         Ok(Some(KeyMaterial { key, passphrase }))
+    }
+
+    async fn totp_code(&self) -> Result<Option<SecretString>, CredentialError> {
+        let Some(seed) = self.give(self.totp_seed.as_deref())? else {
+            return Ok(None);
+        };
+        let seed = crate::totp::TotpSeed::parse(seed.expose_secret()).map_err(|error| {
+            CredentialError::Failed {
+                code: error.code(),
+                message: error.to_string(),
+            }
+        })?;
+        Ok(Some(seed.code_now()))
     }
 }
 

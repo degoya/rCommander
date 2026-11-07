@@ -29,6 +29,7 @@ pub(super) mod history;
 pub(super) mod hostkeys;
 pub(super) mod hotlist;
 pub(super) mod import;
+pub(super) mod inventory;
 pub(super) mod login_scripts;
 pub(super) mod manager;
 pub(super) mod mcp;

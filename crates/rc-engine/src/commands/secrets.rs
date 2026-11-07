@@ -33,6 +33,9 @@ impl Engine {
         if kind == SecretKind::Key {
             return Err(EngineError::KeyImportOnly);
         }
+        if kind == SecretKind::TotpSeed {
+            crate::sessions::check_seed(value.secret())?;
+        }
         let stored = self.store_secret(id, kind, value.secret()).await?;
         self.forget_remote(id).await;
         Ok(stored)

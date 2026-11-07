@@ -10,6 +10,7 @@
 mod env;
 mod ini;
 mod reg;
+mod sln;
 mod toml;
 mod toml_values;
 
@@ -110,6 +111,7 @@ pub(crate) fn lex_line(
         Format::Env => env::env(text, state, &mut out),
         Format::Properties => env::properties(text, state, &mut out),
         Format::Toml => toml::toml(text, state, &mut out),
+        Format::Solution => sln::sln(text, &mut out),
     }
 }
 

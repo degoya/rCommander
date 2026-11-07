@@ -487,6 +487,8 @@ pub enum Outcome {
     Themes(Box<crate::settings::themes::ThemesOutcome>),
     /// What a `workspaces.*` command answers (RC-100-68).
     Workspaces(Box<crate::WorkspacesOutcome>),
+    /// The inventory sources, a sync or its preview, a source saved (`inventory.*`, RC-100-39).
+    Inventory(Box<crate::inventory::InventoryOutcome>),
 }
 
 impl Outcome {

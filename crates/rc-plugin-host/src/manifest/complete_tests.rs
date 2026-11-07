@@ -224,6 +224,13 @@ fn the_bundled_manifests_send_each_sample_file_to_its_viewer() {
         ("deploy.sh", "Shell script viewer"),
         ("setup.ps1", "PowerShell viewer"),
         ("build.bat", "Batch viewer"),
+        // RC-100-83, part A.
+        ("main.tf", "HCL viewer"),
+        ("prod.tfvars", "HCL viewer"),
+        (".terraform.lock.hcl", "HCL viewer"),
+        ("api.proto", "Schema viewer"),
+        ("schema.graphql", "Schema viewer"),
+        ("query.gql", "Schema viewer"),
     ] {
         assert_eq!(chosen(file).as_deref(), Some(viewer), "{file}");
     }

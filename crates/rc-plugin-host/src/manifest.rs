@@ -23,7 +23,10 @@ mod settings;
 mod validate;
 
 pub use complete::{COMPLETED_MARKER, ManifestDefaults, complete_manifest};
-pub use grants::{NET_HTTP, NetHttp, net_http};
+pub use grants::{
+    MAX_SECRET_SLOTS, NET_HTTP, NetHttp, SECRETS, describe_capability, net_http, net_http_entered,
+    secret_slots, valid_slot,
+};
 pub use names::{NAMES_MIN_APP_VERSION, name_matches};
 pub use sections::{
     Capabilities, KNOWN_CAPABILITIES, MagicManifest, MatchRank, MatchSection, PluginMetadata,
@@ -38,8 +41,10 @@ pub const MANIFEST_VERSION: u32 = 1;
 
 /// Versions of `rcommander:plugin` this build links a plugin against: the contract and the ones
 /// before it. A viewer's interfaces are the same in each, 0.1.0 without `settings` (RC-100-14);
-/// 0.3.0 adds `http` and the secrets world (RC-100-33).
-pub const SUPPORTED_API_VERSIONS: &[&str] = &["0.1.0", "0.2.0", rc_plugin_api::API_VERSION];
+/// 0.3.0 adds `http` and the secrets world (RC-100-33), 0.4.0 the inventory world (RC-100-39) -
+/// a 0.3.0 viewer or secret source runs unchanged.
+pub const SUPPORTED_API_VERSIONS: &[&str] =
+    &["0.1.0", "0.2.0", "0.3.0", rc_plugin_api::API_VERSION];
 
 /// The largest `manifest.toml` read.
 pub const MAX_MANIFEST_BYTES: usize = 1024 * 1024;

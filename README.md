@@ -11,13 +11,16 @@ Rust.
 - Two panels with tabs; each panel shows either the file list or a terminal.
 - WSL distributions, SSH servers and phones or cameras on USB (MTP, Windows and Linux) in the
   drive bar, next to the local drives.
-- A small SSH connection manager: servers, keys, credentials and login scripts, stored
-  encrypted behind an optional master password.
+- A small SSH connection manager: servers, keys, credentials, login scripts and one-time codes
+  for two-factor logins, stored encrypted behind an optional master password; inventory plugins
+  keep connections in step with NetBox, Proxmox or another system.
 - Copying local to remote and remote to remote over SFTP and FTP/FTPS; multi-rename.
 - A viewer (Lister and Quick View) whose bundled plugins colour JSON (with JSONC, JSON5 and
   JSON Lines), XML, YAML, CSV, SQL, configuration files, shell, PowerShell, batch and Python
-  scripts, Dockerfiles, Makefiles, server configuration (nginx, Apache, SSH), diffs, logs, web code, SVG
-  and C-like languages from C to Rust - chosen by the file's extension or its whole name.
+  scripts, Dockerfiles, Makefiles, server configuration (nginx, Apache, SSH), diffs, logs, web code, SVG,
+  C-like languages from C to Rust, Terraform/HCL, Protocol Buffers, GraphQL, Ruby, Perl, Lua,
+  VBScript, reStructuredText, LaTeX, BibTeX and Visual Studio solutions - chosen by the file's
+  extension or its whole name.
 - Colour themes for the whole window and the terminal, built in or your own, switched from the
   command palette or a key, and a theme per connection or WSL distribution so each server's
   panel and terminal stand out.
@@ -46,7 +49,8 @@ are needed:
   app is not notarised, so open it the first time with a right-click and *Open*.
 
 Every release lists its files with their SHA-256 in `SHA256SUMS`, and carries a `.deb` and an
-`.rpm` package for each Linux architecture.
+`.rpm` package for each Linux architecture. An unpacked package updates itself: by default a new
+version installs when you quit rCommander (Settings > Updates).
 
 ### Package managers
 

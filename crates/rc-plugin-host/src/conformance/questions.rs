@@ -1,5 +1,6 @@
 //! One behavioural question per plugin kind (`docs/plugins.md`, "SDK"): stage 1 asks the viewer
-//! `viewer_empty_source`, contract 0.3.0 the secret source `secrets_no_service` (RC-100-33).
+//! `viewer_empty_source`, contract 0.3.0 the secret source `secrets_no_service` (RC-100-33),
+//! contract 0.4.0 the inventory `inventory_no_service` (RC-100-39).
 //!
 //! Copied and adapted from rDownloader's `crates/rd-plugin-host/src/conformance/questions.rs` at
 //! commit 26c8592a6 (RD-1280-19): instantiating a component proves its exports line up with its
@@ -18,7 +19,10 @@ use rc_plugin_api::viewer::{Output, Purpose, Theme};
 use rc_plugin_types::Failure;
 
 use super::Built;
-use crate::{BytesSource, MemorySink, PluginManifest, SecretsPlugin, ViewerPlugin, failure::codes};
+use crate::{
+    BytesSource, InventoryPlugin, MemorySink, PluginManifest, SecretsPlugin, ViewerPlugin,
+    failure::codes,
+};
 
 /// The codes of a call that did not answer, or answered against the rules: the plugin trapped,
 /// ran out of time, fuel or memory, or broke a rule of its output.
@@ -52,7 +56,18 @@ pub(super) async fn ask(built: &Built, manifest: &PluginManifest) -> Answer {
                     end in an answer or a refusal, not a crash",
             result: no_service(source).await,
         },
+        Built::Inventory(inventory) => Answer {
+            id: "inventory_no_service",
+            about: "The inventory answers while its system does not: list ends in an answer or \
+                    a refusal, not a crash",
+            result: no_inventory(inventory).await,
+        },
     }
+}
+
+/// `list` with every request refused, as when the inventory's server is not reachable.
+async fn no_inventory(inventory: &InventoryPlugin) -> Result<(), String> {
+    judge_empty_source("list", inventory.list().await.map(|_| ()))
 }
 
 /// `status` and `search` with every request refused, as when the manager is not running.

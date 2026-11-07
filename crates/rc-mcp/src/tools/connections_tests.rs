@@ -245,6 +245,7 @@ async fn a_password_in_a_call_is_refused_not_ignored() {
         ("private_key", json!("-----BEGIN OPENSSH PRIVATE KEY-----")),
         ("Password", json!("x")),
         ("extra", json!({ "password": "x" })),
+        ("totp_seed", json!("JBSWY3DPEHPK3PXP")),
     ] {
         let mut arguments = json!({ "id": created["id"], "notes": "n" });
         arguments[name] = value;

@@ -160,6 +160,10 @@ pub enum EngineError {
     /// with its passphrase, never set as text.
     #[error("a private key is taken into the vault from its file, with secrets.import_key")]
     KeyImportOnly,
+    /// A one-time code seed to store is no `otpauth://totp/` URI or Base32 secret (RC-060-08);
+    /// `reason` names what is wrong, never the secret.
+    #[error("this is no one-time code seed: {reason}")]
+    TotpSeedInvalid { reason: String },
     /// A key file to import cannot be read.
     #[error("cannot read {path}: {source}")]
     KeyFileUnreadable {
@@ -458,6 +462,10 @@ pub enum EngineError {
     /// [`crate::WorkspaceError`].
     #[error(transparent)]
     Workspace(crate::WorkspaceError),
+    /// An inventory source was refused or its sync failed (RC-100-39); keeps the code of its
+    /// [`crate::inventory::InventorySourceError`].
+    #[error(transparent)]
+    Inventory(crate::inventory::InventorySourceError),
 }
 
 #[cfg(test)]

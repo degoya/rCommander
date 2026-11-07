@@ -29,6 +29,10 @@ pub const ALL_CODES: &[&str] = &[
     codes::PLUGIN_UNKNOWN_NODE,
     codes::PLUGIN_TREE_TOO_DEEP,
     codes::PLUGIN_HOST_FAILED,
+    // An inventory's (RC-100-39).
+    codes::PLUGIN_SECRET_MISSING,
+    codes::PLUGIN_SECRET_TARGET_NOT_ALLOWED,
+    codes::PLUGIN_INVENTORY_TOO_LARGE,
 ];
 
 /// The code of a failure the host answered: its own code, or [`PLUGIN_FAILED`].

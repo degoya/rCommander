@@ -32,7 +32,7 @@ pub(super) fn endpoint_rule() -> EndpointRule {
 /// Whether `connection` holds a stored secret (any of `rc_db::SECRET_COLUMNS`).
 fn has_secrets(connection: &Connection) -> bool {
     let flags = connection.secrets;
-    flags.has_password || flags.has_key || flags.has_passphrase
+    flags.has_password || flags.has_key || flags.has_passphrase || flags.has_totp_seed
 }
 
 /// Whether `patch` changes where `connection` connects: its host, port, kind or user.

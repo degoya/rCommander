@@ -50,3 +50,10 @@ targetRules = ["generic-api-key", "gitlab-pat", "aws-access-token"]
 condition = "AND"
 paths = ['''^crates/rc-db/src/redact_tests\.rs$''']
 regexes = ['''npm_abcdefghijklmnop1234''', '''glpat-abcdefghijklmnopqrst''', '''AKIAABCDEFGHIJKLMNOP''']
+
+[[allowlists]]
+description = "The example TOTP seed of Google Authenticator's key-format documentation (\"Hello!\" and DEADBEEF in Base32), a broken copy of it and RFC 6238's test seed (ASCII digits in Base32), in the tests of the one-time code seeds (RC-060-08)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^crates/rc-remote/src/totp_tests\.rs$''']
+regexes = ['''JBSWY3DPEHPK3PX[P1]''', '''GEZDGNBVGY3TQOJQ''']

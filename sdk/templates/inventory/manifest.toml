@@ -1,0 +1,28 @@
+manifest_version = 1
+plugin_type = "inventory"
+# The contract in `wit/` this plugin is built against; an inventory needs 0.4.0 or later.
+api_version = "0.4.0"
+# Your plugin's identity: `plugin new` generated it. Keep it across versions; two plugins
+# sharing one would fight over the same installation folder.
+id = "{{PLUGIN_ID}}"
+name = "{{PLUGIN_NAME}}"
+version = "0.1.0"
+# `plugin new` generated this key pair; the private half is `plugin-signing.key`. Keep it out
+# of version control, and name the key as you like.
+key_id = "{{PLUGIN_SLUG}}-release-v1"
+public_key = "REPLACE_WITH_YOUR_BASE64_ED25519_PUBLIC_KEY"
+
+# An inventory reaches the one address the person enters for the source - HTTPS, or plain HTTP
+# to this machine - and nothing else. It names the API token the person stores for the source
+# as `{{secret:api_token}}` in a header; rCommander fills it in on the way out, so the plugin
+# never sees it. The install preview shows both grants.
+[capabilities]
+net_http = { entered = true }
+secrets = ["api_token"]
+
+[metadata]
+description = "Keeps a folder of connections in step with a server inventory."
+author = "Your name"
+license = "MIT"
+# The first rCommander release that accepts this plugin's `api_version`.
+min_app_version = "0.20.0"

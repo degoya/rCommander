@@ -78,6 +78,8 @@ pub enum ConnJob {
     Run(Then, Box<Command>),
     Save(Box<SaveConnectionRequest>),
     TakeKeys(Vec<KeyToTake>),
+    /// A command of the inventories page (RC-100-39), answered to the page.
+    Inventory(Box<Command>),
 }
 
 impl ConnJob {
@@ -106,6 +108,14 @@ impl ConnJob {
                     taken.push((key.alias, result.map(|_| ()).map_err(|error| error.code())));
                 }
                 ConnMsg::KeysTaken(taken)
+            }
+            Self::Inventory(command) => {
+                ConnMsg::Inventory(super::inventory::InventoryMsg::Answer(Box::new(
+                    engine
+                        .dispatch(*command)
+                        .await
+                        .map_err(|error| error.code()),
+                )))
             }
         }
     }

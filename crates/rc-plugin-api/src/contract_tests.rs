@@ -6,6 +6,7 @@ use super::{API_VERSION, PACKAGE, WIT};
 #[test]
 fn the_package_line_names_the_api_version() {
     assert!(WIT.contains(&format!("package {PACKAGE}@{API_VERSION};")));
-    // The viewer and, since 0.3.0, the secret source; the others come with their stages.
-    assert_eq!(WIT.matches("\nworld ").count(), 2);
+    // The viewer, since 0.3.0 the secret source and since 0.4.0 the inventory; the others come
+    // with their stages.
+    assert_eq!(WIT.matches("\nworld ").count(), 3);
 }

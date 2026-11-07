@@ -304,3 +304,30 @@ async fn the_switches_read_decide() {
     harness.send(Message::Refocus(DEFAULTS)).await;
     assert_eq!(names(&harness, PanelId::Left), ["a.txt", "b.txt", "c.txt"]);
 }
+
+/// Linux and macOS: the main window's focus under a modal dialog's window goes back to it, once
+/// while that is under way (RC-080-73); it is no return from another program.
+#[cfg(not(windows))]
+#[tokio::test]
+async fn a_focus_under_a_modal_dialog_is_handed_back_once() {
+    use crate::app::{
+        dialog_windows::{DialogWindow, DialogWindows},
+        window_state::Geometry,
+    };
+    let root = tempfile::tempdir().expect("temp dir");
+    let mut harness = Harness::headless(root.path()).await;
+    let main = window::Id::unique();
+    harness.app.dialog_windows = DialogWindows::new(main, Vec::new());
+    let geometry = Geometry {
+        width: 900.0,
+        height: 640.0,
+        position: None,
+        maximized: false,
+    };
+    harness
+        .app
+        .dialog_windows
+        .opened(DialogWindow::Settings, window::Id::unique(), geometry);
+    assert_eq!(harness.app.refocused(main, true).len(), 1);
+    assert!(harness.app.refocused(main, true).is_empty(), "under way");
+}

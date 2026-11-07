@@ -161,3 +161,186 @@ async fn a_strange_method_or_a_reserved_header_is_refused() {
         Some(codes::PLUGIN_REQUEST_TOO_LARGE)
     );
 }
+
+const TOKEN: &str = "canary-token-5521";
+
+/// An inventory's grant for `address`, its slot `api_token` holding [`TOKEN`].
+fn entered(address: &str) -> HttpGrant {
+    let address = url::Url::parse(address).expect("an address");
+    let secrets = vec![("api_token".to_owned(), secrecy::SecretString::from(TOKEN))];
+    HttpGrant::entered(&address, secrets, 1024, Duration::from_secs(5)).expect("a client")
+}
+
+/// A server on a free loopback port that answers one connection with the request it read as the
+/// body; the port and the request.
+async fn serve_echo() -> (u16, tokio::sync::oneshot::Receiver<String>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let port = listener.local_addr().expect("address").port();
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept");
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let read = stream.read(&mut buffer).await.expect("read");
+            if read == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..read]);
+        }
+        let text = String::from_utf8_lossy(&request).into_owned();
+        let answer = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{text}",
+            text.len()
+        );
+        stream.write_all(answer.as_bytes()).await.expect("write");
+        let _ = sender.send(text);
+    });
+    (port, receiver)
+}
+
+/// An inventory reaches the scheme, host and port the person entered, and nothing else.
+#[test]
+fn an_inventory_reaches_its_entered_address_only() {
+    let grant = entered("https://netbox.example.net/");
+    for allowed in [
+        "https://netbox.example.net/api/dcim/devices/?limit=100",
+        "https://NETBOX.example.net:443/api/",
+        "/api/dcim/devices/",
+        "api/virtualization/virtual-machines/",
+    ] {
+        assert!(grant.target(allowed).is_ok(), "{allowed}");
+    }
+    assert_eq!(
+        grant.target("/api/").expect("relative").as_str(),
+        "https://netbox.example.net/api/"
+    );
+    for refused in [
+        "http://netbox.example.net/api/",
+        "https://netbox.example.net:8443/api/",
+        "https://evil.example.net/api/",
+        "https://netbox.example.net.evil.example/api/",
+        "https://user@netbox.example.net/api/",
+        "http://localhost:8087/",
+        "//evil.example.net/api/",
+    ] {
+        assert!(denied(&grant, refused), "{refused}");
+    }
+}
+
+/// HTTPS anywhere, plain HTTP only to this machine; never a user in the address.
+#[test]
+fn an_entered_address_is_https_or_the_loopback() {
+    for allowed in [
+        "https://netbox.example.net/",
+        "https://10.0.0.5:8006/",
+        "http://localhost:8000/",
+        "http://127.0.0.1:8000/",
+    ] {
+        let address = url::Url::parse(allowed).expect("an address");
+        assert!(super::entered_address_allowed(&address), "{allowed}");
+    }
+    for refused in [
+        "http://netbox.example.net/",
+        "http://10.0.0.5/",
+        "ftp://netbox.example.net/",
+        "https://admin:secret@netbox.example.net/",
+    ] {
+        let address = url::Url::parse(refused).expect("an address");
+        assert!(!super::entered_address_allowed(&address), "{refused}");
+    }
+}
+
+/// The token reaches the confirmed server in the header it was named in; what the server echoes
+/// is the plugin's to see, and masked wherever the host passes it on.
+#[tokio::test]
+async fn a_marker_is_filled_for_the_entered_address() {
+    let (port, request) = serve_echo().await;
+    let grant = entered(&format!("http://127.0.0.1:{port}/"));
+    let headers = [(
+        "Authorization".to_owned(),
+        "Token {{secret:api_token}}".to_owned(),
+    )];
+    let answer = grant
+        .request(
+            "GET",
+            &format!("http://127.0.0.1:{port}/api/"),
+            &headers,
+            vec![],
+        )
+        .await
+        .expect("an answer");
+    let seen = request.await.expect("the request");
+    assert!(
+        seen.to_ascii_lowercase()
+            .contains(&format!("authorization: token {TOKEN}").to_ascii_lowercase()),
+        "{seen}"
+    );
+    let echoed = String::from_utf8_lossy(&answer.body).into_owned();
+    assert!(!grant.mask(&echoed).contains(TOKEN));
+}
+
+/// A marker towards another host is never filled: the request is denied before it is looked at.
+/// In the address, the body or a header for third parties it is refused even towards the
+/// entered address.
+#[tokio::test]
+async fn a_marker_elsewhere_is_never_filled() {
+    let grant = entered("https://netbox.example.net/");
+    let marker = [(
+        "Authorization".to_owned(),
+        "Token {{secret:api_token}}".to_owned(),
+    )];
+    let elsewhere = grant
+        .request("GET", "https://evil.example.net/", &marker, vec![])
+        .await;
+    assert_eq!(
+        elsewhere.expect_err("denied").code(),
+        Some(codes::PLUGIN_HTTP_DENIED)
+    );
+    let in_address = grant
+        .request(
+            "GET",
+            "https://netbox.example.net/api/?token={{secret:api_token}}",
+            &[],
+            vec![],
+        )
+        .await;
+    let in_body = grant
+        .request(
+            "POST",
+            "https://netbox.example.net/api/",
+            &[],
+            b"{\"token\":\"{{secret:api_token}}\"}".to_vec(),
+        )
+        .await;
+    let referer = [(
+        "Referer".to_owned(),
+        "https://x/{{secret:api_token}}".to_owned(),
+    )];
+    let in_referer = grant
+        .request("GET", "https://netbox.example.net/api/", &referer, vec![])
+        .await;
+    for refused in [in_address, in_body, in_referer] {
+        assert_eq!(
+            refused.expect_err("refused").code(),
+            Some(codes::PLUGIN_SECRET_TARGET_NOT_ALLOWED)
+        );
+    }
+}
+
+/// A secret source holds no slot: a marker it sends is missing, never filled.
+#[tokio::test]
+async fn a_secret_source_fills_no_marker() {
+    let failure = grant(9)
+        .request("GET", "http://localhost:9/", &marker_header(), vec![])
+        .await
+        .expect_err("missing");
+    assert_eq!(failure.code(), Some(codes::PLUGIN_SECRET_MISSING));
+}
+
+fn marker_header() -> [(String, String); 1] {
+    [(
+        "Authorization".to_owned(),
+        "Bearer {{secret:api_token}}".to_owned(),
+    )]
+}

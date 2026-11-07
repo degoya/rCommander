@@ -1,0 +1,7 @@
+{
+  "name": "Visor de scripts",
+  "description": "Muestra scripts de Ruby, Perl, Lua y VBScript en color, como un editor.",
+  "codes": {
+    "01a1b57c-cbc8-7e0f-9f76-d73b6cdc02ed.setting.encoding": "Codificación"
+  }
+}

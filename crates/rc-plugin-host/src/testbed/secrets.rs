@@ -51,6 +51,8 @@ pub struct SecretsBed {
     data: Vec<(u32, Vec<u8>)>,
     next: u32,
     bodies: Vec<String>,
+    /// The `rcommander:plugin` version the component is built against.
+    version: &'static str,
 }
 
 impl Default for SecretsBed {
@@ -67,6 +69,7 @@ impl SecretsBed {
             data: Vec::new(),
             next: DATA,
             bodies: Vec::new(),
+            version: rc_plugin_api::API_VERSION,
         };
         let canary = bed.data(CANARY.as_bytes());
         bed.bodies = vec![
@@ -93,10 +96,17 @@ impl SecretsBed {
         self
     }
 
+    /// Builds the component against contract `version`: `0.3.0`, the first with the secrets
+    /// world (RC-100-33), or the current one (RC-100-39).
+    pub fn contract(mut self, version: &'static str) -> Self {
+        self.version = version;
+        self
+    }
+
     /// The core module as text; it imports `http`, `settings` and `log` only when a body calls
     /// them, as a guest does.
     pub fn core_text(&self) -> String {
-        let version = rc_plugin_api::API_VERSION;
+        let version = self.version;
         let mut text = String::from("(module\n");
         let uses = |name: &str| self.bodies.iter().any(|body| body.contains(name));
         if uses("$log") {
@@ -132,13 +142,9 @@ impl SecretsBed {
         text
     }
 
-    /// The component, built against the current contract.
+    /// The component, built against the contract [`Self::contract`] names.
     pub fn build(&self) -> Vec<u8> {
-        component_of(
-            &self.core_text(),
-            rc_plugin_api::API_VERSION,
-            "secrets-plugin",
-        )
+        component_of(&self.core_text(), self.version, "secrets-plugin")
     }
 }
 

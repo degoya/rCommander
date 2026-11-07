@@ -41,6 +41,7 @@ mod diagnostics;
 mod error;
 mod error_log;
 mod hotlist;
+pub mod inventory;
 mod known_hosts;
 pub mod login_scripts;
 mod mcp_audit_log;

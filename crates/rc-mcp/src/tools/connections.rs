@@ -286,7 +286,7 @@ impl RcMcpServer {
 #[tool_router(router = connections_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase: whether a secret of that kind is stored, key: a private key stored in the vault as {type, fingerprint, comment, stored: true}, or null, and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, key and connections (how many use it). bar_folders: the ids of the folders the drive bar shows as buttons (connections_set_folder_favourite). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key or passphrase itself."
+        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase, has_totp_seed: whether a secret of that kind is stored (has_totp_seed: a one-time code seed for the SSH login), key: a private key stored in the vault as {type, fingerprint, comment, stored: true}, or null, and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, has_totp_seed, key and connections (how many use it). bar_folders: the ids of the folders the drive bar shows as buttons (connections_set_folder_favourite). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key, passphrase or one-time code seed itself."
     )]
     pub(crate) async fn connections_list(&self) -> ToolResult {
         let engine = &self.context.engine;
@@ -305,7 +305,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "One connection by id, with has_password, has_key and has_passphrase saying which secrets are stored and key describing a stored private key by type, fingerprint and comment (never key material). Errors: connection_not_found."
+        description = "One connection by id, with has_password, has_key, has_passphrase and has_totp_seed saying which secrets are stored and key describing a stored private key by type, fingerprint and comment (never key material). Errors: connection_not_found."
     )]
     pub(crate) async fn connections_get(
         &self,

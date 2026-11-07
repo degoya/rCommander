@@ -6,7 +6,8 @@
 //! `GuiOnly`, like every secret. No type here carries a secret's value: a `send_secret` step
 //! names where the secret is ([`ScriptSecretRef`]), a script lists its secrets by id and label.
 //! [`ScriptSecrets`] hands a run (RC-060-03) the values, read through the vault and remembered
-//! for the MCP mask, so an echo of one in a terminal screen is scrubbed like any stored secret.
+//! for the MCP mask, so an echo of one in a terminal screen is scrubbed like any stored secret;
+//! a `send_totp` step gets the one-time code of the connection's seed the same way (RC-060-08).
 
 use async_trait::async_trait;
 use rc_db::login_scripts::{SCRIPT_SECRET_COLUMN, SCRIPT_SECRETS_TABLE};
@@ -176,6 +177,20 @@ impl SecretSource for ScriptSecrets {
         };
         match resolved {
             Ok(Some(value)) => Ok(value),
+            Ok(None) => Err(SecretError::Missing),
+            Err(EngineError::VaultLocked) => Err(SecretError::Locked),
+            Err(error) => Err(SecretError::Failed { code: error.code() }),
+        }
+    }
+
+    /// The code of the connection's seed: the step asks for it explicitly, so it is sent
+    /// whatever `connections.totp_autofill` says.
+    async fn totp_code(&self) -> Result<SecretString, SecretError> {
+        let Some(connection) = self.connection else {
+            return Err(SecretError::Missing);
+        };
+        match self.engine.totp_code(connection, true).await {
+            Ok(Some(code)) => Ok(code),
             Ok(None) => Err(SecretError::Missing),
             Err(EngineError::VaultLocked) => Err(SecretError::Locked),
             Err(error) => Err(SecretError::Failed { code: error.code() }),

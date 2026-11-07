@@ -420,6 +420,25 @@ pub(super) fn more() -> Vec<Command> {
         Command::ListSecretSources {
             connection_id: Some(ConnectionId(1)),
         },
+        Command::RefreshInventory {
+            source: crate::inventory::InventorySourceId(1),
+            preview: true,
+        },
+        Command::DeleteInventorySource {
+            source: crate::inventory::InventorySourceId(1),
+        },
+        Command::SaveInventorySource(crate::inventory::InventorySourceRequest {
+            id: None,
+            name: "NetBox".into(),
+            plugin_id: "019d0000-0000-7000-8000-0000000000c1".into(),
+            address: "https://netbox.example.net/".into(),
+            folder_id: None,
+            secrets: vec![crate::inventory::InventorySecret {
+                slot: "api_token".into(),
+                value: SecretParam::from(REDACTED),
+            }],
+        }),
+        Command::ListInventorySources {},
         Command::ListThemes {},
         Command::SelectTheme {
             mode: crate::settings::themes::ThemeMode::Dark,

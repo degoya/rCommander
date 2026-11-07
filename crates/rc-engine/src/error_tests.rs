@@ -61,6 +61,9 @@ fn one_of_each_own() -> Vec<EngineError> {
         EngineError::KeyPassphraseNeeded,
         EngineError::KeyPassphraseWrong,
         EngineError::KeyImportOnly,
+        EngineError::TotpSeedInvalid {
+            reason: "x".to_owned(),
+        },
         EngineError::KeyFileUnreadable {
             path: "/x".to_owned(),
             source: std::io::Error::other("x"),
@@ -243,6 +246,7 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::Tabs(_)
             | EngineError::Update(_)
             | EngineError::Workspace(_)
+            | EngineError::Inventory(_)
             | EngineError::RenameBusy
             | EngineError::RenameNoChanges
             | EngineError::RenameNothingToUndo
@@ -279,6 +283,7 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::KeyPassphraseNeeded
             | EngineError::KeyPassphraseWrong
             | EngineError::KeyImportOnly
+            | EngineError::TotpSeedInvalid { .. }
             | EngineError::KeyFileUnreadable { .. }
             | EngineError::KeyPathRefused { .. }
             | EngineError::SshConfigPathRefused { .. }

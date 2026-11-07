@@ -4,9 +4,25 @@ use crate::render::render;
 use crate::settings::Settings;
 use crate::test_support::{nested, use_bomb};
 
+/// The elements of `svg`, its curves within their budget.
 fn count(svg: &str, limit: u64) -> u64 {
     let doc = Document::parse(svg).expect("the test SVG parses");
-    expanded_elements(&doc, limit)
+    expanded(
+        &doc,
+        Cost {
+            elements: limit,
+            curves: MAX_ARC_CURVES,
+        },
+    )
+    .elements
+}
+
+/// `elements` left, and the whole curve budget.
+fn left(elements: u64) -> Remaining {
+    Remaining::new(Cost {
+        elements,
+        curves: MAX_ARC_CURVES,
+    })
 }
 
 #[test]
@@ -144,7 +160,7 @@ fn spaces_around_a_reference_hide_no_use_bomb() {
 #[test]
 fn an_embedded_svg_takes_its_elements_from_what_is_left() {
     let small = r#"<svg xmlns="http://www.w3.org/2000/svg"><rect/><rect/></svg>"#;
-    let remaining = Remaining::new(7);
+    let remaining = left(7);
     assert!(remaining.take_svg(small.as_bytes()));
     assert!(remaining.take_svg(small.as_bytes()));
     assert!(!remaining.exceeded());
@@ -156,14 +172,14 @@ fn an_embedded_svg_takes_its_elements_from_what_is_left() {
 
 #[test]
 fn an_embedded_use_bomb_does_not_fit() {
-    let remaining = Remaining::new(MAX_EXPANDED_ELEMENTS);
+    let remaining = left(MAX_EXPANDED_ELEMENTS);
     assert!(!remaining.take_svg(use_bomb(10, 10).as_bytes()));
     assert!(remaining.exceeded());
 }
 
 #[test]
 fn what_usvg_cannot_read_as_svg_takes_nothing() {
-    let remaining = Remaining::new(1);
+    let remaining = left(1);
     assert!(remaining.take_svg(b"\x89PNG\r\n\x1a\n"));
     assert!(remaining.take_svg(b"GIF89a not xml"));
     assert!(!remaining.exceeded());
@@ -179,9 +195,30 @@ fn an_embedded_svg_beyond_the_parse_limits_is_not_read() {
     let options = parsing();
     assert!(!options.allow_dtd);
     assert_eq!(options.nodes_limit, MAX_PARSED_NODES);
-    let remaining = Remaining::new(MAX_EXPANDED_ELEMENTS);
+    let remaining = left(MAX_EXPANDED_ELEMENTS);
     assert!(!remaining.take_svg(b"<!DOCTYPE svg [<!ENTITY e \"x\">]><svg>&e;</svg>"));
     assert!(!remaining.take_svg(nested(crate::depth::MAX_DEPTH + 1).as_bytes()));
     assert!(!remaining.exceeded());
     assert!(remaining.take_svg(nested(8).as_bytes()));
+}
+
+#[test]
+fn an_embedded_svg_takes_its_arc_curves_from_what_is_left() {
+    // A circle is four curves.
+    let circle = r#"<svg xmlns="http://www.w3.org/2000/svg"><circle r="10"/></svg>"#;
+    let remaining = Remaining::new(Cost {
+        elements: MAX_EXPANDED_ELEMENTS,
+        curves: 9,
+    });
+    assert!(remaining.take_svg(circle.as_bytes()));
+    assert!(remaining.take_svg(circle.as_bytes()));
+    // 8 of 9 taken: the third circle does not fit.
+    assert!(!remaining.take_svg(circle.as_bytes()));
+    assert!(remaining.exceeded());
+    // An arc beyond its own limit fits nowhere.
+    let bomb =
+        r#"<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 A1e30 1e30 0 0 1 2e30 0"/></svg>"#;
+    let remaining = Remaining::new(Cost::LIMIT);
+    assert!(!remaining.take_svg(bomb.as_bytes()));
+    assert!(remaining.exceeded());
 }

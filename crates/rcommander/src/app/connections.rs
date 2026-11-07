@@ -17,9 +17,11 @@
 mod arrange;
 mod credentials;
 mod drop;
+mod events;
 mod follow;
 mod form;
 mod import;
+pub(super) mod inventory;
 mod jobs;
 mod keys;
 mod preview;
@@ -41,10 +43,11 @@ mod view;
 
 use rc_engine::{
     AuthMethod, Command, ConnectionId, ConnectionKind, DefaultView, DriveGroup, EngineEvent,
-    Outcome, SHARED_CREDENTIALS_KEY, SecretKind, TreeItem, VaultStateKind,
+    Outcome, SecretKind, TreeItem, VaultStateKind,
 };
 use rc_vault::SecretString;
 
+pub use self::events::concerns;
 pub use self::jobs::ConnJob;
 pub use self::keys::Focus;
 #[cfg(test)]
@@ -129,6 +132,8 @@ pub struct ConnectionManager {
     pub tc_import: Option<TcImportDialog>,
     /// The page of the import from Remote Desktop Manager (RC-050-11), while it is shown.
     pub rdm_import: Option<RdmImportDialog>,
+    /// The page of the server inventories (RC-100-39), while it is shown.
+    pub inventory: Option<inventory::InventoryPage>,
     /// Opened by the settings for that import alone: leaving its page closes the manager.
     pub import_only: bool,
     /// A key or Escape asked to close the dialog.
@@ -191,6 +196,8 @@ pub enum ConnMsg {
     TcImport(TcImportMsg),
     /// The page of the import from Remote Desktop Manager (RC-050-11).
     RdmImport(RdmImportMsg),
+    /// The page of the server inventories (RC-100-39).
+    Inventory(inventory::InventoryMsg),
     /// Test, open or close a stored connection (`connections.test`, `.connect`, `.disconnect`).
     Test(ConnectionId),
     Connect(ConnectionId),
@@ -210,23 +217,6 @@ pub enum ConnMsg {
     Focused(Option<iced::widget::Id>),
     /// The tree's toolbar, its context menu and the dragging (RC-100-63).
     Tree(tree_edit::TreeMsg),
-}
-
-/// Whether the manager takes `event`; the drive bar may take it as well.
-pub fn concerns(event: &EngineEvent) -> bool {
-    matches!(
-        event,
-        EngineEvent::ConnectionManager
-            | EngineEvent::ConnectionTree { .. }
-            | EngineEvent::Drives
-            | EngineEvent::VaultLocked
-            | EngineEvent::VaultUnlocked
-            | EngineEvent::VaultRemoved
-            | EngineEvent::LoginScript { .. }
-            | EngineEvent::SecretNeeded { .. }
-            | EngineEvent::Session { .. }
-            | EngineEvent::TrustedCertificatesChanged
-    ) || matches!(event, EngineEvent::SettingChanged { key } if key == SHARED_CREDENTIALS_KEY)
 }
 
 /// A command for the engine whose answer comes back as `then`.
@@ -417,6 +407,7 @@ impl ConnectionManager {
             ConnMsg::Import(message) => self.on_import(message),
             ConnMsg::TcImport(message) => self.on_tc_import(message),
             ConnMsg::RdmImport(message) => self.on_rdm_import(message),
+            ConnMsg::Inventory(message) => self.on_inventory(message),
             message => self.form_message(message),
         }
     }

@@ -59,7 +59,8 @@ impl ConnectionManager {
         if (self.prompt.is_some()
             || self.import.is_some()
             || self.tc_import.is_some()
-            || self.rdm_import.is_some())
+            || self.rdm_import.is_some()
+            || self.inventory.is_some())
             && let Some(effects) = field_walk::walk_key(chord)
         {
             return effects;
@@ -72,6 +73,9 @@ impl ConnectionManager {
         }
         if self.rdm_import.is_some() {
             return self.rdm_import_key(chord, captured);
+        }
+        if self.inventory.is_some() && self.prompt.is_none() {
+            return self.inventory_key(chord, captured);
         }
         if self.prompt.is_some() {
             if escape {

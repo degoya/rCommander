@@ -9,9 +9,9 @@
 //! Linked by hand rather than through the generated `add_to_linker`, which names the one version
 //! the bindings are generated from (RC-100-14): Wasmtime matches a `0.x` version only within its
 //! minor, so a component built against 0.1.0 would find no `rcommander:plugin/host@0.3.0` it
-//! imports. The interfaces of 0.1.0 are those of 0.2.0 without `settings`, and 0.3.0 adds `http`
-//! for a secret source only (RC-100-33), so the functions of `host_impls.rs` serve every version
-//! in [`crate::SUPPORTED_API_VERSIONS`].
+//! imports. The interfaces of 0.1.0 are those of 0.2.0 without `settings`, 0.3.0 adds `http`
+//! for a secret source (RC-100-33) and 0.4.0 nothing but the inventory world (RC-100-39), so the
+//! functions of `host_impls.rs` serve every version in [`crate::SUPPORTED_API_VERSIONS`].
 
 use wasmtime::{StoreContextMut, component::Linker};
 
@@ -44,7 +44,8 @@ pub(crate) fn link_viewer(
 }
 
 /// Links what a secret source is made of (RC-100-33): `host`, and `settings` and `http` when
-/// granted. It reads no file and writes none, so neither `source` nor `sink` is linked.
+/// granted. It reads no file and writes none, so neither `source` nor `sink` is linked. An
+/// inventory (RC-100-39) is made of the same interfaces and linked by this function too.
 pub(crate) fn link_secrets(
     linker: &mut Linker<PluginStoreState>,
     api_version: &str,

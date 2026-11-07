@@ -31,6 +31,10 @@ pub struct UpdateStatus {
     pub install_command: Option<String>,
     /// Handed to the updater; the window ends now.
     pub installing: bool,
+    /// "Install and restart" was clicked before the download was there (RC-100-84): the engine
+    /// installs once it is downloaded and checked, unless the download fails.
+    #[serde(default)]
+    pub install_after_download: bool,
     /// A job runs, waits or is paused: the install waits for the empty queue.
     pub queue_busy: bool,
     /// The last update the journal records.

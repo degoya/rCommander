@@ -3,10 +3,10 @@
 # A failure code and a setting's label start with the plugin's id (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `separator`, `header` and `encoding`.
-api_version = "0.3.0"
+api_version = "0.4.0"
 id = "01a15984-4cfe-79a8-a86c-38186923b56a"
 name = "CSV viewer"
-version = "0.1.1"
+version = "0.1.2"
 
 [match]
 # Comma, tab and pipe separated values; `separator = "auto"` takes a tab for `tsv` and `tab`, a

@@ -1,0 +1,7 @@
+{
+  "name": "Markup-Viewer",
+  "description": "Zeigt reStructuredText-, LaTeX- und BibTeX-Dateien farbig wie ein Editor.",
+  "codes": {
+    "01a1b57c-cbd2-77a4-a5f6-fffa5d998657.setting.encoding": "Kodierung"
+  }
+}

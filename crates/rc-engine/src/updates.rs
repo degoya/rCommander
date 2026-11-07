@@ -18,6 +18,7 @@ mod auto;
 mod check;
 mod config;
 mod handover;
+mod requested;
 mod status;
 mod task;
 
@@ -53,6 +54,9 @@ pub(crate) struct UpdateDesk {
     last_input: AtomicI64,
     /// One check at a time.
     checking: tokio::sync::Mutex<()>,
+    /// The tests count the hand-overs here instead of starting the updater.
+    #[cfg(test)]
+    launches: OnceLock<Arc<std::sync::atomic::AtomicUsize>>,
 }
 
 /// What the desk knows now; never held across an `await`.
@@ -66,6 +70,9 @@ struct DeskState {
     dismissed: Option<String>,
     /// The update was handed to the updater; the window ends now.
     handed: bool,
+    /// "Install and restart" was clicked before the download was there (RC-100-84): installed
+    /// once it is ready, dropped when it fails.
+    install_requested: bool,
     idle: IdleClock,
     /// `update.auto_install` as last read, and what `when_idle` waits for.
     auto: AutoMode,
@@ -227,6 +234,30 @@ impl Engine {
     pub(crate) fn use_update_sources(&self, fetcher: Arc<dyn Fetcher>, trust: TrustStore) {
         let _ = self.desk().fetcher.set(fetcher);
         let _ = self.desk().trust.set(trust);
+    }
+
+    /// A test's portable installation in `install_dir` with its data in `data_dir`, as if the
+    /// window had started the self-update; the answer counts the hand-overs, which start no
+    /// updater.
+    #[cfg(test)]
+    pub(crate) fn use_portable_installation(
+        &self,
+        data_dir: PathBuf,
+        install_dir: PathBuf,
+    ) -> Arc<std::sync::atomic::AtomicUsize> {
+        let _ = self.desk().started.set(Started {
+            data_dir,
+            installation: Installation {
+                kind: rc_update::InstallKind::Portable,
+                reason: None,
+                install_dir,
+                executable: "rcommander".to_owned(),
+            },
+            _instance: None,
+        });
+        let launches = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let _ = self.desk().launches.set(Arc::clone(&launches));
+        launches
     }
 }
 

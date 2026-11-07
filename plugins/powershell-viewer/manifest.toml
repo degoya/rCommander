@@ -3,10 +3,10 @@
 # A failure code starts with the plugin's id (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.3.0"
+api_version = "0.4.0"
 id = "01a159b6-c865-7f56-a6e7-db2cc02c4981"
 name = "PowerShell viewer"
-version = "0.1.1"
+version = "0.1.2"
 
 [match]
 # Scripts, modules and module manifests.

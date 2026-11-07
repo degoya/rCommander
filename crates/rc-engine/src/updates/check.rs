@@ -111,7 +111,8 @@ impl Engine {
         );
         let code = report.problem.as_ref().map(rc_update::UpdateError::code);
         self.record_check(now, code, offer).await;
-        // With the automation on, the offer is fetched in the background (RC-100-07).
+        // With the automation on (`on_quit` by default, RC-100-84), the offer is fetched in the
+        // background (RC-100-07).
         if config.auto != rc_update::auto_install::AutoMode::Off
             && let Err(refusal) = self.start_update_download()
         {
@@ -139,6 +140,7 @@ impl Engine {
                 && !matches!(state.download, DownloadState::Running { .. })
             {
                 state.download = DownloadState::None;
+                state.install_requested = false;
             }
         }
         self.store_update_state(|stored| {
@@ -197,6 +199,7 @@ impl Engine {
                 .and_then(|started| started.installation.kind.update_command())
                 .map(str::to_owned),
             installing: state.handed,
+            install_after_download: state.install_requested,
             queue_busy,
             last_update: journal,
             updated_to: state

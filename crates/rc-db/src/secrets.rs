@@ -34,11 +34,14 @@ pub enum SecretKind {
     Key,
     /// The passphrase of the stored key or of the file at `key_path`.
     Passphrase,
+    /// The seed of the one-time codes a server asks for as a second factor (RC-060-08): an
+    /// `otpauth://totp/...` URI or a bare Base32 secret, as pasted.
+    TotpSeed,
 }
 
 impl SecretKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 3] = [Self::Password, Self::Key, Self::Passphrase];
+    pub const ALL: [Self; 4] = [Self::Password, Self::Key, Self::Passphrase, Self::TotpSeed];
 
     /// The column that holds this kind's ciphertext.
     #[must_use]
@@ -47,6 +50,7 @@ impl SecretKind {
             Self::Password => "password_enc",
             Self::Key => "key_enc",
             Self::Passphrase => "passphrase_enc",
+            Self::TotpSeed => "totp_seed_enc",
         }
     }
 
@@ -57,6 +61,7 @@ impl SecretKind {
             Self::Password => "password",
             Self::Key => "key",
             Self::Passphrase => "passphrase",
+            Self::TotpSeed => "totp_seed",
         }
     }
 
@@ -124,6 +129,9 @@ pub struct SecretFlags {
     pub has_password: bool,
     pub has_key: bool,
     pub has_passphrase: bool,
+    /// A one-time code seed (RC-060-08).
+    #[serde(default)]
+    pub has_totp_seed: bool,
 }
 
 impl SecretFlags {
@@ -134,6 +142,7 @@ impl SecretFlags {
             SecretKind::Password => self.has_password,
             SecretKind::Key => self.has_key,
             SecretKind::Passphrase => self.has_passphrase,
+            SecretKind::TotpSeed => self.has_totp_seed,
         }
     }
 
@@ -144,6 +153,7 @@ impl SecretFlags {
             has_password: flag("has_password")?,
             has_key: flag("has_key")?,
             has_passphrase: flag("has_passphrase")?,
+            has_totp_seed: flag("has_totp_seed")?,
         })
     }
 }

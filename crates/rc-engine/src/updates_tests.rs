@@ -21,7 +21,7 @@ fn key() -> SigningKey {
     SigningKey::from_bytes(&[3; 32])
 }
 
-fn trust() -> TrustStore {
+pub(crate) fn trust() -> TrustStore {
     let trust = TrustStore::new();
     trust
         .trust(UPDATE_KEY_ID.to_owned(), key().verifying_key())
@@ -30,6 +30,11 @@ fn trust() -> TrustStore {
 }
 
 fn signed(version: &str, sequence: u64) -> Vec<u8> {
+    signed_for(version, sequence, &"ab".repeat(32), 10)
+}
+
+/// The signed stable manifest of `version` whose one artifact has `sha256` and `size`.
+pub(crate) fn signed_for(version: &str, sequence: u64, sha256: &str, size: u64) -> Vec<u8> {
     let now = Utc::now();
     let target = rc_update::Target::current();
     let manifest = UpdateManifest {
@@ -48,8 +53,8 @@ fn signed(version: &str, sequence: u64) -> Vec<u8> {
             url: format!(
                 "https://github.com/degoya/rCommander/releases/download/v{version}/rcommander-{version}-test.zip"
             ),
-            sha256: "ab".repeat(32),
-            size: 10,
+            sha256: sha256.to_owned(),
+            size,
         }],
         schema_change: Some(false),
     };
@@ -57,7 +62,7 @@ fn signed(version: &str, sequence: u64) -> Vec<u8> {
 }
 
 /// An engine with a database file and `fetcher` in place of the release host.
-async fn served_with(fetcher: Arc<dyn rc_update::Fetcher>) -> (TempDir, Engine) {
+pub(crate) async fn served_with(fetcher: Arc<dyn rc_update::Fetcher>) -> (TempDir, Engine) {
     let root = test_support::tree(&[("a.txt", "a"), ("docs/a.txt", "old")]);
     let engine = test_support::headless(root.path()).await;
     let data = root.path().join("data");
@@ -79,7 +84,7 @@ async fn served(stable: Option<Vec<u8>>) -> (TempDir, Engine, MemoryFetcher) {
     (root, engine, fetcher)
 }
 
-fn status_of(outcome: Result<Outcome, EngineError>) -> UpdateStatus {
+pub(crate) fn status_of(outcome: Result<Outcome, EngineError>) -> UpdateStatus {
     match outcome {
         Ok(Outcome::Update(status)) => *status,
         other => panic!("expected the update status, got {other:?}"),
@@ -185,7 +190,7 @@ async fn invalid_stored_values_read_as_the_defaults() {
     assert_eq!(config.interval_hours, 24);
     assert_eq!(config.channel, Channel::of_version(RUNNING));
     assert!(!config.channel_chosen);
-    assert_eq!(config.auto, rc_update::auto_install::AutoMode::Off);
+    assert_eq!(config.auto, rc_update::auto_install::AutoMode::OnQuit);
     db.set(settings::UPDATE_CHANNEL_KEY, &json!("beta"))
         .await
         .expect("store");
@@ -368,4 +373,28 @@ fn a_managers_installation_reads_stable_and_never_installs_by_itself() {
         config.for_kind(kind);
         assert_eq!(config, stored, "{kind:?}");
     }
+}
+
+/// `update.auto_install` is `on_quit` until a person chooses (RC-100-84): the schema's default,
+/// the engine without a database and a database without the key; a stored `off` stays off, and a
+/// package manager's installation never installs by itself.
+#[tokio::test]
+async fn auto_install_defaults_to_on_quit_and_a_stored_off_stays() {
+    let spec = settings::setting(settings::UPDATE_AUTO_KEY).expect("the row");
+    assert_eq!(spec.default_value(), json!("on_quit"));
+    assert_eq!(
+        config::UpdateConfig::defaults(RUNNING).auto,
+        AutoMode::OnQuit
+    );
+    let (_root, engine, _fetcher) = served(None).await;
+    assert_eq!(engine.update_config().await.auto, AutoMode::OnQuit);
+    assert_eq!(engine.update_status().await.auto_install, "on_quit");
+    engine
+        .set_protected_setting(settings::UPDATE_AUTO_KEY, &json!("off"))
+        .await
+        .expect("switch off");
+    assert_eq!(engine.update_config().await.auto, AutoMode::Off);
+    let mut managed = config::UpdateConfig::defaults(RUNNING);
+    managed.for_kind(rc_update::InstallKind::Scoop);
+    assert_eq!(managed.auto, AutoMode::Off);
 }

@@ -8,7 +8,7 @@
 //! has no capability a viewer may hold, so a viewer imports `host`, `types`, `source` and `sink`,
 //! and `settings` when its manifest declares `[[settings]]` (RC-100-14), and nothing else. A
 //! secret source imports `host`, `types`, `settings` as a viewer does, and `http` when granted
-//! `net_http` (RC-100-33).
+//! `net_http` (RC-100-33); an inventory likewise (RC-100-39).
 
 use crate::manifest::{NET_HTTP, PluginManifest, PluginType};
 
@@ -24,10 +24,13 @@ const SETTINGS: &str = "rcommander:plugin/settings";
 /// The interface `net_http` grants (contract 0.3.0, RC-100-33).
 const HTTP: &str = "rcommander:plugin/http";
 
-/// Whether `manifest` may import `http`: a secret source granted `net_http`.
+/// Whether `manifest` may import `http`: a secret source or an inventory (RC-100-39) granted
+/// `net_http`.
 pub(crate) fn http_granted(manifest: &PluginManifest) -> bool {
-    manifest.plugin_type == PluginType::Secrets
-        && manifest.capabilities.declared.contains_key(NET_HTTP)
+    matches!(
+        manifest.plugin_type,
+        PluginType::Secrets | PluginType::Inventory
+    ) && manifest.capabilities.declared.contains_key(NET_HTTP)
 }
 
 /// Whether `manifest` may import `settings`: it declares `[[settings]]` under a contract that

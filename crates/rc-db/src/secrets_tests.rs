@@ -46,9 +46,10 @@ async fn each_kind_is_stored_in_its_own_column_and_flagged() {
             has_password: true,
             has_key: true,
             has_passphrase: true,
+            has_totp_seed: true,
         }
     );
-    assert_eq!(db.stored_secrets(SECRET_COLUMNS).await.expect("count"), 3);
+    assert_eq!(db.stored_secrets(SECRET_COLUMNS).await.expect("count"), 4);
 
     let cleared = db
         .set_connection_secret(id, SecretKind::Key, None)
@@ -56,7 +57,8 @@ async fn each_kind_is_stored_in_its_own_column_and_flagged() {
         .expect("clear");
     assert!(!cleared.secrets.has_key);
     assert!(cleared.secrets.has_password && cleared.secrets.has_passphrase);
-    assert_eq!(db.stored_secrets(SECRET_COLUMNS).await.expect("count"), 2);
+    assert!(cleared.secrets.has_totp_seed);
+    assert_eq!(db.stored_secrets(SECRET_COLUMNS).await.expect("count"), 3);
 }
 
 #[tokio::test]
@@ -93,7 +95,12 @@ fn the_flags_serialize_as_has_fields_only() {
     .expect("serializes");
     assert_eq!(
         value,
-        serde_json::json!({ "has_password": true, "has_key": false, "has_passphrase": false })
+        serde_json::json!({
+            "has_password": true,
+            "has_key": false,
+            "has_passphrase": false,
+            "has_totp_seed": false,
+        })
     );
 }
 
@@ -225,4 +232,25 @@ async fn a_secret_write_under_a_stale_vault_key_is_refused() {
     db.set_connection_secret(id, SecretKind::Password, Some(&[5][..]))
         .await
         .expect("no key held, nothing checked");
+}
+
+#[test]
+fn flags_written_before_the_seed_existed_still_read() {
+    let flags: SecretFlags = serde_json::from_value(serde_json::json!({
+        "has_password": true, "has_key": false, "has_passphrase": false
+    }))
+    .expect("reads");
+    assert!(flags.has_password && !flags.has_totp_seed);
+}
+
+#[tokio::test]
+async fn a_shared_credential_has_a_seed_column_too() {
+    let db = Db::open_in_memory().await.expect("open");
+    let select = SecretKind::TotpSeed.select(CREDENTIALS_TABLE);
+    let stored: Option<(Option<Vec<u8>>,)> = sqlx::query_as(AssertSqlSafe(select))
+        .bind(1_i64)
+        .fetch_optional(db.readers())
+        .await
+        .expect("the column exists");
+    assert_eq!(stored, None);
 }

@@ -2,7 +2,7 @@
 name = "rc-plugin-json-viewer"
 description = "rCommander's bundled JSON viewer plugin (JSON, JSONC, JSON5, JSON Lines): coloured text and a tree, for files of any size"
 # The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
-version = "0.3.0"
+version = "0.3.1"
 edition.workspace = true
 rust-version.workspace = true
 # Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").

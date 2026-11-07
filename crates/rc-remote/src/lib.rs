@@ -9,8 +9,9 @@
 //! model and the engine of login scripts, played against any byte stream. [`ssh`] is the SSH
 //! session (RC-060-01): it checks every server key through a [`ssh::HostKeyGate`] - the engine's
 //! is [`trust::verify`] with a question for a person - before it logs in, and carries the
-//! channels SFTP, the terminal and commands run on. `testkit` (tests, feature `testkit`) is an
-//! in-process SSH server and its fixtures.
+//! channels SFTP, the terminal and commands run on. [`totp`] makes the one-time codes of a second
+//! login factor (RC-060-08). `testkit` (tests, feature `testkit`) is an in-process SSH server and
+//! its fixtures.
 
 pub mod agent;
 pub mod ftp;
@@ -26,6 +27,7 @@ pub mod sftp;
 pub mod ssh;
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkit;
+pub mod totp;
 mod tree;
 pub mod trust;
 mod wire;
@@ -42,4 +44,5 @@ pub use hostkey::{
 pub use private_key::{KeyFormat, KeyInfo, MAX_KEY_BYTES, PrivateKeyError};
 pub use sftp::{SftpError, SftpVfs};
 pub use ssh::{SshError, SshSession};
+pub use totp::{TotpError, TotpSeed};
 pub use trust::TrustError;

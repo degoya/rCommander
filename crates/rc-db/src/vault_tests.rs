@@ -148,7 +148,7 @@ fn identifiers() {
 
 #[test]
 fn the_secret_columns_are_plain_identifiers() {
-    assert_eq!(SECRET_COLUMNS.len(), 7);
+    assert_eq!(SECRET_COLUMNS.len(), 10);
     for column in SECRET_COLUMNS {
         for name in [column.table, column.column, column.row_id] {
             assert!(checked_identifier(name).is_ok(), "{name:?}");

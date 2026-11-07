@@ -5,7 +5,11 @@ use std::{fmt, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use crate::agent::{AgentSource, AgentSourceKind};
+use crate::{
+    agent::{AgentSource, AgentSourceKind},
+    login_script::Pattern,
+    totp::DEFAULT_PROMPT,
+};
 
 /// The longest the TCP connect may take.
 pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -33,7 +37,7 @@ pub enum AuthKind {
     /// passphrase from the vault.
     Key,
     /// The password stored in the vault; over `keyboard-interactive` when the server asks for it
-    /// there instead.
+    /// there instead, with the one-time code of a stored seed where it asks for one (RC-060-08).
     Password,
 }
 
@@ -150,6 +154,15 @@ pub struct SessionOptions {
     pub own_key: Option<String>,
     /// The most agent keys one login offers, every agent together.
     pub max_agent_keys: u32,
+    /// A `keyboard-interactive` question this matches is answered with the one-time code of the
+    /// connection's seed (RC-060-08); [`DEFAULT_PROMPT`] unless the connection sets its own.
+    pub totp_prompt: Pattern,
+}
+
+/// [`DEFAULT_PROMPT`], compiled.
+#[must_use]
+pub fn default_totp_prompt() -> Pattern {
+    Pattern::new(DEFAULT_PROMPT).expect("the default code prompt is a valid pattern")
 }
 
 impl Default for SessionOptions {
@@ -164,6 +177,7 @@ impl Default for SessionOptions {
             agent_fingerprint: None,
             own_key: None,
             max_agent_keys: DEFAULT_MAX_AGENT_KEYS,
+            totp_prompt: default_totp_prompt(),
         }
     }
 }

@@ -21,6 +21,9 @@ pub enum PluginType {
     /// A password manager as the source of a connection's secret (`world secrets-plugin`,
     /// contract 0.3.0, RC-100-33).
     Secrets,
+    /// A server inventory whose hosts become connections (`world inventory-plugin`, contract
+    /// 0.4.0, RC-100-39).
+    Inventory,
     /// Anything this build does not know - the kinds of later stages included; refused by
     /// validation rather than treated as a viewer.
     Unknown(String),
@@ -32,6 +35,7 @@ impl PluginType {
         match self {
             Self::Viewer => "viewer",
             Self::Secrets => "secrets",
+            Self::Inventory => "inventory",
             Self::Unknown(value) => value,
         }
     }
@@ -42,7 +46,7 @@ impl PluginType {
         match self {
             Self::Viewer => crate::limits::DEFAULT_VIEWER_TIMEOUT_MILLISECONDS,
             Self::Secrets => crate::limits::DEFAULT_SECRETS_TIMEOUT_MILLISECONDS,
-            Self::Unknown(_) => crate::limits::DEFAULT_TIMEOUT_MILLISECONDS,
+            Self::Inventory | Self::Unknown(_) => crate::limits::DEFAULT_TIMEOUT_MILLISECONDS,
         }
     }
 }
@@ -59,6 +63,7 @@ impl<'de> Deserialize<'de> for PluginType {
         Ok(match raw.as_str() {
             "viewer" => Self::Viewer,
             "secrets" => Self::Secrets,
+            "inventory" => Self::Inventory,
             _ => Self::Unknown(raw),
         })
     }

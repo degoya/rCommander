@@ -8,14 +8,16 @@
 //! and "Close" - the Updates page has nothing new then, and "Later" would mean nothing. For an
 //! offer, "What's new" opens the settings on the Updates page,
 //! which shows the version, the date, the size and the release notes as plain text, and the
-//! buttons: Check now, Download, Open folder (the panel goes there), Copy the download address
-//! (the way past a proxy that asks for a login; nothing here starts a browser), and Install and
-//! restart with what ends with it. A running, waiting or paused job holds the install back.
-//! "Updated to X" shows only while X runs.
+//! buttons: Check now, Open folder (the panel goes there), Copy the download address (the way
+//! past a proxy that asks for a login; nothing here starts a browser), and Install and restart
+//! with what ends with it. Install and restart downloads first when it must and installs once
+//! the download is checked (RC-100-84), so a portable installation has no Download button. A
+//! running, waiting or paused job holds the install back. "Updated to X" shows only while X runs.
 //!
 //! An installation a package manager owns (Scoop, Homebrew, winget, apt, dnf; RC-100-52 ...
 //! RC-100-54) never installs: the page says so with the reason and shows the manager's command,
-//! and "Copy command" stands where "Install and restart" would.
+//! and "Copy command" stands where "Install and restart" would. An unknown installation does not
+//! install itself either: "Download" is its main button.
 
 use std::{
     hash::{Hash, Hasher},
@@ -26,7 +28,7 @@ use std::{
 use iced::{
     Element, Subscription, Task,
     futures::{Stream, stream},
-    widget::{Column, Space, button, column, row, text},
+    widget::{Space, button, row, text},
 };
 use rc_engine::{
     Command, DownloadState, Engine, EngineEvent, UpdateNotice, UpdateStatus, about::AboutLinkKind,
@@ -39,12 +41,15 @@ use super::{
 };
 use crate::{
     i18n::{error_text, t},
-    theme::{
-        self, Tokens,
-        fit::{label, label_or_glyph, prose},
-        layout,
-    },
+    theme::{self, Tokens, fit::label_or_glyph},
 };
+
+#[path = "update_ui_page.rs"]
+mod page_view;
+
+pub(in crate::app) use page_view::page;
+#[cfg(test)]
+use page_view::{PageAction, PageButton, manager_line, page_buttons};
 
 /// How often "install when idle" looks.
 const IDLE_LOOK: Duration = Duration::from_secs(30);
@@ -314,145 +319,6 @@ pub(super) fn notice_line(notice: &UpdateNotice) -> (String, &'static str) {
             t!("update.notice.details"),
         ),
     }
-}
-
-/// The Updates page above its switches: what runs, the last check, the offer with its notes and
-/// the buttons.
-pub(in crate::app) fn page<'a>(
-    status: Option<&UpdateStatus>,
-    tokens: &'static Tokens,
-) -> Element<'a, Message> {
-    let Some(status) = status else {
-        return label(t!("settings.loading")).into();
-    };
-    let hint = |text: String| prose(text).color(tokens.text_secondary);
-    let mut page = Column::new().spacing(8);
-    page = page.push(label(t!(
-        "update.page.running",
-        version = status.running_version,
-        channel = status.channel
-    )));
-    page = page.push(hint(last_check(status)));
-    if let Some(reason) = &status.install_reason {
-        page = page.push(hint(error_text(reason)));
-    }
-    if let Some(line) = manager_line(status) {
-        page = page.push(label(line));
-    }
-    let offer = status.offer.as_ref();
-    match offer {
-        Some(offer) => {
-            let size = offer
-                .artifact
-                .as_ref()
-                .map_or(0, |artifact| artifact.size / (1024 * 1024));
-            page = page.push(
-                label(t!(
-                    "update.page.offer",
-                    version = offer.version,
-                    date = offer.released_at.format("%Y-%m-%d"),
-                    size = size
-                ))
-                .font(theme::UI_FONT_STRONG),
-            );
-            if !offer.notes.is_empty() {
-                page = page.push(prose(offer.notes.clone()));
-            }
-        }
-        None => page = page.push(hint(t!("update.page.up_to_date").to_owned())),
-    }
-    page = page.push(hint(download_line(&status.download)));
-    if status.offer.is_some() && status.install_kind == "portable" {
-        page = page.push(hint(t!("update.page.install_ends").to_owned()));
-    }
-    page.push(buttons(status)).into()
-}
-
-/// "Update it with Scoop: scoop update rcommander" for a manager's installation.
-pub(super) fn manager_line(status: &UpdateStatus) -> Option<String> {
-    let command = status.install_command.as_deref()?;
-    let manager = rc_update::InstallKind::parse(&status.install_kind)
-        .and_then(rc_update::InstallKind::manager_name)
-        .unwrap_or(status.install_kind.as_str());
-    Some(t!(
-        "update.page.manager_command",
-        manager = manager,
-        command = command
-    ))
-}
-
-fn last_check(status: &UpdateStatus) -> String {
-    match (&status.last_check, &status.last_code) {
-        (None, _) => t!("update.page.never_checked").to_owned(),
-        (Some(at), None) => t!(
-            "update.page.checked",
-            time = at.format("%Y-%m-%d %H:%M UTC")
-        ),
-        (Some(at), Some(code)) => t!(
-            "update.page.check_failed",
-            time = at.format("%Y-%m-%d %H:%M UTC"),
-            reason = error_text(code)
-        ),
-    }
-}
-
-fn download_line(download: &DownloadState) -> String {
-    match download {
-        DownloadState::None => String::new(),
-        DownloadState::Running { received, total } => t!(
-            "update.page.downloading",
-            received = received / 1024,
-            total = total / 1024
-        ),
-        DownloadState::Ready { .. } => t!("update.page.downloaded").to_owned(),
-        DownloadState::Failed { code } => {
-            t!("update.page.download_failed", reason = error_text(code))
-        }
-    }
-}
-
-/// The page's buttons, each a stop of the focus ring (`layout`'s helpers); one that cannot act
-/// now is drawn disabled.
-fn buttons<'a>(status: &UpdateStatus) -> Element<'a, Message> {
-    let artifact = status
-        .offer
-        .as_ref()
-        .is_some_and(|offer| offer.artifact.is_some());
-    let ready = matches!(status.download, DownloadState::Ready { .. });
-    let running = matches!(status.download, DownloadState::Running { .. });
-    let portable = status.install_kind == "portable";
-    let when = |on: bool, message: UpdateMsg| on.then(|| wrap(message));
-    let install = if status.install_command.is_some() {
-        layout::primary_button(
-            t!("update.page.copy_command"),
-            Some(wrap(UpdateMsg::CopyCommand)),
-        )
-    } else if status.queue_busy {
-        layout::primary_button(t!("update.page.install_when_empty"), None)
-    } else {
-        layout::primary_button(
-            t!("update.page.install"),
-            when(ready && portable && !status.installing, UpdateMsg::Install),
-        )
-    };
-    let row = row![
-        layout::secondary_button(t!("update.page.check_now"), Some(wrap(UpdateMsg::CheckNow))),
-        layout::secondary_button(
-            t!("update.page.download"),
-            when(artifact && !ready && !running, UpdateMsg::Download)
-        ),
-        layout::secondary_button(
-            t!("update.page.open_folder"),
-            when(ready, UpdateMsg::OpenFolder)
-        ),
-        layout::secondary_button(
-            t!("update.page.copy_address"),
-            when(artifact, UpdateMsg::CopyAddress)
-        ),
-        install,
-    ]
-    .spacing(8);
-    column![row].into()
 }
 
 /// Starts the engine's self-update once the window runs, then looks every half minute.

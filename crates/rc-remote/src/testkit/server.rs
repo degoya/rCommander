@@ -1,8 +1,9 @@
 //! An in-process SSH server for the session tests: no Docker, no network beyond 127.0.0.1.
 //!
-//! It accepts a password (also as the answer to a `keyboard-interactive` prompt) and the public
-//! keys it is given, offers the methods it is told to, acts out a few `exec` commands
-//! ([`super::exec`]; any other is echoed back), and echoes what a shell channel receives. Every
+//! It accepts a password (also as the answer to a `keyboard-interactive` prompt, with a one-time
+//! code after it when [`ServerOptions::second_factor`] is set) and the public keys it is given,
+//! offers the methods it is told to, acts out a few `exec` commands ([`super::exec`]; any other
+//! is echoed back), and echoes what a shell channel receives. Every
 //! TCP connection it accepts is counted, so a test can prove that two channels share one, and
 //! so is every authentication request it receives ([`TestServer::auth_attempts`]: no secret
 //! before a trusted host key);
@@ -14,7 +15,6 @@
 //! the `sftp` subsystem from a directory on disk (`super::sftp`).
 
 use std::{
-    borrow::Cow,
     collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex, PoisonError,
@@ -35,10 +35,10 @@ use tokio::{net::TcpListener, task::JoinHandle};
 use self::link::Link;
 use super::exec::ExecRuns;
 
-pub(super) mod link;
+pub use self::kbd::SecondFactor;
 
-/// The one prompt of the `keyboard-interactive` method.
-const PROMPTS: &[(Cow<'static, str>, bool)] = &[(Cow::Borrowed("Password: "), false)];
+mod kbd;
+pub(super) mod link;
 
 /// What the server accepts and offers.
 #[derive(Clone)]
@@ -54,6 +54,8 @@ pub struct ServerOptions {
     pub probe_forwarding: bool,
     /// The `sftp` subsystem; refused when `None`.
     pub sftp: Option<super::SftpServe>,
+    /// A one-time code `keyboard-interactive` asks for after the password (RC-060-08).
+    pub second_factor: Option<SecondFactor>,
 }
 
 impl ServerOptions {
@@ -72,6 +74,7 @@ impl ServerOptions {
             ],
             probe_forwarding: false,
             sftp: None,
+            second_factor: None,
         }
     }
 }
@@ -130,6 +133,7 @@ impl TestServer {
                         channels: HashMap::new(),
                         sftp: HashSet::new(),
                         exec: Arc::clone(&runs),
+                        kbd: kbd::Stage::default(),
                     };
                     let config = Arc::clone(&config);
                     tokio::spawn(async move {
@@ -241,6 +245,8 @@ struct Handler {
     /// The channels SFTP runs on: their data is SFTP's, not echoed.
     sftp: HashSet<ChannelId>,
     exec: Arc<ExecRuns>,
+    /// Where its `keyboard-interactive` login stands.
+    kbd: kbd::Stage,
 }
 
 impl Handler {
@@ -308,18 +314,7 @@ impl server::Handler for Handler {
         response: Option<Response<'a>>,
     ) -> Result<Auth, Self::Error> {
         self.attempt();
-        let Some(mut response) = response else {
-            return Ok(Auth::Partial {
-                name: Cow::Borrowed(""),
-                instructions: Cow::Borrowed(""),
-                prompts: Cow::Borrowed(PROMPTS),
-            });
-        };
-        let expected = self.options.password.as_deref().map(str::as_bytes);
-        Ok(match (response.next(), expected) {
-            (Some(answer), Some(expected)) if &answer[..] == expected => Auth::Accept,
-            _ => Auth::reject(),
-        })
+        Ok(kbd::respond(&self.options, &mut self.kbd, response))
     }
 
     async fn auth_succeeded(&mut self, session: &mut Session) -> Result<(), Self::Error> {

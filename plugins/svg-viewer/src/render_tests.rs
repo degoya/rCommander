@@ -288,6 +288,109 @@ fn a_pattern_tile_beyond_the_pixel_budget_ends_with_too_complex() {
 }
 
 #[test]
+fn an_arc_of_a_huge_radius_ends_with_too_complex_before_it_is_cut_up() {
+    // Half an ellipse of radius 10^30: kurbo would cut it into some 75 000 curves, and svgtypes
+    // take them out of its buffer from the front, one move of the rest per curve.
+    let bomb = r#"<path d="M0 0 A1e30 1e30 0 0 1 2e30 0" fill="red"/>"#;
+    assert_eq!(
+        code_of(render(&svg(10, 10, bomb), small())).as_deref(),
+        Some(code::TOO_COMPLEX)
+    );
+    // Embedded as a `data:` picture, it is not read, and the picture is refused.
+    let inner = data_url("image/svg+xml", &svg(10, 10, bomb));
+    let body = format!(r#"<image href="{inner}" width="10" height="10"/>"#);
+    assert_eq!(
+        code_of(render(&svg(10, 10, &body), small())).as_deref(),
+        Some(code::TOO_COMPLEX)
+    );
+}
+
+fn large() -> Settings {
+    Settings {
+        size: Size::Large,
+        background: Background::Transparent,
+    }
+}
+
+/// `depth` groups with `attribute`, one inside the next, around two rectangles covering a 10 x 10
+/// picture, after `defs`.
+fn nested_groups(defs: &str, attribute: &str, depth: usize) -> Vec<u8> {
+    let rects = r#"<rect width="10" height="10" fill="red"/><rect width="5" height="5"/>"#;
+    let open = format!("<g {attribute}>").repeat(depth);
+    let close = "</g>".repeat(depth);
+    svg(10, 10, &format!("{defs}{open}{rects}{close}"))
+}
+
+#[test]
+fn nested_canvases_beyond_the_pixel_budget_end_with_too_complex() {
+    // Drawn 2048 pixels wide, each group takes a canvas of the whole picture (4.2 M pixels), a
+    // mask or a clip path one more of that size, a filter one per primitive and input.
+    let mask = r#"<mask id="m"><rect width="10" height="10" fill="white"/></mask>"#;
+    // usvg cuts a clipped group's canvas to the clip path: this one covers the picture.
+    let clip = r#"<clipPath id="c"><rect width="10" height="10"/></clipPath>"#;
+    let filter = r#"<filter id="f"><feGaussianBlur stdDeviation="1"/><feOffset dx="1"/></filter>"#;
+    for (defs, attribute, depth) in [
+        ("", r#"opacity="0.9""#, 20),
+        (mask, r#"mask="url(#m)""#, 8),
+        (clip, r#"clip-path="url(#c)""#, 10),
+        (filter, r#"filter="url(#f)""#, 3),
+    ] {
+        assert_eq!(
+            code_of(render(&nested_groups(defs, attribute, depth), large())).as_deref(),
+            Some(code::TOO_COMPLEX),
+            "{attribute} x {depth}"
+        );
+        // One of them is a picture (drawn small: the test build draws slowly).
+        assert!(
+            painted(&draw(&nested_groups(defs, attribute, 1), small())) > 0,
+            "{attribute}"
+        );
+    }
+}
+
+#[test]
+fn an_ordinary_picture_with_arcs_groups_a_filter_and_a_mask_is_drawn() {
+    let body = r##"<defs>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+                <feOffset dx="2" dy="2" result="blur"/>
+                <feFlood flood-color="black" flood-opacity="0.5"/>
+                <feComposite in2="blur" operator="in"/>
+                <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <mask id="fade">
+                <rect width="100" height="100" fill="white"/>
+                <circle cx="50" cy="50" r="20" fill="black"/>
+            </mask>
+        </defs>
+        <g filter="url(#shadow)"><rect x="5" y="5" width="90" height="90" rx="10" fill="red"/></g>
+        <g opacity="0.5">
+            <circle cx="30" cy="30" r="20" fill="blue"/>
+            <ellipse cx="70" cy="70" rx="20" ry="10" fill="green"/>
+        </g>
+        <g mask="url(#fade)">
+            <path d="M10 50 A40 40 0 1 1 90 50 A40 40 0 1 1 10 50 Z" fill="yellow"/>
+        </g>"##;
+    let picture = draw(&svg(100, 100, body), Settings::default());
+    assert!(painted(&picture) > 0);
+    // Cheap: a few dozen curves, intermediate canvases of half the budget at most
+    // (the shadow over the whole picture takes the most: a dozen canvases of 1291 x 1291).
+    let text = String::from_utf8(svg(100, 100, body)).expect("UTF-8");
+    let document = roxmltree::Document::parse(&text).expect("parses");
+    let cost = budget::expanded(&document, Cost::LIMIT);
+    assert!(cost.curves < 100, "{cost:?}");
+    let tree = usvg::Tree::from_xmltree(&document, &options(Arc::new(Remaining::new(Cost::LIMIT))))
+        .expect("builds");
+    let pixels = canvas_pixels(
+        &tree,
+        (1024, 1024),
+        Transform::from_scale(10.24, 10.24),
+        Pixels::LIMIT,
+    );
+    assert!(pixels.layers < Pixels::LIMIT.layers / 2, "{pixels:?}");
+}
+
+#[test]
 fn a_use_bomb_ends_with_too_complex() {
     assert_eq!(
         code_of(render(use_bomb(10, 10).as_bytes(), small())).as_deref(),

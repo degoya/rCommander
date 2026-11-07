@@ -58,6 +58,12 @@ pub mod codes {
     pub const PLUGIN_HTTP_TOO_LARGE: &str = "plugin_http_too_large";
     /// One call's HTTP requests took longer than `runtime::HTTP_TIME_BUDGET` together.
     pub const PLUGIN_HTTP_TIME_BUDGET: &str = "plugin_http_time_budget";
+    /// A `{{secret:<slot>}}` marker names a slot the source holds no value for (RC-100-39).
+    pub const PLUGIN_SECRET_MISSING: &str = "plugin_secret_missing";
+    /// A marker in the address, the body or a header that travels to third parties.
+    pub const PLUGIN_SECRET_TARGET_NOT_ALLOWED: &str = "plugin_secret_target_not_allowed";
+    /// An inventory answered more hosts than the host takes (`MAX_HOSTS`, 10 000).
+    pub const PLUGIN_INVENTORY_TOO_LARGE: &str = "plugin_inventory_too_large";
 }
 
 /// Longest trap reason kept as a parameter: one line, never a backtrace.

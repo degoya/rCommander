@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse de balisage",
+  "description": "Affiche les fichiers reStructuredText, LaTeX et BibTeX en couleurs, comme un éditeur.",
+  "codes": {
+    "01a1b57c-cbd2-77a4-a5f6-fffa5d998657.setting.encoding": "Encodage"
+  }
+}

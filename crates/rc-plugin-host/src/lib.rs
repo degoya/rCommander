@@ -15,6 +15,9 @@
 //! (`installed`, `versions`) - [`installed::list`] is what the viewer adapter runs. The
 //! connection to Lister and Quick View is RC-100-13's.
 //!
+//! RC-100-39 adds the inventory kind ([`InventoryPlugin`]) and `{{secret:<slot>}}` markers in
+//! `http`.
+//!
 //! RC-100-12 adds what a plugin author runs: the conformance run (`conformance`) and the
 //! completion of a bundled manifest from `plugins/metadata.toml` ([`complete_manifest`]).
 
@@ -32,6 +35,7 @@ mod host_impls;
 mod http;
 mod install;
 pub mod installed;
+mod inventory;
 mod limits;
 mod link;
 mod locales;
@@ -80,6 +84,10 @@ pub use health::{
 };
 pub use install::{InstalledPackage, PluginInstaller};
 pub use installed::{InUse, InstalledPlugin, PluginState, VersionEntry, hold, in_use, inventory};
+pub use inventory::{
+    InventoryList, InventoryOptions, InventoryPlugin, MAX_EXTERNAL_ID_CHARS, MAX_FOLDER_DEPTH,
+    MAX_FOLDER_NAME_CHARS, MAX_HOST_TEXT_CHARS, MAX_NOTE_CHARS, MAX_TAG_CHARS, MAX_TAGS,
+};
 pub use limits::{
     DEFAULT_FUEL, DEFAULT_MAX_CONCURRENT, DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_MEMORY_BYTES,
     DEFAULT_SECRETS_TIMEOUT_MILLISECONDS, DEFAULT_TIMEOUT_MILLISECONDS,
@@ -93,11 +101,12 @@ pub use locales::{
 pub use log_budget::MAX_LOG_LINES_PER_CALL;
 pub use manifest::{
     COMPLETED_MARKER, Capabilities, KNOWN_CAPABILITIES, MANIFEST_VERSION, MAX_MANIFEST_BYTES,
-    MAX_SETTING_LINE_CHARS, MAX_SETTING_TEXT_CHARS, MagicManifest, ManifestDefaults,
-    ManifestRejection, MatchRank, MatchSection, NAMES_MIN_APP_VERSION, NET_HTTP, NetHttp,
-    PluginManifest, PluginMetadata, PluginType, SUPPORTED_API_VERSIONS, SettingKind,
-    SettingManifest, ViewerSection, check_app_version, complete_manifest, name_matches, net_http,
-    parse_manifest,
+    MAX_SECRET_SLOTS, MAX_SETTING_LINE_CHARS, MAX_SETTING_TEXT_CHARS, MagicManifest,
+    ManifestDefaults, ManifestRejection, MatchRank, MatchSection, NAMES_MIN_APP_VERSION, NET_HTTP,
+    NetHttp, PluginManifest, PluginMetadata, PluginType, SECRETS, SUPPORTED_API_VERSIONS,
+    SettingKind, SettingManifest, ViewerSection, check_app_version, complete_manifest,
+    describe_capability, name_matches, net_http, net_http_entered, parse_manifest, secret_slots,
+    valid_slot,
 };
 pub use package::{
     COMPONENT_MEMBER, MANIFEST_MEMBER, MAX_COMPONENT_BYTES, MAX_PACKAGE_BYTES, MAX_SIGNATURE_BYTES,

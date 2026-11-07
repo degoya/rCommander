@@ -5,7 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use super::{
-    IGNORED, PluginKind, SECRETS, SIGNING_KEY_FILE, VIEWER, scaffold, slug, write_gitignore,
+    IGNORED, INVENTORY, PluginKind, SECRETS, SIGNING_KEY_FILE, VIEWER, scaffold, slug,
+    write_gitignore,
 };
 
 fn template_dir(kind: &str) -> PathBuf {
@@ -16,7 +17,11 @@ fn template_dir(kind: &str) -> PathBuf {
 type Files = &'static [(&'static str, &'static str)];
 
 /// Every template folder with its embedded files.
-const TEMPLATES: [(&str, Files); 2] = [("viewer", VIEWER), ("secrets", SECRETS)];
+const TEMPLATES: [(&str, Files); 3] = [
+    ("viewer", VIEWER),
+    ("secrets", SECRETS),
+    ("inventory", INVENTORY),
+];
 
 fn files_under(root: &Path, directory: &Path, found: &mut Vec<String>) {
     for entry in std::fs::read_dir(directory).expect("read the template folder") {
@@ -143,6 +148,11 @@ fn a_scaffold_packages_verifies_and_passes_conformance_unchanged() {
         "bridge_source",
         &rc_plugin_host::test_support::current_secrets_component(),
     );
+    passes_conformance(
+        PluginKind::Inventory,
+        "netbox_hosts",
+        &rc_plugin_host::test_support::current_inventory_component(),
+    );
 }
 
 fn passes_conformance(kind: PluginKind, name: &str, component: &[u8]) {
@@ -195,4 +205,27 @@ fn a_secrets_scaffold_keeps_no_placeholder() {
     }
     let manifest = std::fs::read_to_string(out.join("manifest.toml")).expect("manifest");
     assert!(manifest.contains("plugin_type = \"secrets\""));
+}
+
+/// The inventory's template names its token as a marker, `{{secret:api_token}}`: the only double
+/// braces a scaffold keeps (RC-100-39).
+#[test]
+fn an_inventory_scaffold_keeps_no_placeholder() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let out = temp.path().join("netbox-hosts");
+    scaffold(PluginKind::Inventory, &out, None).expect("scaffold");
+    for (path, _) in INVENTORY {
+        let text = std::fs::read_to_string(out.join(path)).expect("a scaffolded file");
+        assert!(!text.contains("{{PLUGIN_"), "{path} keeps a placeholder");
+        assert!(
+            !text.replace("{{secret:api_token}}", "").contains("{{"),
+            "{path} keeps a placeholder"
+        );
+        assert!(
+            !text.contains("REPLACE_WITH_YOUR"),
+            "{path} keeps a placeholder"
+        );
+    }
+    let manifest = std::fs::read_to_string(out.join("manifest.toml")).expect("manifest");
+    assert!(manifest.contains("plugin_type = \"inventory\""));
 }

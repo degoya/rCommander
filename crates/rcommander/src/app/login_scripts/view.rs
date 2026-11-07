@@ -211,6 +211,13 @@ impl Editor {
                         .width(120),
                 )
                 .push(Space::new().width(Length::Fill)),
+            StepKind::SendTotp => line
+                .push(
+                    label(t!("login_scripts.send_totp_note"))
+                        .color(tokens.text_secondary)
+                        .width(Length::Fill),
+                )
+                .push(enter_after(at, step.newline)),
         };
         let line = line
             .push(layout::glyph_button(

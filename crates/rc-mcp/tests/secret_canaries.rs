@@ -1,7 +1,7 @@
-//! The canaries (RC-050-03): a planted password, private key and passphrase are stored, read
-//! back by a fake connection and then looked for everywhere they could leak - every log line at
-//! every level, every MCP answer, every engine event and the database files on disk. None may
-//! turn up anywhere.
+//! The canaries (RC-050-03): a planted password, private key, passphrase and one-time code seed
+//! (RC-060-08) are stored, read back by a fake connection - a code made from the seed too - and
+//! then looked for everywhere they could leak - every log line at every level, every MCP answer,
+//! every engine event and the database files on disk. None may turn up anywhere.
 //!
 //! One test in its own binary, because it installs the process-wide log subscriber.
 
@@ -13,6 +13,7 @@ use std::{
 use rc_db::{DB_FILE, Db};
 use rc_engine::{
     Command, ConnectionId, ConnectionPatch, Engine, Outcome, SecretKind, SecretParam, SecretRef,
+    SecretSource as _,
 };
 
 use rc_mcp::{McpContext, RcMcpServer};
@@ -37,6 +38,8 @@ const KEY_FILE: &str = concat!(
     "/../rc-remote/tests/fixtures/client_key_rsapem"
 );
 const PASSPHRASE: &str = "fixture-passphrase";
+/// A one-time code seed (RC-060-08), 32 Base32 symbols.
+const TOTP_SEED: &str = "CANARYTOTPSEEDA2CANARYTOTPSEEDB3";
 /// Its fingerprint as `ssh-keygen -lf` prints it.
 const FINGERPRINT: &str = "SHA256:6KajqcW1Orb7TSswcvfa2oFhUNaLC46DsrFV+00r028";
 
@@ -51,6 +54,7 @@ fn canaries() -> Vec<String> {
         PASSWORD.to_owned(),
         MASTER.to_owned(),
         PASSPHRASE.to_owned(),
+        TOTP_SEED.to_owned(),
     ];
     canaries.extend(
         key()
@@ -91,6 +95,8 @@ fn capture_logs() -> Log {
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::TRACE)
         .with_ansi(false)
+        // No clock: a time's digits could pass for the six of a one-time code.
+        .without_time()
         .with_writer(move || writer.clone())
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("the only subscriber");
@@ -189,10 +195,16 @@ async fn no_canary_leaks_into_logs_answers_events_or_the_database_file() {
                 id: web,
                 patch: rc_engine::ConnectionPatch::default(),
             },
-            secrets: vec![rc_engine::SecretChange::Set {
-                kind: SecretKind::Password,
-                value: SecretParam::from(PASSWORD),
-            }],
+            secrets: vec![
+                rc_engine::SecretChange::Set {
+                    kind: SecretKind::Password,
+                    value: SecretParam::from(PASSWORD),
+                },
+                rc_engine::SecretChange::Set {
+                    kind: SecretKind::TotpSeed,
+                    value: SecretParam::from(TOTP_SEED),
+                },
+            ],
             login_script: None,
             favourite: None,
             credential: None,
@@ -213,6 +225,7 @@ async fn no_canary_leaks_into_logs_answers_events_or_the_database_file() {
         (SecretKind::Password, PASSWORD.to_owned()),
         (SecretKind::Key, key()),
         (SecretKind::Passphrase, PASSPHRASE.to_owned()),
+        (SecretKind::TotpSeed, TOTP_SEED.to_owned()),
     ] {
         let secret = engine
             .resolve_secret(SecretRef {
@@ -224,6 +237,15 @@ async fn no_canary_leaks_into_logs_answers_events_or_the_database_file() {
             .expect("stored");
         assert_eq!(secret.expose_secret(), expected);
     }
+
+    // A login script's `send_totp` step makes a code from the seed, as a login does.
+    let code = engine
+        .login_script_secrets(rc_engine::LoginScriptId(0), Some(web))
+        .totp_code()
+        .await
+        .expect("a code");
+    let code = code.expose_secret().to_owned();
+    assert_eq!(code.len(), 6);
 
     // Everything an agent can read while the vault is unlocked.
     let mut answers = Vec::new();
@@ -244,11 +266,16 @@ async fn no_canary_leaks_into_logs_answers_events_or_the_database_file() {
         let text = whole(answer);
         assert_clean("an MCP answer", &text);
         assert!(!text.contains("agent-offered-value"), "{text}");
+        assert!(
+            !text.contains(&code),
+            "an MCP answer carries the code: {text}"
+        );
     }
     let got = body(&answers[1]);
     assert_eq!(got["has_password"], true, "{got}");
     assert_eq!(got["has_key"], true, "{got}");
     assert_eq!(got["has_passphrase"], true, "{got}");
+    assert_eq!(got["has_totp_seed"], true, "{got}");
     assert_eq!(
         got["key"],
         json!({
@@ -280,6 +307,10 @@ async fn no_canary_leaks_into_logs_answers_events_or_the_database_file() {
     assert!(!events.is_empty());
     for event in &events {
         assert_clean("an engine event", event);
+        assert!(
+            !event.contains(&code),
+            "an engine event carries the code: {event}"
+        );
     }
 
     drop(client);
@@ -311,6 +342,8 @@ async fn no_canary_leaks_into_logs_answers_events_or_the_database_file() {
         "the log was captured: {logged}"
     );
     assert_clean("the log", &logged);
+    assert!(logged.contains("a one-time code was made"), "{logged}");
+    assert!(!logged.contains(&code), "the log carries the code");
 }
 
 /// A secret the person pasted where nothing marks it (a connection's notes) is still replaced

@@ -9,15 +9,16 @@ handbook is the wiki's page *Plugin development*
 (<https://github.com/degoya/rCommander/wiki/plugin-development>), whose last part, *The
 contract*, is generated from the WIT by `scripts/wit-reference.sh`.
 
-Each kind of the contract has a scaffold, one per `--type`. Stage 1 of the plugin system brings
-the first kind:
+Each kind of the contract has a scaffold, one per `--type`:
 
 | Type | What it does | The scaffold |
 | --- | --- | --- |
 | `viewer` | Shows a file in the Lister (F3) and Quick View as text, coloured text, Markdown, a picture, a tree or pages | CSV and TSV as a Markdown table, any other file as text |
+| `secrets` | A password manager as the source of a connection's password, key or passphrase | three plain-text requests to a local bridge on one loopback port |
+| `inventory` | The hosts of a server inventory (NetBox, Proxmox, a CMDB), kept as a folder of connections | one plain-text request to the address the person entered, the API token sent as a `{{secret:api_token}}` marker the host fills in |
 
-The packer, file system, connection, content, secret source, command and compare kinds follow
-with their stages, each with its scaffold.
+The packer, file system, connection, content, command and compare kinds follow with their
+stages, each with its scaffold.
 
 A scaffold is a small, working plugin of its kind rather than a set of signatures, with the
 promises the host makes to that kind written at the top of `src/lib.rs`. They shape the code, so

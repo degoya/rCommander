@@ -7,6 +7,7 @@
 
 mod form;
 mod import;
+mod inventory;
 mod menu;
 mod rdm_import;
 mod remote;
@@ -109,6 +110,11 @@ pub fn title(manager: &ConnectionManager) -> &'static str {
 pub fn body<'a>(manager: &'a ConnectionManager, tokens: &'static Tokens) -> Element<'a, Message> {
     let (body, actions): (Element<'a, Message>, Actions<'a>) =
         match (&manager.tc_import, &manager.import, &manager.rdm_import) {
+            // The inventories page (RC-100-39), unless the vault's prompt is asked over it.
+            (None, None, None) if manager.prompt.is_none() && manager.inventory.is_some() => {
+                let page = manager.inventory.as_ref().expect("checked in the guard");
+                (inventory::page(page, tokens), inventory::actions(page))
+            }
             (Some(dialog), _, _) => match &manager.prompt {
                 Some(prompt) => (form::vault_prompt(prompt, tokens), Actions::default()),
                 None => (tc_import::page(dialog, tokens), tc_import::actions(dialog)),

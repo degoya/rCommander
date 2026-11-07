@@ -21,6 +21,7 @@ mod files_search;
 mod flat;
 mod hostkeys;
 mod hotlist;
+mod inventory;
 mod login_scripts;
 mod multi_rename;
 mod ops;

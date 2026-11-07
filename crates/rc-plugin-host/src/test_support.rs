@@ -13,7 +13,7 @@ pub fn viewer_component() -> Vec<u8> {
 }
 
 /// The same viewer built against the current contract, for a manifest naming it - the SDK's
-/// scaffold and the bundled plugins say `api_version = "0.3.0"`.
+/// scaffold and the bundled plugins say `api_version = "0.4.0"`.
 #[must_use]
 pub fn current_viewer_component() -> Vec<u8> {
     testbed::Testbed::new()
@@ -26,6 +26,13 @@ pub fn current_viewer_component() -> Vec<u8> {
 #[must_use]
 pub fn current_secrets_component() -> Vec<u8> {
     testbed::secrets::SecretsBed::new().build()
+}
+
+/// An inventory built against the current contract that answers no host (RC-100-39) - standing
+/// in for the SDK's `inventory` scaffold.
+#[must_use]
+pub fn current_inventory_component() -> Vec<u8> {
+    testbed::inventory::InventoryBed::new().build()
 }
 
 /// A component importing `http`, which no viewer is granted.
@@ -178,6 +185,40 @@ min_app_version = "0.1.0"
 [limits]
 timeout_milliseconds = 1000
 {extra}"#,
+        api = rc_plugin_api::API_VERSION,
+    );
+    package_plugin(manifest.as_bytes(), component, &[], Some(key)).expect("a valid test package")
+}
+
+/// A package of the inventory `component` (a `testbed::inventory::InventoryBed` built) as plugin
+/// `id` named `Test inventory`, signed by `key` under `key_id`, with a 1 s time limit per call
+/// and no `http` (RC-100-39's tests).
+///
+/// # Panics
+///
+/// The packager refuses it, which a test helper may.
+#[must_use]
+pub fn inventory_package(id: &str, key_id: &str, key: &SigningKey, component: &[u8]) -> Vec<u8> {
+    let public_key = public_key_base64(key);
+    let manifest = format!(
+        r#"manifest_version = 1
+plugin_type = "inventory"
+api_version = "{api}"
+id = "{id}"
+name = "Test inventory"
+version = "1.0.0"
+key_id = "{key_id}"
+public_key = "{public_key}"
+
+[metadata]
+description = "An inventory for tests."
+author = "rCommander tests"
+license = "MIT"
+min_app_version = "0.1.0"
+
+[limits]
+timeout_milliseconds = 1000
+"#,
         api = rc_plugin_api::API_VERSION,
     );
     package_plugin(manifest.as_bytes(), component, &[], Some(key)).expect("a valid test package")

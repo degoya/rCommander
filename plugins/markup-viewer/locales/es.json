@@ -1,0 +1,7 @@
+{
+  "name": "Visor de marcado",
+  "description": "Muestra archivos reStructuredText, LaTeX y BibTeX en color, como un editor.",
+  "codes": {
+    "01a1b57c-cbd2-77a4-a5f6-fffa5d998657.setting.encoding": "Codificación"
+  }
+}

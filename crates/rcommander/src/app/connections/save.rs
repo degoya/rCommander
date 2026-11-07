@@ -3,11 +3,11 @@
 //! shared credential and the mark, all stored or none. A shared credential's form saves through
 //! `credentials.rs`.
 
-use rc_engine::{Command, ConnectionId, Outcome, SecretKind, TreeItem, VaultStateKind};
+use rc_engine::{Command, ConnectionId, Outcome, TreeItem, VaultStateKind};
 
 use super::{
     ConnJob, ConnMsg, ConnectionManager, Focus,
-    form::Field,
+    form::{Field, secret_field},
     jobs::Then,
     run,
     vault::{AfterVault, Ask, VaultPrompt},
@@ -30,11 +30,7 @@ impl ConnectionManager {
             ConnMsg::Edit(edit) => form.edit(edit),
             ConnMsg::Secret(kind, value) => {
                 form.secret(kind, value);
-                if kind == SecretKind::Passphrase {
-                    Field::Passphrase
-                } else {
-                    Field::Password
-                }
+                secret_field(kind)
             }
             ConnMsg::Kind(kind) => {
                 form.set_kind(kind);

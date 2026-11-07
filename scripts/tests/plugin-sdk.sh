@@ -39,7 +39,7 @@ TEMPLATE="$TREE/sdk/templates/viewer"
 
 run_status bash "$ROOT/scripts/check-sdk-templates.sh" "$TREE"
 expect_status "the tree's SDK is complete" 0
-expect_output "it counts the worlds" "2 world(s), 2 template(s)"
+expect_output "it counts the worlds" "3 world(s), 3 template(s)"
 
 echo "// changed" >> "$TEMPLATE/wit/rcommander.wit"
 sed -i 's/^min_app_version = ".*"$/min_app_version = "0.0.1"/' "$TEMPLATE/manifest.toml"

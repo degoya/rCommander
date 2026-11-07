@@ -22,7 +22,7 @@ use crate::{
         browse::{self, PathField},
         connections::{
             ConnMsg, ConnectionManager, Focus,
-            form::{Edit, Field, Form, theme_choices},
+            form::{Edit, Field, Form, secret_field, theme_choices, totp_hint},
         },
     },
     i18n::t,
@@ -63,7 +63,7 @@ pub(super) fn side<'a>(
             tokens,
         ));
     }
-    if form.uses_password() || form.uses_key() {
+    if form.uses_password() || form.uses_key() || form.uses_totp() {
         rows = rows.push(layout::check(
             t!("connections.reveal"),
             form.reveal,
@@ -207,6 +207,12 @@ fn field_row<'a>(
             &form.passphrase,
             form.stored.has_passphrase,
         ),
+        Field::TotpSeed => secret(
+            form,
+            SecretKind::TotpSeed,
+            &form.totp_seed,
+            form.stored.has_totp_seed,
+        ),
         Field::Credential => {
             let own = Labeled(None, t!("connections.credential_own").to_owned());
             let shared = manager
@@ -274,7 +280,10 @@ fn field_row<'a>(
         .align_y(Alignment::Center)
     ]
     .spacing(2);
-    if shown == Field::Password || shown == Field::Passphrase {
+    if shown == Field::TotpSeed {
+        column = column.push(indented(hint(totp_hint(), tokens).into()));
+    }
+    if matches!(shown, Field::Password | Field::Passphrase | Field::TotpSeed) {
         let note = if locked {
             t!("connections.secret_locked")
         } else {
@@ -330,11 +339,7 @@ fn secret<'a>(
     } else {
         t!("connections.secret_none")
     };
-    let id = if kind == SecretKind::Passphrase {
-        Field::Passphrase.id()
-    } else {
-        Field::Password.id()
-    };
+    let id = secret_field(kind).id();
     field(placeholder, typed.expose_secret())
         .id(id)
         .secure(!form.reveal)
@@ -428,6 +433,7 @@ fn field_label(shown: Field) -> &'static str {
         Field::Notes => t!("connections.field.notes"),
         Field::ThemeLight => t!("connections.field.theme_light"),
         Field::ThemeDark => t!("connections.field.theme_dark"),
+        Field::TotpSeed => t!("connections.field.totp_seed"),
     }
 }
 
@@ -436,6 +442,7 @@ fn forget_label(kind: SecretKind) -> &'static str {
         SecretKind::Password => t!("connections.forget.password"),
         SecretKind::Key => t!("connections.forget.key"),
         SecretKind::Passphrase => t!("connections.forget.passphrase"),
+        SecretKind::TotpSeed => t!("connections.forget.totp_seed"),
     }
 }
 

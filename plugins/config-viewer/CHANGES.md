@@ -1,5 +1,14 @@
 # Changes
 
+## 0.3.0
+
+Visual Studio solutions (`.sln`): the format line, comments, the blocks `Project(...)`,
+`ProjectSection(...)`, `Global` and `GlobalSection(...)` with their ends, project and section
+names, GUIDs, versions and the `key = value` lines; the tree shows the properties, then a node
+per project and section with its lines.
+
+Built against plugin contract 0.4.0.
+
 ## 0.2.0
 
 More files: `.env.local`, `.env.production` and every other `.env.*` (rCommander 0.19.0 and

@@ -11,8 +11,16 @@ use crate::{answer::error_result, redact::is_secret_name};
 /// (RC-050-12) and the login scripts'.
 const GROUP_PREFIXES: &[&str] = &["connections_", "credentials_", "login_scripts_"];
 
-/// Parts of a parameter name that make it a secret's, beside the names the mask knows.
-const SECRET_PARTS: &[&str] = &["password", "passphrase", "passwd", "secret", "private_key"];
+/// Parts of a parameter name that make it a secret's, beside the names the mask knows; `seed`
+/// for a one-time code seed (RC-060-08).
+const SECRET_PARTS: &[&str] = &[
+    "password",
+    "passphrase",
+    "passwd",
+    "secret",
+    "private_key",
+    "seed",
+];
 
 /// The refusal of a call to a tool of this group whose arguments name a secret, at any depth;
 /// `None` for any other call.

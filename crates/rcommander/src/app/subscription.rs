@@ -88,6 +88,8 @@ impl App {
         all.push(super::palette::menu_bar::subscription());
         // The self-update's start and the look of "install when idle" (RC-100-05, RC-100-07).
         all.push(super::update_ui::subscription(&self.engine));
+        // The server inventories' schedule, `inventory.refresh_minutes` (RC-100-39).
+        all.push(super::connections::inventory::subscription(&self.engine));
         // The pointer's moves only while a press on a row may become a drag (RC-080-01).
         if self.drag.tracking() {
             all.push(event::listen_with(super::drag::pointer_events));

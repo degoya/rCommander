@@ -7,9 +7,9 @@
 //! `gui_only`); a call whose arguments name a secret is refused like the connection tools'
 //! (`secret_not_accepted`). Making a connection run a script runs it on a server, so
 //! `login_scripts_assign` is an exec tool, and so is a create or update that brings steps
-//! (`Command::effective_class`, RC-080-42): each asks for a confirmation code. A `send_secret`
-//! step, the steps before it and assigning a script with one are the window's only (`gui_only`,
-//! refused by the engine).
+//! (`Command::effective_class`, RC-080-42): each asks for a confirmation code. A `send_secret` or
+//! `send_totp` step, the steps before it and assigning a script with one are the window's only
+//! (`gui_only`, refused by the engine).
 
 use rc_engine::{
     Command, Connection, ConnectionId, EngineError, LoginScriptDeletion, LoginScriptDraft,
@@ -49,6 +49,12 @@ pub(crate) enum StepArg {
     },
     /// Send Enter alone.
     SendLine,
+    /// Send the current one-time code of the connection's stored seed, and Enter after it
+    /// unless `newline` is false.
+    SendTotp {
+        #[serde(default = "enter_by_default")]
+        newline: bool,
+    },
     /// Wait `ms` milliseconds, at most 60000.
     Sleep { ms: u64 },
 }
@@ -179,6 +185,7 @@ fn steps(args: Vec<StepArg>) -> Result<Vec<Step>, EngineError> {
                     newline,
                 },
                 StepArg::SendLine => Step::SendLine,
+                StepArg::SendTotp { newline } => Step::SendTotp { newline },
                 StepArg::Sleep { ms } => Step::Sleep { ms },
             })
         })
@@ -248,7 +255,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Add a login script. Steps: {step: wait_for, pattern, timeout_ms?}, {step: send_text, text, newline?}, {step: send_secret, source: {kind: connection_password} or {kind: stored, id}, newline? (true)}, {step: send_line}, {step: sleep, ms}. Takes no secrets: a password among the arguments is refused (secret_not_accepted); the person stores a script's secrets in rCommander. With steps it is exec: the first call answers with a question and a confirmation code; ask the person, and only if they agree call again with confirmation set to the code. A script with a send_secret step is made by the person in rCommander (gui_only). Errors: gui_only, name_empty, name_taken, login_script_pattern_invalid, login_script_too_many_steps, login_script_text_too_long, login_script_timeout_invalid."
+        description = "Add a login script. Steps: {step: wait_for, pattern, timeout_ms?}, {step: send_text, text, newline?}, {step: send_secret, source: {kind: connection_password} or {kind: stored, id}, newline? (true)}, {step: send_line}, {step: send_totp, newline? (true)} (the one-time code of the connection's stored seed), {step: sleep, ms}. Takes no secrets: a password among the arguments is refused (secret_not_accepted); the person stores a script's secrets in rCommander. With steps it is exec: the first call answers with a question and a confirmation code; ask the person, and only if they agree call again with confirmation set to the code. A script with a send_secret or send_totp step is made by the person in rCommander (gui_only). Errors: gui_only, name_empty, name_taken, login_script_pattern_invalid, login_script_too_many_steps, login_script_text_too_long, login_script_timeout_invalid."
     )]
     pub(crate) async fn login_scripts_create(
         &self,

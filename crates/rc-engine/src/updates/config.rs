@@ -31,7 +31,9 @@ pub(crate) struct UpdateConfig {
 }
 
 impl UpdateConfig {
-    /// The schema's defaults, for an engine without a database: no check by itself.
+    /// The schema's defaults, for an engine without a database: no check by itself; an offer
+    /// installs at quitting (RC-100-84), which a package manager's installation turns off
+    /// ([`Self::for_kind`]).
     pub(crate) fn defaults(running: &str) -> Self {
         Self {
             check_enabled: false,
@@ -41,7 +43,7 @@ impl UpdateConfig {
             source: String::new(),
             proxy: String::new(),
             whats_new: true,
-            auto: AutoMode::Off,
+            auto: AutoMode::OnQuit,
             idle_minutes: 30,
             retention_days: 14,
         }

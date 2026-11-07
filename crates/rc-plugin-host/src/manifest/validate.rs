@@ -8,7 +8,7 @@
 use anyhow::{Context, Result, bail};
 use base64::Engine as _;
 
-use super::grants::{NET_HTTP, net_http};
+use super::grants::{NET_HTTP, SECRETS, net_http, net_http_entered, secret_slots};
 use super::names::validate_names;
 use super::sections::KNOWN_CAPABILITIES;
 use super::settings::validate_settings;
@@ -31,6 +31,8 @@ const MAX_MAGIC_OFFSET: u64 = 4096;
 const MAX_MAGIC_BYTES: usize = 32;
 /// The contracts before the secrets world (RC-100-33): a secret source never names one.
 const BEFORE_SECRETS: [&str; 2] = ["0.1.0", "0.2.0"];
+/// The contracts before the inventory world (RC-100-39): an inventory never names one.
+const BEFORE_INVENTORY: [&str; 3] = ["0.1.0", "0.2.0", "0.3.0"];
 
 pub(crate) fn validate_manifest(manifest: &PluginManifest) -> Result<()> {
     if manifest.manifest_version != MANIFEST_VERSION {
@@ -150,7 +152,37 @@ fn validate_kind(manifest: &PluginManifest) -> Result<()> {
             }
             net_http(manifest)?;
         }
+        PluginType::Inventory => validate_inventory(manifest)?,
         PluginType::Unknown(_) => unreachable!("unknown types are refused before this point"),
+    }
+    Ok(())
+}
+
+/// An inventory (RC-100-39): asked for its hosts, never offered a file; it reaches the address
+/// the person entered (`net_http = { entered = true }`) and names its token by slot (`secrets`),
+/// and a slot means nothing without the request that carries it.
+fn validate_inventory(manifest: &PluginManifest) -> Result<()> {
+    if BEFORE_INVENTORY.contains(&manifest.api_version.as_str()) {
+        bail!("an inventory needs api_version 0.4.0 or later");
+    }
+    if manifest.viewer.is_some()
+        || !manifest.matching.extensions.is_empty()
+        || !manifest.matching.names.is_empty()
+        || !manifest.matching.magic.is_empty()
+    {
+        bail!("an inventory has no [viewer] section and claims no file in [match]");
+    }
+    if let Some(name) = manifest
+        .capabilities
+        .declared
+        .keys()
+        .find(|name| name.as_str() != NET_HTTP && name.as_str() != SECRETS)
+    {
+        bail!("an inventory cannot be granted the capability `{name}`");
+    }
+    let http = net_http_entered(manifest)?;
+    if !secret_slots(manifest)?.is_empty() && !http {
+        bail!("[capabilities] secrets needs net_http = {{ entered = true }} to be sent anywhere");
     }
     Ok(())
 }

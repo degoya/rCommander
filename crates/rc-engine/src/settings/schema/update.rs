@@ -18,7 +18,8 @@ pub const UPDATE_SOURCE_KEY: &str = "update.source";
 pub const UPDATE_PROXY_KEY: &str = "update.proxy";
 /// Whether the first start after an update shows its notes once.
 pub const UPDATE_WHATS_NEW_KEY: &str = "update.whats_new_after_update";
-/// `off`, `on_quit` or `when_idle` (RC-100-07).
+/// `off`, `on_quit` or `when_idle` (RC-100-07); `on_quit` unless a person chose (owner,
+/// 2026-11-07, RC-100-84) - only behind the manifest's signature and the archive's SHA-256.
 pub const UPDATE_AUTO_KEY: &str = "update.auto_install";
 /// Minutes without input before `when_idle` restarts into the update.
 pub const UPDATE_IDLE_KEY: &str = "update.idle_minutes";
@@ -123,7 +124,7 @@ pub(super) const AUTO_INSTALL: SettingSpec = SettingSpec {
     page: SettingPage::Updates,
     kind: SettingKind::Choice {
         choices: AUTO,
-        default: "off",
+        default: "on_quit",
     },
     label: "setting.update.auto_install",
     help: "setting.update.auto_install.help",

@@ -16,6 +16,7 @@ fn prefs() -> StoredSessionPrefs {
         agent_fingerprint: Some("SHA256:abc".to_owned()),
         keepalive_secs: 15,
         idle_close_secs: 0,
+        totp_prompt: None,
     }
 }
 
@@ -33,6 +34,7 @@ async fn settings_are_stored_and_replaced() {
     let changed = StoredSessionPrefs {
         agent_fingerprint: None,
         idle_close_secs: 600,
+        totp_prompt: Some("(?i)passcode".to_owned()),
         ..prefs()
     };
     db.set_session_prefs(id, &changed).await.expect("replaced");

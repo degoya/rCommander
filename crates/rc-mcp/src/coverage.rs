@@ -28,6 +28,7 @@ mod history;
 mod hostkeys;
 mod hotlist;
 mod import;
+mod inventory;
 mod login_scripts;
 mod manager;
 mod mcp;

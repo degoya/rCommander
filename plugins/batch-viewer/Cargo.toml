@@ -2,7 +2,7 @@
 name = "rc-plugin-batch-viewer"
 description = "rCommander's bundled batch file viewer plugin: .bat and .cmd coloured, for files of any size"
 # The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 # Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").

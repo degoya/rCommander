@@ -3,10 +3,10 @@
 plugin_type = "viewer"
 # Built against `rcommander:plugin@0.2.0` (RC-100-14). The plugin declares no `[[settings]]` and
 # never calls the `settings` interface, so its component does not import it.
-api_version = "0.3.0"
+api_version = "0.4.0"
 id = "01a159b6-9d47-7a8f-aee9-f3b577860484"
 name = "Web code viewer"
-version = "0.1.1"
+version = "0.1.2"
 
 [match]
 # Not `json` (the JSON viewer), not `svg` or `xml` (the XML viewer). A `.vue` file is HTML with

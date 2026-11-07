@@ -3,10 +3,10 @@
 plugin_type = "viewer"
 # The plugin declares no `[[settings]]` and never calls the `settings` interface, so its
 # component does not import it.
-api_version = "0.3.0"
+api_version = "0.4.0"
 id = "01a1ab00-1875-76a3-b82e-11060080c3ff"
 name = "Dockerfile viewer"
-version = "0.1.0"
+version = "0.1.1"
 
 [match]
 # `app.dockerfile` and `app.containerfile` by extension.

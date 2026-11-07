@@ -33,8 +33,9 @@ macro_rules! codes {
             /// [`crate::CertificateError::ALL_CODES`], a network drive's one of
             /// [`crate::NetworkDriveError::ALL_CODES`], a plugin command's one of
             /// [`crate::PluginAdminError::ALL_CODES`], a secret source's one of
-            /// [`crate::SecretSourceError::ALL_CODES`] and a workspace's one of
-            /// [`crate::WorkspaceError::ALL_CODES`].
+            /// [`crate::SecretSourceError::ALL_CODES`], a workspace's one of
+            /// [`crate::WorkspaceError::ALL_CODES`] and an inventory's one of
+            /// [`crate::inventory::InventorySourceError::ALL_CODES`].
             pub const ALL_CODES: &[&str] = &[$($code,)*];
 
             /// The stable code.
@@ -74,6 +75,7 @@ codes! {
         EngineError::KeyPassphraseNeeded => "key_passphrase_needed",
         EngineError::KeyPassphraseWrong => "key_passphrase_wrong",
         EngineError::KeyImportOnly => "key_import_only",
+        EngineError::TotpSeedInvalid { .. } => "totp_seed_invalid",
         EngineError::KeyFileUnreadable { .. } => "key_file_unreadable",
         EngineError::KeyPathRefused { .. } => "key_path_refused",
         EngineError::SshConfigPathRefused { .. } => "ssh_config_path_refused",
@@ -168,5 +170,6 @@ codes! {
         EngineError::SecretSource(error) => error.code(),
         EngineError::Update(error) => error.code(),
         EngineError::Workspace(error) => error.code(),
+        EngineError::Inventory(error) => error.code(),
     }
 }

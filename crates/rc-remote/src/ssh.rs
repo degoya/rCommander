@@ -13,6 +13,7 @@
 
 mod agent_offer;
 mod auth;
+mod auth_prompts;
 mod config;
 mod error;
 mod exec;
@@ -25,7 +26,7 @@ use secrecy::SecretString;
 pub use config::{
     AuthKind, AuthUsed, DEFAULT_AUTH_TIMEOUT, DEFAULT_CONNECT_TIMEOUT, DEFAULT_HANDSHAKE_TIMEOUT,
     DEFAULT_KEEPALIVE, DEFAULT_MAX_AGENT_KEYS, KEEPALIVE_MAX, MAX_AGENT_KEYS, SessionOptions,
-    SshTarget, Stage, format_order, parse_order,
+    SshTarget, Stage, default_totp_prompt, format_order, parse_order,
 };
 pub use error::{
     CONNECTION_LOST, CredentialError, HostKeyRefusal, SSH_AUTH_FAILED, SSH_HOST_KEY_CHECK_FAILED,
@@ -79,6 +80,17 @@ pub trait Credentials: Send + Sync {
     ///
     /// As [`Credentials::password`].
     async fn private_key(&self) -> Result<Option<KeyMaterial>, CredentialError>;
+
+    /// The current one-time code of the connection's stored seed (RC-060-08), made when a
+    /// server's question asks for it; `None` when no seed is stored or filling codes in is
+    /// switched off - then the question is a person's. None by default.
+    ///
+    /// # Errors
+    ///
+    /// As [`Credentials::password`].
+    async fn totp_code(&self) -> Result<Option<SecretString>, CredentialError> {
+        Ok(None)
+    }
 }
 
 /// A private key's text and its passphrase, as long as the login needs them.

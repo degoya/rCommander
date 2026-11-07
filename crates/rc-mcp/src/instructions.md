@@ -132,3 +132,9 @@ and `files_dir_size` occupied space, both metadata only; `files_set_attributes` 
 and times, `files_create_link` makes shortcuts, symbolic and hard links and junctions,
 `files_set_comment` edits descript.ion comments - keys and credential files are refused with
 sensitive_path.
+
+`inventory_sources` lists the server inventories (NetBox, Proxmox, ... through an inventory
+plugin) whose hosts rCommander keeps as connections, and `inventory_refresh` syncs one source's
+folder with what its inventory lists now (with preview only the plan): a host that left is marked,
+never deleted, and the person's own fields stay. Setting a source up, its address and its token
+are the person's alone.

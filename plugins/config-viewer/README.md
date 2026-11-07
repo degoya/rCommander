@@ -16,6 +16,7 @@ The format is chosen by the file's name (`src/types.rs`, `Format::from_name`):
 | `*.properties` | Java properties |
 | `*.toml`, `Cargo.lock` | TOML |
 | `.gitignore`, `.gitattributes`, `.dockerignore` | a pattern a line |
+| `*.sln` | Visual Studio solution (RC-100-83) |
 
 A `.conf` whose first meaningful line (not blank, no `#` or `;` comment) opens a `{` block
 (`server {`), is a directive ending in `;` without an `=` (`worker_processes auto;`) or a tag
@@ -28,11 +29,15 @@ the built-in viewer.
 ## Colours
 
 - **keyword** - a section `[x]`, a TOML table `[a.b]` or array of tables `[[a]]`, a registry key
-  `[HKEY_...]`, the registry's version line, `export` in `.env`
+  `[HKEY_...]`, the registry's version line, `export` in `.env`; a solution's format line and
+  its blocks `Project`, `ProjectSection`, `Global`, `GlobalSection` and their `End...`
 - **key** - keys; in a registry export `"Name"` and `@`; in `.gitignore` the pattern
 - **string**, **number**, **literal** - values: `true false on off yes no` and TOML dates and
   times are literals; TOML strings of all four kinds, also over lines
-- **type-name** - the registry's `dword:`, `hex:`, `hex(2):`
+- **type-name** - the registry's `dword:`, `hex:`, `hex(2):`; a solution's project name and
+  section name
+- **literal** in a solution also the GUIDs `{...}` and `preSolution`, `postProject`; a version
+  `17.0.31903.59` a number
 - **comment** - `;` and `#` (`!` in properties)
 - **punctuation** - `=`, `:`, brackets, commas, a continuing `\`; **operator** - a registry `-`
   that deletes a value
@@ -49,8 +54,10 @@ Sections and tables are nodes, keys leaves labelled with their key and valued wi
 short (`...` when it goes on in the next line). Keys before the first section come first. INI and
 registry sections are one level, in the order of the file; TOML tables nest by their dots
 (`[a.b]` under `a`), an array of tables shows its elements `[0]`, `[1]`, ..., and a table named
-after one (`[a.b]` after `[[a]]`) is under its last element. `.env`, properties and the git files
-are flat. More than 1000 children are shown in ranges; at most 16384 sections or tables are kept,
+after one (`[a.b]` after `[[a]]`) is under its last element. A solution's projects and sections
+(`ProjectSection`, `GlobalSection`) are one level too, labelled with the project's or section's
+name, and the properties before the first project come first. `.env`, properties and the git
+files are flat. More than 1000 children are shown in ranges; at most 16384 sections or tables are kept,
 the rest are named in one last node.
 
 ## Encoding
@@ -79,7 +86,7 @@ plain.
   promises at the top
 - `src/types.rs` - the viewer world's records and the `source`/`sink` interfaces, mirrored one
   to one, the setting and `Format`
-- `src/lexer.rs`, `src/lexer/{ini,reg,env,toml,toml_values}.rs` - the lexer a line at a time and
+- `src/lexer.rs`, `src/lexer/{ini,reg,env,toml,toml_values,sln}.rs` - the lexer a line at a time and
   the state a line starts in
 - `src/entry.rs` - what a line is to the tree: a header, an entry, or neither
 - `src/outline.rs` - the sections and tables the open pass finds; `src/tree.rs` - the tree output

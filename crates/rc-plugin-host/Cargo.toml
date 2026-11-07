@@ -34,8 +34,9 @@ rc-plugin-api = { path = "../rc-plugin-api" }
 rc-plugin-types = { path = "../rc-plugin-types" }
 # The one list of invisible and direction characters a failure's text spells out (RC-080-43).
 rc-rename = { path = "../rc-rename" }
-# `http` of a secret source: plain HTTP to its granted loopback port (RC-100-33), no TLS needed.
-reqwest.workspace = true
+# `http` of a secret source: plain HTTP to its granted loopback port (RC-100-33); of an
+# inventory: HTTPS to the address the person entered (RC-100-39), hence rustls.
+reqwest = { workspace = true, features = ["rustls"] }
 # The value `secrets.get` answers, zeroized when dropped (RC-100-33).
 secrecy.workspace = true
 semver.workspace = true

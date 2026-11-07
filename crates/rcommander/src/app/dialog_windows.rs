@@ -43,6 +43,7 @@
 mod book;
 mod dialog_window;
 mod file_ops;
+mod front;
 mod kinds;
 mod own;
 mod question_window;
@@ -354,11 +355,13 @@ impl App {
     }
 
     /// Closes window `id` - hides it, for a dialog asked for again and again - and stores where
-    /// it was; the main window takes input again with the last modal dialog's window closing.
+    /// it was; the main window takes input again with the last modal dialog's window closing,
+    /// and the window to the front takes the keyboard it had (`front.rs`).
     fn close_dialog_window(&mut self, id: window::Id) -> Task<Message> {
         if let Some(closed) = self.close_question_first(id) {
             return closed;
         }
+        let front = self.dialog_windows.front_after(id);
         let closing = self.dialog_windows.closed(id);
         let modal = closing.as_ref().is_none_or(|(kind, _)| kind.modal())
             && !self.dialog_windows.modal_open();
@@ -380,9 +383,9 @@ impl App {
         let closed = match closing {
             Some((kind, _)) if kind.reused() && self.dialog_windows.hides => {
                 self.dialog_windows.park(kind, id);
-                platform::dialog_window::hide(id, main, modal)
+                platform::dialog_window::hide(id, main, modal, front)
             }
-            _ => platform::dialog_window::close(id, main, modal),
+            _ => platform::dialog_window::close(id, main, modal, front),
         };
         Task::batch([stored, closed])
     }

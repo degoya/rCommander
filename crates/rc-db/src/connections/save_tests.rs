@@ -64,6 +64,7 @@ async fn a_new_connection_is_saved_with_its_secrets_script_and_setting_at_once()
                 info: &info,
                 passphrase: true,
             },
+            SecretWrite::Seal(SecretKind::TotpSeed),
         ],
         login_script: Some(Some(script)),
         credential: None,
@@ -82,6 +83,7 @@ async fn a_new_connection_is_saved_with_its_secrets_script_and_setting_at_once()
     assert_eq!(saved.name, "web");
     assert_eq!(saved.login_script_id, Some(script.0));
     assert!(saved.secrets.has_password && saved.secrets.has_key && saved.secrets.has_passphrase);
+    assert!(saved.secrets.has_totp_seed);
     assert_eq!(saved.key, Some(info));
     // Each secret was sealed for the id the connection got inside the transaction.
     let row = saved.id.0.to_string();

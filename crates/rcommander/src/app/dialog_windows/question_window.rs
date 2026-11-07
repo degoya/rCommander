@@ -86,8 +86,10 @@ impl App {
 
     /// Closes the question's window `id` and stores where it was. The window it locked takes
     /// input again first, so Windows gives it the focus: a dialog's window at once, the main
-    /// window with the last modal window closing.
+    /// window with the last modal window closing; then the window to the front takes the
+    /// keyboard on every system (`front.rs`).
     fn close_question_window(&mut self, id: window::Id) -> Task<Message> {
+        let front = self.dialog_windows.front_after(id);
         let owner = self
             .dialog_windows
             .question_owner
@@ -100,7 +102,7 @@ impl App {
             _ => main.filter(|_| !self.dialog_windows.modal_open()),
         };
         let stored = self.store_place(closing);
-        let closed = platform::dialog_window::close(id, released, released.is_some());
+        let closed = platform::dialog_window::close(id, released, released.is_some(), front);
         Task::batch([stored, closed])
     }
 

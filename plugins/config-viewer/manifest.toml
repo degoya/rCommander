@@ -3,10 +3,10 @@
 # packages. A failure code and a setting's label start with the plugin's id (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.3.0"
+api_version = "0.4.0"
 id = "01a159c1-6b39-7240-9bbb-81ecaf343ed1"
 name = "Config viewer"
-version = "0.2.0"
+version = "0.3.0"
 
 [match]
 # rCommander takes what follows the last dot of a name as its extension, so `desktop.ini` matches
@@ -14,11 +14,12 @@ version = "0.2.0"
 # `probe` declines every other `.lock` file. The format is chosen by the name (src/types.rs,
 # `Format::from_name`): `.ini`, `.inf`, `.cfg`, `.conf`, `.editorconfig`, `.gitconfig`,
 # `.gitmodules`, `.npmrc` and the systemd units (`.service`, `.timer`, `.socket`, `.mount`,
-# `.path`, `.target`) are read as INI, `.dockerignore` as `.gitignore`.
+# `.path`, `.target`) are read as INI, `.dockerignore` as `.gitignore`, `.sln` as a Visual Studio
+# solution (RC-100-83).
 extensions = [
     "ini", "inf", "cfg", "conf", "reg", "env", "properties", "editorconfig", "gitconfig",
     "gitattributes", "gitignore", "toml", "lock", "service", "timer", "socket", "mount", "path",
-    "target", "gitmodules", "npmrc", "dockerignore",
+    "target", "gitmodules", "npmrc", "dockerignore", "sln",
 ]
 # `.env.local`, `.env.production` end in an extension nobody claims (RC-100-80): by name, after
 # every extension, so `.env.json` stays a JSON file.
@@ -36,7 +37,7 @@ outputs = ["highlighted", "tree"]
 [capabilities]
 
 [metadata]
-description = "Shows INI, .reg, .env, properties, TOML and systemd unit files coloured, or their sections and keys as a tree."
+description = "Shows INI, .reg, .env, properties, TOML, systemd unit and Visual Studio solution files coloured, or their sections and keys as a tree."
 # `[match] names` arrived with 0.19.0; an older rCommander refuses the field.
 min_app_version = "0.19.0"
 

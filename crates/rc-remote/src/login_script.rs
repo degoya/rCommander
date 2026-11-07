@@ -2,7 +2,8 @@
 //! password it asks for.
 //!
 //! A script is linear - no conditions, loops or variables: wait for a prompt, send text, send a
-//! stored secret, send Enter, sleep. The model here is what `rcommander.db` stores as JSON
+//! stored secret, send the one-time code of the connection's seed (RC-060-08), send Enter,
+//! sleep. The model here is what `rcommander.db` stores as JSON
 //! ([`steps_to_json`], with [`SCHEMA_VERSION`]); a secret is only ever a reference to a vault
 //! field ([`SecretRef`]), never a value. [`run_script`] plays a script against any async byte
 //! stream ([`ScriptStream`]), so it is tested without a server and the SSH PTY channel of
@@ -96,6 +97,13 @@ pub enum Step {
     },
     /// Sends Enter alone.
     SendLine,
+    /// Sends the current one-time code of the connection's TOTP seed (RC-060-08), made when the
+    /// step runs, and Enter after it when `newline` (the default): for a server that asks for the
+    /// code only after the login.
+    SendTotp {
+        #[serde(default = "enter_by_default")]
+        newline: bool,
+    },
     /// Waits `ms` milliseconds.
     Sleep { ms: u64 },
 }
@@ -125,7 +133,8 @@ pub enum ScriptInvalid {
     #[error("step {step:?}: a timeout or sleep lies between 1 and {max} ms")]
     TimeoutInvalid { step: Option<usize>, max: u64 },
     #[error(
-        "step {step}: a secret is sent only right after a wait_for step, to the prompt it waited for"
+        "step {step}: a secret or a code is sent only right after a wait_for step, to the \
+         prompt it waited for"
     )]
     SecretWithoutPrompt { step: usize },
     #[error("step {step:?}: {error}")]
@@ -167,9 +176,9 @@ impl ScriptInvalid {
 }
 
 impl LoginScript {
-    /// Checks every bound; a pattern was checked when it was made. A `send_secret` step comes
-    /// right after a `wait_for` step: a secret typed blindly lands in whatever has the input - a
-    /// shell's command line, its history, the screen (RC-080-12).
+    /// Checks every bound; a pattern was checked when it was made. A `send_secret` or `send_totp`
+    /// step comes right after a `wait_for` step: a secret typed blindly lands in whatever has the
+    /// input - a shell's command line, its history, the screen (RC-080-12).
     ///
     /// # Errors
     ///
@@ -196,7 +205,7 @@ impl LoginScript {
                     }
                 }
                 Step::Sleep { ms } => timeout(Some(index), *ms, MAX_SLEEP_MS)?,
-                Step::SendSecret { .. } => {
+                Step::SendSecret { .. } | Step::SendTotp { .. } => {
                     let prompted = index
                         .checked_sub(1)
                         .and_then(|before| self.steps.get(before))
@@ -209,6 +218,14 @@ impl LoginScript {
             }
         }
         Ok(())
+    }
+
+    /// Whether a step sends the connection's one-time code.
+    #[must_use]
+    pub fn sends_totp(&self) -> bool {
+        self.steps
+            .iter()
+            .any(|step| matches!(step, Step::SendTotp { .. }))
     }
 
     /// The secrets the steps send, each once, in step order.

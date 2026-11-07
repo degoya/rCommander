@@ -1,0 +1,5 @@
+{
+  "name": "{{PLUGIN_NAME}}",
+  "description": "Keeps a folder of connections in step with a server inventory.",
+  "codes": {}
+}

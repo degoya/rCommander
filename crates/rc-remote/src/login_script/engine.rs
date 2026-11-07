@@ -8,7 +8,9 @@
 //! matches the same prompt again.
 //!
 //! Every secret the steps send is resolved before the first byte is written: a locked vault
-//! answers [`ScriptError::VaultLocked`] while nothing has been sent. A secret's value never
+//! answers [`ScriptError::VaultLocked`] while nothing has been sent. A `send_totp` step's code is
+//! asked for once up front the same way, to know it can be had, and made again when the step
+//! runs, so it is the code of that moment (RC-060-08). A secret's value never
 //! reaches a log line, an event or an error; [`ScriptEvent::SecretSent`] marks only *when* one
 //! was sent, so the caller can mask the echo. The run ends at the step's or the script's timeout,
 //! on cancellation, or when the stream closes, each with the step it was at.
@@ -63,6 +65,12 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ScriptStream for T {
 pub trait SecretSource: Sync {
     /// The value `source` refers to.
     async fn secret(&self, source: SecretRef) -> Result<SecretString, SecretError>;
+
+    /// The current one-time code of the connection's TOTP seed (RC-060-08); `Missing` by
+    /// default and without a seed.
+    async fn totp_code(&self) -> Result<SecretString, SecretError> {
+        Err(SecretError::Missing)
+    }
 }
 
 /// Why a secret cannot be had.
@@ -168,7 +176,7 @@ pub async fn run_script_observed(
     observe: &mut (dyn FnMut(ScriptEvent) + Send),
 ) -> Result<ScriptOutcome, ScriptError> {
     script.validate()?;
-    let resolved = resolve(script, secrets).await?;
+    let (resolved, first_code) = resolve(script, secrets).await?;
     let deadline = Instant::now() + Duration::from_millis(script.total_timeout_ms);
     let mut output = Output::default();
     for (step, action) in script.steps.iter().enumerate() {
@@ -205,6 +213,21 @@ pub async fn run_script_observed(
                     .iter()
                     .find(|(kept, _)| kept == source)
                     .map(|(_, value)| value.expose_secret().as_bytes())
+                    .unwrap_or_default();
+                let progress = send(stream, value, *newline, deadline, cancel).await;
+                if progress == Progress::Done {
+                    observe(ScriptEvent::SecretSent { step });
+                }
+                progress
+            }
+            Step::SendTotp { newline } => {
+                // Made now, so it is the code of this moment; the one had before the run stands in
+                // when the vault locked meanwhile.
+                let fresh = secrets.totp_code().await.ok();
+                let value = fresh
+                    .as_ref()
+                    .or(first_code.as_ref())
+                    .map(|code| code.expose_secret().as_bytes())
                     .unwrap_or_default();
                 let progress = send(stream, value, *newline, deadline, cancel).await;
                 if progress == Progress::Done {
@@ -277,11 +300,12 @@ impl Output {
     }
 }
 
-/// Every secret the steps send, read once before the run.
+/// Every secret the steps send, read once before the run, and the one-time code when a step
+/// sends one.
 async fn resolve(
     script: &LoginScript,
     secrets: &dyn SecretSource,
-) -> Result<Vec<(SecretRef, SecretString)>, ScriptError> {
+) -> Result<(Vec<(SecretRef, SecretString)>, Option<SecretString>), ScriptError> {
     let mut resolved = Vec::new();
     for source in script.secret_refs() {
         match secrets.secret(source).await {
@@ -300,7 +324,23 @@ async fn resolve(
             Err(SecretError::Failed { code }) => return Err(ScriptError::SecretFailed { code }),
         }
     }
-    Ok(resolved)
+    let mut code = None;
+    if script.sends_totp() {
+        match secrets.totp_code().await {
+            Ok(value) => code = Some(value),
+            Err(SecretError::Locked) => return Err(ScriptError::VaultLocked),
+            Err(SecretError::Missing) => {
+                let step = script
+                    .steps
+                    .iter()
+                    .position(|step| matches!(step, Step::SendTotp { .. }))
+                    .unwrap_or_default();
+                return Err(ScriptError::SecretMissing { step });
+            }
+            Err(SecretError::Failed { code }) => return Err(ScriptError::SecretFailed { code }),
+        }
+    }
+    Ok((resolved, code))
 }
 
 async fn wait_for(
@@ -382,6 +422,7 @@ fn name(step: &Step) -> &'static str {
         Step::WaitFor { .. } => "wait_for",
         Step::SendText { .. } => "send_text",
         Step::SendSecret { .. } => "send_secret",
+        Step::SendTotp { .. } => "send_totp",
         Step::SendLine => "send_line",
         Step::Sleep { .. } => "sleep",
     }
@@ -390,3 +431,7 @@ fn name(step: &Step) -> &'static str {
 #[cfg(test)]
 #[path = "engine_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "engine_totp_tests.rs"]
+mod totp_tests;

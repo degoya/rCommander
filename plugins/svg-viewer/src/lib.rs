@@ -15,10 +15,13 @@
 //!   parsed tree, a DOCTYPE is blanked so no entity expands ([`doctype`]), the parse stops at
 //!   [`budget::MAX_PARSED_NODES`] nodes, and one whose `<use>`
 //!   references would expand beyond [`budget::MAX_EXPANDED_ELEMENTS`] elements before usvg
-//!   builds it - markers counted per vertex and patterns per painted shape - and the SVGs
-//!   embedded as `data:` pictures take their share of the same budget each time usvg reads one.
-//!   The tiles resvg draws patterns into are at most [`pixels::MAX_PATTERN_PIXELS`] together. What is left ends at the host's time, fuel and memory limits,
-//!   as a notice.
+//!   builds it - markers counted per vertex and patterns per painted shape - or whose arcs kurbo
+//!   would cut into more than [`budget::MAX_ARC_CURVES`] curves, or one arc into more than
+//!   [`budget::MAX_CURVES_PER_ARC`]; the SVGs embedded as `data:` pictures take their share of
+//!   the same budgets each time usvg reads one. The tiles resvg draws patterns into are at most
+//!   [`pixels::MAX_PATTERN_PIXELS`] together, its intermediate canvases (groups with an opacity,
+//!   a filter, a mask or a clip path) at most [`pixels::MAX_LAYER_PIXELS`]. What is left ends at
+//!   the host's time, fuel and memory limits, as a notice.
 //! - **The source is the XML viewer's.** [`Viewer::text`] and [`Viewer::tokens`] are those of
 //!   `rc-plugin-xml-viewer` (RC-100-15) over the file's bytes, inflated for `.svgz`: the same
 //!   token classes, the text UTF-8 through `rc-plugin-text` with each invalid part as U+FFFD and
@@ -34,6 +37,7 @@ pub mod doctype;
 mod expand;
 #[cfg(target_arch = "wasm32")]
 mod guest;
+mod layers;
 pub mod load;
 pub mod pixels;
 mod refs;

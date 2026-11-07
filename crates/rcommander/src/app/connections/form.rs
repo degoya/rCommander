@@ -13,8 +13,10 @@
 
 mod plan;
 mod themes;
+mod totp;
 
 pub use themes::theme_choices;
+pub use totp::{secret_field, totp_hint};
 
 use rc_engine::{
     AuthMethod, Connection, ConnectionId, ConnectionKind, Credential, CredentialId, DefaultView,
@@ -47,6 +49,8 @@ pub enum Field {
     ThemeLight,
     ThemeDark,
     Favourite,
+    /// The seed of the one-time codes the SSH login answers with (RC-060-08).
+    TotpSeed,
 }
 
 impl Field {
@@ -70,11 +74,13 @@ impl Field {
             Self::Forget(SecretKind::Password) => "rcommander.connections.forget_password",
             Self::Forget(SecretKind::Key) => "rcommander.connections.forget_key",
             Self::Forget(SecretKind::Passphrase) => "rcommander.connections.forget_passphrase",
+            Self::Forget(SecretKind::TotpSeed) => "rcommander.connections.forget_totp_seed",
             Self::Script => "rcommander.connections.script",
             Self::View => "rcommander.connections.view",
             Self::ThemeLight => "rcommander.connections.theme_light",
             Self::ThemeDark => "rcommander.connections.theme_dark",
             Self::Favourite => "rcommander.connections.favourite",
+            Self::TotpSeed => "rcommander.connections.totp_seed",
         }
     }
 
@@ -93,6 +99,7 @@ impl Field {
             "secret_empty" => Self::Password,
             "key_format_unknown" | "key_file_unreadable" | "key_path_refused" => Self::KeyPath,
             "key_passphrase_needed" | "key_passphrase_wrong" => Self::Passphrase,
+            "totp_seed_invalid" => Self::TotpSeed,
             _ => return None,
         })
     }
@@ -140,6 +147,8 @@ pub struct Form {
     /// Newly typed; never a stored value.
     pub password: SecretString,
     pub passphrase: SecretString,
+    /// The one-time code seed, newly typed (RC-060-08).
+    pub totp_seed: SecretString,
     /// Typed secrets shown in clear (only while the vault is not locked).
     pub reveal: bool,
     pub forget: Vec<SecretKind>,
@@ -184,6 +193,7 @@ impl Form {
             import_key: false,
             password: SecretString::from(""),
             passphrase: SecretString::from(""),
+            totp_seed: SecretString::from(""),
             reveal: false,
             forget: Vec::new(),
             script: None,
@@ -292,9 +302,12 @@ impl Form {
         field
     }
 
-    /// A typed secret; the password field for any kind but the passphrase.
+    /// A typed secret; the password field for any kind but the passphrase and the seed.
     pub fn secret(&mut self, kind: SecretKind, value: SecretString) {
-        if kind == SecretKind::Passphrase {
+        if kind == SecretKind::TotpSeed {
+            self.totp_seed = value;
+            self.touched(Field::TotpSeed);
+        } else if kind == SecretKind::Passphrase {
             self.passphrase = value;
             self.touched(Field::Passphrase);
         } else {
@@ -401,6 +414,7 @@ impl Form {
         if self.uses_key() {
             fields.extend([Field::KeyPath, Field::ImportKey, Field::Passphrase]);
         }
+        fields.extend(self.totp_fields());
         if self.shared.is_none() {
             fields.extend(self.forget_fields());
         }
@@ -454,6 +468,7 @@ impl Form {
     pub fn saved(&mut self) {
         self.password = SecretString::from("");
         self.passphrase = SecretString::from("");
+        self.totp_seed = SecretString::from("");
         self.import_key = false;
         self.forget.clear();
         self.dirty = false;

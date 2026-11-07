@@ -56,6 +56,11 @@ pub(crate) struct PrefsParams {
     /// Seconds without a channel before the session closes, 0 (never) to 86400.
     #[serde(default)]
     pub idle_close_secs: Option<u32>,
+    /// The regular expression a keyboard-interactive question is matched with to be answered
+    /// with the one-time code of the connection's stored seed; an empty string restores the
+    /// default.
+    #[serde(default)]
+    pub totp_prompt: Option<String>,
 }
 
 /// An outcome as these tools answer it: without the engine's `kind` tag.
@@ -135,7 +140,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "A connection's SSH session settings: auth_order (agent, key, password in the order tried), agent_fingerprint (the one agent key offered, or null for every key), keepalive_secs (30 by default) and idle_close_secs (600 by default, 0 never). Errors: connection_not_found."
+        description = "A connection's SSH session settings: auth_order (agent, key, password in the order tried), agent_fingerprint (the one agent key offered, or null for every key), keepalive_secs (30 by default), idle_close_secs (600 by default, 0 never) and totp_prompt (the pattern of the server's question answered with the one-time code of the connection's stored seed; null for the default, (?i)verification code|one-time|otp|token). The seed itself is never answered. Errors: connection_not_found."
     )]
     pub(crate) async fn connections_session_prefs(
         &self,
@@ -148,7 +153,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Change a connection's SSH session settings; omitted fields stay. Used by the connection's next session. Answers the settings. Errors: connection_not_found, session_prefs_invalid (an empty or repeated auth_order, keepalive_secs outside 1 to 3600, idle_close_secs above 86400, an agent_fingerprint that is not SHA256:...)."
+        description = "Change a connection's SSH session settings; omitted fields stay. Used by the connection's next session. Answers the settings. Errors: connection_not_found, session_prefs_invalid (an empty or repeated auth_order, keepalive_secs outside 1 to 3600, idle_close_secs above 86400, an agent_fingerprint that is not SHA256:..., a totp_prompt that is no regular expression of at most 512 characters)."
     )]
     pub(crate) async fn connections_set_session_prefs(
         &self,
@@ -170,6 +175,7 @@ impl RcMcpServer {
                 .map_or(current.agent_fingerprint, Some),
             keepalive_secs: params.keepalive_secs.unwrap_or(current.keepalive_secs),
             idle_close_secs: params.idle_close_secs.unwrap_or(current.idle_close_secs),
+            totp_prompt: params.totp_prompt.map_or(current.totp_prompt, Some),
         };
         self.run_session(Command::SetSessionPrefs { id, prefs })
             .await

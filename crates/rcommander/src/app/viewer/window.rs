@@ -2,8 +2,10 @@
 //! `appearance.dialog_windows` is on (`dialog_windows.rs`, kind `Lister`). As Total Commander's
 //! Lister the window is modeless and not owned by the main window: the panels work beside it and
 //! it can lie behind the main window. It takes the keys while it has the keyboard; Escape, F10
-//! and its X close that Lister only. Every Lister opens where the last one was
-//! (`window.dialog.lister`). Quick View stays in its panel.
+//! and its X close that Lister only; the keyboard it had goes back to the window it was opened
+//! from, else to the main window, never to another program (`dialog_windows/front.rs`,
+//! RC-080-73). Every Lister opens where the last one was (`window.dialog.lister`). Quick View
+//! stays in its panel.
 
 use crate::{
     app::{App, Effect, Message, dialog_windows::DialogWindow},

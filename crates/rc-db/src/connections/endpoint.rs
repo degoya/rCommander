@@ -63,7 +63,7 @@ pub(crate) async fn guard_endpoint(
 async fn holds_secrets(connection: &mut SqliteConnection, id: ConnectionId) -> TreeResult<bool> {
     let holds: Option<bool> = sqlx::query_scalar(
         "SELECT password_enc IS NOT NULL OR key_enc IS NOT NULL OR passphrase_enc IS NOT NULL \
-         OR credential_id IS NOT NULL \
+         OR totp_seed_enc IS NOT NULL OR credential_id IS NOT NULL \
          OR EXISTS (SELECT 1 FROM secret_sources WHERE connection_id = c.id) \
          OR EXISTS (SELECT 1 FROM login_scripts AS s WHERE s.id = c.login_script_id \
              AND (json_type(s.steps) IS NOT 'array' \

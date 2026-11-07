@@ -277,6 +277,7 @@ async fn settings_are_read_back_and_checked() {
         keepalive_secs: 10,
         idle_close_secs: 0,
         agent_fingerprint: None,
+        totp_prompt: Some("(?i)passcode".to_owned()),
     };
     let harness = harness(Some(prefs.clone()), true).await;
     let read = harness

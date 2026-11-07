@@ -1,5 +1,9 @@
 # Changes
 
+## 0.1.1
+
+Built against plugin contract 0.4.0; nothing else changed.
+
 ## 0.1.0
 
 The first release: SQL scripts (`.sql`, `.ddl`, `.dml`, `.psql`, `.pgsql`, `.mysql`) coloured

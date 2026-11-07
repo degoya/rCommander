@@ -1,9 +1,10 @@
-//! The count behind [`crate::budget::expanded_elements`]: every element as often as usvg 0.49
-//! builds it. A `<use>` copies what it references; a shape draws the content of its markers
-//! once at the start, once at the end and once at each vertex between (`src/parser/marker.rs:
-//! 41-72, 216-262`); a painted shape, and each glyph run of a text, takes a copy of the content
-//! of each pattern it is painted with (`Paint::to_user_coordinates`, `src/parser/paint_server.rs:
-//! 964-1010`). Markers and patterns inside those, and their `<use>`, count the same way.
+//! The count behind [`crate::budget::expanded`]: every element as often as usvg 0.49 builds
+//! it, and with it the cubic curves of its arcs (`segments.rs`, RC-100-78). A `<use>` copies
+//! what it references; a shape draws the content of its markers once at the start, once at the
+//! end and once at each vertex between (`src/parser/marker.rs:41-72, 216-262`); a painted shape,
+//! and each glyph run of a text, takes a copy of the content of each pattern it is painted with
+//! (`Paint::to_user_coordinates`, `src/parser/paint_server.rs:964-1010`). Markers and patterns
+//! inside those, and their `<use>`, count the same way.
 //!
 //! Which markers and patterns apply is [`crate::refs`]' over-count, inherited as usvg inherits
 //! (`find_attribute`, `src/parser/svgtree/mod.rs:369-391`), through a `<use>` from where the
@@ -12,14 +13,18 @@
 //! `src/parser/svgtree/parse.rs:720-774`); both count nothing. Any other ring of markers and
 //! patterns is refused: usvg would recurse into it without end, or draw it to a depth this count
 //! cannot follow.
+//!
+//! A `textPath` makes usvg convert the shape it names once more (`resolve_text_flow`,
+//! `src/parser/text.rs:365-367`): it counts that shape's curves, the largest of every element of
+//! the id, since usvg links the last one (`src/parser/svgtree/parse.rs:116-123`).
 
 use std::collections::HashMap;
 
 use roxmltree::{Document, Node, NodeId};
 
-use crate::budget::iri;
+use crate::budget::{Cost, iri};
 use crate::refs::{Own, Property, Styles, own};
-use crate::segments::segments;
+use crate::segments::{Shape, shape};
 
 const XLINK: &str = "http://www.w3.org/1999/xlink";
 
@@ -52,18 +57,31 @@ enum Task {
 enum State {
     /// Entered and not left. A `<use>` back to it is a cycle, which usvg skips: it counts 0.
     Open,
-    Done(u64),
+    Done(Cost),
 }
+
+/// What a task is made of: its own cost, and each part with how often it is drawn there.
+type Parts = (Cost, Vec<(u64, Task)>);
+
+/// One element; a marker or a pattern task counts one as well.
+const ONE: Cost = Cost {
+    elements: 1,
+    curves: 0,
+};
 
 /// A count beyond the cap: the document is too complex.
 struct TooComplex;
 
-/// The elements of `doc` as usvg builds them, up to `limit + 1`: a result above `limit` means
-/// "too many". Iterative, so a deep document cannot overflow the stack here; each element is
-/// visited once per context it is drawn in, and the visits are capped as well.
+/// The elements of `doc` and the curves of their arcs as usvg builds them, each up to its
+/// `limit + 1`: a result that exceeds `limit` means "too many". Iterative, so a deep document
+/// cannot overflow the stack here; each element is visited once per context it is drawn in, and
+/// the visits are capped as well.
 #[must_use]
-pub fn count(doc: &Document, limit: u64) -> u64 {
-    let cap = limit.saturating_add(1);
+pub fn count(doc: &Document, limit: Cost) -> Cost {
+    let cap = Cost {
+        elements: limit.elements.saturating_add(1),
+        curves: limit.curves.saturating_add(1),
+    };
     let mut count = Count::new(doc, cap);
     count.run().unwrap_or(cap)
 }
@@ -77,26 +95,33 @@ struct Count<'a, 'input> {
     /// (`src/parser/svgtree/parse.rs:116-123`), counting all is never less.
     markers: HashMap<&'a str, Vec<NodeId>>,
     patterns: HashMap<&'a str, Vec<NodeId>>,
+    /// The shapes a `textPath` may name, every element of an id.
+    shapes_by_id: HashMap<&'a str, Vec<NodeId>>,
+    /// What each shape makes, read once however often it is visited.
+    shapes: HashMap<NodeId, Shape>,
     contexts: Vec<Context>,
     interned: HashMap<Context, usize>,
     states: HashMap<Task, State>,
-    pending: HashMap<Task, Vec<(u64, Task)>>,
-    cap: u64,
+    pending: HashMap<Task, Parts>,
+    cap: Cost,
     work: u64,
 }
 
 impl<'a, 'input> Count<'a, 'input> {
-    fn new(doc: &'a Document<'input>, cap: u64) -> Self {
+    fn new(doc: &'a Document<'input>, cap: Cost) -> Self {
         let mut ids = HashMap::new();
         let mut markers: HashMap<&str, Vec<NodeId>> = HashMap::new();
         let mut patterns: HashMap<&str, Vec<NodeId>> = HashMap::new();
+        let mut shapes_by_id: HashMap<&str, Vec<NodeId>> = HashMap::new();
         for node in doc.descendants() {
             if let Some(id) = node.attribute("id") {
                 ids.entry(id).or_insert(node);
             }
-            let by_id = match node.tag_name().name() {
+            let name = node.tag_name().name();
+            let by_id = match name {
                 "marker" => &mut markers,
                 "pattern" => &mut patterns,
+                _ if SHAPES.contains(&name) => &mut shapes_by_id,
                 _ => continue,
             };
             for attribute in node
@@ -113,6 +138,8 @@ impl<'a, 'input> Count<'a, 'input> {
             ids,
             markers,
             patterns,
+            shapes_by_id,
+            shapes: HashMap::new(),
             contexts: vec![empty.clone()],
             interned: HashMap::from([(empty, 0)]),
             states: HashMap::new(),
@@ -122,7 +149,7 @@ impl<'a, 'input> Count<'a, 'input> {
         }
     }
 
-    fn run(&mut self) -> Result<u64, TooComplex> {
+    fn run(&mut self) -> Result<Cost, TooComplex> {
         let root = Task::Element {
             node: self.doc.root_element().id(),
             context: 0,
@@ -131,18 +158,20 @@ impl<'a, 'input> Count<'a, 'input> {
         let mut stack = vec![(root, false)];
         while let Some((task, leaving)) = stack.pop() {
             if leaving {
-                let dependencies = self.pending.remove(&task).unwrap_or_default();
-                let total = dependencies
-                    .iter()
-                    .fold(1u64, |sum, (times, dependency)| {
-                        let each = match self.states.get(dependency) {
-                            Some(State::Done(count)) => *count,
-                            _ => 0,
-                        };
-                        sum.saturating_add(times.saturating_mul(each))
-                    })
-                    .min(self.cap);
-                if total >= self.cap {
+                let (own, dependencies) = self.pending.remove(&task).unwrap_or_default();
+                let total = dependencies.iter().fold(own, |sum, (times, dependency)| {
+                    let each = match self.states.get(dependency) {
+                        Some(State::Done(count)) => *count,
+                        _ => Cost::default(),
+                    };
+                    Cost {
+                        elements: sum
+                            .elements
+                            .saturating_add(times.saturating_mul(each.elements)),
+                        curves: sum.curves.saturating_add(times.saturating_mul(each.curves)),
+                    }
+                });
+                if total.elements >= self.cap.elements || total.curves >= self.cap.curves {
                     // Everything counted here is reached from the root, which counts as much.
                     return Err(TooComplex);
                 }
@@ -154,11 +183,11 @@ impl<'a, 'input> Count<'a, 'input> {
             }
             // Each visit adds at least one to the count it is reached from.
             self.work += 1;
-            if self.work > self.cap.saturating_mul(4) {
+            if self.work > self.cap.elements.saturating_mul(4) {
                 return Err(TooComplex);
             }
             self.states.insert(task, State::Open);
-            let dependencies = self.dependencies(task)?;
+            let (own, dependencies) = self.dependencies(task)?;
             stack.push((task, true));
             for &(_, dependency) in &dependencies {
                 match self.states.get(&dependency) {
@@ -169,11 +198,11 @@ impl<'a, 'input> Count<'a, 'input> {
                     Some(_) => {}
                 }
             }
-            self.pending.insert(task, dependencies);
+            self.pending.insert(task, (own, dependencies));
         }
         match self.states.get(&root) {
             Some(State::Done(count)) => Ok(*count),
-            _ => Ok(0),
+            _ => Ok(Cost::default()),
         }
     }
 
@@ -181,8 +210,8 @@ impl<'a, 'input> Count<'a, 'input> {
         self.doc.get_node(id)
     }
 
-    /// What `task` is made of, each with how often it is drawn there.
-    fn dependencies(&mut self, task: Task) -> Result<Vec<(u64, Task)>, TooComplex> {
+    /// What `task` is made of: its own cost, and each part with how often it is drawn there.
+    fn dependencies(&mut self, task: Task) -> Result<Parts, TooComplex> {
         match task {
             Task::Element {
                 node,
@@ -190,14 +219,16 @@ impl<'a, 'input> Count<'a, 'input> {
                 inside,
             } => match self.node(node) {
                 Some(node) => self.element(node, context, inside),
-                None => Ok(Vec::new()),
+                None => Ok((ONE, Vec::new())),
             },
-            Task::Marker(marker) => Ok(self.content(marker, marker)),
-            Task::Pattern(pattern) => Ok(self
-                .owners(pattern)
-                .into_iter()
-                .flat_map(|owner| self.content(owner, owner))
-                .collect()),
+            Task::Marker(marker) => Ok((ONE, self.content(marker, marker))),
+            Task::Pattern(pattern) => Ok((
+                ONE,
+                self.owners(pattern)
+                    .into_iter()
+                    .flat_map(|owner| self.content(owner, owner))
+                    .collect(),
+            )),
         }
     }
 
@@ -206,7 +237,7 @@ impl<'a, 'input> Count<'a, 'input> {
         node: Node<'a, 'input>,
         context: usize,
         inside: Option<NodeId>,
-    ) -> Result<Vec<(u64, Task)>, TooComplex> {
+    ) -> Result<Parts, TooComplex> {
         let own = own(node, &self.styles);
         let context = self.apply(context, &own);
         let element = |node: Node| Task::Element {
@@ -223,8 +254,11 @@ impl<'a, 'input> Count<'a, 'input> {
             dependencies.push((1, element(target)));
         }
         let name = node.tag_name().name();
+        let mut curves = 0;
         let painted = if SHAPES.contains(&name) {
-            let vertices = segments(node);
+            let shape = self.shape(node);
+            curves = shape.curves;
+            let vertices = shape.segments;
             for (property, times) in [
                 (Property::MarkerStart, 1),
                 (Property::MarkerMid, vertices),
@@ -239,6 +273,9 @@ impl<'a, 'input> Count<'a, 'input> {
             }
             1
         } else if TEXTS.contains(&name) {
+            if name == "textPath" {
+                curves = self.followed_curves(node);
+            }
             // A run of glyphs and up to three decoration lines per character, at most.
             let characters: usize = node
                 .children()
@@ -249,6 +286,10 @@ impl<'a, 'input> Count<'a, 'input> {
         } else {
             0
         };
+        if curves >= self.cap.curves {
+            // One arc beyond its own limit, or more curves than the whole budget.
+            return Err(TooComplex);
+        }
         if painted > 0 {
             for property in [Property::Fill, Property::Stroke] {
                 for &pattern in &self.contexts[context].0[property.index()] {
@@ -264,7 +305,38 @@ impl<'a, 'input> Count<'a, 'input> {
                 }
             }
         }
-        Ok(dependencies)
+        Ok((
+            Cost {
+                elements: 1,
+                curves,
+            },
+            dependencies,
+        ))
+    }
+
+    /// What the shape `node` makes, read once.
+    fn shape(&mut self, node: Node) -> Shape {
+        *self.shapes.entry(node.id()).or_insert_with(|| shape(node))
+    }
+
+    /// The curves of the shape a `textPath` follows: of every element its `href` or `xlink:href`
+    /// may name, the most.
+    fn followed_curves(&mut self, node: Node<'a, 'input>) -> u64 {
+        let targets: Vec<NodeId> = node
+            .attributes()
+            .filter(|attribute| {
+                attribute.name() == "href" && matches!(attribute.namespace(), None | Some(XLINK))
+            })
+            .filter_map(|attribute| iri(attribute.value()))
+            .flat_map(|id| self.shapes_by_id.get(id).into_iter().flatten().copied())
+            .collect();
+        let mut most = 0;
+        for id in targets {
+            if let Some(target) = self.node(id) {
+                most = most.max(self.shape(target).curves);
+            }
+        }
+        most
     }
 
     /// The element children of `owner` (a marker, or the pattern whose content a pattern takes),

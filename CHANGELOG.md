@@ -5,6 +5,109 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-07
+
+### Added
+
+- **Two bundled viewers: HCL and schemas** (RC-100-83, part A), each built as the C-family
+  viewer is (one streamed pass, a line index within 16 MiB, `highlighted` only, nothing granted,
+  the setting `encoding`, locales en, de, fr, es, native unit tests, the 100 MiB case
+  `#[ignore]`d). `plugins/hcl-viewer/` (`rc-plugin-hcl-viewer` 0.1.0) for Terraform's `.tf` and
+  `.tfvars` and `.hcl`: block types and labels, attribute names, quoted templates whose `${...}`
+  and `%{...}` sequences are lexed as code (nested templates, strip markers), heredocs
+  `<<EOT`/`<<-EOT` over lines with their markers, `for` expressions, directives, functions, type
+  constraints, `#`/`//`/`/* */` comments; a quoted template its line leaves open shows its quote
+  `invalid`. `plugins/schema-viewer/` (`rc-plugin-schema-viewer` 0.1.0) for Protocol Buffers
+  (`.proto`) and GraphQL (`.graphql`, `.gql`, `.graphqls`), the language by the extension: a pass
+  over code per language beside shared strings, numbers, block comments and block strings;
+  declared types, `rpc` and operation names, field types and `map<K, V>`, field, option and
+  argument names, `$variables`, `@directives`, fragment spreads. The C-family lexer of RC-100-82
+  is not shared: GraphQL is not C-like, and Protobuf needs none of that lexer's machinery
+  (reasoned in the schema viewer's README).
+
+- **One-time codes for the SSH login** (RC-060-08): an SSH connection keeps a TOTP seed in the
+  vault (secret kind `totp_seed`, migration 0025; pasted as an `otpauth://totp/` link or a bare
+  Base32 secret, checked before it is stored, `totp_seed_invalid`). A `keyboard-interactive`
+  question its pattern matches - default `(?i)verification code|one-time|otp|token`, per
+  connection `totp_prompt` in the session settings - is answered with the RFC 6238 code of that
+  moment (SHA-1, SHA-256, SHA-512, 6 to 8 digits), the password with it in the same login, as
+  Google Authenticator's PAM module asks; without a seed, or with the new setting
+  `connections.totp_autofill` (on, protected) off, the question stays unanswered as before. The
+  login-script step `send_totp` types the code for a server that asks after the login. Seed and
+  code never reach a log line, an event, an MCP answer or `Debug`; MCP sees `has_totp_seed`
+  only, and a script with `send_totp` is the window's (`gui_only`), like `send_secret`. The code
+  from a password manager (RC-100-33's field `totp`) is not wired yet.
+
+- **Server inventories as a plugin kind** (RC-100-39): plugin contract 0.4.0 adds the
+  `inventory-plugin` world, whose `list` answers the hosts of NetBox, Proxmox or another system.
+  The connection manager gets an Inventories page: a source names the plugin, the address it
+  reaches and the plugin's API token, kept in the vault; a sync - previewed before the first -
+  keeps one folder of connections in step, matched by the inventory's id, name, address, port
+  and folder written over, credentials, login script and drive-bar mark left alone, a host that
+  left marked and never deleted. The answer is checked as hostile input (at most 10 000 hosts,
+  no control character, no `.` or `..` in a folder path, port 0 refused, an address a host name
+  or IP address). The plugin never sees its token: it writes `{{secret:<slot>}}` into a header
+  and the host fills it in on the way out, to the confirmed address only, and masks it out of
+  the plugin's log, failures and answers. Setting `inventory.refresh_minutes` (60, 0 = by hand);
+  MCP `inventory_sources` and `inventory_refresh`; `rcommander plugin new --type inventory`. The
+  host still runs plugins built against 0.1.0 to 0.3.0; the bundled viewers are rebuilt against
+  0.4.0, one patch version up each.
+
+- **Bundled viewers for Ruby, Perl, Lua and VBScript, for reStructuredText, LaTeX and BibTeX,
+  and Visual Studio solutions** (RC-100-83, part B), each built as the C-family viewer (one
+  streamed pass, a bounded line index, `highlighted`, nothing granted, the setting `encoding`,
+  locales en, de, fr, es). `plugins/script-viewer/` (`rc-plugin-script-viewer` 0.1.0) for `.rb`,
+  `Gemfile` and `Rakefile` (by `[match] names`, `min_app_version = "0.19.0"`), `.pl`, `.pm`,
+  `.lua`, `.vbs`: a lexer per language over a shared cursor - Ruby's `=begin`, `%` literals,
+  symbols, hash keys and `#{...}` interpolation lexed as code, Perl's POD, quote-like operators
+  with any delimiter and interpolated variables, heredocs and `__END__` in both, Lua's long
+  brackets at their level, VBScript's keywords in any case, `Rem`, `""` and dates.
+  `plugins/markup-viewer/` (`rc-plugin-markup-viewer` 0.1.0) for `.rst`, `.tex`, `.sty`, `.bib`:
+  every line is lexed with the next beside it, so a reStructuredText title is known by its
+  underline in both passes; directives, literal blocks and inline markup; LaTeX commands, math
+  (a blank line ends it, `invalid`), environments, labels, citations and verbatim environments;
+  BibTeX entries, keys, fields and values over lines. The config viewer 0.3.0 reads `.sln`
+  (`Format::Solution`): blocks, project and section names as the tree's nodes, GUIDs, versions.
+
+### Changed
+
+- **Dependencies current for 0.20.0**: the semver-compatible updates (rmcp 3.9, zip 9.4,
+  uuid 1.29.1, toml 1.2.1, flate2, cc and smaller ones); `cargo deny` clean.
+
+- **One button installs an update, and updates install when quitting by default** (RC-100-84):
+  on a portable installation "Install and restart" can be pressed as soon as a package is
+  offered - without the download it downloads first (the page shows the progress and "Installs
+  and restarts as soon as the download is complete and checked") and installs by itself once
+  the download is verified, also when the settings were closed meanwhile; a busy queue holds it
+  back as before, a failed download drops it. The separate "Download" button is gone there; an
+  unknown installation keeps "Download" as its main button, a package manager's is unchanged.
+  `update.auto_install` defaults to `on_quit` (a stored choice stays, package managers stay
+  `off`); a download not finished at quitting never holds quitting up. `update.status` carries
+  `install_after_download`.
+
+### Fixed
+
+- **SVG viewer: arcs of a huge radius and intermediate canvases have budgets** (RC-100-78,
+  `svg-viewer` 0.1.5): the element pass counts the cubic curves kurbo cuts every arc into, as
+  kurbo counts them and as often as usvg builds the shape (paths, circles, ellipses, rounded
+  rects, the path of a `textPath`), at most 1,048,576 per picture and 64 per arc of a `d`, since
+  svgtypes empties an arc's buffer from the front, quadratic in its curves. Before drawing, the
+  canvases resvg 0.49 takes for isolated groups (opacity, filter with its region and a canvas per
+  primitive and input, mask, clip path) and for embedded SVGs are summed as resvg computes them,
+  at most 64 M pixels, beside the 16 M of the pattern tiles; the walk visits at most four times
+  the element budget. Both end in `too_complex` before usvg or resvg does the work.
+
+- **Dialog windows no longer vanish behind others or send rCommander to the background**
+  (RC-080-73): a dialog's, a question's or a Lister's window that closes or hides while it has the
+  keyboard gives it explicitly (`window::gain_focus`) to the open question, else the modal dialog
+  opened last, else the window it was opened from, else the main window - on every system, after
+  Windows' release of the locked owner; a window that goes without the keyboard (a job's progress
+  while another program is used) moves no focus. On Linux and macOS a focus that lands on the main
+  window or a dialog's window under a modal dialog or a question is handed back to it, once per
+  500 ms while it has not landed, so a compositor that refuses it cannot start a ping-pong. Under
+  X11 the dialog and question windows get `WM_TRANSIENT_FOR` (their owner) and
+  `_NET_WM_WINDOW_TYPE_DIALOG` through `x11rb` before they map; Wayland keeps the two focus rules.
+
 ## [0.19.0] - 2026-11-05
 
 ### Added

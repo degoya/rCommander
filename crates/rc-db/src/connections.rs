@@ -89,7 +89,8 @@ macro_rules! select_connections {
             $crate::connections::theme_column!("theme_dark"),
             ", sort_order, created_at, updated_at, password_enc IS NOT NULL AS has_password, \
              key_enc IS NOT NULL AS has_key, passphrase_enc IS NOT NULL AS has_passphrase, \
-             key_type, key_fingerprint, key_comment, key_public, credential_id FROM connections ",
+             key_type, key_fingerprint, key_comment, key_public, credential_id, ",
+            "totp_seed_enc IS NOT NULL AS has_totp_seed FROM connections ",
             $tail
         )
     };

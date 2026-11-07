@@ -1,5 +1,9 @@
 # Changes
 
+## 0.3.1
+
+Built against plugin contract 0.4.0; nothing else changed.
+
 ## 0.3.0
 
 Reads three more kinds of JSON, chosen by the file's extension:

@@ -1,5 +1,16 @@
 # Changes
 
+## 0.1.5
+
+Two more ways a small file kept the plugin busy end with "too complex" at once. An arc with a
+huge radius, which the renderer would cut into hundreds of thousands of curves, is refused, and
+so are arcs that together make more than a million curves; an ordinary arc makes a handful. And
+the canvases the renderer draws groups with an opacity, a filter, a mask or a clip path into are
+counted before anything is drawn: nested or repeated beyond 64 million pixels, the picture is
+refused instead of running out of memory.
+
+Built against plugin contract 0.4.0.
+
 ## 0.1.4
 
 A DOCTYPE no longer expands entities: the usual `<!DOCTYPE svg PUBLIC ...>` line is ignored and

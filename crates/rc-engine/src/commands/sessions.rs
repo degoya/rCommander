@@ -233,6 +233,7 @@ impl Engine {
             port: connection.port,
             user: connection.username.unwrap_or_default(),
         };
+        let totp_prompt = prefs.totp_pattern();
         let options = SessionOptions {
             keepalive: Duration::from_secs(u64::from(prefs.keepalive_secs)),
             auth_order: prefs.auth_order,
@@ -240,6 +241,7 @@ impl Engine {
             agent_fingerprint: prefs.agent_fingerprint,
             own_key: connection.key.as_ref().map(|key| key.fingerprint.clone()),
             max_agent_keys: self.agent_max_keys().await,
+            totp_prompt,
             ..SessionOptions::default()
         };
         let gate = Arc::new(EngineGate {

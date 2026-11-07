@@ -11,6 +11,10 @@
 //! never. A panel showing its terminal, a flat view (its reading would start over) and a listing
 //! still arriving are left alone. `panels.refresh_on_focus` switches it all off. No MCP: this is
 //! the window's behaviour, an agent has `panel.refresh`.
+//!
+//! The same focus events keep a modal dialog modal on Linux and macOS (RC-080-73): a focus that
+//! lands on a window under the open question or modal dialog goes back to it
+//! (`dialog_windows/front.rs`). Windows keeps the focus off a locked window itself.
 
 use std::time::{Duration, Instant};
 
@@ -122,18 +126,18 @@ pub fn on_network(path: &VfsPath, drives: &[Drive]) -> bool {
 }
 
 impl App {
-    /// Window `id` took the keyboard or let go of it: on the app's return from another program
+    /// Window `id` took the keyboard or let go of it: a focus under a question or a modal
+    /// dialog goes back to it ([`App::modal_focus`]); on the app's return from another program
     /// the switches are read, then the panels follow ([`App::refresh_on_return`]).
     pub(in crate::app) fn refocused(&mut self, id: window::Id, focused: bool) -> Vec<Effect> {
-        if !self
-            .dialog_windows
-            .refocus
-            .seen(id, focused, Instant::now())
-        {
-            return Vec::new();
+        let now = Instant::now();
+        let mut effects = self.modal_focus(id, focused, now);
+        if !self.dialog_windows.refocus.seen(id, focused, now) {
+            return effects;
         }
         let Some(db) = self.db.clone() else {
-            return self.refresh_on_return(Switches::default());
+            effects.extend(self.refresh_on_return(Switches::default()));
+            return effects;
         };
         let read = async move {
             Switches {
@@ -141,7 +145,22 @@ impl App {
                 network: stored_bool(&db, REFRESH_ON_FOCUS_NETWORK_KEY).await,
             }
         };
-        vec![Effect::Task(Task::perform(read, Message::Refocus))]
+        effects.push(Effect::Task(Task::perform(read, Message::Refocus)));
+        effects
+    }
+
+    /// Linux and macOS: window `id` took the keyboard at `now` while it lies under the open
+    /// question or modal dialog - the window on top takes it back (`front.rs`). Not on Windows,
+    /// where such a window is disabled and never takes it.
+    fn modal_focus(&mut self, id: window::Id, focused: bool, now: Instant) -> Vec<Effect> {
+        if cfg!(windows) || !focused {
+            return Vec::new();
+        }
+        self.dialog_windows
+            .hand_back(id, now)
+            .map(|top| Effect::Task(window::gain_focus(top)))
+            .into_iter()
+            .collect()
     }
 
     /// `panel.refresh` for each shown panel [`refreshes`] picks.

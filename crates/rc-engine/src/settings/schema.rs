@@ -20,6 +20,7 @@ mod file_ops;
 mod folders;
 mod fonts;
 pub(super) mod ftp;
+pub(super) mod inventory;
 mod keys;
 mod language;
 pub(super) mod layout;
@@ -35,6 +36,7 @@ pub(super) mod sort;
 mod ssh_agent;
 pub(super) mod terminal;
 mod themes;
+pub(super) mod totp;
 mod transfers;
 mod types;
 pub(super) mod update;
@@ -369,11 +371,13 @@ pub const SETTINGS: &[SettingSpec] = &[
     plugins::DEVELOPMENT_MODE,
     plugins::RECENT_CALLS_SHOWN,
     ssh_agent::AGENT_MAX_KEYS,
+    totp::TOTP_AUTOFILL,
     backup::KEEP,
     ftp::RESOLVE_LINKS,
     ftp::ASK_PLAINTEXT,
     sftp::CASE,
     sftp::UPLOAD_RIGHTS,
+    inventory::REFRESH_MINUTES,
     update::CHECK_ENABLED,
     update::CHECK_INTERVAL,
     update::CHANNEL,

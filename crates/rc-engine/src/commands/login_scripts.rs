@@ -4,8 +4,9 @@
 //! A script is checked by rc-remote (bounds, patterns) before the repository writes it, and
 //! read back through the same check. Storing a script's own secret needs the vault unlocked,
 //! like a connection's (`vault_absent`, `vault_locked`); removing one does not, and the last
-//! secret gone announces [`EngineEvent::VaultUnused`]. Through MCP no `send_secret` step is
-//! added, changed or moved, nor the steps before it, and no script with one is assigned
+//! secret gone announces [`EngineEvent::VaultUnused`]. Through MCP no `send_secret` step - nor a
+//! `send_totp` step, which sends the connection's one-time code (RC-060-08) - is added, changed
+//! or moved, nor the steps before it, and no script with one is assigned
 //! (`Engine::refuse_mcp_secret_steps`).
 
 use rc_db::login_scripts::{LoginScriptFields, SCRIPT_SECRET_COLUMN, SCRIPT_SECRETS_TABLE};
@@ -234,18 +235,21 @@ impl Engine {
     }
 }
 
+/// Whether a step sends a secret: a stored one, or the one-time code of the connection's seed.
 fn sends_secret(steps: &[Step]) -> bool {
-    steps
-        .iter()
-        .any(|step| matches!(step, Step::SendSecret { .. }))
+    steps.iter().any(is_secret_step)
 }
 
-/// Whether `new` keeps every step of `old` up to and including its last `send_secret` step, in
-/// place, and adds no `send_secret` step after them.
+fn is_secret_step(step: &Step) -> bool {
+    matches!(step, Step::SendSecret { .. } | Step::SendTotp { .. })
+}
+
+/// Whether `new` keeps every step of `old` up to and including its last step that sends a
+/// secret, in place, and adds no such step after them.
 fn keeps_secret_prefix(old: &[Step], new: &[Step]) -> bool {
     let kept = old
         .iter()
-        .rposition(|step| matches!(step, Step::SendSecret { .. }))
+        .rposition(is_secret_step)
         .map_or(0, |last| last + 1);
     new.get(..kept) == Some(&old[..kept]) && !sends_secret(&new[kept..])
 }

@@ -3,10 +3,13 @@
 //! state shows; and those of the main window's menu bar (RC-080-18) and of the app's return
 //! from another program (RC-100-69). No window is touched here.
 
+use std::time::Instant;
+
 use iced::window;
 use rc_engine::JobId;
 
 pub use super::dialog_window::DialogWindow;
+use super::front::{self, HandBack, Up};
 use crate::app::{
     palette::menu_bar::MenuBar,
     refocus::Refocus,
@@ -31,6 +34,9 @@ struct Open {
     id: window::Id,
     state: WindowState,
     stage: Stage,
+    /// The window that had the keyboard when it opened: it takes it back when this one goes
+    /// (RC-080-73).
+    opener: Option<window::Id>,
 }
 
 #[derive(Debug, Default)]
@@ -62,6 +68,8 @@ pub struct DialogWindows {
     /// The small question's window, once shown, and the window it is owned by and locks
     /// (`question_window.rs`).
     pub question_owner: Option<(window::Id, window::Id)>,
+    /// The focus handed back to the window on top, not landed yet (RC-080-73).
+    handing: HandBack,
 }
 
 impl DialogWindows {
@@ -80,6 +88,7 @@ impl DialogWindows {
             asked: None,
             parked: Vec::new(),
             question_owner: None,
+            handing: HandBack::default(),
         }
     }
 
@@ -209,6 +218,7 @@ impl DialogWindows {
             id,
             state: WindowState::new(Some(geometry)),
             stage,
+            opener: self.focused.filter(|focused| *focused != id),
         });
     }
 
@@ -280,6 +290,52 @@ impl DialogWindows {
         self.open
             .iter()
             .any(|open| open.kind.modal() && open.stage != Stage::Opening)
+    }
+
+    /// The dialogs' windows on the screen or being shown - not those still being made -, in the
+    /// order they opened.
+    pub(super) fn up(&self) -> Vec<Up> {
+        self.open
+            .iter()
+            .filter(|open| open.stage != Stage::Opening)
+            .map(|open| Up {
+                kind: open.kind,
+                id: open.id,
+            })
+            .collect()
+    }
+
+    /// The window to give the keyboard once window `id` closes or hides (`front::after_close`),
+    /// asked before it is booked closed; `None` while the keyboard is in a window that stays or
+    /// in another program - a window that goes without the keyboard takes nobody's focus.
+    pub fn front_after(&self, id: window::Id) -> Option<window::Id> {
+        // The keyboard in `id`, or in a window that went in the same round (a question closed
+        // before its owner) and told no loss yet.
+        let ours = self.focused.is_some_and(|focused| {
+            focused == id || (Some(focused) != self.main && self.kind_of(focused).is_none())
+        });
+        if !ours {
+            return None;
+        }
+        let opener = self
+            .open
+            .iter()
+            .find(|open| open.id == id)
+            .and_then(|open| open.opener);
+        let up: Vec<Up> = self.up().into_iter().filter(|up| up.id != id).collect();
+        front::after_close(&up, opener, self.main)
+    }
+
+    /// Window `id` took the keyboard at `now`: the window on top to hand it back to while `id`
+    /// lies under it (`front::under`), once per hand-back under way.
+    pub fn hand_back(&mut self, id: window::Id, now: Instant) -> Option<window::Id> {
+        let up = self.up();
+        let owner = self
+            .question_owner
+            .filter(|(question, _)| up.iter().any(|up| up.id == *question))
+            .map(|(_, owner)| owner);
+        let target = front::under(&up, owner, self.main, id);
+        self.handing.hand(id, target, now)
     }
 
     /// Where every open dialog window is: stored with the main window's place when the app ends.

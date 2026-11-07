@@ -1,12 +1,13 @@
-//! Generated bindings for `rcommander:plugin@0.3.0`: the records and the host traits.
+//! Generated bindings for `rcommander:plugin@0.4.0`: the records and the host traits.
 //!
 //! As rDownloader's `crates/rd-plugin-host/src/component.rs` and `extension/bindings.rs` at commit
 //! 26c8592a6 generate them: async imports and exports. One `bindgen!` per world; the secrets world
 //! (RC-100-33) maps `types`, `host` and `settings` onto the viewer's modules (`with: { ... }`), so
 //! a `failure` is one type across every world and the host functions in `host_impls.rs` are
 //! written once. The generated linker and export lookup name the current version alone, so
-//! `link.rs`, `viewer/guest.rs` and `secrets/guest.rs` do both under the manifest's version
-//! instead (RC-100-14).
+//! `link.rs`, `viewer/guest.rs`, `secrets/guest.rs` and `inventory/guest.rs` do both under the
+//! manifest's version instead (RC-100-14). The inventory world (RC-100-39) maps `http` onto the
+//! secrets world's as well.
 
 wasmtime::component::bindgen!({
     path: "../rc-plugin-api/wit",
@@ -26,6 +27,22 @@ pub(crate) mod secrets_world {
             "rcommander:plugin/types": crate::bindings::rcommander::plugin::types,
             "rcommander:plugin/host": crate::bindings::rcommander::plugin::host,
             "rcommander:plugin/settings": crate::bindings::rcommander::plugin::settings,
+        },
+    });
+}
+
+/// The inventory world's own interface: the `inventory` export (RC-100-39).
+pub(crate) mod inventory_world {
+    wasmtime::component::bindgen!({
+        path: "../rc-plugin-api/wit",
+        world: "inventory-plugin",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "rcommander:plugin/types": crate::bindings::rcommander::plugin::types,
+            "rcommander:plugin/host": crate::bindings::rcommander::plugin::host,
+            "rcommander:plugin/settings": crate::bindings::rcommander::plugin::settings,
+            "rcommander:plugin/http": crate::bindings::secrets_world::rcommander::plugin::http,
         },
     });
 }

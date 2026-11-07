@@ -6,8 +6,8 @@
 //! become one question. Everything checked here is something the host would otherwise tell the
 //! author only through a person's bug report: a manifest field out of bounds, an import the
 //! manifest never granted, a world that does not match, and one behavioural question per kind
-//! (`questions.rs`) - for a viewer, what it does with an empty file; for a secret source, what it
-//! does when its service does not answer (RC-100-33).
+//! (`questions.rs`) - for a viewer, what it does with an empty file; for a secret source and an
+//! inventory, what it does when its service does not answer (RC-100-33, RC-100-39).
 //!
 //! Adapted: rCommander's kinds (the viewer in stage 1; `docs/plugins.md`, "SDK" names the
 //! question of each later kind), no network to refuse (no viewer is granted one), and English
@@ -23,8 +23,8 @@ use serde::Serialize;
 mod questions;
 
 use crate::{
-    PluginType, PluginVerifier, SecretsOptions, SecretsPlugin, VerifiedPackage, ViewerOptions,
-    ViewerPlugin, net_http,
+    InventoryOptions, InventoryPlugin, PluginType, PluginVerifier, SecretsOptions, SecretsPlugin,
+    VerifiedPackage, ViewerOptions, ViewerPlugin, net_http,
 };
 
 /// What the `package` check covers, named because a run stops there when it fails.
@@ -123,6 +123,7 @@ pub async fn check_package(bytes: &[u8], verifier: &PluginVerifier) -> Conforman
 pub(crate) enum Built {
     Viewer(Box<ViewerPlugin>),
     Secrets(Box<SecretsPlugin>),
+    Inventory(Box<InventoryPlugin>),
 }
 
 /// Builds the package as the host would.
@@ -153,6 +154,15 @@ fn instantiate(package: &VerifiedPackage) -> Result<Built, String> {
             .map(|source| Built::Secrets(Box::new(source)))
             .map_err(|failure| format!("the component is refused: {failure}"))
         }
+        // Asked without an address (RC-100-39): every request is denied, so the run reaches
+        // nothing and sends no token.
+        PluginType::Inventory => InventoryPlugin::new(
+            &package.manifest,
+            &package.component,
+            InventoryOptions::default(),
+        )
+        .map(|inventory| Built::Inventory(Box::new(inventory)))
+        .map_err(|failure| format!("the component is refused: {failure}")),
         PluginType::Unknown(ref other) => Err(format!("unknown plugin type `{other}`")),
     }
 }

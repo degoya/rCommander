@@ -45,13 +45,19 @@ pub(crate) fn to_wit_failure(failure: Failure) -> types::Failure {
 impl types::Host for PluginStoreState {}
 
 impl host::Host for PluginStoreState {
-    /// At most [`crate::MAX_LOG_LINES_PER_CALL`] lines per call reach the log, each cut to
+    /// At most [`crate::MAX_LOG_LINES_PER_CALL`] lines per call reach the log, each masked (a
+    /// value a `{{secret:<slot>}}` marker may be filled with, RC-100-39), then cut to
     /// [`MAX_LOG_CHARS`] with its control and direction characters spelled out, so a plugin can
-    /// neither flood the log nor forge a line of rCommander's.
+    /// neither flood the log nor forge a line of rCommander's, nor pass on a token a server
+    /// echoed.
     async fn log(&mut self, level: String, message: String) {
         if !self.log_budget.admit() {
             return;
         }
+        let message = match &self.http {
+            Some(grant) => grant.mask(&message).into_owned(),
+            None => message,
+        };
         let line = readable(&message, MAX_LOG_CHARS);
         let origin = self.log_budget.origin();
         let plugin_id = origin.plugin_id.as_str();

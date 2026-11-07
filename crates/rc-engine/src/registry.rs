@@ -39,6 +39,7 @@ mod history;
 mod hostkeys;
 mod hotlist;
 mod import;
+mod inventory;
 mod login_scripts;
 mod manager;
 mod mcp;
@@ -115,6 +116,7 @@ macro_rules! command_groups {
             file_ops,
             hostkeys,
             import,
+            inventory,
             login_scripts,
             multi_rename,
             mcp,

@@ -142,6 +142,7 @@ impl RcMcpServer {
             + Self::terminal_router()
             + Self::vault_router()
             + Self::secret_sources_router()
+            + Self::inventory_router()
             + Self::wsl_router()
             + Self::agent_router()
             + Self::files_search_router()

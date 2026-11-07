@@ -17,6 +17,7 @@ fn valid_settings_are_stored_as_text() {
         agent_fingerprint: Some(" SHA256:abc+/def ".to_owned()),
         keepalive_secs: 1,
         idle_close_secs: 0,
+        totp_prompt: None,
     };
     let stored = prefs.checked().expect("valid");
     assert_eq!(stored.auth_order, "password,key");
@@ -80,10 +81,43 @@ fn a_stored_order_that_does_not_parse_falls_back_to_the_default() {
         agent_fingerprint: None,
         keepalive_secs: 0,
         idle_close_secs: 999_999,
+        totp_prompt: Some("(".to_owned()),
     });
     assert_eq!(prefs.auth_order, AuthKind::DEFAULT_ORDER);
     assert_eq!(prefs.keepalive_secs, 1);
     assert_eq!(prefs.idle_close_secs, MAX_IDLE_CLOSE_SECS);
+    // A stored pattern that no longer compiles falls back to the default too.
+    assert_eq!(
+        prefs.totp_pattern().as_str(),
+        rc_remote::totp::DEFAULT_PROMPT
+    );
+}
+
+#[test]
+fn the_code_prompt_is_checked_and_blank_is_the_default() {
+    let own = SessionPrefs {
+        totp_prompt: Some("(?i)passcode".to_owned()),
+        ..SessionPrefs::default()
+    };
+    let stored = own.checked().expect("valid");
+    assert_eq!(stored.totp_prompt.as_deref(), Some("(?i)passcode"));
+    assert_eq!(
+        SessionPrefs::from_stored(stored).totp_pattern().as_str(),
+        "(?i)passcode"
+    );
+    let blank = SessionPrefs {
+        totp_prompt: Some("  ".to_owned()),
+        ..SessionPrefs::default()
+    };
+    assert_eq!(blank.checked().expect("valid").totp_prompt, None);
+    for broken in ["(".to_owned(), "x".repeat(513)] {
+        let prefs = SessionPrefs {
+            totp_prompt: Some(broken),
+            ..SessionPrefs::default()
+        };
+        let error = prefs.checked().expect_err("refused");
+        assert_eq!(error.code(), "session_prefs_invalid");
+    }
 }
 
 #[test]

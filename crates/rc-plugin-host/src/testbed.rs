@@ -24,6 +24,8 @@ use std::fmt::Write as _;
 
 use crate::MAX_WINDOW_BYTES;
 
+/// The inventory world's bed (RC-100-39).
+pub mod inventory;
 /// The secrets world's bed (RC-100-33).
 pub mod secrets;
 
@@ -46,6 +48,8 @@ const SETTING_RET: u32 = 12320;
 const WIT_0_1_0: &str = include_str!("testbed/rcommander-0.1.0.wit");
 /// The contract of RC-100-14, before `http` and the secrets world (RC-100-33), exactly as it was.
 const WIT_0_2_0: &str = include_str!("testbed/rcommander-0.2.0.wit");
+/// The contract of RC-100-33, before the inventory world (RC-100-39), exactly as it was.
+const WIT_0_3_0: &str = include_str!("testbed/rcommander-0.3.0.wit");
 
 /// The exports of `interface viewer`, with their core signatures.
 #[derive(Clone, Copy, Debug)]
@@ -170,7 +174,7 @@ impl Testbed {
         self
     }
 
-    /// Builds the component against contract `version`: `0.1.0`, `0.2.0` or the current one.
+    /// Builds the component against contract `version`: `0.1.0` to `0.3.0` or the current one.
     pub fn contract(mut self, version: &'static str) -> Self {
         self.version = version;
         self
@@ -247,6 +251,7 @@ fn component_of(core_text: &str, version: &str, world: &str) -> Vec<u8> {
     let contract = match version {
         "0.1.0" => WIT_0_1_0,
         "0.2.0" => WIT_0_2_0,
+        "0.3.0" => WIT_0_3_0,
         current if current == rc_plugin_api::API_VERSION => rc_plugin_api::WIT,
         other => panic!("the test bed knows no contract {other}"),
     };

@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse HCL",
+  "description": "Affiche les fichiers Terraform et HCL (.tf, .tfvars, .hcl) en couleurs, comme un éditeur.",
+  "codes": {
+    "01a1aafa-1ce6-783f-b838-664eed7d6ab0.setting.encoding": "Encodage"
+  }
+}

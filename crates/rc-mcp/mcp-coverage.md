@@ -77,6 +77,10 @@ asks by.
 | `import.remote_desktop_manager` | write | `import_remote_desktop_manager` | Import the SSH connections of a Remote Desktop Manager export (.rdm without a master key); dry_run only previews; never a password |
 | `import.total_commander` | write | `import_total_commander` | Import Total Commander's hotlist, tabs, FTP connections, list colours and list font (wincmd.ini, wcx_ftp.ini); dry_run only previews; never a password |
 | `import.total_commander_passwords` | gui_only | omitted: GUI only: human decision | Take the FTP passwords of connections imported from Total Commander into the vault |
+| `inventory.refresh` | write | `inventory_refresh` | Sync an inventory source's folder of connections with the hosts its inventory lists now; with preview only the plan |
+| `inventory.source_delete` | gui_only | omitted: GUI only: human decision | Remove an inventory source and its stored token; its connections stay |
+| `inventory.source_save` | gui_only | omitted: GUI only: human decision | Set up or change an inventory source: plugin, address, folder and the token it sends |
+| `inventory.sources` | read | `inventory_sources` | The inventory sources with their last sync, and the installed inventory plugins; never a token |
 | `login_scripts.assign` | exec | `login_scripts_assign` | Set the login script a connection types after it logged in, or none |
 | `login_scripts.clear_secret` | gui_only | omitted: GUI only: human decision | Remove a secret stored with a login script |
 | `login_scripts.create` | write (exec when it brings steps) | `login_scripts_create` | Add a login script: steps that wait for prompts and send text or stored secrets |
@@ -240,7 +244,7 @@ asks by.
 | `app.quit` | gui_only | omitted: GUI only: human decision | Quit rCommander; with transfers running or waiting the window asks first |
 | `update.check` | read | `update_check` | Check for a newer rCommander now against the signed manifest; changes no file |
 | `update.download` | gui_only | omitted: GUI only: human decision | Download the offered version, kept only when its size and SHA-256 match the manifest |
-| `update.install` | gui_only | omitted: GUI only: human decision | Install the downloaded version and restart; the old one comes back if the new fails |
+| `update.install` | gui_only | omitted: GUI only: human decision | Install the offered version and restart, downloading it first when needed; the old one comes back if the new fails |
 | `update.status` | read | `update_status` | Running version, channel, last check and its result, the offer with its notes, download and install state |
 | `theme.delete` | gui_only | omitted: GUI only: human decision | Delete an own colour theme; not a built-in one, nor the theme a mode draws with |
 | `theme.list` | read | `theme_list` | The colour themes: id, name, mode (light or dark), built in or own, and whether it is the mode's theme |
@@ -257,4 +261,4 @@ asks by.
 | `workspaces.rename` | write | `workspaces_rename` | Give a workspace another name |
 | `workspaces.update` | write | `workspaces_update` | Change a workspace's name, panels or themes |
 
-246 commands: 172 covered, 74 omitted.
+250 commands: 174 covered, 76 omitted.

@@ -25,7 +25,7 @@ macro_rules! select_credentials {
             "SELECT id, folder_id, name, username, created_at, updated_at, \
              password_enc IS NOT NULL AS has_password, key_enc IS NOT NULL AS has_key, \
              passphrase_enc IS NOT NULL AS has_passphrase, key_type, key_fingerprint, \
-             key_comment, key_public, \
+             key_comment, key_public, totp_seed_enc IS NOT NULL AS has_totp_seed, \
              (SELECT count(*) FROM connections WHERE credential_id = credentials.id) AS users \
              FROM credentials ",
             $tail
@@ -45,7 +45,8 @@ pub struct Credential {
     /// RFC 3339 in UTC, as SQLite writes it.
     pub created_at: String,
     pub updated_at: String,
-    /// Which secrets are stored (`has_password`, `has_key`, `has_passphrase`); never a value.
+    /// Which secrets are stored (`has_password`, `has_key`, `has_passphrase`, `has_totp_seed`);
+    /// never a value.
     #[serde(flatten)]
     pub secrets: SecretFlags,
     /// The private key stored in the vault, by its public half.

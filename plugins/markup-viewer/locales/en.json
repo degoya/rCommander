@@ -1,0 +1,7 @@
+{
+  "name": "Markup viewer",
+  "description": "Shows reStructuredText, LaTeX and BibTeX files coloured like an editor.",
+  "codes": {
+    "01a1b57c-cbd2-77a4-a5f6-fffa5d998657.setting.encoding": "Encoding"
+  }
+}

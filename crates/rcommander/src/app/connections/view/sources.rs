@@ -159,6 +159,8 @@ fn choice_id(kind: SecretKind) -> &'static str {
         SecretKind::Password => "rcommander.connections.source_password",
         SecretKind::Key => "rcommander.connections.source_key",
         SecretKind::Passphrase => "rcommander.connections.source_passphrase",
+        // Never listed: a seed is kept in the vault only (RC-060-08).
+        SecretKind::TotpSeed => "rcommander.connections.source_totp_seed",
     }
 }
 
@@ -167,6 +169,7 @@ fn kind_label(kind: SecretKind) -> &'static str {
         SecretKind::Password => t!("connections.source.password"),
         SecretKind::Key => t!("connections.source.key"),
         SecretKind::Passphrase => t!("connections.source.passphrase"),
+        SecretKind::TotpSeed => t!("connections.field.totp_seed"),
     }
 }
 

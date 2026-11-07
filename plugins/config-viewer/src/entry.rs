@@ -1,7 +1,7 @@
 //! What a line is to the tree, told from its tokens: a header (`[section]`, `[a.b]`, `[[a]]`,
-//! `[HKEY_...]`), an entry (a key, maybe after `export`, with its value), or neither. A line that
-//! starts inside a value of the line before (a continuation, a multi-line string, an array) is
-//! neither.
+//! `[HKEY_...]`, a solution's `Project(...) = "Name"` and `GlobalSection(Name)`), an entry (a key,
+//! maybe after `export`, with its value), or neither. A line that starts inside a value of the
+//! line before (a continuation, a multi-line string, an array) is neither.
 
 use crate::lexer::LineState;
 use crate::tree::preview;
@@ -25,8 +25,7 @@ pub(crate) fn line_kind<'t>(text: &'t str, start: LineState, tokens: &[Token]) -
     if start != LineState::Clear {
         return LineKind::Other;
     }
-    let mut tokens = tokens.iter();
-    let Some(first) = tokens.next() else {
+    let Some((first, rest)) = tokens.split_first() else {
         return LineKind::Other;
     };
     let word = piece(text, first);
@@ -46,12 +45,30 @@ pub(crate) fn line_kind<'t>(text: &'t str, start: LineState, tokens: &[Token]) -
             }
         }
         TokenClass::Keyword
-            if tokens
-                .next()
+            if rest
+                .first()
                 .is_some_and(|next| next.class == TokenClass::Key) =>
         {
             LineKind::Entry
         }
+        // A solution's block names itself with a type name, quoted for a project (`.sln`); no
+        // other format's keyword line has one.
+        TokenClass::Keyword => match rest
+            .iter()
+            .find(|token| token.class == TokenClass::TypeName)
+        {
+            Some(name) => {
+                let name = piece(text, name);
+                LineKind::Header {
+                    array: false,
+                    name: name
+                        .strip_prefix('"')
+                        .and_then(|inner| inner.strip_suffix('"'))
+                        .unwrap_or(name),
+                }
+            }
+            None => LineKind::Other,
+        },
         _ => LineKind::Other,
     }
 }

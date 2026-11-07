@@ -4,10 +4,10 @@
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `probe` and `open` read `encoding` and `open` reads
 # `level_colour`.
-api_version = "0.3.0"
+api_version = "0.4.0"
 id = "01a159b7-2a8f-7014-9357-344c5730dbd4"
 name = "Log viewer"
-version = "0.1.1"
+version = "0.1.2"
 
 [match]
 # rCommander takes what follows the last dot of a name as its extension: `app.log` and

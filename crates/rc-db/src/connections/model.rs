@@ -219,7 +219,8 @@ pub struct Connection {
     /// RFC 3339 in UTC, as SQLite writes it.
     pub created_at: String,
     pub updated_at: String,
-    /// Which secrets are stored (`has_password`, `has_key`, `has_passphrase`); never a value.
+    /// Which secrets are stored (`has_password`, `has_key`, `has_passphrase`, `has_totp_seed`);
+    /// never a value.
     #[serde(flatten)]
     pub secrets: SecretFlags,
     /// The private key stored in the vault, by its public half; `None` when there is none

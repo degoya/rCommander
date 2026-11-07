@@ -109,6 +109,8 @@ fn every_error_code_has_a_message() {
         .chain(rc_engine::NetworkDriveError::ALL_CODES)
         .chain(rc_engine::PluginAdminError::ALL_CODES)
         .chain(rc_engine::WorkspaceError::ALL_CODES)
+        .chain(rc_engine::inventory::InventorySourceError::ALL_CODES)
+        .chain(rc_db::inventory::InventoryError::ALL_CODES)
         .chain(rc_remote::SshError::ALL_CODES)
         .chain(rc_remote::SftpError::ALL_CODES)
         .chain(rc_engine::viewer::PatternError::ALL_CODES)

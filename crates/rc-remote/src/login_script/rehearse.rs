@@ -2,8 +2,8 @@
 //!
 //! The engine runs as it would on a server, on a stream that reads the sample and swallows what
 //! is sent. Secrets are not read: nothing reaches a server, so the vault stays shut and a
-//! `send_secret` sends nothing. Sleeps are cut short. When the sample is used up the run ends
-//! with `stream_closed` at the step that waited for more.
+//! `send_secret` or `send_totp` sends nothing. Sleeps are cut short. When the sample is used up
+//! the run ends with `stream_closed` at the step that waited for more.
 
 use std::{
     io,
@@ -120,12 +120,16 @@ impl AsyncWrite for Sample<'_> {
     }
 }
 
-/// Answers every secret with nothing: a test run never opens the vault.
+/// Answers every secret, and the one-time code, with nothing: a test run never opens the vault.
 struct NoSecrets;
 
 #[async_trait]
 impl SecretSource for NoSecrets {
     async fn secret(&self, _: SecretRef) -> Result<SecretString, SecretError> {
+        Ok(SecretString::from(""))
+    }
+
+    async fn totp_code(&self) -> Result<SecretString, SecretError> {
         Ok(SecretString::from(""))
     }
 }

@@ -4,9 +4,11 @@
 //! A method without its material is skipped without asking anyone: no agent running, no key,
 //! no stored password. Secrets are asked for only when their method's turn comes, so a login an
 //! agent signs never touches the vault. A key is opened off the async threads and zeroizes
-//! itself on drop; a password answers the server's `password` method, or its single hidden
-//! `keyboard-interactive` prompt when the server offers only that. A prompt a person would have
-//! to answer (several, or an echoed one) is not guessed at.
+//! itself on drop; a password answers the server's `password` method, or its hidden
+//! `keyboard-interactive` prompt when the server offers only that. A question the connection's
+//! code pattern matches gets the one-time code of its stored seed (RC-060-08, `auth_prompts.rs`),
+//! made at the moment it is asked; a prompt a person would have to answer (a second hidden one,
+//! an echoed one, a code question without a seed) is not guessed at.
 
 use std::sync::Arc;
 
@@ -19,6 +21,7 @@ use secrecy::{ExposeSecret as _, SecretString};
 use tokio::time::timeout;
 
 use super::agent_offer::offer_order;
+use super::auth_prompts::{Answer, answers};
 use crate::recover::LogPanic as _;
 use crate::{
     PrivateKeyError,
@@ -60,7 +63,7 @@ pub(super) async fn authenticate(
         let attempt = match kind {
             AuthKind::Agent => by_agent(handle, user, options).await?,
             AuthKind::Key => by_key(handle, user, credentials).await?,
-            AuthKind::Password => by_password(handle, user, credentials).await?,
+            AuthKind::Password => by_password(handle, user, options, credentials).await?,
         };
         match attempt {
             Attempt::Skipped => {}
@@ -202,14 +205,20 @@ async fn by_key(
     })
 }
 
-/// The stored password, over `password` or the server's `keyboard-interactive` prompt.
+/// The stored password, over `password` or the server's `keyboard-interactive` prompt; without
+/// one, a stored seed still answers a server that asks only for a code over
+/// `keyboard-interactive` (after a key it took as the first factor, say).
 async fn by_password(
     handle: &mut Handle<ClientHandler>,
     user: &str,
+    options: &SessionOptions,
     credentials: &dyn Credentials,
 ) -> Result<Attempt, SshError> {
     let Some(password) = credentials.password().await? else {
-        return Ok(Attempt::Skipped);
+        if credentials.totp_code().await?.is_none() {
+            return Ok(Attempt::Skipped);
+        }
+        return keyboard_interactive(handle, user, None, options, credentials).await;
     };
     let result = handle
         .authenticate_password(user, password.expose_secret())
@@ -224,17 +233,21 @@ async fn by_password(
         } if remaining_methods.contains(&MethodKind::KeyboardInteractive)
             && !remaining_methods.contains(&MethodKind::Password) =>
         {
-            keyboard_interactive(handle, user, &password).await
+            keyboard_interactive(handle, user, Some(&password), options, credentials).await
         }
         AuthResult::Failure { .. } => Ok(Attempt::Refused),
     }
 }
 
-/// Answers the server's one hidden prompt with the password; empty rounds are answered empty.
+/// Answers the server's rounds of questions: the password to its hidden one, the one-time code
+/// to those the code pattern matches (`auth_prompts.rs`); empty rounds are answered empty. A round
+/// with a question for a person, or a code question without a code, refuses the method.
 async fn keyboard_interactive(
     handle: &mut Handle<ClientHandler>,
     user: &str,
-    password: &SecretString,
+    password: Option<&SecretString>,
+    options: &SessionOptions,
+    credentials: &dyn Credentials,
 ) -> Result<Attempt, SshError> {
     let mut reply = handle
         .authenticate_keyboard_interactive_start(user, None::<String>)
@@ -248,15 +261,39 @@ async fn keyboard_interactive(
             KeyboardInteractiveAuthResponse::Failure { .. } => return Ok(Attempt::Refused),
             KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => prompts,
         };
-        let answers = match prompts.as_slice() {
-            [] => Vec::new(),
-            // russh takes the answers as `Vec<String>` and keeps them: the copy cannot be
-            // zeroized (RC-080-51), as no password handed to russh can.
-            [prompt] if !prompt.echo => vec![password.expose_secret().to_owned()],
-            _ => return Ok(Attempt::Refused),
+        let questions = prompts
+            .iter()
+            .map(|prompt| (prompt.prompt.as_str(), prompt.echo));
+        let Some(plan) = answers(questions, &options.totp_prompt, password.is_some()) else {
+            return Ok(Attempt::Refused);
         };
+        // Made now, not at the start of the login: the code is the one of the moment it is asked.
+        let code = if plan.contains(&Answer::Code) {
+            match credentials.totp_code().await? {
+                Some(code) => Some(code),
+                // No seed, or filling codes in is switched off: the code is the person's.
+                None => return Ok(Attempt::Refused),
+            }
+        } else {
+            None
+        };
+        // russh takes the answers as `Vec<String>` and keeps them: the copy cannot be
+        // zeroized (RC-080-51), as no password handed to russh can.
+        let secret = |value: Option<&SecretString>| {
+            value.map_or_else(String::new, |value| value.expose_secret().to_owned())
+        };
+        let replies = plan
+            .iter()
+            .map(|answer| match answer {
+                Answer::Password => secret(password),
+                Answer::Code => secret(code.as_ref()),
+            })
+            .collect();
+        if code.is_some() {
+            tracing::debug!("a one-time code answers the server's question");
+        }
         reply = handle
-            .authenticate_keyboard_interactive_respond(answers)
+            .authenticate_keyboard_interactive_respond(replies)
             .await
             .map_err(|error| SshError::transport(&error))?;
     }
@@ -282,3 +319,7 @@ async fn rsa_hash(
 #[cfg(test)]
 #[path = "auth_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "auth_totp_tests.rs"]
+mod totp_tests;

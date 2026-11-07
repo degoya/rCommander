@@ -22,6 +22,8 @@ pub enum PluginKind {
     Viewer,
     /// A password manager as the source of a connection's secret (contract 0.3.0).
     Secrets,
+    /// A server inventory whose hosts become connections (contract 0.4.0).
+    Inventory,
 }
 
 impl PluginKind {
@@ -30,6 +32,7 @@ impl PluginKind {
         match self {
             Self::Viewer => VIEWER,
             Self::Secrets => SECRETS,
+            Self::Inventory => INVENTORY,
         }
     }
 }
@@ -123,6 +126,50 @@ pub(super) const SECRETS: &[(&str, &str)] = &[
     (
         "wit/rcommander.wit",
         include_str!("../../../../sdk/templates/secrets/wit/rcommander.wit"),
+    ),
+];
+
+/// `sdk/templates/inventory`, file by file (RC-100-39).
+pub(super) const INVENTORY: &[(&str, &str)] = &[
+    (
+        "CHANGES.md",
+        include_str!("../../../../sdk/templates/inventory/CHANGES.md"),
+    ),
+    (
+        "Cargo.toml",
+        include_str!("../../../../sdk/templates/inventory/Cargo.toml"),
+    ),
+    (
+        "README.md",
+        include_str!("../../../../sdk/templates/inventory/README.md"),
+    ),
+    (
+        "locales/en.json",
+        include_str!("../../../../sdk/templates/inventory/locales/en.json"),
+    ),
+    (
+        "manifest.toml",
+        include_str!("../../../../sdk/templates/inventory/manifest.toml"),
+    ),
+    (
+        "src/guest.rs",
+        include_str!("../../../../sdk/templates/inventory/src/guest.rs"),
+    ),
+    (
+        "src/lib.rs",
+        include_str!("../../../../sdk/templates/inventory/src/lib.rs"),
+    ),
+    (
+        "src/lib_tests.rs",
+        include_str!("../../../../sdk/templates/inventory/src/lib_tests.rs"),
+    ),
+    (
+        "src/types.rs",
+        include_str!("../../../../sdk/templates/inventory/src/types.rs"),
+    ),
+    (
+        "wit/rcommander.wit",
+        include_str!("../../../../sdk/templates/inventory/wit/rcommander.wit"),
     ),
 ];
 

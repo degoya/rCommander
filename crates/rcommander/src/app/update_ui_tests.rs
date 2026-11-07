@@ -4,7 +4,10 @@
 
 use rc_engine::{DownloadState, UpdateNotice, UpdateStatus};
 
-use super::{UpdateMsg, changelog_url, manager_line, notice_actions, notice_line};
+use super::{
+    PageAction, PageButton, UpdateMsg, changelog_url, manager_line, notice_actions, notice_line,
+    page_buttons,
+};
 use crate::app::{Effect, Message, harness::Harness, settings::Page, viewer::links};
 
 fn status() -> UpdateStatus {
@@ -23,6 +26,7 @@ fn status() -> UpdateStatus {
         install_reason: Some("update.kind_no_version_file".to_owned()),
         install_command: None,
         installing: false,
+        install_after_download: false,
         queue_busy: false,
         last_update: None,
         updated_to: None,
@@ -157,4 +161,154 @@ fn a_managers_installation_shows_its_command() {
     let line = manager_line(&scoop).expect("a line");
     assert!(line.contains("Scoop"), "{line}");
     assert!(line.contains("scoop update rcommander"), "{line}");
+}
+
+/// `status` with an offer of 9.1.0 that has a package for this platform.
+fn offered(status: UpdateStatus) -> UpdateStatus {
+    let offer = rc_update::Offer {
+        version: "9.1.0".to_owned(),
+        channel: rc_update::Channel::Stable,
+        released_at: chrono::Utc::now(),
+        notes: String::new(),
+        artifact: Some(rc_update::Artifact {
+            platform: "windows".to_owned(),
+            arch: "x64".to_owned(),
+            kind: "zip".to_owned(),
+            url: "https://example.invalid/rcommander-9.1.0.zip".to_owned(),
+            sha256: "ab".repeat(32),
+            size: 10,
+        }),
+        schema_change: false,
+    };
+    UpdateStatus {
+        offer: Some(offer),
+        ..status
+    }
+}
+
+fn portable() -> UpdateStatus {
+    offered(UpdateStatus {
+        install_kind: "portable".to_owned(),
+        install_reason: None,
+        ..status()
+    })
+}
+
+fn actions(buttons: &[PageButton]) -> Vec<PageAction> {
+    buttons.iter().map(|button| button.action).collect()
+}
+
+fn primary(buttons: &[PageButton]) -> PageButton {
+    let mut primary = buttons.iter().filter(|button| button.primary);
+    let first = *primary.next().expect("a main button");
+    assert!(primary.next().is_none(), "one main button");
+    first
+}
+
+/// A portable installation has one button for download and install (RC-100-84): no "Download",
+/// and "Install and restart" can be pressed as soon as a package is offered.
+#[test]
+fn a_portable_installation_installs_with_one_button() {
+    let buttons = page_buttons(&portable());
+    assert_eq!(
+        actions(&buttons),
+        [
+            PageAction::CheckNow,
+            PageAction::OpenFolder,
+            PageAction::CopyAddress,
+            PageAction::Install,
+        ]
+    );
+    assert!(primary(&buttons).enabled, "installable before the download");
+    // Downloaded: still the one button.
+    let ready = UpdateStatus {
+        download: DownloadState::Ready {
+            file: "rcommander-9.1.0.zip".to_owned(),
+        },
+        ..portable()
+    };
+    let buttons = page_buttons(&ready);
+    assert_eq!(primary(&buttons).action, PageAction::Install);
+    assert!(primary(&buttons).enabled);
+    // While it downloads or waits for its download, the button rests; a failure frees it.
+    for waiting in [
+        UpdateStatus {
+            download: DownloadState::Running {
+                received: 1,
+                total: 10,
+            },
+            install_after_download: true,
+            ..portable()
+        },
+        UpdateStatus {
+            install_after_download: true,
+            ..portable()
+        },
+    ] {
+        assert!(!primary(&page_buttons(&waiting)).enabled, "{waiting:?}");
+    }
+    let failed = UpdateStatus {
+        download: DownloadState::Failed {
+            code: "update.download_failed".to_owned(),
+        },
+        ..portable()
+    };
+    assert!(primary(&page_buttons(&failed)).enabled);
+    // A busy queue: "Install once the queue is empty", never pressable.
+    let busy = UpdateStatus {
+        queue_busy: true,
+        ..portable()
+    };
+    let main = primary(&page_buttons(&busy));
+    assert_eq!(main.action, PageAction::InstallWhenEmpty);
+    assert!(!main.enabled);
+    // Without an offer there is nothing to install.
+    let nothing = UpdateStatus {
+        offer: None,
+        ..portable()
+    };
+    assert!(!primary(&page_buttons(&nothing)).enabled);
+}
+
+/// An unknown installation does not install itself: "Download" is its main button.
+#[test]
+fn an_unknown_installation_only_downloads() {
+    let buttons = page_buttons(&offered(status()));
+    assert_eq!(
+        actions(&buttons),
+        [
+            PageAction::CheckNow,
+            PageAction::OpenFolder,
+            PageAction::CopyAddress,
+            PageAction::Download,
+        ]
+    );
+    let main = primary(&buttons);
+    assert_eq!(main.action, PageAction::Download);
+    assert!(main.enabled);
+}
+
+/// A package manager's installation is as before: "Download" beside the others, and "Copy
+/// command" as the main button.
+#[test]
+fn a_managers_installation_keeps_download_and_copies_its_command() {
+    let scoop = offered(UpdateStatus {
+        install_kind: "scoop".to_owned(),
+        install_reason: Some("update.kind_package_manager".to_owned()),
+        install_command: Some("scoop update rcommander".to_owned()),
+        ..status()
+    });
+    let buttons = page_buttons(&scoop);
+    assert_eq!(
+        actions(&buttons),
+        [
+            PageAction::CheckNow,
+            PageAction::Download,
+            PageAction::OpenFolder,
+            PageAction::CopyAddress,
+            PageAction::CopyCommand,
+        ]
+    );
+    assert_eq!(primary(&buttons).action, PageAction::CopyCommand);
+    assert!(buttons[1].enabled, "the download");
 }

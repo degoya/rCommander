@@ -159,10 +159,10 @@ impl Form {
     }
 
     /// Removals first, then what was typed; a key is taken in only from its file. A connection
-    /// on a shared credential changes none of its own.
+    /// on a shared credential changes none of its own but its one-time code seed.
     fn secret_changes(&self) -> Vec<SecretChange> {
         if !self.is_credential() && self.shared.is_some() {
-            return Vec::new();
+            return self.own_totp_changes();
         }
         let mut changes: Vec<SecretChange> = self
             .forget
@@ -196,6 +196,7 @@ impl Form {
                 });
             }
         }
+        changes.extend(self.totp_set());
         changes
     }
 }

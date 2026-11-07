@@ -20,7 +20,7 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "update.install",
         class: CommandClass::GuiOnly,
-        summary: "Install the downloaded version and restart; the old one comes back if the new fails",
+        summary: "Install the offered version and restart, downloading it first when needed; the old one comes back if the new fails",
     },
     CommandSpec {
         id: "update.status",
@@ -38,7 +38,8 @@ macro_rules! commands {
             "update.check" => CheckForUpdates {},
             /// The offer's archive, into `<data>/update/download/`.
             "update.download" => DownloadUpdate {},
-            /// Refused with `update.queue_busy` while a job runs, waits or is paused.
+            /// Refused with `update.queue_busy` while a job runs, waits or is paused; without
+            /// the verified download it downloads first and installs once it is ready (RC-100-84).
             "update.install" => InstallUpdate {},
         } }
     };

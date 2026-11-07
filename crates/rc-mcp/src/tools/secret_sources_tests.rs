@@ -25,7 +25,7 @@ async fn listing_and_searching_reach_mcp_and_mapping_does_not() {
     let names = RcMcpServer::tool_names();
     let tools: Vec<&String> = names
         .iter()
-        .filter(|name| name.contains("sources"))
+        .filter(|name| name.contains("sources") && !name.starts_with("inventory_"))
         .collect();
     assert_eq!(
         tools,

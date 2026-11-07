@@ -1,0 +1,50 @@
+# rCommander's bundled viewer for scripting languages (RC-100-83): Ruby, Perl, Lua and VBScript.
+# The fields every bundled plugin shares are in plugins/metadata.toml; `scripts/build-plugins.sh`
+# writes them into the manifest it packages. A failure code starts with the plugin's id
+# (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0: `settings`, through which `open` reads `encoding`.
+api_version = "0.4.0"
+id = "01a1b57c-cbc8-7e0f-9f76-d73b6cdc02ed"
+name = "Script viewer"
+version = "0.1.0"
+
+[match]
+# The language is the name's (src/lang.rs, `Lang::from_name`): Ruby (`.rb`, `Gemfile`,
+# `Rakefile`), Perl (`.pl`, `.pm`), Lua (`.lua`), VBScript (`.vbs`). No magic: the content never
+# names the language. `Gemfile` and `Rakefile` have no extension: they are claimed by their name
+# (RC-100-80; any case, the name alone, never the folder).
+names = ["Gemfile", "Rakefile"]
+extensions = ["rb", "pl", "pm", "lua", "vbs"]
+magic = []
+# The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
+# file would be cut anyway.
+max_size = 268435456
+
+[viewer]
+# Read coloured; the outline of a script is not this plugin's.
+outputs = ["highlighted"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows Ruby, Perl, Lua and VBScript scripts coloured like an editor."
+# `[match] names` is understood from 0.19.0 on (RC-100-80).
+min_app_version = "0.19.0"
+
+# The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
+# src/lib.rs), the 1 MiB windows `open` and `text` read and write through, and one line of at
+# most 1 MiB with its text.
+[limits]
+# `open` reads the whole file once, which for a large file on a slow remote takes a while.
+timeout_milliseconds = 60000
+
+# How the file's bytes are read: `auto` takes the encoding of a byte-order mark (UTF-8, UTF-16),
+# else UTF-8 when the start of the file is valid UTF-8, else Windows-1252, for an old script
+# saved in the ANSI code page (a `.vbs` often is).
+[[settings]]
+key = "encoding"
+type = "choice"
+values = ["auto", "utf-8", "utf-16le", "windows-1252"]
+default = "auto"

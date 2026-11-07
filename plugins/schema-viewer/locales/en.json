@@ -1,0 +1,7 @@
+{
+  "name": "Schema viewer",
+  "description": "Shows Protocol Buffers (.proto) and GraphQL (.graphql, .gql) schemas coloured like an editor.",
+  "codes": {
+    "01a1aafa-409f-715f-b096-2782e53c4ab0.setting.encoding": "Encoding"
+  }
+}

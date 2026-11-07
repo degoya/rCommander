@@ -1,13 +1,32 @@
 use roxmltree::Document;
 
 use super::*;
-use crate::budget::MAX_EXPANDED_ELEMENTS;
+use crate::budget::{MAX_ARC_CURVES, MAX_EXPANDED_ELEMENTS};
 
 const MAX: u64 = MAX_EXPANDED_ELEMENTS;
 
-fn counted(svg: &str, limit: u64) -> u64 {
+/// What `svg` costs, each part up to its `limit + 1`.
+fn cost(svg: &str, limit: Cost) -> Cost {
     let doc = Document::parse(svg).expect("the test SVG parses");
     count(&doc, limit)
+}
+
+/// The elements of `svg`, its curves within their budget.
+fn counted(svg: &str, limit: u64) -> u64 {
+    let limit = Cost {
+        elements: limit,
+        curves: MAX_ARC_CURVES,
+    };
+    cost(svg, limit).elements
+}
+
+/// The curves of `svg`, unlimited but for an arc beyond its own limit.
+fn curves(svg: &str) -> u64 {
+    let limit = Cost {
+        elements: MAX,
+        curves: u64::MAX - 1,
+    };
+    cost(svg, limit).curves
 }
 
 /// A document around `body`.
@@ -164,4 +183,63 @@ fn painted_text_takes_a_copy_per_character_and_line() {
     let svg = svg(r##"<pattern id="p"><rect/></pattern><text fill="url(#p)">abc</text>"##);
     // The svg, the pattern and its rect; the text with (3 + 1) * 4 copies of 2 elements.
     assert_eq!(counted(&svg, 100), 3 + 1 + 16 * 2);
+}
+
+#[test]
+fn curves_count_as_often_as_usvg_builds_their_shape() {
+    // Half a circle of radius 1 is two curves: in place, and twice more through `use`.
+    let document =
+        svg(r##"<path id="p" d="M0 0 A1 1 0 0 1 2 0"/><use href="#p"/><use href="#p"/>"##);
+    assert_eq!(curves(&document), 3 * 2);
+    // A circle (four curves) in a marker drawn at both ends of a line, and where it stands.
+    let document = svg(r##"<marker id="m"><circle r="10"/></marker>
+        <line x1="0" y1="0" x2="10" y2="0" marker-start="url(#m)" marker-end="url(#m)"/>"##);
+    assert_eq!(curves(&document), 3 * 4);
+}
+
+#[test]
+fn a_text_path_counts_the_curves_of_the_shape_it_follows() {
+    let document = svg(r##"<path id="p" d="M0 0 A1 1 0 0 1 2 0"/>
+        <text><textPath href="#p">ab</textPath><textPath xlink:href="#p"
+            xmlns:xlink="http://www.w3.org/1999/xlink">c</textPath></text>"##);
+    assert_eq!(curves(&document), 3 * 2);
+}
+
+#[test]
+fn an_arc_beyond_its_own_limit_is_refused_at_once() {
+    let document = svg(r#"<path d="M0 0 A1e30 1e30 0 0 1 2e30 0"/>"#);
+    let limit = Cost {
+        elements: MAX,
+        curves: MAX_ARC_CURVES,
+    };
+    let counted = cost(&document, limit);
+    assert!(counted.exceeds(limit));
+    assert_eq!(counted.curves, MAX_ARC_CURVES + 1);
+}
+
+#[test]
+fn arcs_within_their_limit_add_up_beyond_the_budget_through_use() {
+    // Ten arcs of some 48 curves each, in five levels of ten `<use>`: 11 111 copies of them,
+    // over five million curves, from some 136 000 elements.
+    let mut body = format!(
+        r#"<g id="l0">{}</g>"#,
+        r#"<path d="M0 0 A1e9 1e9 0 1 1 1 0"/>"#.repeat(10)
+    );
+    for level in 1..5 {
+        let uses = format!(r##"<use href="#l{}"/>"##, level - 1).repeat(10);
+        body.push_str(&format!(r#"<g id="l{level}">{uses}</g>"#));
+    }
+    let document = svg(&body);
+    let unlimited = Cost {
+        elements: MAX,
+        curves: u64::MAX - 1,
+    };
+    let counted = cost(&document, unlimited);
+    assert!(counted.elements < MAX, "{counted:?}");
+    assert!(counted.curves > MAX_ARC_CURVES, "{counted:?}");
+    let limit = Cost {
+        elements: MAX,
+        curves: MAX_ARC_CURVES,
+    };
+    assert_eq!(cost(&document, limit).curves, MAX_ARC_CURVES + 1);
 }

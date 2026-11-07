@@ -22,15 +22,18 @@ pub(crate) enum StepKind {
     SendSecret,
     SendLine,
     Sleep,
+    /// The one-time code of the connection's seed (RC-060-08).
+    SendTotp,
 }
 
 impl StepKind {
-    pub(crate) const ALL: [Self; 5] = [
+    pub(crate) const ALL: [Self; 6] = [
         Self::WaitFor,
         Self::SendText,
         Self::SendSecret,
         Self::SendLine,
         Self::Sleep,
+        Self::SendTotp,
     ];
 
     /// The kind's name in the window.
@@ -41,6 +44,7 @@ impl StepKind {
             Self::SendSecret => t!("login_scripts.step.send_secret"),
             Self::SendLine => t!("login_scripts.step.send_line"),
             Self::Sleep => t!("login_scripts.step.sleep"),
+            Self::SendTotp => t!("login_scripts.step.send_totp"),
         }
     }
 }
@@ -79,7 +83,10 @@ impl StepRow {
             kind,
             text: String::new(),
             timeout: String::new(),
-            newline: matches!(kind, StepKind::SendText | StepKind::SendSecret),
+            newline: matches!(
+                kind,
+                StepKind::SendText | StepKind::SendSecret | StepKind::SendTotp
+            ),
             source: SourceChoice::default(),
             ms: "500".to_owned(),
             error: None,
@@ -114,6 +121,7 @@ impl StepRow {
             Step::SendSecret { .. } => StepKind::SendSecret,
             Step::SendLine => StepKind::SendLine,
             Step::Sleep { .. } => StepKind::Sleep,
+            Step::SendTotp { .. } => StepKind::SendTotp,
         };
         let mut row = Self::new(kind);
         match step {
@@ -137,6 +145,7 @@ impl StepRow {
             }
             Step::SendLine => {}
             Step::Sleep { ms } => row.ms = ms.to_string(),
+            Step::SendTotp { newline } => row.newline = *newline,
         }
         row
     }
@@ -162,6 +171,9 @@ impl StepRow {
             StepKind::SendLine => Step::SendLine,
             StepKind::Sleep => Step::Sleep {
                 ms: millis(&self.ms)?,
+            },
+            StepKind::SendTotp => Step::SendTotp {
+                newline: self.newline,
             },
         })
     }
@@ -230,13 +242,16 @@ impl Draft {
         Ok(script)
     }
 
-    /// Why the secret the step at `at` sends may be typed without a password prompt (RC-050-13):
-    /// no "Wait for" right before it, or one whose pattern neither names "pass" nor matches one of
-    /// [`PASSWORD_PROMPTS`] - a shell prompt, say, where the secret would be run as a command and
-    /// kept in the history. None for another step, a fitting prompt, or a pattern that does not
+    /// Why the secret (or one-time code) the step at `at` sends may be typed without a password
+    /// prompt (RC-050-13): no "Wait for" right before it, or one whose pattern neither names
+    /// "pass" nor matches one of [`PASSWORD_PROMPTS`] - a shell prompt, say, where the secret would
+    /// be run as a command and kept in the history. None for another step, a fitting prompt, or a pattern that does not
     /// compile (its field says so).
     pub(crate) fn secret_warning(&self, at: usize) -> Option<SecretWarning> {
-        if self.steps.get(at)?.kind != StepKind::SendSecret {
+        if !matches!(
+            self.steps.get(at)?.kind,
+            StepKind::SendSecret | StepKind::SendTotp
+        ) {
             return None;
         }
         let before = at.checked_sub(1).and_then(|before| self.steps.get(before));

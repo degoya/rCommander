@@ -7,7 +7,13 @@
 //!   line, an unknown keyword only when it is a plausible one (ASCII letters, at most 32).
 //! - A host becomes a connection named by its alias; `IdentityFile` gives the key path (the
 //!   first file, by path - no key is read), auth method `key` with one and `agent` without, as
-//!   `ssh` would try. `ProxyJump` and further key files go into the notes as not used.
+//!   `ssh` would try. Further key files go into the notes as not used.
+//! - `ProxyJump <alias>` names the jump host when the alias is a connection of this import or of
+//!   an earlier ssh_config import: set once every host is written (`commands/ssh_import_links.rs`,
+//!   RC-110-03). A list (`j1,j2`) or `user@host:port` stays a note, not imported.
+//! - `LocalForward` becomes a port forward that does not start by itself, only from the window:
+//!   an MCP import lists them as `forwards_gui_only` and creates none (`forwards.save` is a
+//!   person's). A bind address other than loopback is lowered to `127.0.0.1` with a warning.
 //! - The repository's key is the alias in ASCII lower case, its source `ssh_config:<file>`.
 
 use std::path::Path;
@@ -15,8 +21,10 @@ use std::path::Path;
 use rc_db::connections::{ImportCandidate, ImportResult, ImportStatus};
 use serde::{Deserialize, Serialize};
 
-use super::ssh_config::{ImportWarning, ImportedHost, SkippedHost, SshConfigImport, WarningKind};
-use crate::{AuthMethod, ConnectionDraft, FolderId};
+use super::ssh_config::{
+    ImportWarning, ImportedHost, LocalForwardSpec, SkippedHost, SshConfigImport, WarningKind,
+};
+use crate::{AuthMethod, ConnectionDraft, ConnectionId, FolderId};
 
 /// The root folder new connections go into when the import names none.
 pub const DEFAULT_FOLDER: &str = "Imported from ssh config";
@@ -52,8 +60,18 @@ pub struct SshConfigHost {
     pub user: Option<String>,
     /// Key files by path; the first one becomes the connection's key path.
     pub identity_files: Vec<String>,
-    /// Not supported yet; kept in the notes of a new connection.
+    /// As written; one alias becomes `jump_id` once written, anything else a note.
     pub proxy_jump: Option<String>,
+    /// The jump host the import set (RC-110-03); `None` in a preview, without one, or when the
+    /// alias is no connection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jump_id: Option<ConnectionId>,
+    /// The `LocalForward` lines as `127.0.0.1:8080 -> web:80` (RC-110-03).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_forwards: Vec<String>,
+    /// Whether the forwards are left to the window: an MCP import creates none.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub forwards_gui_only: bool,
     /// Keywords of the host that are not imported, when plausible ones; never their values.
     pub ignored_options: Vec<String>,
     pub file: String,
@@ -120,11 +138,39 @@ pub fn candidates(found: &SshConfigImport, hosts: Option<&[String]>) -> Vec<Impo
         .collect()
 }
 
+/// The alias of `ProxyJump` when it names one host by its alias alone: no list, no user, no
+/// port - what the import can set as the jump host.
+#[must_use]
+pub fn single_jump(proxy_jump: &str) -> Option<&str> {
+    let alias = proxy_jump.trim();
+    (!alias.is_empty()
+        && !alias.contains([',', '@', ':', '/', '[', ']'])
+        && !alias.chars().any(char::is_whitespace))
+    .then_some(alias)
+}
+
+/// `127.0.0.1:8080 -> web:80`.
+#[must_use]
+pub fn forward_label(spec: &LocalForwardSpec) -> String {
+    let bind = spec.bind.as_deref().unwrap_or(rc_db::connections::LOOPBACK);
+    let bind = if bind.contains(':') {
+        format!("[{bind}]")
+    } else {
+        bind.to_owned()
+    };
+    format!(
+        "{bind}:{} \u{2192} {}:{}",
+        spec.port, spec.host, spec.host_port
+    )
+}
+
 /// The new connection a host describes.
 fn draft(host: &ImportedHost) -> ConnectionDraft {
     let mut notes = Vec::new();
-    if let Some(jump) = &host.proxy_jump {
-        notes.push(format!("ProxyJump {jump} (not supported yet)"));
+    if let Some(jump) = &host.proxy_jump
+        && single_jump(jump).is_none()
+    {
+        notes.push(format!("ProxyJump {jump} (not imported)"));
     }
     for file in host.identity_files.iter().skip(1) {
         notes.push(format!("IdentityFile {} (not used)", file.display()));
@@ -172,6 +218,9 @@ pub fn report(
                 .map(|file| file.display().to_string())
                 .collect(),
             proxy_jump: host.proxy_jump.clone(),
+            jump_id: None,
+            local_forwards: host.local_forwards.iter().map(forward_label).collect(),
+            forwards_gui_only: !host.local_forwards.is_empty() && crate::read_guard::from_mcp(),
             ignored_options: host
                 .ignored_options
                 .iter()
@@ -216,6 +265,9 @@ fn warning(warning: &ImportWarning) -> SshConfigWarning {
         WarningKind::TooManyHosts => Some("Host".to_owned()),
         WarningKind::MatchSkipped => Some("Match".to_owned()),
         WarningKind::InvalidPort { .. } => Some("Port".to_owned()),
+        WarningKind::InvalidForward | WarningKind::ForwardBindLowered => {
+            Some("LocalForward".to_owned())
+        }
         WarningKind::OptionOutsideHost { keyword } | WarningKind::MissingArgument { keyword } => {
             plausible_keyword(keyword)
         }

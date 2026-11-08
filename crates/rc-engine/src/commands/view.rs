@@ -1,11 +1,11 @@
-//! How a panel lists its entries: `panel.sort` (Ctrl+F3 to F6 or a click on a column header),
-//! `panel.set_view` (Ctrl+F1 brief, Ctrl+F2 full) and `panel.toggle_hidden` (Total Commander's
-//! `cm_SwitchHidSys`, no standard key), whose choice is stored in the database.
+//! How a panel lists its entries: `panel.sort` (Ctrl+F3 to F6 or a click on a column header) and
+//! `panel.toggle_hidden` (Total Commander's `cm_SwitchHidSys`, no standard key), whose choice is
+//! stored in the database. `panel.set_view` is the column view's (`columns/view.rs`).
 
 use std::sync::Arc;
 
 use crate::{
-    Engine, EngineError, EngineEvent, ListMode, Outcome, PanelChange, PanelId, SortKey, SortOrder,
+    Engine, EngineError, EngineEvent, Outcome, PanelChange, PanelId, SortKey, SortOrder,
     settings::{SORT_NAMES_KEY, SORT_NUMBERS_KEY, stored_setting},
     sort::{NameOrder, names_for, set_names, sort_entries},
 };
@@ -44,24 +44,9 @@ impl Engine {
                 let name = panel.cursor_entry().map(|entry| entry.name.clone());
                 panel.relist(sorted.into());
                 panel.cursor = name.and_then(|name| panel.index_of(&name)).unwrap_or(0);
+                // By comment once the panel has read them (RC-100-90).
+                panel.order_by_comments();
             }
-            panel.snapshot(id, active)
-        };
-        self.publish(EngineEvent::Panel {
-            panel: id,
-            change: PanelChange::Listing,
-        });
-        Outcome::Panel(snapshot)
-    }
-
-    /// `panel.set_view`.
-    pub(crate) fn set_list_mode(&self, panel: Option<PanelId>, mode: ListMode) -> Outcome {
-        let id = self.resolve(panel);
-        let snapshot = {
-            let mut state = self.state();
-            let active = state.active == id;
-            let panel = state.panel_mut(id);
-            panel.mode = mode;
             panel.snapshot(id, active)
         };
         self.publish(EngineEvent::Panel {
@@ -94,6 +79,9 @@ impl Engine {
         };
         self.read_name_order().await;
         self.read_archive_limits().await;
+        // The ignore list, the programs of the file filters, the most visited folders (RC-100-92).
+        self.read_panel_list_settings().await;
+        self.read_frequent().await;
         if let Ok(Some(true)) = db.get::<bool>(SHOW_HIDDEN_KEY).await {
             // A panel that cannot be read again keeps its listing and says so on the next key.
             if let Err(error) = self.show_hidden(true).await {
@@ -121,6 +109,8 @@ impl Engine {
     /// folders again; a panel that cannot be read keeps its listing and says so on the next key.
     pub(crate) async fn name_order_changed(&self) {
         self.read_name_order().await;
+        // The trees' levels were sorted the old way (RC-100-88).
+        self.inner.tree.clear();
         for panel in PanelId::BOTH {
             if let Err(error) = self.refresh(Some(panel)).await {
                 tracing::debug!(code = error.code(), "a panel was not sorted again");

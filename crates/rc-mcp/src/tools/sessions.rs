@@ -101,7 +101,7 @@ impl RcMcpServer {
 #[tool_router(router = sessions_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Open the SSH session of a connection, or take the one that is up. The server's host key is checked first, then the login tries the connection's methods in order (default: agent, key, password; secrets come from rCommander's vault, never through MCP). Answers connection_id, state, login {method: agent|key|password|keyboard_interactive, fingerprint for a key}, host_key_fingerprint, channels. Errors: connection_not_found, connection_not_ssh, vault_locked (ask the person to unlock the vault in rCommander), host_key_unknown and host_key_changed (only the person can trust or replace a key, in the window), ssh_auth_failed, ssh_unreachable, ssh_timeout, ssh_no_username, key_passphrase_wrong, cancelled."
+        description = "Open the SSH session of a connection, or take the one that is up. The server's host key is checked first, then the login tries the connection's methods in order (default: agent, key, password; secrets come from rCommander's vault, never through MCP). A connection with a jump host goes through it (and its own, at most 4 hops), each hop checked and logged in with its own key and secrets. Answers connection_id, state, login {method: agent|key|password|keyboard_interactive, fingerprint for a key, certificate: the key id of the OpenSSH certificate that signed in, when one did}, host_key_fingerprint, channels, via (the jump hosts' names, the first one first; absent when direct). A failure at a jump host keeps its code and names the hop in the message. Errors: connection_not_found, connection_not_ssh, jump_cycle, jump_chain_too_long, jump_needs_ssh, vault_locked (ask the person to unlock the vault in rCommander), host_key_unknown and host_key_changed (only the person can trust or replace a key, in the window), ssh_auth_failed, ssh_certificate_expired and ssh_certificate_not_yet_valid (the key's certificate is outside its validity and was not sent), ssh_certificate_principal (the server refused the certificate; it does not name the user), ssh_unreachable, ssh_timeout, ssh_no_username, key_passphrase_wrong, cancelled."
     )]
     pub(crate) async fn connections_connect(
         &self,
@@ -114,7 +114,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Close the session of a connection - SSH, or an FTP connection's kept session (every control connection says QUIT) - or cancel a setup under way (within a second). Channels on it end with connection_lost. A panel showing the server goes back to the local folder it showed before, as Ctrl+Shift+F does. Answers was_open: whether there was a session or a setup. Errors: connection_not_found."
+        description = "Close the session of a connection - SSH, or an FTP connection's kept session (every control connection says QUIT) - or cancel a setup under way (within a second). Channels on it end with connection_lost, and its port forwards stop. A panel showing the server goes back to the local folder it showed before, as Ctrl+Shift+F does. Answers was_open: whether there was a session or a setup. Errors: connection_not_found."
     )]
     pub(crate) async fn connections_disconnect(
         &self,
@@ -127,7 +127,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Test a connection without keeping a session: connect, check the host key, log in, disconnect. Answers login (the method that got in), host_key {algorithm, fingerprint, public_key} and duration_ms. Errors as connections_connect."
+        description = "Test a connection without keeping a session: connect, check the host key, log in, disconnect. Answers login (the method that got in), host_key {algorithm, fingerprint, public_key}, duration_ms and hops (the jump hosts it went through; absent when direct). Errors as connections_connect."
     )]
     pub(crate) async fn connections_test(
         &self,

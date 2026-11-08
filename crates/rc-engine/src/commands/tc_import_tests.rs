@@ -422,6 +422,7 @@ async fn tabs_are_added_once_and_a_missing_folder_only_when_named() {
             tabs: true,
             connections: false,
             look: false,
+            commands: false,
         },
         dry_run,
         only,

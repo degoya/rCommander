@@ -110,6 +110,7 @@ impl Engine {
                         sort: Some(tab.sort),
                         mode: Some(tab.mode),
                         locked: tab.locked,
+                        title: tab.title.clone(),
                     });
                 }
                 PanelNow {

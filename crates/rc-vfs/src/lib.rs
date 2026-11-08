@@ -42,7 +42,8 @@ use serde::{Deserialize, Serialize};
 
 pub use archive::{
     ArchiveEntryInfo, ArchiveFormat, ArchiveFs, ArchiveItem, ArchiveLimits, ArchivePassword,
-    ArchiveSettings, Compression, UnsafeName, detect_format, detect_format_within,
+    ArchiveSettings, Compression, UnsafeName, check_sevenz_block, check_sevenz_header,
+    detect_format, detect_format_within,
 };
 pub use device::{DeviceFs, DeviceHub, PortableDevice, system_hub};
 pub use entry::{

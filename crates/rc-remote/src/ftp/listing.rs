@@ -135,6 +135,7 @@ fn named(
         kind,
         modified,
         created,
+        accessed: None,
         attributes,
         hidden: name.starts_with('.'),
         owner: None,

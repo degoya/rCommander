@@ -12,6 +12,7 @@
 
 mod exchange;
 mod exchange_view;
+mod portable;
 mod view;
 
 use std::path::{MAIN_SEPARATOR, Path, PathBuf};
@@ -27,6 +28,7 @@ use rc_engine::{
 };
 
 pub use self::exchange::{ExchangeForm, ExchangeMsg, Part};
+pub use self::portable::{PortableMsg, PortableStep};
 pub(super) use self::view::{PATH_FIELD, body, overlay, title};
 use super::{App, Effect, Message, vault_ask::Ask};
 use crate::{
@@ -66,6 +68,8 @@ pub struct DatabaseDialog {
     pub phase: Phase,
     /// The export's and the import's fields.
     pub exchange: ExchangeForm,
+    /// "Make this copy portable..." (RC-100-95).
+    pub portable: PortableStep,
     /// The suggested folder, made when the backup goes into it.
     folder: Option<PathBuf>,
 }
@@ -93,6 +97,7 @@ impl DatabaseDialog {
             overwrite: false,
             phase: Phase::Editing,
             exchange: ExchangeForm::default(),
+            portable: PortableStep::Idle,
             folder,
         }
     }
@@ -107,6 +112,8 @@ pub enum DatabaseMsg {
     OpenMode(DialogMode),
     /// The export's and the import's fields (RC-080-19).
     Exchange(ExchangeMsg),
+    /// Making this copy portable (RC-100-95).
+    Portable(PortableMsg),
     Mode(DialogMode),
     Path(String),
     Overwrite(bool),
@@ -166,6 +173,7 @@ impl App {
                 }
             }
             DatabaseMsg::Exchange(ExchangeMsg::Read) => return self.read_export(),
+            DatabaseMsg::Portable(message) => return self.on_portable(message),
             DatabaseMsg::Exchange(message) => {
                 if let Some(dialog) = self.editable() {
                     dialog.exchange.update(message);
@@ -205,6 +213,10 @@ impl App {
         }
         if !chord.is_plain() {
             return Vec::new();
+        }
+        // The portable question and the restart offer take Enter and Escape (RC-100-95).
+        if let Some(effects) = self.portable_key(chord.key.as_str()) {
+            return effects;
         }
         match chord.key.as_str() {
             "Escape" => self.database = None,
@@ -334,12 +346,23 @@ impl App {
     }
 
     fn database_finished(&mut self, result: Result<Outcome, &'static str>) {
+        // `app.make_portable` answers with the copy's report (RC-100-95).
+        let report = match &result {
+            Ok(Outcome::DatabaseBackup(report)) => Some(report),
+            _ => None,
+        };
+        let made = self
+            .database
+            .as_mut()
+            .and_then(|dialog| portable::finished(dialog, report));
         let phase = match result {
-            Ok(Outcome::DatabaseBackup(report)) => Phase::Done(t!(
-                "db.backup_done",
-                path = report.path.display(),
-                size = format::size(report.size)
-            )),
+            Ok(Outcome::DatabaseBackup(report)) => Phase::Done(made.unwrap_or_else(|| {
+                t!(
+                    "db.backup_done",
+                    path = report.path.display(),
+                    size = format::size(report.size)
+                )
+            })),
             Ok(Outcome::RestoreStaged(report)) => Phase::Done(t!(
                 "db.restore_staged",
                 backup = report.safety_backup.path.display()

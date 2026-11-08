@@ -8,12 +8,12 @@ use rcgen::{
 use rustls::{
     RootCertStore,
     client::{WebPkiServerVerifier, danger::ServerCertVerifier},
-    pki_types::{CertificateDer, ServerName, UnixTime},
+    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName, UnixTime},
 };
 
 use super::{
-    CertificateRejection, CertificateTrust, FtpError, RefuseUnknown, TlsSession, TlsSetup,
-    TrustDecision, Verifier, VerifierParts, fingerprint,
+    CertificateRejection, CertificateTrust, FtpError, HttpsTls, RefuseUnknown, TlsSession,
+    TlsSetup, TrustDecision, Verifier, VerifierParts, fingerprint,
 };
 use crate::ftp::PinnedCertificates;
 
@@ -263,4 +263,87 @@ fn a_refusal_reported_is_always_the_current_handshakes() {
     control.begin_handshake();
     assert!(handshake(&setup, &control, &leaf(Some(&roots), false)));
     assert_eq!(reported(&control), None);
+}
+
+/// A self-signed certificate for `nas.example` and its key, as a Proxmox node makes its own.
+fn self_signed_with_key() -> (CertificateDer<'static>, PrivateKeyDer<'static>) {
+    let key = KeyPair::generate().expect("key");
+    let mut params = CertificateParams::new(vec!["nas.example".to_owned()]).expect("params");
+    params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+    let der = params.self_signed(&key).expect("certificate").der().clone();
+    let key = PrivateKeyDer::from(PrivatePkcs8KeyDer::from(key.serialize_der()));
+    (der, key)
+}
+
+/// A handshake in memory between a client over `config` and a server presenting `der`: whether
+/// the client accepted it.
+fn handshake_in_memory(
+    config: rustls::ClientConfig,
+    der: CertificateDer<'static>,
+    key: PrivateKeyDer<'static>,
+) -> bool {
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+    let server_config = rustls::ServerConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .expect("versions")
+        .with_no_client_auth()
+        .with_single_cert(vec![der], key)
+        .expect("server configuration");
+    let mut server = rustls::ServerConnection::new(Arc::new(server_config)).expect("server");
+    let name = ServerName::try_from("nas.example".to_owned()).expect("name");
+    let mut client = rustls::ClientConnection::new(Arc::new(config), name).expect("client");
+    for _ in 0..8 {
+        let mut bytes = Vec::new();
+        client.write_tls(&mut bytes).expect("client writes");
+        if !bytes.is_empty() {
+            server
+                .read_tls(&mut bytes.as_slice())
+                .expect("server reads");
+            if server.process_new_packets().is_err() {
+                return false;
+            }
+        }
+        let mut bytes = Vec::new();
+        server.write_tls(&mut bytes).expect("server writes");
+        if !bytes.is_empty() {
+            client
+                .read_tls(&mut bytes.as_slice())
+                .expect("client reads");
+            if client.process_new_packets().is_err() {
+                return false;
+            }
+        }
+        if !client.is_handshaking() {
+            return true;
+        }
+    }
+    false
+}
+
+/// RC-100-40: an inventory's HTTPS client refuses a self-signed certificate and names it, and
+/// takes it once the person trusted it - the FTPS trust, never verification turned off.
+#[test]
+fn an_https_client_takes_a_self_signed_certificate_only_when_it_is_pinned() {
+    let (der, key) = self_signed_with_key();
+    let refusing = HttpsTls::new("nas.example", 8006, Arc::new(RefuseUnknown)).expect("TLS");
+    assert_eq!(refusing.rejection(), None);
+    assert!(!handshake_in_memory(
+        refusing.client_config(),
+        der.clone(),
+        key.clone_key()
+    ));
+    let rejection = refusing
+        .rejection()
+        .expect("the refused certificate is named");
+    assert_eq!(rejection.fingerprint, fingerprint(der.as_ref()));
+    assert_eq!(
+        (rejection.host.as_str(), rejection.port),
+        ("nas.example", 8006)
+    );
+    assert!(!rejection.system_verified);
+
+    let trust = Arc::new(PinnedCertificates::new(Some(pinned(&der, i64::MAX)), None));
+    let pinned = HttpsTls::new("nas.example", 8006, trust).expect("TLS");
+    assert!(handshake_in_memory(pinned.client_config(), der, key));
+    assert_eq!(pinned.rejection(), None);
 }

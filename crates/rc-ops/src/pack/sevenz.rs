@@ -7,7 +7,7 @@
 
 use std::{
     fs::File,
-    io::{self, BufReader, BufWriter, Read},
+    io::{self, BufReader, BufWriter, Read, Seek, Write},
 };
 
 use sevenz_rust2::{
@@ -33,12 +33,31 @@ pub(super) fn write(
     feed: &Feed,
 ) -> io::Result<File> {
     let mut writer = ArchiveWriter::new(out).map_err(seven_error)?;
-    let method = if level == 0 {
+    writer.set_content_methods(vec![content_method(level)]);
+    push_members(&mut writer, members, solid, feed)?;
+    writer
+        .finish()?
+        .into_inner()
+        .map_err(io::IntoInnerError::into_error)
+}
+
+/// The coder of `level`: LZMA2 with the level as its preset, 0 stores.
+pub(crate) fn content_method(level: u32) -> EncoderConfiguration {
+    if level == 0 {
         EncoderConfiguration::new(EncoderMethod::COPY)
     } else {
         EncoderConfiguration::from(Lzma2Options::from_level(level))
-    };
-    writer.set_content_methods(vec![method]);
+    }
+}
+
+/// Pushes `members` into `writer`, solid in one block or one block per file (also an archive
+/// update's new entries, RC-110-05).
+pub(crate) fn push_members<W: Write + Seek>(
+    writer: &mut ArchiveWriter<W>,
+    members: &[Member],
+    solid: bool,
+    feed: &Feed,
+) -> io::Result<()> {
     let mut block: Vec<(ArchiveEntry, &Member)> = Vec::new();
     for member in members {
         let entry = entry(member);
@@ -74,10 +93,7 @@ pub(super) fn write(
             .push_archive_entries(entries, readers)
             .map_err(seven_error)?;
     }
-    writer
-        .finish()?
-        .into_inner()
-        .map_err(io::IntoInnerError::into_error)
+    Ok(())
 }
 
 /// The entry of `member`, with its time and attributes.
@@ -125,7 +141,7 @@ impl Read for Lazy<'_> {
 
 /// The 7z crate's error as an I/O error; one that wraps an I/O error (a source's, the disk's)
 /// gives that back, so its code survives.
-fn seven_error(error: sevenz_rust2::Error) -> io::Error {
+pub(crate) fn seven_error(error: sevenz_rust2::Error) -> io::Error {
     match error {
         sevenz_rust2::Error::Io(error, _) => error,
         other => io::Error::other(other),

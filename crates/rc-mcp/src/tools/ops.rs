@@ -115,6 +115,12 @@ pub(crate) struct TransferParams {
     /// have one. On when omitted.
     #[serde(default = "keep_by_default")]
     pub keep_attributes: bool,
+    /// Rename every entry by Total Commander's mask, for example *.bak (the extension bak),
+    /// new_* or ?x*.*: name and extension are worked on apart, ? takes the old name's character
+    /// at its place, * the rest of it, ** all of it; other characters are written as they are.
+    /// One name, no separator. Omitted: the names stay.
+    #[serde(default)]
+    pub rename_mask: Option<String>,
 }
 
 impl TransferParams {
@@ -125,6 +131,7 @@ impl TransferParams {
             sources,
             target: self.target.clone(),
             options: self.options(),
+            rename_mask: self.rename_mask.clone(),
         }
     }
 
@@ -245,6 +252,13 @@ impl RcMcpServer {
                     let Some(name) = from.path.file_name() else {
                         continue;
                     };
+                    // The guard judges the name the entry gets there, its mask applied.
+                    let name: std::ffi::OsString = match params.rename_mask.as_deref() {
+                        Some(mask) => {
+                            rc_engine::apply_target_mask(mask, &name.to_string_lossy()).into()
+                        }
+                        None => name.to_owned(),
+                    };
                     if let Some(refusal) = guard.refuse_copy(&from, &target.join(name)).await {
                         return Ok(refusal);
                     }
@@ -265,7 +279,7 @@ impl RcMcpServer {
 #[tool_router(router = ops_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Copy files and directories into a directory, as a background job of the operations queue (the same queue the window shows). Directories are copied with their contents and merged into existing ones. Answers at once with the queued job (id, state, progress); with several sources and the setting queue.one_job_per_item on (the default) with one job per source instead (jobs, in the order given, sharing a batch number) - each listed, paused, resumed and cancelled on its own, a cancel or on_error cancel of one stopping the others too; follow them with ops_list. Existing targets: on_conflict skip (default), rename (the new file to name (2)), rename_existing (the old file aside), overwrite, overwrite_older, overwrite_larger, overwrite_smaller or cancel - every overwrite needs a confirmation code. Failing files are skipped and listed in failures (on_error cancel stops instead). verify compares BLAKE3 checksums; keep_attributes (default true) keeps modification times and, between Unix systems, permissions. A link to a folder goes by the setting ops.copy_links: contents (default) copies the folder it leads to as a plain folder, link makes the link anew at the target (links_unsupported where the target makes none), skip passes it over; a link leading back into its own path is not followed (link_loop); a move on the same drive renames the link itself. Sources and target may be on an SSH server as sftp://<connection name>/<path> (logs in with what is stored); a file is written there under <name>.rcpart and renamed when complete, and at most two jobs per server run at once (the others wait, state queued). A broken connection is retried (transfers.retry_count, growing waits) and the file continues where its part ends; with the retries spent the job pauses with resumable=true for ops_resume. A <name>.rcpart an earlier copy left is a conflict: on_conflict resume continues it. Between two servers (sftp:// or ftp:// on both sides) the file streams through rCommander with no local copy; failures[].target names the target when it was the target that failed. Sources that are or hold keys or credential files are refused with sensitive_path before a job is queued. A target in rCommander's data folder, an SSH folder, an autostart folder or a shell's start-up file - also below it, for a copied folder - is refused with protected_target: a person copies there in rCommander. Errors: no_sources, same_location, target_inside_source, backend_unavailable, sensitive_path, protected_target, sftp_connection_not_found, sftp_connection_ambiguous, vault_locked, host_key_unknown, sftp_* codes; panel_changed when an asked call finds its panel or the target panel in another folder than the question showed."
+        description = "Copy files and directories into a directory, as a background job of the operations queue (the same queue the window shows). Directories are copied with their contents and merged into existing ones. Answers at once with the queued job (id, state, progress); with several sources and the setting queue.one_job_per_item on (the default) with one job per source instead (jobs, in the order given, sharing a batch number) - each listed, paused, resumed and cancelled on its own, a cancel or on_error cancel of one stopping the others too; follow them with ops_list. Existing targets: on_conflict skip (default), rename (the new file to name (2)), rename_existing (the old file aside), overwrite, overwrite_older, overwrite_larger, overwrite_smaller or cancel - every overwrite needs a confirmation code. Failing files are skipped and listed in failures (on_error cancel stops instead). verify compares BLAKE3 checksums; keep_attributes (default true) keeps modification times and, between Unix systems, permissions. A link to a folder goes by the setting ops.copy_links: contents (default) copies the folder it leads to as a plain folder, link makes the link anew at the target (links_unsupported where the target makes none), skip passes it over; a link leading back into its own path is not followed (link_loop); a move on the same drive renames the link itself. rename_mask renames every entry as Total Commander's copy dialog does (*.bak: each name with the extension bak); all names are checked first and the jobs go as one batch: two entries on one name are mask_collision, a name a file system refuses invalid_name, a copy into the sources' own folder that keeps a name mask_unchanged, a rename onto the old name of another source mask_chain, a mask into an archive mask_into_archive - nothing is queued then. Sources and target may be on an SSH server as sftp://<connection name>/<path> (logs in with what is stored); a file is written there under <name>.rcpart and renamed when complete, and at most two jobs per server run at once (the others wait, state queued). A broken connection is retried (transfers.retry_count, growing waits) and the file continues where its part ends; with the retries spent the job pauses with resumable=true for ops_resume. A <name>.rcpart an earlier copy left is a conflict: on_conflict resume continues it. Between two servers (sftp:// or ftp:// on both sides) the file streams through rCommander with no local copy; failures[].target names the target when it was the target that failed. Sources that are or hold keys or credential files are refused with sensitive_path before a job is queued. A target in rCommander's data folder, an SSH folder, an autostart folder or a shell's start-up file - also below it, for a copied folder - is refused with protected_target: a person copies there in rCommander. Errors: no_sources, same_location, target_inside_source, backend_unavailable, sensitive_path, protected_target, sftp_connection_not_found, sftp_connection_ambiguous, vault_locked, host_key_unknown, sftp_* codes; panel_changed when an asked call finds its panel or the target panel in another folder than the question showed."
     )]
     pub(crate) async fn ops_copy(
         &self,

@@ -1,99 +1,21 @@
 //! The preview: a rule applied to the entries of one directory, with the conflicts.
 
 use std::collections::{HashMap, HashSet};
-use std::time::SystemTime;
 
-use chrono::{DateTime, Local, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 
-use crate::case::CaseMode;
+use crate::case::{CaseMode, lower_small_words};
+use crate::clock::{DEFAULT_DATE_FORMAT, DEFAULT_TIME_FORMAT};
 use crate::error::{MaskField, RenameError};
 use crate::names::{FsRules, InvalidName};
-use crate::pattern::parse;
-use crate::render::{Fields, NoTimestamp, path_levels, render};
-use crate::replace::SearchReplace;
+use crate::pattern::{Pattern, Token, parse};
+use crate::render::{Fields, NoTimestamp, Switches, Times, from_root, path_levels, render};
+use crate::rule::check_lengths;
+pub use crate::rule::{
+    CounterSettings, MAX_NAMES, MAX_NAMES_BYTES, MAX_RULE_TEXT, RenameContext, RenameRule,
+    RenameSource, local_time,
+};
 use crate::subdir::{check_path, normalized};
-
-/// The most characters a mask, a search text or a replacement may have: rules are untrusted input (MCP), and no file name needs more.
-pub const MAX_RULE_TEXT: usize = 1024;
-
-/// What the person set up: masks, case, search and replace, counter.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct RenameRule {
-    /// The mask for the name without the extension; `[N]` keeps it.
-    pub name_mask: String,
-    /// The mask for the extension; `[E]` keeps it. When it renders nothing, the new name has
-    /// no dot.
-    pub extension_mask: String,
-    /// The case of the whole rendered name, extension included (Total Commander's one
-    /// drop-down).
-    pub case: CaseMode,
-    /// The search and replace after masks and case, if any.
-    pub search: Option<SearchReplace>,
-    /// The settings `[C]` uses where it does not set its own.
-    pub counter: CounterSettings,
-}
-
-impl RenameRule {
-    /// Refuses a rule with a text longer than [`MAX_RULE_TEXT`] characters; what [`plan`]
-    /// checks first, for a rule that is stored rather than planned (a preset).
-    ///
-    /// # Errors
-    ///
-    /// [`RenameError::TooLong`] naming the first text that is too long.
-    pub fn check(&self) -> Result<(), RenameError> {
-        check_lengths(self)
-    }
-}
-
-impl Default for RenameRule {
-    fn default() -> Self {
-        Self {
-            name_mask: "[N]".to_owned(),
-            extension_mask: "[E]".to_owned(),
-            case: CaseMode::Unchanged,
-            search: None,
-            counter: CounterSettings::default(),
-        }
-    }
-}
-
-/// The counter: the first entry gets `start`, each further one `step` more, at least `width`
-/// digits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CounterSettings {
-    pub start: i64,
-    pub step: i64,
-    pub width: u32,
-}
-
-impl Default for CounterSettings {
-    fn default() -> Self {
-        Self {
-            start: 1,
-            step: 1,
-            width: 1,
-        }
-    }
-}
-
-/// One entry to rename.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RenameSource {
-    /// The current name, without the directory.
-    pub name: String,
-    /// The local modification time, for the date placeholders.
-    #[serde(default)]
-    pub modified: Option<NaiveDateTime>,
-}
-
-/// A modification time as the date placeholders read it: local time.
-#[must_use]
-pub fn local_time(time: SystemTime) -> NaiveDateTime {
-    DateTime::<Local>::from(time).naive_local()
-}
 
 /// What a plan is made from.
 #[derive(Debug, Clone, Copy)]
@@ -107,6 +29,8 @@ pub struct PlanInput<'a> {
     pub existing: &'a [String],
     /// The naming rules of the directory's file system.
     pub fs: FsRules,
+    /// The clipboard, the moments and the local formats the placeholders read.
+    pub context: &'a RenameContext,
 }
 
 /// The kind of change for one entry.
@@ -135,8 +59,11 @@ pub enum Conflict {
     TargetExists,
     /// The file system refuses the new name.
     InvalidName { reason: InvalidName },
-    /// The mask has a date placeholder and the entry has no modification time.
+    /// The mask has a date placeholder and the entry has no modification time (or the time it
+    /// reads lies outside the calendar after its offset).
     NoTimestamp,
+    /// The rule's name list has no name for this entry.
+    NamesMissing,
 }
 
 impl Conflict {
@@ -145,6 +72,7 @@ impl Conflict {
         "rename_duplicate",
         "rename_target_exists",
         "rename_no_timestamp",
+        "rename_names_missing",
     ];
 
     /// The stable code; its message is `error.<code>` in the i18n catalogue. An invalid name
@@ -156,6 +84,7 @@ impl Conflict {
             Self::TargetExists => "rename_target_exists",
             Self::InvalidName { reason } => reason.code(),
             Self::NoTimestamp => "rename_no_timestamp",
+            Self::NamesMissing => "rename_names_missing",
         }
     }
 }
@@ -205,27 +134,45 @@ impl RenamePlan {
     }
 }
 
+/// Where the new names come from: the masks, or the rule's name list.
+enum NewNames<'a> {
+    Masks { name: Pattern, extension: Pattern },
+    List(&'a [String]),
+}
+
 /// Applies `rule` to the sources: the preview of the run, with every conflict.
 ///
-/// The order per entry: the masks, the case of the whole name, the search and replace, the name
-/// and the extension joined with a dot. A `\` or `/` in a new name moves the entry into a
-/// subfolder; the new name then spells it `sub/name` ([`crate::SUBFOLDER_SEPARATOR`]) and is
-/// held against [`check_path`].
+/// The order per entry: the masks (or the entry's name from the rule's name list), the case of
+/// the whole name, the search and replace, the name and the extension joined with a dot. A `\`
+/// or `/` in a new name moves the entry into a subfolder; the new name then spells it `sub/name`
+/// ([`crate::SUBFOLDER_SEPARATOR`]) and is held against [`check_path`].
 ///
 /// # Errors
 ///
-/// A rule text longer than [`MAX_RULE_TEXT`], a mask that does not parse, a search that is not
-/// a valid regular expression. Conflicts are not errors; they are in the items.
+/// A rule text longer than [`MAX_RULE_TEXT`], a name list beyond its limits, a mask that does
+/// not parse, `[X]` with an empty clipboard, a search that is not a valid regular expression.
+/// Conflicts are not errors; they are in the items.
 pub fn plan(input: &PlanInput<'_>, rule: &RenameRule) -> Result<RenamePlan, RenameError> {
     check_lengths(rule)?;
-    let name_mask = parse(&rule.name_mask).map_err(|error| RenameError::Mask {
-        field: MaskField::Name,
-        error,
-    })?;
-    let extension_mask = parse(&rule.extension_mask).map_err(|error| RenameError::Mask {
-        field: MaskField::Extension,
-        error,
-    })?;
+    let context = input.context;
+    context.check()?;
+    let new_names = match &rule.names {
+        Some(names) => NewNames::List(names),
+        None => NewNames::Masks {
+            name: parse(&rule.name_mask).map_err(|error| RenameError::Mask {
+                field: MaskField::Name,
+                error,
+            })?,
+            extension: parse(&rule.extension_mask).map_err(|error| RenameError::Mask {
+                field: MaskField::Extension,
+                error,
+            })?,
+        },
+    };
+    let clipboard = match &new_names {
+        NewNames::Masks { name, extension } => clipboard_text(context, [name, extension])?,
+        NewNames::List(_) => String::new(),
+    };
     let replacer = match &rule.search {
         Some(search) => search.compile()?,
         None => None,
@@ -235,13 +182,7 @@ pub fn plan(input: &PlanInput<'_>, rule: &RenameRule) -> Result<RenamePlan, Rena
         .as_ref()
         .is_some_and(|search| search.include_extension);
     let levels = path_levels(input.dir);
-    let parent = levels.last().copied().unwrap_or_default();
-    let grandparent = levels
-        .len()
-        .checked_sub(2)
-        .and_then(|index| levels.get(index))
-        .copied()
-        .unwrap_or_default();
+    let from_root = from_root(input.dir);
     let count = u64::try_from(input.sources.len()).unwrap_or(u64::MAX);
     let fs = input.fs;
 
@@ -252,23 +193,53 @@ pub fn plan(input: &PlanInput<'_>, rule: &RenameRule) -> Result<RenamePlan, Rena
             name,
             extension,
             file_name: &source.name,
-            parent,
-            grandparent,
+            levels: &levels,
+            from_root: &from_root,
+            size: source.size,
+            is_dir: source.is_dir,
             index: u64::try_from(index).unwrap_or(u64::MAX),
             count,
             counter: rule.counter,
-            modified: source.modified,
+            times: Times {
+                modified: source.modified,
+                opened: context.opened_at,
+                changed: context.changed_at,
+            },
+            clipboard: &clipboard,
+            date_format: context
+                .date_format
+                .as_deref()
+                .unwrap_or(DEFAULT_DATE_FORMAT),
+            time_format: context
+                .time_format
+                .as_deref()
+                .unwrap_or(DEFAULT_TIME_FORMAT),
         };
-        let rendered = render(&name_mask, &fields)
-            .and_then(|name| render(&extension_mask, &fields).map(|extension| (name, extension)));
+        let rendered = match &new_names {
+            NewNames::Masks { name, extension } => {
+                let mut switches = Switches::default();
+                render(name, &fields, &mut switches)
+                    .and_then(|name| {
+                        render(extension, &fields, &mut switches).map(|extension| (name, extension))
+                    })
+                    .map_err(|NoTimestamp| Conflict::NoTimestamp)
+            }
+            NewNames::List(names) => match names.get(index) {
+                Some(new) => {
+                    let (name, extension) = split_name(new);
+                    Ok((name.to_owned(), extension.to_owned()))
+                }
+                None => Err(Conflict::NamesMissing),
+            },
+        };
         let (name, extension) = match rendered {
             Ok(parts) => parts,
-            Err(NoTimestamp) => {
+            Err(conflict) => {
                 items.push(RenameItem {
                     old: source.name.clone(),
                     new: source.name.clone(),
                     change: Change::Unchanged,
-                    conflict: Some(Conflict::NoTimestamp),
+                    conflict: Some(conflict),
                 });
                 continue;
             }
@@ -356,27 +327,6 @@ fn mark_conflicts(items: &mut [RenameItem], dir: &str, taken: &HashSet<String>, 
     }
 }
 
-/// Refuses a rule with a text longer than [`MAX_RULE_TEXT`] characters.
-fn check_lengths(rule: &RenameRule) -> Result<(), RenameError> {
-    let search = rule.search.as_ref();
-    let texts = [
-        ("name mask", Some(&rule.name_mask)),
-        ("extension mask", Some(&rule.extension_mask)),
-        ("search text", search.map(|search| &search.find)),
-        ("replacement", search.map(|search| &search.replace)),
-    ];
-    match texts
-        .into_iter()
-        .find(|(_, text)| text.is_some_and(|text| text.chars().count() > MAX_RULE_TEXT))
-    {
-        Some((field, _)) => Err(RenameError::TooLong {
-            field,
-            max: MAX_RULE_TEXT,
-        }),
-        None => Ok(()),
-    }
-}
-
 /// The name and the extension: split at the last dot, unless the dot starts the name
 /// (`.bashrc`) or ends it (`notes.`). Folders too, as in Total Commander.
 pub(crate) fn split_name(name: &str) -> (&str, &str) {
@@ -392,13 +342,63 @@ fn cased(case: CaseMode, name: &str, extension: &str) -> (String, String) {
     case.append(&mut text, name);
     let name_end = text.len();
     if extension.is_empty() {
+        if case == CaseMode::Title {
+            lower_small_words(&mut text, &[(0, name_end)]);
+        }
         return (text, String::new());
     }
     case.append(&mut text, ".");
     case.append(&mut text, extension);
+    if case == CaseMode::Title {
+        let end = text.len();
+        lower_small_words(&mut text, &[(0, end)]);
+    }
     let extension = text.split_off(name_end + 1);
     text.truncate(name_end);
     (text, extension)
+}
+
+/// The clipboard's text as `[X]` inserts it: the line breaks at its end dropped, `*?:|"<>` as
+/// `_` (Total Commander). Empty when no mask reads it.
+///
+/// # Errors
+///
+/// `[X]` in a mask with no text on the clipboard; a clipboard text longer than
+/// [`MAX_RULE_TEXT`] that a mask reads.
+fn clipboard_text(context: &RenameContext, masks: [&Pattern; 2]) -> Result<String, RenameError> {
+    let mut used = false;
+    let mut required = false;
+    for token in masks.iter().flat_map(|mask| mask.tokens()) {
+        if let Token::Clipboard { optional } = token {
+            used = true;
+            required |= !optional;
+        }
+    }
+    if !used {
+        return Ok(String::new());
+    }
+    let raw = context.clipboard.as_deref().unwrap_or_default();
+    if raw.chars().count() > MAX_RULE_TEXT {
+        return Err(RenameError::TooLong {
+            field: "clipboard text",
+            max: MAX_RULE_TEXT,
+        });
+    }
+    let text: String = raw
+        .trim_end_matches(['\r', '\n'])
+        .chars()
+        .map(|c| {
+            if matches!(c, '*' | '?' | ':' | '|' | '"' | '<' | '>') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    if required && text.is_empty() {
+        return Err(RenameError::ClipboardEmpty);
+    }
+    Ok(text)
 }
 
 fn join_extension(name: &str, extension: &str) -> String {
@@ -412,3 +412,7 @@ fn join_extension(name: &str, extension: &str) -> String {
 #[cfg(test)]
 #[path = "plan_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "plan_extras_tests.rs"]
+mod extras_tests;

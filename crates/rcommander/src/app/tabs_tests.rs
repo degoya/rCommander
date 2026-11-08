@@ -86,7 +86,13 @@ async fn alt_down_opens_the_history_and_enter_jumps() {
     navigate(&mut harness, "deep").await;
     harness.press("Alt+ArrowDown").await;
     let popup = harness.app.tabs.popup.as_ref().expect("the history");
-    assert_eq!(popup.rows.len(), 3);
+    // The most visited folders follow below a heading (RC-100-92).
+    let history = popup
+        .rows
+        .iter()
+        .filter(|row| matches!(row.action, Some(PopupAction::HistoryJump(_))))
+        .count();
+    assert_eq!(history, 3);
     assert_eq!(popup.cursor, 0, "the folder shown, the newest");
     harness.press("ArrowDown").await;
     harness.press("Enter").await;
@@ -238,9 +244,11 @@ async fn ctrl_shift_a_lists_the_tabs_and_reaches_their_menu() {
     harness.press("Shift+F10").await;
     let menu = harness.app.tabs.popup.as_ref().expect("the tab's menu");
     let second = harness.app.tabs.strips[0][1].id;
-    assert_eq!(
-        menu.rows.last().and_then(|row| row.action.clone()),
-        Some(PopupAction::CloseTab(second))
+    assert!(
+        menu.rows
+            .iter()
+            .any(|row| row.action == Some(PopupAction::CloseTab(second))),
+        "the menu of the tab under the cursor"
     );
     harness.press("Escape").await;
 

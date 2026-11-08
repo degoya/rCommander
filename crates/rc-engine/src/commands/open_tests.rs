@@ -86,3 +86,126 @@ async fn a_folder_below_a_name_that_is_no_utf8_opens() {
     };
     assert_eq!(inside.path.path, odd.join("sub"));
 }
+
+/// What `file.open` was given by the internal associations (RC-100-91): the rules stored, the
+/// switch set, the cursor on `name`.
+mod associations {
+    use std::path::Path;
+
+    use serde_json::json;
+
+    use super::{launched, open};
+    use crate::{
+        Command, CursorTarget, Engine,
+        associations::{FileAssociation, write_rules},
+        recover::LockOrRecover as _,
+        settings::{ASSOCIATIONS_ENABLED_KEY, FILE_ASSOCIATIONS_KEY},
+        test_support,
+        user_commands::{CommandRef, Launch, STARTED},
+    };
+
+    fn rule(mask: &str, program: &str) -> FileAssociation {
+        FileAssociation {
+            mask: mask.into(),
+            open: Some(CommandRef {
+                command: program.into(),
+                params: "-o %1".into(),
+                ..CommandRef::default()
+            }),
+            ..FileAssociation::default()
+        }
+    }
+
+    async fn store(engine: &Engine, rules: &[FileAssociation], enabled: bool) {
+        engine
+            .set_protected_setting(FILE_ASSOCIATIONS_KEY, &json!(write_rules(rules)))
+            .await
+            .expect("rules stored");
+        engine
+            .set_protected_setting(ASSOCIATIONS_ENABLED_KEY, &json!(enabled))
+            .await
+            .expect("switch stored");
+    }
+
+    async fn enter_on(engine: &Engine, name: &str) {
+        engine
+            .dispatch(Command::SetCursor {
+                panel: None,
+                target: CursorTarget::Name(name.into()),
+            })
+            .await
+            .expect("cursor");
+        open(engine, None).await.expect("opened");
+    }
+
+    fn started(program: &str) -> Vec<Launch> {
+        STARTED
+            .lock_or_recover("test")
+            .iter()
+            .filter(|launch| launch.program == program)
+            .cloned()
+            .collect()
+    }
+
+    /// The file's full path as `%1` hands it to the program, after `-o`.
+    fn args_for(root: &Path, name: &str) -> Vec<String> {
+        let path = format!(
+            "{}{}{name}",
+            root.to_string_lossy(),
+            std::path::MAIN_SEPARATOR
+        );
+        if cfg!(windows) {
+            vec![format!("-o \"{path}\"")]
+        } else {
+            vec!["-o".to_owned(), path]
+        }
+    }
+
+    #[tokio::test]
+    async fn first_matching_rule_opens() {
+        let (root, engine) = test_support::engine_with_db(&[("app.log", "x")]).await;
+        let rules = [
+            rule("*.log", "assoc-first-test"),
+            rule("*.*", "assoc-second-test"),
+        ];
+        store(&engine, &rules, true).await;
+        enter_on(&engine, "app.log").await;
+        let launch = started("assoc-first-test")
+            .pop()
+            .expect("the first rule ran");
+        assert_eq!(launch.args, args_for(root.path(), "app.log"));
+        assert!(started("assoc-second-test").is_empty());
+        assert!(!launched(&root.path().join("app.log")), "not the system");
+    }
+
+    #[tokio::test]
+    async fn no_rule_falls_back_to_the_system() {
+        let (root, engine) = test_support::engine_with_db(&[("readme.md", "x")]).await;
+        store(&engine, &[rule("*.log", "assoc-none-test")], true).await;
+        enter_on(&engine, "readme.md").await;
+        assert!(started("assoc-none-test").is_empty());
+        assert!(launched(&root.path().join("readme.md")));
+    }
+
+    /// `*.*` leaves an archive to open as a folder (or to the system); `*.zip` takes it.
+    #[tokio::test]
+    async fn an_archive_needs_its_extension_named() {
+        let (root, engine) = test_support::engine_with_db(&[("pack.zip", "no zip")]).await;
+        store(&engine, &[rule("*.*", "assoc-every-test")], true).await;
+        enter_on(&engine, "pack.zip").await;
+        assert!(started("assoc-every-test").is_empty());
+        store(&engine, &[rule("*.zip", "assoc-zip-test")], true).await;
+        enter_on(&engine, "pack.zip").await;
+        let launch = started("assoc-zip-test").pop().expect("the named rule ran");
+        assert_eq!(launch.args, args_for(root.path(), "pack.zip"));
+    }
+
+    #[tokio::test]
+    async fn switched_off_uses_the_system() {
+        let (root, engine) = test_support::engine_with_db(&[("off.log", "x")]).await;
+        store(&engine, &[rule("*.log", "assoc-off-test")], false).await;
+        enter_on(&engine, "off.log").await;
+        assert!(started("assoc-off-test").is_empty());
+        assert!(launched(&root.path().join("off.log")));
+    }
+}

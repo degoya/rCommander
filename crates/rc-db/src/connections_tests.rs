@@ -41,6 +41,16 @@ fn one_of_each() -> Vec<ConnectionError> {
         ConnectionError::EndpointChangeNeedsGui {
             id: ConnectionId(1),
         },
+        ConnectionError::JumpCycle,
+        ConnectionError::JumpChainTooLong { max: MAX_JUMPS },
+        ConnectionError::JumpNeedsSsh,
+        ConnectionError::ConnectionIsJumpHost {
+            id: ConnectionId(1),
+            users: vec!["web".into()],
+        },
+        ConnectionError::ForwardNotFound { id: 1 },
+        ConnectionError::ForwardInvalid { reason: "port" },
+        ConnectionError::ForwardsTooMany { max: MAX_FORWARDS },
         ConnectionError::Db(DbError::NoDataDir),
     ];
     for sample in &samples {
@@ -63,6 +73,13 @@ fn one_of_each() -> Vec<ConnectionError> {
             | ConnectionError::TextTooLong { .. }
             | ConnectionError::PathTooLong { .. }
             | ConnectionError::EndpointChangeNeedsGui { .. }
+            | ConnectionError::JumpCycle
+            | ConnectionError::JumpChainTooLong { .. }
+            | ConnectionError::JumpNeedsSsh
+            | ConnectionError::ConnectionIsJumpHost { .. }
+            | ConnectionError::ForwardNotFound { .. }
+            | ConnectionError::ForwardInvalid { .. }
+            | ConnectionError::ForwardsTooMany { .. }
             | ConnectionError::Db(_) => {}
         }
     }

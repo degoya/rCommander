@@ -12,6 +12,13 @@ macro_rules! arms {
             Command::LockTab(request) => $self.lock_tab(request),
             Command::CopyTabToOther(request) => $self.copy_tab_to_other(request),
             Command::MoveTab(request) => $self.move_tab(request),
+            Command::RenameTab { panel, tab, title } => {
+                $self.rename_tab(panel, tab, title.as_deref())
+            }
+            Command::CloseAllTabs {
+                panel,
+                include_locked,
+            } => Ok($self.close_all_tabs(panel, include_locked)),
             Command::SwapPanels(request) => Ok($self.swap_panels(request.with_tabs)),
             Command::TransferDir(request) => $self.transfer_dir(request).await,
         } }

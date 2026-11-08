@@ -55,6 +55,9 @@ pub(crate) struct Remotes {
     /// The plain FTP servers a person allowed to get the password in clear, until rCommander
     /// ends (RC-080-67): host (lower case) and port.
     plaintext: Mutex<HashSet<(String, u16)>>,
+    /// The secrets PAM systems lent the connections' sessions, and the reasons given for them
+    /// (RC-100-38, `secret_sources/leases.rs`).
+    pub(crate) leases: crate::secret_sources::Leases,
 }
 
 impl Remotes {

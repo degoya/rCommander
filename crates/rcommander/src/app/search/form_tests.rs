@@ -95,3 +95,44 @@ fn a_before_day_that_ends_at_the_epoch_does_not_overflow() {
         }
     }
 }
+
+#[test]
+fn search_archives_reaches_the_query() {
+    let mut form = Form::starting_in(String::new());
+    assert!(!form.query().expect("a query").archives);
+    *form.flag_mut(Flag::Archives) = true;
+    assert!(form.query().expect("a query").archives);
+}
+
+/// `ev:` before the masks asks Everything, as its box does, and is no part of the masks.
+#[test]
+fn ev_asks_everything_and_leaves_the_masks() {
+    let mut form = Form::starting_in(String::new());
+    form.name = "*.log".to_owned();
+    assert!(!form.wants_everything());
+    for (typed, masks) in [
+        ("ev:*.log", "*.log"),
+        (" EV: *.log;*.txt ", "*.log;*.txt"),
+        ("ev:", ""),
+    ] {
+        form.name = typed.to_owned();
+        assert!(form.wants_everything(), "{typed:?}");
+        assert_eq!(form.query().expect("a query").name, masks, "{typed:?}");
+    }
+    form.name = "*.log".to_owned();
+    *form.flag_mut(Flag::Everything) = true;
+    assert!(form.wants_everything());
+    assert_eq!(form.query().expect("a query").name, "*.log");
+}
+
+/// "Find duplicate files" reaches the query with its criteria, name and size ticked at first as
+/// in Total Commander (RC-100-98).
+#[test]
+fn find_duplicates_reaches_the_query() {
+    let mut form = Form::starting_in(String::new());
+    assert_eq!(form.query().expect("a query").duplicates, None);
+    *form.flag_mut(Flag::Duplicates) = true;
+    *form.flag_mut(Flag::SameContents) = true;
+    let duplicates = form.query().expect("a query").duplicates.expect("asked");
+    assert!(duplicates.name && duplicates.size && duplicates.content);
+}

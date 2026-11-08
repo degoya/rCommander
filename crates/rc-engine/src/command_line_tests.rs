@@ -114,3 +114,31 @@ fn only_a_local_folder_runs_a_command() {
     let inside = VfsPath::archive(local, rc_vfs::ArchiveFormat::Zip, "/docs");
     assert!(!runs_in(&inside));
 }
+
+/// `*` in front runs the line as administrator (RC-100-86), whatever follows it.
+#[test]
+fn a_star_in_front_runs_as_administrator() {
+    assert_eq!(parse("*cmd"), Parsed::RunElevated("cmd"));
+    assert_eq!(
+        parse("  * regedit.exe "),
+        Parsed::RunElevated("regedit.exe")
+    );
+    assert_eq!(parse("*cd docs"), Parsed::RunElevated("cd docs"));
+    assert_eq!(parse("*"), Parsed::RunElevated(""));
+    assert_eq!(parse("dir *.txt"), Parsed::Run("dir *.txt"));
+}
+
+/// RC-100-92: `cd %LOCALAPPDATA%\x` fills in the known variables, as Total Commander does; a
+/// name it does not know stays as written, and nothing runs.
+#[test]
+fn cd_fills_in_known_variables_and_keeps_others() {
+    let own = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.to_string_lossy().into_owned()))
+        .expect("the test's own folder");
+    assert_eq!(parse("cd %COMMANDER_PATH%"), Parsed::Cd(own));
+    assert_eq!(
+        parse("cd %RC_NOT_A_KNOWN_ONE%\\x"),
+        Parsed::Cd("%RC_NOT_A_KNOWN_ONE%\\x".into())
+    );
+}

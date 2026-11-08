@@ -181,6 +181,7 @@ impl Db {
         if !recursive && (inside.folders > 1 || inside.connections > 0 || inside.credentials > 0) {
             return Err(ConnectionError::FolderNotEmpty { id });
         }
+        super::jump::guard_folder_delete(&mut tx, id).await?;
         // The foreign keys cascade to the subfolders and every connection and shared credential
         // inside.
         sqlx::query("DELETE FROM connection_folders WHERE id = ?")

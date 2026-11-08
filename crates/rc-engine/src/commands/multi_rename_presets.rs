@@ -107,9 +107,13 @@ impl Engine {
         rule.check()?;
         let _guard = presets_lock().lock().await;
         let mut presets = self.stored_presets().await?;
+        // A name list belongs to the entries it was loaded for, not to a preset (RC-100-96).
         let preset = RenamePreset {
             name,
-            rule: rule.clone(),
+            rule: RenameRule {
+                names: None,
+                ..rule.clone()
+            },
         };
         match presets
             .iter()

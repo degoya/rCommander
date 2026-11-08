@@ -8,13 +8,20 @@
 //!   target is resolved against the source panel's directory, `sftp://<connection>/<path>` is
 //!   on that server (RC-060-05); it is a directory to copy into
 //!   when it is one, ends with a separator or a `*.*` mask, or when there are several sources -
-//!   otherwise the one source gets it as its new path (copy under a new name, rename).
+//!   otherwise the one source gets it as its new path (copy under a new name, rename). Any
+//!   other wildcard in its last part renames every source by Total Commander's mask
+//!   (`target\*.bak`, RC-110-04, `file_ops_mask.rs`).
 //! - `file.open_external`: F4 hands a file to the editor of the settings (`files.editor`), else
 //!   Notepad or `$VISUAL`/`$EDITOR`; Shift+F4 first creates the file when it is missing. A file
 //!   inside an archive goes as a read-only copy under the temporary folder (RC-030-02). F3 goes
 //!   to an external viewer only when one is set (`files.viewer`, Total Commander's "use external
 //!   viewer"), else to the internal viewer (`view.open`'s Lister, RC-020-07). Both settings are
-//!   protected, so no agent picks the program that runs.
+//!   protected, so no agent picks the program that runs. Alt+F3 takes the other viewer: Lister
+//!   while `files.viewer` is set, else the system's program (RC-100-91); Shift+F3 shows the file
+//!   under the cursor alone, where F3 with marked files lets Lister step through them
+//!   (`viewer_window.rs`). Neither F3 nor F4 uses the internal associations, as in Total
+//!   Commander. A file on an SFTP or FTP
+//!   server opens through a watched copy whose saves go back up (RC-110-01, `remote_edit.rs`).
 
 use std::path::{Path, is_separator};
 
@@ -23,12 +30,14 @@ use rc_vfs::{BackendId, VfsError, VfsPath, WriteMode};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
+use super::file_ops_mask::{refuse_mask_into_archive, split_mask};
 use super::{archive::refuse_archive_change, ops::sources_of, panel::resolve_path};
 #[cfg(test)]
 use crate::recover::LockOrRecover as _;
 use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, EngineEvent, Outcome, PanelId,
+    remote_edit::{OpenRemote, is_server},
     settings::{EDITOR_KEY, VIEWER_KEY, stored_setting},
 };
 
@@ -63,6 +72,9 @@ pub enum ExternalProgram {
     Viewer,
     /// F4: `files.editor`, else Notepad on Windows, `$VISUAL` or `$EDITOR` elsewhere.
     Editor,
+    /// Alt+F3: the other viewer - the internal one while `files.viewer` is set, else the
+    /// system's program for the file (RC-100-91).
+    AltViewer,
 }
 
 /// `target` as typed, without a trailing `*.*` or `*` mask, and whether it names a directory to
@@ -108,6 +120,8 @@ impl Engine {
             }
             .into());
         }
+        // `target\*.bak`: the folder, and the mask that renames every source (RC-110-04).
+        let (typed, mask) = split_mask(typed)?;
         let id = self.resolve(panel);
         self.remember_selection(id, sources);
         let (mut sources, current) = {
@@ -116,8 +130,14 @@ impl Engine {
             (sources_of(from, sources)?, from.path.clone())
         };
         // `sftp://<connection>/<path>` reaches a server (RC-060-05); anything else is read
-        // against the panel's own directory.
-        let target = self.locate(&current, typed).await?;
+        // against the panel's own directory - and a mask alone (`*.bak`) is that directory.
+        let target = match (typed, mask) {
+            ("", Some(_)) => current,
+            _ => self.locate(&current, typed).await?,
+        };
+        if mask.is_some() {
+            refuse_mask_into_archive(&target)?;
+        }
         // Archives are read-only: nothing goes into one, nothing moves out of one; a copy out
         // of one reads it through the backend the queue knows (RC-030-03).
         refuse_archive_change(&target)?;
@@ -130,6 +150,13 @@ impl Engine {
         }
         self.open_server(&target).await?;
         self.apply_transfer_settings().await;
+        // F2 names a list; OK runs the job at once, as in Total Commander (owner, 2026-10-18).
+        let list = queue.unwrap_or(AT_ONCE);
+        if let Some(mask) = mask {
+            return self
+                .submit_masked(sources, &target, mask, (options, list), moving)
+                .await;
+        }
         // A folder renamed to another case (Shift+F6 `Docs` to `docs`) is no folder to move into.
         let into = into_by_form
             || sources.len() != 1
@@ -146,8 +173,6 @@ impl Engine {
                 }
             }
         };
-        // F2 names a list; OK runs the job at once, as in Total Commander (owner, 2026-10-18).
-        let list = queue.unwrap_or(AT_ONCE);
         self.submit_items(JobSpec { kind, options }, list).await
     }
 
@@ -171,13 +196,13 @@ impl Engine {
 
     /// `file.open_external`: `path` (resolved against the panel's directory), or the file under
     /// the cursor - a directory there opens nothing. With `create`, a missing `path` is made
-    /// as an empty file first.
+    /// as an empty file first; with `cursor_only`, Lister shows that file alone.
     pub(crate) async fn open_external(
         &self,
         panel: Option<PanelId>,
         path: Option<&str>,
         program: ExternalProgram,
-        create: bool,
+        (create, cursor_only): (bool, bool),
     ) -> Result<Outcome, EngineError> {
         let id = self.resolve(panel);
         let (directory, cursor) = {
@@ -185,7 +210,7 @@ impl Engine {
             let panel = state.panel(id);
             (panel.path.clone(), panel.cursor_entry().cloned())
         };
-        let target = match (path, cursor) {
+        let target = match (path, cursor.as_ref()) {
             (Some(path), _) => resolve_path(&directory, path),
             (None, Some(entry)) if !entry.is_dir_like() => directory.join(&entry.name),
             (None, _) => return Ok(Outcome::Panel(self.snapshot(Some(id)))),
@@ -195,18 +220,38 @@ impl Engine {
         }
         match (program, self.external_program(program).await) {
             // TC's "use external viewer" is off: F3 is rCommander's own viewer.
-            (ExternalProgram::Viewer, None) => self.view_internally(id, target).await,
+            (ExternalProgram::Viewer, None) => self.view_internally(id, target, cursor_only).await,
+            // Alt+F3 is the other one: Lister beside an external viewer, else the system's.
+            (ExternalProgram::AltViewer, Some(_)) => {
+                self.view_internally(id, target, cursor_only).await
+            }
+            // A server file opens through a watched copy, F3 with an external viewer too, as in
+            // Total Commander (RC-110-01).
+            (_, chosen) if is_server(&target.backend) => {
+                let listed = cursor.filter(|_| path.is_none());
+                let how = OpenRemote {
+                    program: chosen,
+                    system: false,
+                    listed,
+                };
+                self.edit_remote(target, how).await?;
+                Ok(Outcome::Panel(self.snapshot(Some(id))))
+            }
+            (ExternalProgram::AltViewer, None) => self.launch_external(id, target, None).await,
             (_, chosen) => self.launch_external(id, target, chosen).await,
         }
     }
 
-    /// F3 without an external viewer: the internal viewer (Lister), as `view.open` (RC-020-07).
+    /// F3 without an external viewer: the internal viewer (Lister), as `view.open` (RC-020-07),
+    /// stepping through the marked files or showing this one alone (`cursor_only`).
     async fn view_internally(
         &self,
         panel: PanelId,
         target: VfsPath,
+        cursor_only: bool,
     ) -> Result<Outcome, EngineError> {
-        self.view_target(panel, target).await
+        let files = self.lister_files(panel, cursor_only).await;
+        self.view_target(panel, target, files).await
     }
 
     /// Hands `target` to `program`, or to the system's program for it, without waiting.
@@ -225,7 +270,8 @@ impl Engine {
             // A file inside an archive goes as a read-only copy under the temporary folder
             // (RC-030-02); nothing is written back into the archive.
             BackendId::Archive { .. } => self.unpack_to_temp(&target).await?,
-            // On a server a file would have to be fetched first.
+            // A server's file went through a watched copy before (RC-110-01); a device's is not
+            // fetched.
             _ => {
                 return Err(VfsError::Unsupported {
                     path: target.path,
@@ -275,7 +321,7 @@ impl Engine {
     /// program for the file.
     async fn external_program(&self, program: ExternalProgram) -> Option<String> {
         let key = match program {
-            ExternalProgram::Viewer => VIEWER_KEY,
+            ExternalProgram::Viewer | ExternalProgram::AltViewer => VIEWER_KEY,
             ExternalProgram::Editor => EDITOR_KEY,
         };
         let stored = match self.db() {
@@ -288,7 +334,7 @@ impl Engine {
             .filter(|path| !path.is_empty())
             .map(str::to_owned);
         match program {
-            ExternalProgram::Viewer => configured,
+            ExternalProgram::Viewer | ExternalProgram::AltViewer => configured,
             ExternalProgram::Editor => configured.or_else(default_editor),
         }
     }
@@ -327,3 +373,7 @@ fn launch(file: &Path, program: Option<&str>) -> std::io::Result<()> {
 #[cfg(test)]
 #[path = "file_ops_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "file_ops_viewer_tests.rs"]
+mod viewer_tests;

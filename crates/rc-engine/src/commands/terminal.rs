@@ -11,12 +11,11 @@ use std::{
 
 use rc_term::{
     InheritedEnv, Integration, Platform, SessionState, ShellChoice, ShellEnv, ShellProfile,
-    TermError, TermEvent, TermId, TermSession, TermSize, WslCwd, WslLaunch, choose_distro,
-    choose_shell, local_shells, windows_to_wsl_path, wsl_profiles, wsl_program,
+    TermError, TermId, TermSession, TermSize, WslCwd, WslLaunch, choose_distro, choose_shell,
+    local_shells, windows_to_wsl_path, wsl_profiles, wsl_program,
 };
 use rc_vfs::{BackendId, VfsError, VfsPath, WslDistro};
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast::error::RecvError;
 
 use super::{
     panel::resolve_path,
@@ -431,42 +430,6 @@ impl Engine {
     fn publish_terminal(&self, terminal: TermId, change: TerminalChange) {
         self.publish(EngineEvent::Terminal { terminal, change });
     }
-
-    /// Announces the session's title changes and its end as engine events; after the end its
-    /// panel turns away from it. Holds the engine weakly: a session never keeps it alive.
-    fn watch_terminal(&self, session: &TermSession) {
-        let terminal = session.id();
-        let mut events = session.subscribe();
-        let exited_already = session.state().is_exited();
-        let engine_events = self.inner.events.clone();
-        let engine = Arc::downgrade(&self.inner);
-        let announce = move |change| {
-            // No subscriber is not an error: a headless engine may have none.
-            let _ = engine_events.send(EngineEvent::Terminal { terminal, change });
-        };
-        if exited_already {
-            announce(TerminalChange::Exited);
-            return;
-        }
-        tokio::spawn(async move {
-            loop {
-                match events.recv().await {
-                    Ok(TermEvent::Title(_)) => announce(TerminalChange::Title),
-                    Ok(TermEvent::Folder) => announce(TerminalChange::Folder),
-                    Ok(TermEvent::Prompt) => announce(TerminalChange::Follow),
-                    Ok(TermEvent::Exited(_)) => {
-                        announce(TerminalChange::Exited);
-                        if let Some(inner) = engine.upgrade() {
-                            Engine { inner }.terminal_ended(terminal);
-                        }
-                        break;
-                    }
-                    Ok(_) | Err(RecvError::Lagged(_)) => {}
-                    Err(RecvError::Closed) => break,
-                }
-            }
-        });
-    }
 }
 
 /// `start` on the blocking pool (RC-080-46): looking for shells, writing zsh's integration and
@@ -484,12 +447,15 @@ async fn off_runtime<T: Send + 'static>(
 /// The folder zsh's integration lives in (`<data>/shell-integration/zsh`), written when needed;
 /// `None` when there is no data folder or it cannot be written.
 fn zsh_dir() -> Option<PathBuf> {
-    let base = directories::ProjectDirs::from("de", "degoya", "rCommander")?
-        .data_local_dir()
-        .join("shell-integration");
+    let base = shell_integration(&rc_db::location().ok()?)?;
     rc_term::zsh_dotdir(&base)
         .map_err(|error| tracing::warn!(%error, "zsh's shell integration cannot be written"))
         .ok()
+}
+
+/// Beside a portable copy's data, else in the platform's local data folder (RC-100-95).
+fn shell_integration(location: &rc_db::DataLocation) -> Option<PathBuf> {
+    Some(location.local_dir()?.join("shell-integration"))
 }
 
 #[cfg(test)]

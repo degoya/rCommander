@@ -10,6 +10,7 @@
 #   rc_package_guard "$ZIP" "<stage>/VERSION.txt" "$commit"
 #   list="$(rc_package_plugins "$ROOT" "$prebuilt")"   # the bundled .rcplug files, one per line
 #   rc_package_zip "$OUT" "<stage name>" "$ZIP"
+#   rc_package_unportable "$STAGE"            # rc_package_zip runs it; the tarball calls it
 #
 # rc_package_guard fails when the package already exists and was built from another commit, from
 # a dirty tree, or names no commit at all - then the version is raised (scripts/set-version.sh).
@@ -109,11 +110,37 @@ rc_package_plugins() {
     done <<< "$names"
 }
 
+# Fails, naming each, when the folder $1 carries what switches a copy to the portable mode
+# (RC-100-95): the marker `rcommander.portable` anywhere, or a `data` beside a program
+# (`rcommander`, `rcommander.exe`). A package never makes a copy portable by itself, and the
+# update leaves both where they are, so one shipped would never go again.
+rc_package_unportable() {
+    local stage="$1" entry folder found=()
+    while IFS= read -r -d '' entry; do
+        folder="$(dirname "$entry")"
+        case "$(basename "$entry")" in
+            rcommander.portable) found+=("$entry") ;;
+            data)
+                if [[ -e "$folder/rcommander" || -e "$folder/rcommander.exe" ]]; then
+                    found+=("$entry")
+                fi
+                ;;
+        esac
+    done < <(find "$stage" \( -name rcommander.portable -o -name data \) -print0)
+    if ((${#found[@]})); then
+        printf '!! the package carries what makes a copy portable: %s\n' "${found[@]}" >&2
+        echo "   No package carries rcommander.portable or data beside the program; nothing was packaged." >&2
+        return 1
+    fi
+}
+
 # Zips the folder $2 of directory $1 into $3 (an absolute path), the folder at the top: with
 # `zip` where it is installed, else with Python's zipfile, which keeps the files' modes - the
-# Windows runner's Git Bash has no `zip` (RC-100-31).
+# Windows runner's Git Bash has no `zip` (RC-100-31). A folder that carries the portable mode's
+# marker or data is refused first (rc_package_unportable).
 rc_package_zip() {
     local dir="$1" name="$2" zip="$3" python
+    rc_package_unportable "$dir/$name" || return 1
     if command -v zip > /dev/null 2>&1; then
         (cd "$dir" && zip -qry "$zip" "$name")
         return

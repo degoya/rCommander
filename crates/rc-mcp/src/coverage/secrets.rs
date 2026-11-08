@@ -4,6 +4,10 @@ use super::Coverage;
 
 pub(super) const ROWS: &[(&str, Coverage)] = &[
     (
+        "secrets.checkout_reason",
+        Coverage::Omitted("GUI only: human decision"),
+    ),
+    (
         "secrets.import_key",
         Coverage::Omitted("GUI only: human decision"),
     ),

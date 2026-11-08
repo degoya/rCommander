@@ -23,6 +23,11 @@ pub const DEVELOPMENT_MODE_KEY: &str = "plugins.development_mode";
 /// How many of a plugin's latest calls its details show and `plugins.list` answers with; 0
 /// hides the list (RC-100-75).
 pub const RECENT_CALLS_SHOWN_KEY: &str = "plugins.recent_calls_shown";
+/// The largest file, in MiB, a compare plugin is handed (RC-100-41); a larger pair is compared
+/// by line alone, and the diff window says why.
+pub const COMPARE_LIMIT_KEY: &str = "plugins.compare_limit_mib";
+/// `plugins.compare_limit_mib` until a person sets it.
+pub const DEFAULT_COMPARE_LIMIT_MIB: u64 = 16;
 /// `plugins.recent_calls_shown` until a person sets it.
 pub const DEFAULT_RECENT_CALLS_SHOWN: u32 = 10;
 /// The most `plugins.recent_calls_shown` allows.
@@ -106,6 +111,20 @@ pub(super) const RECENT_CALLS_SHOWN: SettingSpec = SettingSpec {
     },
     label: "setting.plugins.recent_calls_shown",
     help: "setting.plugins.recent_calls_shown.help",
+    protected: true,
+    restart: false,
+};
+
+pub(super) const COMPARE_LIMIT: SettingSpec = SettingSpec {
+    key: COMPARE_LIMIT_KEY,
+    page: SettingPage::Plugins,
+    kind: SettingKind::Int {
+        min: 1,
+        max: 256,
+        default: DEFAULT_COMPARE_LIMIT_MIB as i64,
+    },
+    label: "setting.plugins.compare_limit_mib",
+    help: "setting.plugins.compare_limit_mib.help",
     protected: true,
     restart: false,
 };

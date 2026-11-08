@@ -53,6 +53,22 @@ pub(super) fn field<'a>(
         .into()
 }
 
+/// A mask's field; read-only while `locked` (a name list stands in for the masks).
+pub(super) fn mask_field<'a>(
+    value: &'a str,
+    field: Field,
+    placeholder: &'a str,
+    locked: bool,
+) -> Element<'a, Message> {
+    text_input(placeholder, value)
+        .id(field.id())
+        .on_input_maybe((!locked).then_some(move |text| wrap(MrMsg::Text(field, text))))
+        .font(theme::UI_FONT)
+        .size(theme::TEXT_SIZE)
+        .padding([5, 8])
+        .into()
+}
+
 pub(super) fn field_sized(value: &str, field: Field, width: f32) -> Element<'_, Message> {
     text_input("", value)
         .id(field.id())

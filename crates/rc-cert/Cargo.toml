@@ -1,0 +1,21 @@
+[package]
+name = "rc-cert"
+description = "rCommander's certificate and key reader: X.509 certificates, requests and keys (PEM, DER, OpenSSH) taken apart and checked, for the built-in viewer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# x509-parser reads certificates and requests (the workspace's version, no features: no `ring`,
+# so no signature is verified); keys are read by the crate's own small DER reader (src/der.rs).
+# sha1 and sha2 give the fingerprints, base64 the PEM bodies and OpenSSH keys. No I/O and no
+# async: the caller hands in the file's bytes (rc-engine's `viewer::cert`).
+[dependencies]
+base64.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+x509-parser.workspace = true
+
+[lints]
+workspace = true

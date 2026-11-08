@@ -32,6 +32,7 @@ async fn view(harness: &mut Harness, root: &tempfile::TempDir, name: &str) -> u6
     let event = EngineEvent::ViewFile {
         panel: PanelId::Left,
         path,
+        files: rc_engine::ListerFiles::Panel,
     };
     harness.send(Message::Engine(event)).await;
     harness

@@ -13,6 +13,8 @@ use rc_engine::{
 };
 use rc_vault::{ExposeSecret as _, SecretString};
 
+pub(super) use super::form_labels::kind_label;
+use super::form_labels::{auth_label, field_label, forget_label, view_label};
 pub(super) use super::vault_prompt::{vault_fields, vault_prompt};
 
 use super::{Actions, field, hint, label, wrap};
@@ -22,7 +24,9 @@ use crate::{
         browse::{self, PathField},
         connections::{
             ConnMsg, ConnectionManager, Focus,
-            form::{Edit, Field, Form, secret_field, theme_choices, totp_hint},
+            form::{
+                Edit, Field, Form, chain_text, jump_choices, secret_field, theme_choices, totp_hint,
+            },
         },
     },
     i18n::t,
@@ -76,6 +80,10 @@ pub(super) fn side<'a>(
         && form.shared.is_none()
         && let Some(panel) = super::sources::panel(manager, form, tokens)
     {
+        rows = rows.push(panel);
+    }
+    // Its port forwards (RC-110-03).
+    if let Some(panel) = super::forwards::panel(manager, tokens) {
         rows = rows.push(panel);
     }
     // A session: of the connection as stored, so not while the form has edits.
@@ -264,6 +272,18 @@ fn field_row<'a>(
                 shown,
             )
         }
+        Field::Jump => {
+            let none = Labeled(None, t!("connections.jump_none").to_owned());
+            let hosts = jump_choices(&manager.tree.tree, form.id())
+                .into_iter()
+                .map(|(id, name)| Labeled(Some(id), name));
+            choice(
+                std::iter::once(none).chain(hosts),
+                form.jump,
+                ConnMsg::Jump,
+                shown,
+            )
+        }
         Field::ThemeLight => theme_choice(form, false, ConnMsg::ThemeLight, shown),
         Field::ThemeDark => theme_choice(form, true, ConnMsg::ThemeDark, shown),
         Field::ImportKey => switch(form.import_key, t!("connections.import_key"), shown),
@@ -282,6 +302,13 @@ fn field_row<'a>(
     .spacing(2);
     if shown == Field::TotpSeed {
         column = column.push(indented(hint(totp_hint(), tokens).into()));
+    }
+    // The chain it goes through, the first hop first (RC-110-03).
+    if shown == Field::Jump
+        && let Some(chain) = chain_text(&manager.tree.tree, form.jump)
+    {
+        let via = t!("connections.jump_chain", chain = chain);
+        column = column.push(indented(hint(via, tokens).into()));
     }
     if matches!(shown, Field::Password | Field::Passphrase | Field::TotpSeed) {
         let note = if locked {
@@ -307,6 +334,17 @@ fn field_row<'a>(
             fingerprint = key.fingerprint
         );
         column = column.push(indented(hint(stored, tokens).into()));
+        if let Some(certificate) = &key.certificate {
+            let now = super::certificate::unix_now();
+            for (line, warning) in super::certificate::lines(certificate, now) {
+                let line = if warning {
+                    label(line).size(12).color(theme::DANGER)
+                } else {
+                    hint(line, tokens)
+                };
+                column = column.push(indented(line.into()));
+            }
+        }
     }
     if let Some(error) = form.error(shown) {
         column = column.push(indented(label(error).size(12).color(theme::DANGER).into()));
@@ -412,66 +450,4 @@ fn switch<'a>(on: bool, title: &'static str, shown: Field) -> Element<'a, Messag
     focus::Stop::toggle(check, shown.id(), Some(wrap(ConnMsg::Toggle(shown))))
         .id(shown.id())
         .into()
-}
-
-fn field_label(shown: Field) -> &'static str {
-    match shown {
-        Field::Name => t!("connections.field.name"),
-        Field::Kind => t!("connections.field.kind"),
-        Field::Host => t!("connections.field.host"),
-        Field::Port => t!("connections.field.port"),
-        Field::User => t!("connections.field.user"),
-        Field::Auth => t!("connections.field.auth"),
-        Field::Credential => t!("connections.field.credential"),
-        Field::Password => t!("connections.field.password"),
-        Field::KeyPath => t!("connections.field.key_path"),
-        Field::ImportKey | Field::Favourite | Field::Forget(_) => "",
-        Field::Passphrase => t!("connections.field.passphrase"),
-        Field::Script => t!("connections.field.script"),
-        Field::View => t!("connections.field.view"),
-        Field::StartDirectory => t!("connections.field.start_directory"),
-        Field::Notes => t!("connections.field.notes"),
-        Field::ThemeLight => t!("connections.field.theme_light"),
-        Field::ThemeDark => t!("connections.field.theme_dark"),
-        Field::TotpSeed => t!("connections.field.totp_seed"),
-    }
-}
-
-fn forget_label(kind: SecretKind) -> &'static str {
-    match kind {
-        SecretKind::Password => t!("connections.forget.password"),
-        SecretKind::Key => t!("connections.forget.key"),
-        SecretKind::Passphrase => t!("connections.forget.passphrase"),
-        SecretKind::TotpSeed => t!("connections.forget.totp_seed"),
-    }
-}
-
-/// A protocol's name; the FTP kinds of RC-070-01 by their stored name.
-pub fn kind_label(kind: ConnectionKind) -> &'static str {
-    match kind.as_str() {
-        "ssh" => t!("connections.kind.ssh"),
-        "ftp" => t!("connections.kind.ftp"),
-        "ftps" => t!("connections.kind.ftps"),
-        "ftps_implicit" => t!("connections.kind.ftps_implicit"),
-        other => other,
-    }
-}
-
-fn auth_label(auth: AuthMethod) -> &'static str {
-    match auth.as_str() {
-        "password" => t!("connections.auth.password"),
-        "key" => t!("connections.auth.key"),
-        "agent" => t!("connections.auth.agent"),
-        "interactive" => t!("connections.auth.interactive"),
-        "anonymous" => t!("connections.auth.anonymous"),
-        other => other,
-    }
-}
-
-fn view_label(view: DefaultView) -> &'static str {
-    match view.as_str() {
-        "files" => t!("connections.view.files"),
-        "terminal" => t!("connections.view.terminal"),
-        other => other,
-    }
 }

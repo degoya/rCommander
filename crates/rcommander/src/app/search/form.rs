@@ -1,18 +1,23 @@
 //! What the find-files dialog's fields hold, and the search they make: masks, start folders,
 //! depth and text on the first tab, size, date, attributes and kind on the second, as Total
 //! Commander lays them out. Every field is text as typed; [`Form::query`] reads it and says
-//! which field it could not read.
+//! which field it could not read. "Search archives" and "Everything" sit on the first tab too
+//! (RC-100-93); `ev:` before the masks asks Everything as its box does, as in Total Commander.
+//! "Find duplicate files" with its three criteria sits on the second tab (RC-100-98): name and size
+//! are ticked at first, as in Total Commander.
 
 use chrono::{Local, NaiveDate, TimeZone};
 use rc_engine::{
     SearchQuery,
-    search::{ContentQuery, Filters, KindFilter, TextEncoding},
+    search::{ContentQuery, DuplicateQuery, Filters, KindFilter, TextEncoding},
 };
 
 use crate::format::parse_size;
 
 /// Seconds of a day, for "not older than n days".
 const DAY_SECS: u64 = 24 * 60 * 60;
+/// Before the masks, asks Everything (any case), as Total Commander's `ev:` does.
+const EVERYTHING_PREFIX: &str = "ev:";
 
 /// A text field of the form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +56,16 @@ pub enum Flag {
     Windows1252,
     FollowLinks,
     SkipHidden,
+    /// "Search archives" (RC-100-93).
+    Archives,
+    /// "Everything": the candidates from Everything's index (Windows).
+    Everything,
+    /// "Find duplicate files" (RC-100-98).
+    Duplicates,
+    /// Duplicates by the same name, size, contents.
+    SameName,
+    SameSize,
+    SameContents,
 }
 
 /// An attribute condition: either way, set, or not set.
@@ -113,6 +128,12 @@ pub struct Form {
     pub archive: Tri,
     pub follow_links: bool,
     pub skip_hidden: bool,
+    pub archives: bool,
+    pub everything: bool,
+    pub duplicates: bool,
+    pub same_name: bool,
+    pub same_size: bool,
+    pub same_contents: bool,
 }
 
 impl Form {
@@ -121,6 +142,8 @@ impl Form {
         Self {
             name: "*.*".to_owned(),
             start,
+            same_name: true,
+            same_size: true,
             ..Self::default()
         }
     }
@@ -154,6 +177,12 @@ impl Form {
             Flag::Windows1252 => &mut self.windows1252,
             Flag::FollowLinks => &mut self.follow_links,
             Flag::SkipHidden => &mut self.skip_hidden,
+            Flag::Archives => &mut self.archives,
+            Flag::Everything => &mut self.everything,
+            Flag::Duplicates => &mut self.duplicates,
+            Flag::SameName => &mut self.same_name,
+            Flag::SameSize => &mut self.same_size,
+            Flag::SameContents => &mut self.same_contents,
         }
     }
 
@@ -174,6 +203,11 @@ impl Form {
             .filter(|folder| !folder.is_empty())
             .map(str::to_owned)
             .collect()
+    }
+
+    /// Whether the search asks Everything: its box is ticked, or `ev:` stands before the masks.
+    pub fn wants_everything(&self) -> bool {
+        self.everything || masks(&self.name).0
     }
 
     /// The search the fields describe, or the first field that does not read.
@@ -210,7 +244,7 @@ impl Form {
             mode_bits: None,
         };
         Ok(SearchQuery {
-            name: self.name.trim().to_owned(),
+            name: masks(&self.name).1.to_owned(),
             name_regex: self.name_regex,
             case_sensitive: self.name_case,
             content,
@@ -218,6 +252,12 @@ impl Form {
             max_depth: optional(&self.depth, |depth| depth.parse().ok()).ok_or(Field::Depth)?,
             follow_symlinks: self.follow_links,
             skip_hidden: self.skip_hidden,
+            archives: self.archives,
+            duplicates: self.duplicates.then_some(DuplicateQuery {
+                name: self.same_name,
+                size: self.same_size,
+                content: self.same_contents,
+            }),
         })
     }
 
@@ -232,6 +272,20 @@ impl Form {
         .into_iter()
         .filter_map(|(ticked, encoding)| ticked.then_some(encoding))
         .collect()
+    }
+}
+
+/// The masks of "Search for", trimmed, and whether `ev:` stood before them.
+fn masks(name: &str) -> (bool, &str) {
+    let name = name.trim();
+    match name.get(..EVERYTHING_PREFIX.len()) {
+        Some(prefix) if prefix.eq_ignore_ascii_case(EVERYTHING_PREFIX) => (
+            true,
+            name.get(EVERYTHING_PREFIX.len()..)
+                .unwrap_or_default()
+                .trim_start(),
+        ),
+        _ => (false, name),
     }
 }
 

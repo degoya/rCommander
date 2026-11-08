@@ -3,7 +3,7 @@
 # scripts/winget-supersede.sh (RC-100-53, after rDownloader's test of RD-1280-03) against a `gh`
 # that answers from files: after a submission it closes the account's own open pull requests for an older rCommander version with
 # "Superseded by #<new>", the new one's number from komac's log or, without it, from the open
-# pull request of the submitted version; it never closes the new one, one of another author, one
+# pull request of the submitted version, `New package:` titles included (RC-100-85); it never closes the new one, one of another author, one
 # for the same or a newer version, a pre-release of a newer one or another package's; every
 # failure - no account, no list, no new pull request, a refused close - is a warning and exit 0.
 #
@@ -52,6 +52,7 @@ reset() {
         printf '449001\tdegoya\tAdd version: degoya.OtherTool version 1.0.0\n'
         printf '449002\tdegoya\tNew version: degoya.rCommander version 1.8.0\n'
         printf '449003\tdegoya\tUpdate version: degoya.rCommander version 1.7.0\n'
+        printf '449004\tdegoya\tNew package: degoya.rCommander version 1.6.0\n'
     } > "$FAKE/open"
 }
 closes() { grep -c '^pr close' "$FAKE/calls" || true; }
@@ -66,7 +67,7 @@ reset
 printf 'Created pull request: https://github.com/microsoft/winget-pkgs/pull/451400\n' > "$SCRATCH/komac.log"
 run_status "$ROOT/scripts/winget-supersede.sh" 1.28.0 "$SCRATCH/komac.log"
 expect_status "a submission with older ones open succeeds" 0
-expect "the five older ones are closed, nothing else" "5" "$(closes)"
+expect "the six older ones are closed, nothing else" "6" "$(closes)"
 for number in 451308 450001 450900; do
     expect_true "#$number, older, is closed" "closed $number"
 done
@@ -81,6 +82,7 @@ expect_true "a newer version stays" "! closed 451403"
 expect_true "another author's stays" "! closed 449000"
 expect_true "another package's stays" "! closed 449001"
 expect_true "a title from an older komac (New version:) is closed too" "closed 449002"
+expect_true "a title of a package not yet in winget-pkgs (New package:) is closed too" "closed 449004"
 expect_true "any other title stays" "! closed 449003"
 expect_true "the list asks for the account's open pull requests" \
     'grep -q "^pr list --repo microsoft/winget-pkgs --author degoya --state open " "$FAKE/calls"'
@@ -91,6 +93,21 @@ expect_status "without komac's log the new one is found by its title" 0
 expect_true "the highest number for the version is the new one" \
     'grep -q "Superseded by #451308$" "$FAKE/calls"'
 expect_true "and only older versions are closed" "closed 450001 && closed 450900 && ! closed 451000"
+
+# The 0.20.0 case (RC-100-85): every pull request titled `New package:`, no komac log.
+reset
+{
+    printf '470886\tdegoya\tNew package: degoya.rCommander version 0.18.1\n'
+    printf '471421\tdegoya\tNew package: degoya.rCommander version 0.19.0\n'
+    printf '474239\tdegoya\tNew package: degoya.rCommander version 0.20.0\n'
+} > "$FAKE/open"
+run_status "$ROOT/scripts/winget-supersede.sh" 0.20.0
+expect_status "a new package's submission without komac's log succeeds" 0
+expect_true "the new one is found by its New package: title" \
+    'grep -q "^pr close 470886 --repo microsoft/winget-pkgs --comment Superseded by #474239$" "$FAKE/calls"'
+expect "both older New package: ones are closed" "2" "$(closes)"
+expect_true "the new one stays open" "closed 471421 && ! closed 474239"
+expect_output "counting them" "2 superseded winget pull request(s) closed; #474239 carries 0.20.0"
 
 reset
 run_status "$ROOT/scripts/winget-supersede.sh" 1.31.0

@@ -9,6 +9,7 @@
 //! and stops at [`MAX_FLAT_ENTRIES`]; a panel that shows another directory ends the run.
 
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -31,6 +32,8 @@ pub enum FlatSource {
     Selection,
     /// Given paths, such as the hits of a search ("Feed to listbox").
     Paths,
+    /// The groups of a duplicate search, each path with its group (RC-100-98).
+    Duplicates,
 }
 
 /// A panel's flat view as commands report it.
@@ -58,6 +61,19 @@ pub(crate) struct FlatPlan {
     pub(crate) walk: Vec<PathBuf>,
     /// Entries listed as they are: selected files, fed paths.
     pub(crate) stat: Vec<PathBuf>,
+    /// The duplicate group of each of `stat`, when it holds a duplicate result; else empty.
+    pub(crate) groups: Vec<u32>,
+}
+
+impl FlatPlan {
+    /// The group of each entry of a duplicate result shown in `root`, by the entry's name.
+    pub(crate) fn groups_by_name(&self, root: &Path) -> HashMap<String, u32> {
+        self.stat
+            .iter()
+            .zip(&self.groups)
+            .map(|(path, group)| (flat_name(root, path), *group))
+            .collect()
+    }
 }
 
 /// A new run's number.

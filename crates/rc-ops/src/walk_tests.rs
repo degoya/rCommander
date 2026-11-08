@@ -14,6 +14,7 @@ fn item(rel: &str, kind: EntryKind, size: u64) -> Item {
             size,
             modified: None,
             created: None,
+            accessed: None,
             attributes: Attributes::default(),
             hidden: false,
             owner: None,

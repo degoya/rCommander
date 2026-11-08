@@ -54,7 +54,21 @@ impl Queue {
             archive: config.archive,
             resume,
             read_guard,
+            archive_release: hooks.archive_release,
+            ignore: hooks.ignore,
         }
+    }
+
+    /// Lets an archive update ask `hook` to let go of its archive before replacing it
+    /// (RC-110-05): the engine closes the archive's reading sessions.
+    pub fn set_archive_release(&self, hook: Arc<dyn crate::ArchiveRelease>) {
+        lock(&self.inner.hooks).archive_release = Some(hook);
+    }
+
+    /// The panels' ignore list for the copies and moves started from now on, `None` while it is
+    /// off (RC-100-92): they leave out what it hides.
+    pub fn set_ignore(&self, rule: Option<Arc<dyn crate::IgnoreRule>>) {
+        lock(&self.inner.hooks).ignore = rule;
     }
 
     /// The store, the reconnect hook and the read guards as set now.

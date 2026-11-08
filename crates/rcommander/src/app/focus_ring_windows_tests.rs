@@ -5,12 +5,17 @@
 use std::time::Duration;
 
 use iced::{Element, widget::Id};
-use rc_engine::{ConflictChoice, ConnectionId, EngineEvent, PanelId};
+use rc_engine::{
+    BarButton, BarItem, BarSpec, ButtonAction, ButtonBar, CommandRef, ConflictChoice, ConnectionId,
+    EngineEvent, PanelId,
+};
 
 use super::probe::{Screen, beside_a_file, harness, two_trees, walk_round};
 use crate::{
     app::{
-        Message, archive_ops, checksum, connections,
+        Message, archive_ops,
+        button_bar::{self, BarWindow},
+        checksum, connections,
         database_dialog::{self, DatabaseMsg},
         dialog_windows::{DialogWindow, first_field},
         drive_bar::{self, DriveMessage, actions::DriveAction},
@@ -183,4 +188,49 @@ async fn the_file_operations_windows_walk_their_rings() {
             for_all: false,
         }))
         .await;
+}
+
+/// The button bars' window (RC-100-87) walks its ring from the bar's name without a loose
+/// button: the bar's choice and buttons, the name, the items' list and buttons, the form of a
+/// program's button with its Browse, the row of buttons; and so does its import page.
+#[tokio::test]
+async fn the_button_bar_window_walks_its_ring_from_the_name() {
+    let tokens = theme::tokens(false);
+    let program = BarItem::Button(BarButton {
+        action: ButtonAction::Command(CommandRef {
+            command: "notepad.exe".into(),
+            ..CommandRef::default()
+        }),
+        icon: None,
+        tooltip: "Notepad".into(),
+    });
+    let bar = |id: i64, name: &str, items: Vec<BarItem>| ButtonBar {
+        id,
+        name: name.into(),
+        spec: BarSpec {
+            items,
+            ..BarSpec::default()
+        },
+    };
+    let bars = vec![
+        bar(1, "Default", vec![program.clone(), BarItem::Separator]),
+        bar(2, "Tools", Vec::new()),
+    ];
+    let mut window = BarWindow {
+        bar: Some(1),
+        name: "Default".into(),
+        items: bars[0].spec.items.clone(),
+        cursor: Some(0),
+        dirty: true,
+        ..BarWindow::default()
+    };
+    let body = button_bar::window_body(&window, &bars, tokens);
+    window_ring(body, DialogWindow::ButtonBar, "button bar window").await;
+
+    window.import = Some(button_bar::Import {
+        path: "C:\\totalcmd\\default.bar".into(),
+        preview: None,
+    });
+    let body = button_bar::window_body(&window, &bars, tokens);
+    window_ring(body, DialogWindow::ButtonBar, "button bar import").await;
 }

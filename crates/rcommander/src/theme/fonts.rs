@@ -42,8 +42,9 @@ use crate::recover::RwLockOrRecover as _;
 
 /// The most font names kept for `Font::with_name`; a name past them draws in the default.
 pub const MAX_NAMES: usize = 64;
-/// The families of iced's own icons and the buttons' ([`super::icon`]), no fonts to read text in.
-const ICON_FAMILIES: [&str; 2] = ["Iced-Icons", super::icon::FAMILY];
+/// The families of iced's own icons, the buttons' ([`super::icon`]) and the symbol collection's
+/// ([`super::symbols`]), no fonts to read text in.
+const ICON_FAMILIES: [&str; 3] = ["Iced-Icons", super::icon::FAMILY, super::symbols::FAMILY];
 
 /// The font of one area: its iced font, its size in points and whether it is monospaced.
 #[derive(Debug, Clone, Copy, PartialEq)]

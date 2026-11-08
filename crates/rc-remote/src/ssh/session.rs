@@ -1,7 +1,10 @@
 //! One SSH connection, set up and authenticated, that channels are opened on.
 //!
 //! [`SshSession::connect`] connects over TCP, runs the handshake with the host-key gate, and
-//! logs in - each step under its own timeout, the whole of it cancellable. The session then
+//! logs in - each step under its own timeout, the whole of it cancellable.
+//! [`SshSession::connect_via`] does the same over a `direct-tcpip` channel of another session, a
+//! jump host (RC-110-03, OpenSSH's ProxyJump): the jump host only carries bytes, the handshake,
+//! the host-key check and the login are this session's own, end to end. The session then
 //! carries any number of channels at once (SFTP, a terminal, a command) over its one TCP
 //! connection. russh sends a keepalive after [`SessionOptions::keepalive`] of silence and gives
 //! the connection up after [`KEEPALIVE_MAX`] unanswered ones; [`SshSession::closed`] resolves
@@ -10,7 +13,12 @@
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
 use russh::{ChannelMsg, Disconnect, client};
-use tokio::{net::TcpStream, sync::watch, time::timeout};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpStream,
+    sync::watch,
+    time::timeout,
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -29,7 +37,13 @@ pub struct SshSession {
     closed: watch::Receiver<bool>,
     auth: AuthUsed,
     host_key: OfferedKey,
+    /// The jump host this session runs through, kept as long as it: its end is this one's.
+    via: Option<Arc<SshSession>>,
 }
+
+/// The originator a `direct-tcpip` channel names when no client stands behind it: the jump of
+/// a chain is this program's own.
+const OWN_ORIGINATOR: (&str, u32) = ("127.0.0.1", 0);
 
 impl SshSession {
     /// Connects to `target`, checks its host key with `gate` and logs in with the methods of
@@ -54,7 +68,33 @@ impl SshSession {
         tokio::select! {
             biased;
             () = cancel.cancelled() => Err(SshError::Cancelled),
-            session = Box::pin(Self::establish(target, options, gate, credentials)) => session,
+            session = Box::pin(Self::establish(target, options, gate, credentials, None)) => session,
+        }
+    }
+
+    /// [`SshSession::connect`] through `via`, the session of a jump host: a `direct-tcpip`
+    /// channel of it to `target`'s host and port carries this session. `target`'s host is the
+    /// name the jump host resolves; the gate checks the key under it, as the connection names it.
+    /// The new session keeps `via` and ends with it; [`SshSession::disconnect`] closes both.
+    ///
+    /// # Errors
+    ///
+    /// As [`SshSession::connect`]; the jump host refusing the channel is
+    /// [`SshError::Unreachable`], its session gone [`SshError::ConnectionLost`].
+    pub async fn connect_via(
+        via: Arc<SshSession>,
+        target: &SshTarget,
+        options: &SessionOptions,
+        gate: Arc<dyn HostKeyGate>,
+        credentials: &dyn Credentials,
+        cancel: &CancellationToken,
+    ) -> Result<Self, SshError> {
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => Err(SshError::Cancelled),
+            session = Box::pin(Self::establish(target, options, gate, credentials, Some(via))) => {
+                session
+            }
         }
     }
 
@@ -63,23 +103,52 @@ impl SshSession {
         options: &SessionOptions,
         gate: Arc<dyn HostKeyGate>,
         credentials: &dyn Credentials,
+        via: Option<Arc<SshSession>>,
     ) -> Result<Self, SshError> {
         let user = target.user.trim();
         if user.is_empty() {
             return Err(SshError::NoUsername);
         }
         let host = target.host.trim();
-        let stream = step(
+        let Some(via) = via else {
+            let stream = step(
+                Stage::Connect,
+                options.connect_timeout,
+                TcpStream::connect((host, target.port)),
+            )
+            .await?
+            .map_err(|error| SshError::Unreachable {
+                host: host.to_owned(),
+                port: target.port,
+                reason: error.kind().to_string(),
+            })?;
+            return Self::over(stream, target, options, gate, credentials, None).await;
+        };
+        let (originator, originator_port) = OWN_ORIGINATOR;
+        let channel = step(
             Stage::Connect,
             options.connect_timeout,
-            TcpStream::connect((host, target.port)),
+            via.open_direct_tcpip(host, target.port, originator, originator_port),
         )
-        .await?
-        .map_err(|error| SshError::Unreachable {
-            host: host.to_owned(),
-            port: target.port,
-            reason: error.kind().to_string(),
-        })?;
+        .await??;
+        let stream = channel.into_stream();
+        Self::over(stream, target, options, gate, credentials, Some(via)).await
+    }
+
+    /// The handshake and the login over `stream`, a TCP connection or a jump host's channel.
+    async fn over<S>(
+        stream: S,
+        target: &SshTarget,
+        options: &SessionOptions,
+        gate: Arc<dyn HostKeyGate>,
+        credentials: &dyn Credentials,
+        via: Option<Arc<SshSession>>,
+    ) -> Result<Self, SshError>
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
+        let user = target.user.trim();
+        let host = target.host.trim();
         // The stored key types first: a server with a key of such a type presents that one.
         let known = gate.known_types(host, target.port).await;
         let (closed_tx, closed) = watch::channel(false);
@@ -131,12 +200,19 @@ impl SshSession {
             auth::authenticate(&mut handle, user, options, credentials),
         )
         .await??;
-        tracing::info!(host, port = target.port, method = auth.label(), "SSH login");
+        tracing::info!(
+            host,
+            port = target.port,
+            method = auth.label(),
+            via = via.is_some(),
+            "SSH login"
+        );
         Ok(Self {
             handle,
             closed,
             auth,
             host_key,
+            via,
         })
     }
 
@@ -159,10 +235,51 @@ impl SshSession {
         })
     }
 
-    /// Whether the connection is gone.
+    /// A `direct-tcpip` channel on this connection: the server connects to `host` on `port`
+    /// and carries the bytes (a jump to the next session of a chain, a local port forward).
+    /// `originator` and `originator_port` name the client the bytes come from, as the server
+    /// logs it.
+    ///
+    /// # Errors
+    ///
+    /// [`SshError::ConnectionLost`] once the connection is gone; [`SshError::Unreachable`] when
+    /// the server refuses the channel or cannot connect; a protocol failure.
+    pub async fn open_direct_tcpip(
+        &self,
+        host: &str,
+        port: u16,
+        originator: &str,
+        originator_port: u32,
+    ) -> Result<SshChannel, SshError> {
+        if self.is_closed() {
+            return Err(SshError::ConnectionLost);
+        }
+        self.handle
+            .channel_open_direct_tcpip(host, u32::from(port), originator, originator_port)
+            .await
+            .map_err(|error| match error {
+                _ if self.is_closed() => SshError::ConnectionLost,
+                russh::Error::ChannelOpenFailure(reason) => SshError::Unreachable {
+                    host: host.to_owned(),
+                    port,
+                    reason: format!("the server could not connect ({reason:?})"),
+                },
+                other => SshError::transport(&other),
+            })
+    }
+
+    /// The jump host this session runs through; `None` for a direct one.
+    #[must_use]
+    pub fn via(&self) -> Option<&Arc<SshSession>> {
+        self.via.as_ref()
+    }
+
+    /// Whether the connection is gone, or the jump host it runs through.
     #[must_use]
     pub fn is_closed(&self) -> bool {
-        *self.closed.borrow() || self.handle.is_closed()
+        *self.closed.borrow()
+            || self.handle.is_closed()
+            || self.via.as_ref().is_some_and(|via| via.is_closed())
     }
 
     /// Resolves once the connection is gone: closed by either side, or keepalives unanswered.
@@ -179,13 +296,17 @@ impl SshSession {
         self.closed.clone()
     }
 
-    /// Says goodbye to the server; the connection then ends.
+    /// Says goodbye to the server; the connection then ends, and so do the jump hosts it ran
+    /// through, the nearest first.
     pub async fn disconnect(&self) {
         // A connection that is gone already needs no goodbye.
         let _ = self
             .handle
             .disconnect(Disconnect::ByApplication, "", "en")
             .await;
+        if let Some(via) = &self.via {
+            Box::pin(via.disconnect()).await;
+        }
     }
 
     /// The method the login used.
@@ -276,3 +397,7 @@ async fn step<T>(
 #[cfg(test)]
 #[path = "session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "session_jump_tests.rs"]
+mod jump_tests;

@@ -3,10 +3,10 @@
 # A failure code starts with the plugin's id (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.4.0"
+api_version = "0.6.0"
 id = "01a19b54-2242-7948-bcb3-b578803a0fcc"
 name = "Python viewer"
-version = "0.1.1"
+version = "0.1.2"
 
 [match]
 # Scripts, scripts without a console window, and type stubs.

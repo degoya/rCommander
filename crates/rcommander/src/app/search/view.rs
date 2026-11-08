@@ -23,9 +23,13 @@ use crate::{
     },
 };
 
+mod duplicates;
 mod hits;
+mod sources;
 
+use duplicates::duplicates;
 use hits::hit_list;
+use sources::sources;
 
 const LABEL_WIDTH: f32 = 130.0;
 
@@ -67,7 +71,7 @@ pub fn body<'a>(dialog: &'a SearchDialog, tokens: &'static Tokens) -> Element<'a
         |tab| wrap(SearchMsg::Tab(tab)),
     );
     let page = match dialog.tab {
-        Tab::General => general(dialog),
+        Tab::General => general(dialog, tokens),
         Tab::Advanced => advanced(&dialog.form),
     };
     column![
@@ -87,6 +91,7 @@ pub fn flat_badge<'a>(flat: &FlatView, tokens: &'static Tokens) -> Element<'a, M
         FlatSource::Branch => t!("flat.branch").to_owned(),
         FlatSource::Selection => t!("flat.selection").to_owned(),
         FlatSource::Paths => t!("flat.paths").to_owned(),
+        FlatSource::Duplicates => t!("flat.duplicates").to_owned(),
     };
     if flat.loading {
         label.push_str(t!("flat.loading"));
@@ -103,7 +108,7 @@ pub fn flat_badge<'a>(flat: &FlatView, tokens: &'static Tokens) -> Element<'a, M
     line(label).color(tokens.accent).into()
 }
 
-fn general(dialog: &SearchDialog) -> Element<'_, Message> {
+fn general<'a>(dialog: &'a SearchDialog, tokens: &'static Tokens) -> Element<'a, Message> {
     let form = &dialog.form;
     let recall = |mask: String| wrap(SearchMsg::Recall(mask));
     let recent = pick_list(dialog.history.as_slice(), None::<String>, recall)
@@ -177,6 +182,7 @@ fn general(dialog: &SearchDialog) -> Element<'_, Message> {
             ]
             .spacing(16)
         ),
+        indented(sources(dialog, tokens)),
     ]
     .spacing(8)
     .into()
@@ -293,6 +299,7 @@ fn advanced(form: &Form) -> Element<'_, Message> {
             ]
             .spacing(16)
         ),
+        indented(duplicates(form)),
     ]
     .spacing(8)
     .into()
@@ -338,10 +345,7 @@ fn status<'a>(dialog: &'a SearchDialog, tokens: &'static Tokens) -> Element<'a, 
                 "search.running",
                 hits = hits,
                 entries = format::count(stats.entries),
-                dir = dir
-                    .as_ref()
-                    .map(|dir| dir.path.display().to_string())
-                    .unwrap_or_default()
+                dir = dir.as_ref().map(hits::shown).unwrap_or_default()
             ),
             tokens.text_secondary,
         ),
@@ -354,7 +358,13 @@ fn status<'a>(dialog: &'a SearchDialog, tokens: &'static Tokens) -> Element<'a, 
             if stats.skipped > 0 {
                 done.push_str(&t!("search.skipped", count = format::count(stats.skipped)));
             }
-            if dialog.results.truncated {
+            if dialog.results.is_duplicates() {
+                done.push_str(&t!(
+                    "search.groups",
+                    count = format::count(dialog.results.group_count() as u64)
+                ));
+            }
+            if dialog.results.truncated || stats.truncated {
                 done.push_str(&t!(
                     "search.truncated",
                     limit = format::count(MAX_FLAT_ENTRIES as u64)

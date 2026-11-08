@@ -51,3 +51,20 @@ fn appending_continues_the_words_of_what_is_there() {
         assert_eq!(out, expected, "{mode:?} {before:?} + {text:?}");
     }
 }
+
+#[test]
+fn title_case_keeps_small_words() {
+    let cases = [
+        ("the LORD of THE rings", "The Lord of the Rings"),
+        ("of mice and men", "Of Mice and Men"),
+        ("to be or not to be", "To Be or Not to Be"),
+        ("what it is for", "What It Is For"),
+        ("a-tale_of.two", "A-Tale_of.Two"),
+        ("vs", "Vs"),
+        ("", ""),
+    ];
+    for (text, expected) in cases {
+        assert_eq!(CaseMode::Title.apply(text), expected, "{text}");
+    }
+    assert_eq!(super::SMALL_WORDS.len(), 20);
+}

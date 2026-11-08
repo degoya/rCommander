@@ -1,7 +1,9 @@
 //! The file operations of the function keys (RC-010-07), after Total Commander: F5 copies and F6
-//! moves from the active panel into the other one, Shift+F5 copies beside the file, Shift+F6
-//! renames in the list, F7 makes a folder, F8 and Delete delete (into the recycle bin; with
-//! Shift for good), Shift+F4 makes a text file; F3 and F4 open the external viewer and editor.
+//! moves from the active panel into the other one - `*.*` after the folder, a mask such as
+//! `*.bak` renames (RC-110-04) -, Shift+F5 copies beside the file, Shift+F6 renames in the list
+//! (several selected entries in a dialog with a mask), F7 makes a folder, F8 and Delete delete
+//! (into the recycle bin; with Shift for good), Shift+F4 makes a text file; F3 and F4 open the
+//! external viewer and editor.
 //!
 //! Every key runs a registry command. The dialog keys run `ops.dialog`, which the engine
 //! announces ([`rc_engine::EngineEvent::FileDialog`]); the dialog opens here (`dialog.rs`), and
@@ -19,19 +21,20 @@ mod pace;
 mod question;
 mod run;
 mod strip;
+mod submit;
 mod totals;
 mod view;
 mod window;
 
 use iced::keyboard::Modifiers;
 use rc_engine::{
-    Answer, Chord, Command, ConflictChoice, Engine, ErrorChoice, FileDialog, JobId, JobSnapshot,
-    Outcome, PanelId, check_name,
+    Answer, Chord, Command, ConflictChoice, ErrorChoice, FileDialog, JobId, PanelId, check_name,
 };
 
 pub use self::dialog::{Dialog, FollowUp, InlineRename, Preset};
 use self::jobs::Jobs;
 pub use self::strip::concerns as settings_concern;
+pub use self::submit::{Submit, Submitted};
 pub(in crate::app) use self::view::duration;
 pub(in crate::app) use self::window::dialog_window;
 use super::{App, Effect, Message};
@@ -74,6 +77,8 @@ pub struct FileOps {
     pub enter_opens_checksums: bool,
     /// `mkdir.prefill_cursor_name` is off: F7 starts with an empty name.
     pub mkdir_blank: bool,
+    /// `rename.selection_dialog` is off: Shift+F6 always edits in the list (RC-110-04).
+    pub rename_inline: bool,
     /// The jobs whose archive password was answered, until they take the answer: their prompt
     /// does not open again meanwhile (`archive_ops/password.rs`, RC-080-44).
     pub passwords_answered: Vec<JobId>,
@@ -143,63 +148,13 @@ pub enum FileOpsMsg {
     Compare(JobId),
 }
 
-/// A job command for the engine, with what the window does with its job.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Submit {
-    pub panel: PanelId,
-    pub command: Command,
-    pub follow: FollowUp,
-    pub background: bool,
-}
-
-/// What became of a [`Submit`]: its job, or its jobs in their order - one per source
-/// (RC-010-14).
-#[derive(Debug, Clone)]
-pub struct Submitted {
-    pub panel: PanelId,
-    pub follow: FollowUp,
-    pub background: bool,
-    pub result: Result<Vec<JobSnapshot>, &'static str>,
-    /// The command, when a locked vault refused it: the unlock prompt submits it again
-    /// (RC-050-03).
-    pub refused: Option<Command>,
-}
-
-impl Submit {
-    /// Hands the command to `engine`; the job it accepted.
-    pub async fn run(self, engine: Engine) -> Submitted {
-        // Kept for a refusal; a command is a few words.
-        let again = self.command.clone();
-        let mut refused = None;
-        let result = match engine.dispatch(self.command).await {
-            Ok(Outcome::Job(job)) => Ok(vec![*job]),
-            Ok(Outcome::Jobs { jobs }) if !jobs.is_empty() => Ok(jobs),
-            // The ops commands answer with their jobs; anything else is no job to follow.
-            Ok(_) => Err("io"),
-            Err(error) => {
-                if error.code() == "vault_locked" {
-                    refused = Some(again);
-                }
-                Err(error.code())
-            }
-        };
-        Submitted {
-            panel: self.panel,
-            follow: self.follow,
-            background: self.background,
-            result,
-            refused,
-        }
-    }
-}
-
 fn wrap(message: FileOpsMsg) -> Message {
     Message::FileOps(message)
 }
 
-/// Gives the field `id` the keys, with its first `select` characters selected (all of them
-/// when `None`), so typing replaces them.
-fn focus(id: &'static str, select: Option<usize>) -> Effect {
+/// Gives the field `id` the keys, with the characters from and to `select` selected (all of
+/// them when `None`), so typing replaces them.
+fn focus(id: &'static str, select: Option<(usize, usize)>) -> Effect {
     Effect::Task(window::focus_task(id, select))
 }
 
@@ -270,17 +225,24 @@ impl App {
     }
 
     /// `ops.dialog` was dispatched: the dialog opens over the window, the rename editor in the
-    /// list. Nothing opens over another dialog or where there is nothing to work on.
+    /// list (into or inside an archive the archive's, RC-110-05). Nothing opens over another
+    /// dialog or where there is nothing to work on.
     pub(super) fn open_file_dialog(&mut self, panel: PanelId, kind: FileDialog) -> Vec<Effect> {
         if self.file_ops.modal() || self.file_ops.rename.is_some() {
             return Vec::new();
         }
+        if let Some(effects) = self.archive_route(panel, kind) {
+            return effects;
+        }
         let pane = self.pane(panel);
         let (state, on_parent) = (pane.state.clone(), pane.on_parent());
-        if kind == FileDialog::Rename {
+        // Shift+F6 on several selected entries is a dialog with a mask (RC-110-04,
+        // `rename.selection_dialog`); else the name is edited in the list.
+        let inline = self.file_ops.rename_inline || state.selection.len() < 2;
+        if kind == FileDialog::Rename && inline {
             self.file_ops.rename = InlineRename::open(panel, &state, on_parent);
             return match &self.file_ops.rename {
-                Some(rename) => vec![focus(RENAME_ID, Some(rename.selected))],
+                Some(rename) => vec![focus(RENAME_ID, Some((0, rename.selected)))],
                 None => Vec::new(),
             };
         }
@@ -380,6 +342,7 @@ impl App {
             FileOpsMsg::Settings(settings) => {
                 self.file_ops.hide_bar = !settings.bar;
                 self.file_ops.mkdir_blank = !settings.prefill;
+                self.file_ops.rename_inline = !settings.selection_dialog;
                 self.file_ops.strip_rows = Some(settings.rows);
                 self.file_ops.hide_at_once = !settings.at_once;
                 self.file_ops.hide_total_speed = !settings.total_speed;

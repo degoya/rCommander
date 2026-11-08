@@ -14,7 +14,8 @@
 #                                  # keyboard-reference.sh --check,
 #                                  # settings-reference.sh --check, the plugin SDK's checks
 #                                  # (check-sdk-templates.sh, wit-reference.sh --check,
-#                                  # plugin-manifest-defaults.sh --check); no lock
+#                                  # plugin-manifest-defaults.sh --check),
+#                                  # icon-font.sh --check; no lock
 #   scripts/check.sh --rust        # clippy over the workspace (-D warnings), every test
 #                                  # (--no-fail-fast: every failing test is named), and clippy
 #                                  # for wasm32-unknown-unknown over the plugins and the crates
@@ -269,6 +270,7 @@ preflight() {
     stage sdk-templates scripts/check-sdk-templates.sh
     stage wit-reference scripts/wit-reference.sh --check
     stage manifest-defaults scripts/plugin-manifest-defaults.sh --check
+    stage symbol-font scripts/icon-font.sh --check
 }
 
 rust() {

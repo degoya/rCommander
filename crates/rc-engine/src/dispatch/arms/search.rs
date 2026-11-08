@@ -19,9 +19,29 @@ macro_rules! arms {
                 selection,
                 show,
             } => $self.branch_view(panel, selection, show).await,
-            Command::FeedPaths { panel, root, paths } => {
-                $self.feed_paths(panel, root.as_deref(), &paths).await
+            Command::FindDuplicates(crate::DuplicatesRequest {
+                panel,
+                paths,
+                query,
+                duplicates,
+                limit,
+                cursor,
+            }) => {
+                $self
+                    .find_duplicates(panel, &paths, query, duplicates, limit, cursor.as_deref())
+                    .await
             }
+            Command::FeedPaths {
+                panel,
+                root,
+                paths,
+                groups,
+            } => {
+                $self
+                    .feed_paths(panel, root.as_deref(), &paths, &groups)
+                    .await
+            }
+            Command::SelectDuplicates { panel, spec } => $self.select_duplicates(panel, &spec),
             Command::FindFilesDialog { panel } => Ok($self.find_dialog(panel)),
         } }
     };

@@ -64,6 +64,7 @@ fn entry(name: &str, kind: EntryKind) -> Entry {
         size: 1,
         modified: None,
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,

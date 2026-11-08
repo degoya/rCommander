@@ -63,14 +63,14 @@ pub const MAX_SVG_BYTES: u64 = 64 << 20;
 /// The failure codes of `locales/en.json`, under the plugin's id.
 pub mod code {
     /// The file or the inflated `.svgz` is larger than [`super::MAX_SVG_BYTES`].
-    pub const TOO_LARGE: &str = "too_large";
+    pub const TOO_LARGE: &str = "01a15a31-bee0-72a5-bbbf-292cb2295623.too_large";
     /// An `.svgz` that does not inflate.
-    pub const BAD_GZIP: &str = "bad_gzip";
+    pub const BAD_GZIP: &str = "01a15a31-bee0-72a5-bbbf-292cb2295623.bad_gzip";
     /// Not an SVG usvg can read, or a picture without a size.
-    pub const NOT_SVG: &str = "not_svg";
+    pub const NOT_SVG: &str = "01a15a31-bee0-72a5-bbbf-292cb2295623.not_svg";
     /// Nesting deeper than the depth budget, or `<use>` references that would expand beyond the
     /// element budget.
-    pub const TOO_COMPLEX: &str = "too_complex";
+    pub const TOO_COMPLEX: &str = "01a15a31-bee0-72a5-bbbf-292cb2295623.too_complex";
 }
 
 /// How far `probe` looks for the `<svg` start tag: past a long comment or DOCTYPE an editor

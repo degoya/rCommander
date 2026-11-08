@@ -218,3 +218,59 @@ async fn ops_mkdir_judges_a_server_s_location_where_it_creates() {
     assert!(context.engine().ops().jobs().is_empty());
     assert!(!root.path().join("sftp:").exists());
 }
+
+/// `ops_copy` with `rename_mask` copies under the names of Total Commander's mask (RC-110-04);
+/// two sources on one name answer `mask_collision` and nothing is queued.
+#[tokio::test]
+async fn ops_copy_renames_by_a_mask_and_refuses_a_collision_before_any_job() {
+    let (root, context) = setup().await;
+    fs::write(root.path().join("b.txt"), b"b").expect("write");
+    let client = connect(&context).await;
+    let refused = call(
+        &client,
+        "ops_copy",
+        json!({ "sources": ["a.txt", "b.txt"], "target": "docs", "rename_mask": "x.*" }),
+    )
+    .await;
+    assert_eq!(refused["code"], "mask_collision", "{refused}");
+    assert!(context.engine().ops().jobs().is_empty(), "nothing queued");
+
+    let queued = call(
+        &client,
+        "ops_copy",
+        json!({ "sources": ["a.txt", "b.txt"], "target": "docs", "rename_mask": "*.bak" }),
+    )
+    .await;
+    let jobs = queued["jobs"]
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| vec![queued.clone()]);
+    for job in &jobs {
+        assert_eq!(finished(&context, job).await, JobState::Completed, "{job}");
+    }
+    assert_eq!(
+        fs::read(root.path().join("docs/a.bak")).expect("copied"),
+        b"new"
+    );
+    assert_eq!(
+        fs::read(root.path().join("docs/b.bak")).expect("copied"),
+        b"b"
+    );
+}
+
+/// The write guard judges the name the mask gives, not the old one: `a.txt` through `.bashrc`
+/// is a shell's start-up file.
+#[tokio::test]
+async fn the_write_guard_judges_the_masked_name() {
+    let (root, context) = setup().await;
+    let client = connect(&context).await;
+    let refused = call(
+        &client,
+        "ops_copy",
+        json!({ "sources": ["a.txt"], "target": "docs", "rename_mask": ".bashrc" }),
+    )
+    .await;
+    assert_eq!(refused["code"], "protected_target", "{refused}");
+    assert!(context.engine().ops().jobs().is_empty());
+    assert!(!root.path().join("docs/.bashrc").exists());
+}

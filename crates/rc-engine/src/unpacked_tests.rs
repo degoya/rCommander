@@ -1,11 +1,14 @@
 use std::fs;
 
-use super::{alive, create_folder, owner, sweep};
+use super::{alive, create_folder, owner, sweep, sweep_edits};
 
 #[test]
 fn only_open_pid_n_names_have_an_owner() {
     assert_eq!(owner("open-1234-7"), Some(1234));
     assert_eq!(owner("open-1234-aB3xYz"), Some(1234));
+    // The list files of an own command (RC-100-86) go the same way.
+    assert_eq!(owner("list-1234-aB3"), Some(1234));
+    assert_eq!(owner("lists-1234-a"), None);
     for name in [
         "open-1234",
         "open--7",
@@ -80,16 +83,19 @@ fn this_process_is_alive() {
     assert!(alive(std::process::id()));
 }
 
-#[cfg(target_os = "linux")]
+/// RC-110-01: macOS too - a kept edit of an ended run is offered only when its end is seen.
+/// Windows' answer for these pids is `OpenProcess`'s, covered by the kept edits' tests there.
+#[cfg(not(windows))]
 #[test]
 fn a_pid_without_a_process_is_not_alive() {
     assert!(!alive(u32::MAX));
+    assert!(!alive(3_999_999_999));
 }
 
 #[test]
 fn a_new_folder_has_a_name_nobody_guesses_and_is_the_users_alone() {
-    let first = create_folder().expect("a folder");
-    let second = create_folder().expect("another");
+    let first = create_folder("open").expect("a folder");
+    let second = create_folder("list").expect("another");
     for dir in [&first, &second] {
         assert!(dir.is_dir());
         let name = dir.file_name().and_then(|name| name.to_str());
@@ -131,4 +137,28 @@ fn the_root_is_made_the_users_alone_and_a_link_is_refused() {
         own_root(&link).is_err(),
         "a link to another folder is no root"
     );
+}
+
+/// RC-110-01: an ended process's edit folder goes, unless a session file beside it keeps a
+/// change for the next start (a quit that kept it, an upload job still holding it).
+#[test]
+fn a_sweep_spares_the_edit_folders_with_a_session() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let path = root.path();
+    for dir in ["edit-111-kept", "edit-111-done", "edit-222-live"] {
+        fs::create_dir(path.join(dir)).expect("folder");
+        fs::write(path.join(dir).join("app.conf"), b"x").expect("copy");
+    }
+    fs::write(path.join("edit-111-kept.json"), b"{}").expect("session");
+
+    assert_eq!(sweep_edits(path, |pid| pid == 111), 1);
+
+    assert!(
+        path.join("edit-111-kept").exists(),
+        "kept for the next start"
+    );
+    assert!(!path.join("edit-111-done").exists());
+    assert!(path.join("edit-222-live").exists(), "its process runs");
+    // The open- sweep never touches an edit folder.
+    assert_eq!(sweep(path, |_| true), 0);
 }

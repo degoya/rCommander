@@ -17,10 +17,16 @@
 //!
 //! The presets are rules saved under a name (Total Commander's saved settings, RC-020-02); they
 //! rename nothing and are `write` tools for the settings they change.
+//!
+//! What the window gives the engine an agent passes itself (RC-100-96): the clipboard's text for
+//! `[X]`, the moments of `[T2]` and `[T3]` (the time of the call when omitted, the same for the
+//! check and the run of an apply), the local date and time formats, and a list of new names.
+//! The next step (`multi_rename.next_step`) has no tool: the agent passes the names itself.
 
+use chrono::NaiveDateTime;
 use rc_engine::{
-    CaseMode, Change, Command, CounterSettings, MultiRenameRequest, Outcome, RenameRule,
-    SearchReplace, VfsPath,
+    CaseMode, Change, Command, CounterSettings, MultiRenameRequest, Outcome, RenameContext,
+    RenameRule, SearchReplace, VfsPath,
 };
 use rmcp::{
     handler::server::wrapper::Parameters, model::CallToolResult, schemars, tool, tool_router,
@@ -30,7 +36,7 @@ use serde::Deserialize;
 use super::panels::PanelArg;
 use crate::{
     RcMcpServer,
-    answer::{ToolResult, respond},
+    answer::{ToolResult, error_result, respond},
     guard::refuse_sensitive_tree,
 };
 
@@ -47,6 +53,8 @@ pub(crate) enum CaseArg {
     FirstUpper,
     /// First character of every word upper case.
     WordsUpper,
+    /// As words_upper, but English title words (a, an, the, of, ...) lower case inside.
+    Title,
 }
 
 impl From<CaseArg> for CaseMode {
@@ -57,6 +65,7 @@ impl From<CaseArg> for CaseMode {
             CaseArg::Upper => Self::Upper,
             CaseArg::FirstUpper => Self::FirstUpper,
             CaseArg::WordsUpper => Self::WordsUpper,
+            CaseArg::Title => Self::Title,
         }
     }
 }
@@ -65,10 +74,12 @@ impl From<CaseArg> for CaseMode {
 #[derive(Debug, Clone, Default, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub(crate) struct SearchArg {
-    /// What to look for. Plain text takes several terms separated by | (ae|oe).
+    /// What to look for. Plain text takes several terms separated by | (ae|oe), and the
+    /// wildcards * (any characters) and ? (one character).
     pub find: String,
-    /// What to put in its place: per term separated by | (a|o), or one text for all; with regex
-    /// $1, ${name} insert groups and $$ is a literal $.
+    /// What to put in its place: per term separated by | (a|o), or one text for all; with one
+    /// plain term the n-th * or ? inserts what the n-th wildcard of find matched; with regex $1,
+    /// ${name} insert groups and $$ is a literal $.
     pub replace: String,
     /// find is a regular expression (Rust regex syntax).
     pub regex: bool,
@@ -111,16 +122,20 @@ pub(crate) struct RenameParams {
     pub panel: Option<PanelArg>,
     /// The mask for the name without extension, [N] when omitted. Total Commander's
     /// placeholders: [N] name, [N2-5] its characters 2 to 5 ([N3], [N2,5], [N2-], [N-8,5]),
-    /// [E] extension, [A] name with extension, [C] counter ([C10+5:3] start 10, step 5, 3
-    /// digits), [P] parent and [G] grandparent folder, [Y] [M] [D] [h] [m] [s] the file's date
-    /// and time ([YMD], [hms]), [U] [L] [F] [n] case from there on, [[] and []] literal brackets.
+    /// [E] extension, [A] name with extension, [S] size, [C] counter ([C10+5:3] start 10, step
+    /// 5, 3 digits; [Caa+1] letters; [C+1/100] a step of 1/100), [P] parent and [G] grandparent
+    /// folder, [B0]..[B9] parent and up, [B+0]..[B+9] drive and folders from the root, [Y] [M]
+    /// [D] [h] [m] [s] the date and time ([YMD], [hms]; [d] [t] in the local format) of the file,
+    /// or after [T2] of opened_at, after [T3] of changed_at ([T1+60m] with an offset), [X] the
+    /// clipboard text, [I] ignore dots in folder names, [U] [L] [F] [f] [n] case from there on,
+    /// [[] and []] literal brackets.
     #[serde(default)]
     pub name_mask: Option<String>,
     /// The mask for the extension, [E] when omitted; when it renders nothing the name has no dot.
     #[serde(default)]
     pub extension_mask: Option<String>,
-    /// The case of the whole new name: unchanged (default), lower, upper, first_upper or
-    /// words_upper.
+    /// The case of the whole new name: unchanged (default), lower, upper, first_upper,
+    /// words_upper or title.
     #[serde(default)]
     pub case: CaseArg,
     /// Search and replace after the masks and the case.
@@ -135,6 +150,38 @@ pub(crate) struct RenameParams {
     /// The counter's least number of digits; 1 by default.
     #[serde(default)]
     pub counter_width: Option<u32>,
+    /// New names in place of the masks, the n-th for the n-th entry (at most 10000); an entry
+    /// without one has the conflict names_missing. Case and search still apply.
+    #[serde(default)]
+    pub new_names: Option<Vec<String>>,
+    /// The text [X] inserts (*?:|"<> become _); [X] is rename_clipboard_empty without it.
+    #[serde(default)]
+    pub clipboard: Option<String>,
+    /// What [T2] reads, local time as 2026-11-07T08:15:00; the time of the call when omitted.
+    #[serde(default)]
+    pub opened_at: Option<String>,
+    /// What [T3] reads, local time as 2026-11-07T08:15:00; the time of the call when omitted.
+    #[serde(default)]
+    pub changed_at: Option<String>,
+    /// The date format of [d] as a Windows picture (dd.MM.yyyy); yyyy-MM-dd when omitted.
+    #[serde(default)]
+    pub date_format: Option<String>,
+    /// The time format of [t] as a Windows picture (HH:mm:ss, the default).
+    #[serde(default)]
+    pub time_format: Option<String>,
+}
+
+/// A local time as an agent writes it, or the refusal naming the argument.
+fn moment(name: &str, text: Option<String>) -> Result<Option<NaiveDateTime>, CallToolResult> {
+    text.map(|text| {
+        text.trim().parse::<NaiveDateTime>().map_err(|_| {
+            error_result(
+                "invalid_params",
+                &format!("{name} is no local time like 2026-11-07T08:15:00"),
+            )
+        })
+    })
+    .transpose()
 }
 
 /// A rule from the tools' fields, each omitted one at its default.
@@ -162,28 +209,48 @@ impl RuleArgs {
                 step: self.counter_step.unwrap_or(counter.step),
                 width: self.counter_width.unwrap_or(counter.width),
             },
+            names: None,
         }
     }
 }
 
 impl RenameParams {
-    fn request(self) -> MultiRenameRequest {
-        MultiRenameRequest {
+    /// The engine's request, the moments left open set to `now` so a check and its run agree;
+    /// or the refusal of a moment that does not read.
+    fn request(self, now: NaiveDateTime) -> Result<MultiRenameRequest, CallToolResult> {
+        let context = RenameContext {
+            clipboard: self.clipboard,
+            opened_at: Some(moment("opened_at", self.opened_at)?.unwrap_or(now)),
+            changed_at: Some(moment("changed_at", self.changed_at)?.unwrap_or(now)),
+            date_format: self.date_format,
+            time_format: self.time_format,
+        };
+        let rule = RuleArgs {
+            name_mask: self.name_mask,
+            extension_mask: self.extension_mask,
+            case: self.case,
+            search: self.search,
+            counter_start: self.counter_start,
+            counter_step: self.counter_step,
+            counter_width: self.counter_width,
+        }
+        .rule();
+        Ok(MultiRenameRequest {
             panel: self.panel.map(Into::into),
             dir: self.dir,
             names: self.names,
-            rule: RuleArgs {
-                name_mask: self.name_mask,
-                extension_mask: self.extension_mask,
-                case: self.case,
-                search: self.search,
-                counter_start: self.counter_start,
-                counter_step: self.counter_step,
-                counter_width: self.counter_width,
-            }
-            .rule(),
-        }
+            rule: RenameRule {
+                names: self.new_names,
+                ..rule
+            },
+            context,
+        })
     }
+}
+
+/// The local time of the call.
+fn now() -> NaiveDateTime {
+    chrono::Local::now().naive_local()
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -198,8 +265,8 @@ pub(crate) struct PresetSaveParams {
     /// The mask for the extension, [E] when omitted.
     #[serde(default)]
     pub extension_mask: Option<String>,
-    /// The case of the whole new name: unchanged (default), lower, upper, first_upper or
-    /// words_upper.
+    /// The case of the whole new name: unchanged (default), lower, upper, first_upper,
+    /// words_upper or title.
     #[serde(default)]
     pub case: CaseArg,
     /// Search and replace after the masks and the case.
@@ -280,24 +347,29 @@ impl RcMcpServer {
 #[tool_router(router = multi_rename_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Preview a multi-rename (Total Commander's multi-rename tool) without renaming anything: for each entry its old and new name, change (unchanged, rename, case_only) and conflict (duplicate, target_exists, invalid_name with a reason, no_timestamp). Masks, case, search and replace and counter as in multi_rename_apply. Errors: rename_mask_* with the position, rename_regex_invalid, rename_input_too_long, entry_not_found, no_sources."
+        description = "Preview a multi-rename (Total Commander's multi-rename tool) without renaming anything: for each entry its old and new name, change (unchanged, rename, case_only) and conflict (duplicate, target_exists, invalid_name with a reason, no_timestamp, names_missing). Masks or new_names, case, search and replace, counter, clipboard, opened_at, changed_at and the local formats as in multi_rename_apply. Errors: rename_mask_* with the position, rename_regex_invalid, rename_replace_wildcards, rename_clipboard_empty, rename_names_too_large, rename_input_too_long, invalid_params, entry_not_found, no_sources."
     )]
     pub(crate) async fn multi_rename_preview(
         &self,
         Parameters(params): Parameters<RenameParams>,
     ) -> ToolResult {
-        self.run(Command::MultiRenamePreview(params.request()))
-            .await
+        match params.request(now()) {
+            Ok(request) => self.run(Command::MultiRenamePreview(request)).await,
+            Err(refusal) => Ok(refusal),
+        }
     }
 
     #[tool(
-        description = "Rename entries of one folder by masks, case, search and replace and counter, as a background job of the operations queue: the plan is made again from the folder as it is, and nothing is renamed when it has a conflict (rename_plan_conflicts - run multi_rename_preview to see which). Swaps, rings and case-only changes go through temporary names; no entry is ever overwritten. When a step fails while entries are under temporary names, the job reverses its own steps with the setting rename.undo_on_failure on (the default); the failed job's report (ops_list) says rename_stopped with rolled_back, or lists each parked entry (temp, old, new). Answers with the run and its queued job (follow it with ops_list); the run is kept for multi_rename_undo. Keys and credential files, and new names that would look like one, are refused with sensitive_path; names in rCommander's data folder, an SSH folder or an autostart folder, or of a shell's start-up file, with protected_target. Errors also: rename_no_changes, rename_busy, database_unavailable."
+        description = "Rename entries of one folder by masks (or a list of new_names), case, search and replace and counter, as a background job of the operations queue: the plan is made again from the folder as it is, and nothing is renamed when it has a conflict (rename_plan_conflicts - run multi_rename_preview to see which). Swaps, rings and case-only changes go through temporary names; no entry is ever overwritten. When a step fails while entries are under temporary names, the job reverses its own steps with the setting rename.undo_on_failure on (the default); the failed job's report (ops_list) says rename_stopped with rolled_back, or lists each parked entry (temp, old, new). Answers with the run and its queued job (follow it with ops_list); the run is kept for multi_rename_undo. Keys and credential files, and new names that would look like one, are refused with sensitive_path; names in rCommander's data folder, an SSH folder or an autostart folder, or of a shell's start-up file, with protected_target. Each step is its own run: a second multi_rename_undo goes on to the run before. Errors also: rename_no_changes, rename_busy, database_unavailable."
     )]
     pub(crate) async fn multi_rename_apply(
         &self,
         Parameters(params): Parameters<RenameParams>,
     ) -> ToolResult {
-        let request = params.request();
+        let request = match params.request(now()) {
+            Ok(request) => request,
+            Err(refusal) => return Ok(refusal),
+        };
         let preview = self
             .context
             .engine

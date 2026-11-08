@@ -1,5 +1,9 @@
 # Changes
 
+## 0.1.1
+
+Rebuilt against plugin contract 0.6.0; no other change.
+
 ## 0.1.0
 
 The first release: Protocol Buffers (`.proto`) and GraphQL (`.graphql`, `.gql`, `.graphqls`)

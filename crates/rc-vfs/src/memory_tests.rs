@@ -106,3 +106,12 @@ async fn relative_paths_are_invalid() {
     let error = fs.list(Path::new("rel")).await.expect_err("relative");
     assert_eq!(error.code(), "invalid_path");
 }
+
+/// The memory backend knows no access time: the field stays empty (RC-100-90).
+#[tokio::test]
+async fn a_memory_listing_has_no_last_access() {
+    let fs = MemoryFs::new();
+    fs.mkdir(Path::new("/d"), false).await.expect("mkdir");
+    let entries = fs.list(Path::new("/")).await.expect("list");
+    assert!(entries.iter().all(|entry| entry.accessed.is_none()));
+}

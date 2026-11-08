@@ -33,6 +33,10 @@ const MAX_MAGIC_BYTES: usize = 32;
 const BEFORE_SECRETS: [&str; 2] = ["0.1.0", "0.2.0"];
 /// The contracts before the inventory world (RC-100-39): an inventory never names one.
 const BEFORE_INVENTORY: [&str; 3] = ["0.1.0", "0.2.0", "0.3.0"];
+/// The contracts before `checkout` and `checkin` (RC-100-38): a lending source never names one.
+const BEFORE_CHECKOUT: [&str; 4] = ["0.1.0", "0.2.0", "0.3.0", "0.4.0"];
+/// The contracts before the compare world (RC-100-41): a compare plugin never names one.
+const BEFORE_COMPARE: [&str; 5] = ["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.5.0"];
 
 pub(crate) fn validate_manifest(manifest: &PluginManifest) -> Result<()> {
     if manifest.manifest_version != MANIFEST_VERSION {
@@ -107,6 +111,9 @@ fn validate_identity(manifest: &PluginManifest) -> Result<()> {
 
 /// The sections a kind carries, and the grants it may hold.
 fn validate_kind(manifest: &PluginManifest) -> Result<()> {
+    if manifest.secrets.is_some() && manifest.plugin_type != PluginType::Secrets {
+        bail!("only a secret source has a [secrets] section");
+    }
     match manifest.plugin_type {
         PluginType::Viewer => {
             let Some(viewer) = &manifest.viewer else {
@@ -151,8 +158,13 @@ fn validate_kind(manifest: &PluginManifest) -> Result<()> {
                 bail!("a secret source cannot be granted the capability `{name}` yet");
             }
             net_http(manifest)?;
+            if manifest.lends_secrets() && BEFORE_CHECKOUT.contains(&manifest.api_version.as_str())
+            {
+                bail!("[secrets] checkout needs api_version 0.5.0 or later");
+            }
         }
         PluginType::Inventory => validate_inventory(manifest)?,
+        PluginType::Compare => validate_compare(manifest)?,
         PluginType::Unknown(_) => unreachable!("unknown types are refused before this point"),
     }
     Ok(())
@@ -183,6 +195,30 @@ fn validate_inventory(manifest: &PluginManifest) -> Result<()> {
     let http = net_http_entered(manifest)?;
     if !secret_slots(manifest)?.is_empty() && !http {
         bail!("[capabilities] secrets needs net_http = {{ entered = true }} to be sent anywhere");
+    }
+    Ok(())
+}
+
+/// A compare plugin (RC-100-41): it claims the files it compares by extension or name in
+/// `[match]` - both files of a pair are named, their heads are not read, so a magic would never
+/// match - shows no document and is granted nothing; its `source` is the two files of the call.
+fn validate_compare(manifest: &PluginManifest) -> Result<()> {
+    if BEFORE_COMPARE.contains(&manifest.api_version.as_str()) {
+        bail!("a compare plugin needs api_version 0.6.0 or later");
+    }
+    if manifest.viewer.is_some() {
+        bail!("a compare plugin has no [viewer] section");
+    }
+    if !manifest.matching.magic.is_empty() {
+        bail!("a compare plugin claims files by extension or name, not by magic");
+    }
+    validate_match(&manifest.matching)?;
+    validate_names(
+        &manifest.matching.names,
+        manifest.metadata.min_app_version.as_deref(),
+    )?;
+    if let Some(name) = manifest.capabilities.declared.keys().next() {
+        bail!("a compare plugin cannot be granted the capability `{name}`");
     }
     Ok(())
 }

@@ -8,8 +8,8 @@ use crate::support::{Harness, exists, mem, read, write};
 use async_trait::async_trait;
 use rc_ops::{ErrorPolicy, JobChange, JobKind, JobOptions, JobSpec, JobState, StepJournal};
 use rc_rename::{
-    FsRules, PlanInput, RenameRule, RenameSource, RenameStep, SearchReplace, plan, schedule,
-    undo_steps,
+    FsRules, PlanInput, RenameContext, RenameRule, RenameSource, RenameStep, SearchReplace, plan,
+    schedule, undo_steps,
 };
 use rc_vfs::MemoryFs;
 
@@ -24,10 +24,7 @@ fn steps_for(
 ) -> Vec<RenameStep> {
     let sources: Vec<RenameSource> = names
         .iter()
-        .map(|name| RenameSource {
-            name: (*name).to_owned(),
-            modified: None,
-        })
+        .map(|name| RenameSource::named(*name))
         .collect();
     let existing: Vec<String> = names.iter().map(|name| (*name).to_owned()).collect();
     let rule = RenameRule {
@@ -45,6 +42,7 @@ fn steps_for(
         sources: &sources,
         existing: &existing,
         fs,
+        context: &RenameContext::default(),
     };
     let plan = plan(&input, &rule).expect("the rule plans");
     assert!(!plan.has_conflicts(), "{plan:?}");

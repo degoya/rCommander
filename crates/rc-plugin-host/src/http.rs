@@ -119,6 +119,11 @@ impl HttpGrant {
     /// container) - never a token in clear over the network. `localhost` is this machine's
     /// loopback, as for a secret source.
     ///
+    /// `tls` is the engine's TLS for the address (RC-100-40): the system roots, then the
+    /// certificate the person trusted for its host and port (RC-070-02), so a self-signed one
+    /// (a Proxmox node) passes only once a person trusted it. Without it the system roots alone
+    /// decide; verification is never turned off.
+    ///
     /// # Errors
     ///
     /// `plugin_http_denied` for any other address, `plugin_host_failed` when the client cannot
@@ -126,6 +131,7 @@ impl HttpGrant {
     pub(crate) fn entered(
         address: &Url,
         secrets: Vec<(String, SecretString)>,
+        tls: Option<rustls::ClientConfig>,
         max_response_bytes: u64,
         timeout: Duration,
     ) -> Result<Self, Failure> {
@@ -145,6 +151,9 @@ impl HttpGrant {
                 SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), port),
             ];
             builder = builder.no_proxy().resolve_to_addrs("localhost", &loopback);
+        }
+        if let Some(tls) = tls.filter(|_| address.scheme() == "https") {
+            builder = builder.tls_backend_preconfigured(tls);
         }
         let client = builder.build().map_err(failure::host_failed)?;
         Ok(Self {

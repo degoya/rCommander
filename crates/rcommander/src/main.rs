@@ -20,6 +20,7 @@ mod mcp;
 mod native_window;
 mod platform;
 mod plugin_cli;
+mod portable;
 mod recover;
 mod term;
 mod theme;
@@ -85,6 +86,9 @@ fn main() -> ExitCode {
     // The About page and `app.about` name the build, in the window and over `rcommander mcp`.
     rc_engine::about::stamp_build(env!("RC_BUILD_COMMIT"), env!("RC_BUILD_TIME"));
     let cli = Cli::parse();
+    // Where this process keeps its data - the profile, or `data` beside a portable copy
+    // (RC-100-95) - before the update's recovery and before anything opens the database.
+    portable::choose();
     if let Some(code) = app::screenshots::run_if_asked(&cli.shots) {
         return code;
     }

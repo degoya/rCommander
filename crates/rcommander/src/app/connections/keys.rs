@@ -28,7 +28,7 @@ use rc_engine::{AuthMethod, Chord, ConnectionKind, CredentialId, DefaultView, Tr
 use super::{
     ConnMsg, ConnectionManager, Pending,
     arrange::Arrange,
-    form::{Field, Form, theme_choices},
+    form::{Field, Form, jump_choices, theme_choices},
     tree_actions::unfocus,
     view::{FILTER_FIELD, TREE_SCROLL_ID, TREE_STOP_ID},
 };
@@ -276,6 +276,14 @@ impl ConnectionManager {
             ("Enter", false) => self.save(),
             ("ArrowLeft" | "ArrowRight" | "Space", false) => {
                 let by = if chord.key == "ArrowLeft" { -1 } else { 1 };
+                // The jump hosts the tree offers (RC-110-03).
+                if field == Field::Jump {
+                    let mut jumps = vec![None];
+                    let choices = jump_choices(&self.tree.tree, form.id());
+                    jumps.extend(choices.into_iter().map(|(id, _)| Some(id)));
+                    form.set_jump(cycle(&jumps, form.jump, by));
+                    return Vec::new();
+                }
                 let mut shared = vec![None];
                 shared.extend(self.tree.credentials().iter().map(|entry| Some(entry.id)));
                 change(form, field, by, &self.scripts, &shared);

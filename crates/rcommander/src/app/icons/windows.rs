@@ -20,6 +20,7 @@
 use std::{
     ffi::OsStr,
     os::windows::ffi::OsStrExt,
+    path::Path,
     ptr::{null, null_mut},
 };
 
@@ -36,7 +37,8 @@ use windows_sys::Win32::{
     },
     UI::{
         Shell::{
-            SHFILEINFOW, SHGFI_ICON, SHGFI_SMALLICON, SHGFI_USEFILEATTRIBUTES, SHGetFileInfoW,
+            ExtractIconExW, SHFILEINFOW, SHGFI_ICON, SHGFI_SMALLICON, SHGFI_USEFILEATTRIBUTES,
+            SHGetFileInfoW,
         },
         WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO},
     },
@@ -130,12 +132,48 @@ fn shell_icon(name: &OsStr, attributes: Option<FILE_FLAGS_AND_ATTRIBUTES>) -> Op
     icon.rgba()
 }
 
+/// The icon at `index` of `path` - an `.exe`, a `.dll` or an `.ico` -, a button's symbol
+/// (RC-100-87): the large one (32 px at 100 %) with `large`, else the small one, the other where
+/// the file has only one; a negative index is a resource id, as Total Commander reads it. `None`
+/// when the file holds no such icon.
+pub fn extracted(path: &Path, index: i32, large: bool) -> Option<Rgba> {
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut big: HICON = null_mut();
+    let mut small: HICON = null_mut();
+    // SAFETY: `wide` is NUL-terminated and outlives the call; both out-pointers are writable
+    // HICONs and one icon of each size is asked for. The handles it returns belong to the
+    // caller, which the guards below destroy.
+    let found = unsafe { ExtractIconExW(wide.as_ptr(), index, &mut big, &mut small, 1) };
+    // Only a handle the call gave is guarded: a null one is never destroyed.
+    let big = if big.is_null() { None } else { Some(Icon(big)) };
+    let small = if small.is_null() {
+        None
+    } else {
+        Some(Icon(small))
+    };
+    if found == 0 || found == u32::MAX {
+        return None;
+    }
+    let chosen = if large {
+        big.as_ref().or(small.as_ref())
+    } else {
+        small.as_ref().or(big.as_ref())
+    };
+    chosen?.rgba()
+}
+
+/// The small icon of the file at `path` itself, as Explorer shows it: a program's own.
+pub fn file_icon(path: &Path) -> Option<Rgba> {
+    shell_icon(path.as_os_str(), None)
+}
+
 /// An icon handle this module owns.
 struct Icon(HICON);
 
 impl Drop for Icon {
     fn drop(&mut self) {
-        // SAFETY: the handle came from SHGetFileInfoW with SHGFI_ICON and is destroyed once.
+        // SAFETY: the handle came from SHGetFileInfoW with SHGFI_ICON or from ExtractIconExW,
+        // and is destroyed once.
         unsafe { DestroyIcon(self.0) };
     }
 }

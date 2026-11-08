@@ -1,5 +1,6 @@
 //! Under the form of a stored connection: for each secret it uses, "from" the vault or a secret
-//! source, the entry it is mapped to, and the search that maps it (`connections/sources.rs`).
+//! source, the entry it is mapped to, and the search that maps it (`connections/sources.rs`); for
+//! a PAM system that lends, the reason the next checkout hands over (RC-100-38).
 
 use std::fmt;
 
@@ -16,7 +17,9 @@ use crate::{
         connections::{
             ConnMsg, ConnectionManager,
             form::Form,
-            sources::{SOURCE_QUERY_FIELD, SourceMsg, SourceSearch},
+            sources::{
+                SOURCE_QUERY_FIELD, SOURCE_REASON_FIELD, SourceMsg, SourcePanel, SourceSearch,
+            },
         },
     },
     i18n::t,
@@ -105,7 +108,29 @@ pub(super) fn panel<'a>(
             lines = lines.push(search_block(search, tokens));
         }
     }
+    if panel.wants_reason() {
+        lines = lines.push(reason_row(panel));
+    }
     Some(lines.into())
+}
+
+/// The reason a PAM system is given at the next checkout, and Set, which hands it over.
+fn reason_row(panel: &SourcePanel) -> Element<'_, Message> {
+    row![
+        label(t!("connections.source.reason")).width(LABEL_WIDTH),
+        field(t!("connections.source.reason_hint"), &panel.reason)
+            .id(SOURCE_REASON_FIELD)
+            .on_input(|text| source(SourceMsg::Reason(text)))
+            .on_submit(source(SourceMsg::SetReason)),
+        layout::secondary_icon_button(
+            Icon::Confirm,
+            t!("connections.source.reason_set"),
+            Some(source(SourceMsg::SetReason)),
+        ),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center)
+    .into()
 }
 
 /// The search field, its button, an error or the entries found, each a button that maps it.

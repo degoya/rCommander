@@ -17,7 +17,7 @@
 
 use std::{
     io,
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -48,8 +48,8 @@ type Lister = JoinHandle<rc_vfs::Result<()>>;
 /// The rest of a listing that is shown before its end.
 pub(crate) struct Arriving {
     run: u64,
-    /// The folder listed, for the error of a listing that breaks off.
-    dir: PathBuf,
+    /// The folder listed: for the ignore list, and the error of a listing that breaks off.
+    dir: VfsPath,
     /// What arrived up to the last flush, hidden entries left out unless shown, sorted as
     /// `sorted_as` says.
     found: Vec<Entry>,
@@ -104,7 +104,7 @@ impl Engine {
             };
             match next {
                 Some(batch) => {
-                    keep(&mut found, batch, show_hidden);
+                    keep(&mut found, batch, show_hidden, path);
                     arrived = true;
                 }
                 None => break true,
@@ -120,7 +120,7 @@ impl Engine {
         let shown = found.clone();
         let arriving = Arriving {
             run: next_run(),
-            dir: path.path.clone(),
+            dir: path.clone(),
             found,
             sorted_as: (sort, names),
             fresh: Vec::new(),
@@ -171,8 +171,10 @@ impl Arriving {
     }
 }
 
-/// `batch` added to `found`, hidden entries only when they are shown.
-fn keep(found: &mut Vec<Entry>, batch: Vec<Entry>, show_hidden: bool) {
+/// `batch` of the folder `dir` added to `found`, hidden entries only when they are shown, none the
+/// ignore list hides (RC-100-92).
+fn keep(found: &mut Vec<Entry>, mut batch: Vec<Entry>, show_hidden: bool, dir: &VfsPath) {
+    crate::ignore_list::retain_shown(dir, &mut batch);
     found.extend(
         batch
             .into_iter()
@@ -213,7 +215,8 @@ impl Follower {
             match timeout(FLUSH_EVERY, self.arriving.receiver.recv()).await {
                 Ok(Some(batch)) => {
                     let shown = self.arriving.show_hidden;
-                    keep(&mut self.arriving.fresh, batch, shown);
+                    let arriving = &mut self.arriving;
+                    keep(&mut arriving.fresh, batch, shown, &arriving.dir);
                     self.dirty = true;
                 }
                 Ok(None) => break,
@@ -230,7 +233,7 @@ impl Follower {
                 return;
             }
         }
-        let failed = ended((&mut self.arriving.lister).await, &self.arriving.dir).err();
+        let failed = ended((&mut self.arriving.lister).await, &self.arriving.dir.path).err();
         if self.flush(true)
             && let Some(error) = failed
         {

@@ -40,7 +40,7 @@ for crate in rc-engine rc-ops rc-vault rc-plugin-host; do
 done
 cp "$ROOT/crates/rcommander/locales/en.json" "$CATALOGUE"
 cp "$ROOT/$DIALOG.rs" "$TREE/$DIALOG.rs"
-cp "$ROOT/$DIALOG/view.rs" "$ROOT/$DIALOG/tabs.rs" "$TREE/$DIALOG/"
+cp "$ROOT/$DIALOG/view.rs" "$ROOT/$DIALOG/tabs.rs" "$ROOT/$DIALOG/page.rs" "$TREE/$DIALOG/"
 # Restores one copied file from the repository after a case changed it.
 restore() { cp "$ROOT/${1#"$TREE/"}" "$1"; }
 

@@ -23,6 +23,7 @@ fn on_server(connection_id: i64, path: &str) -> TabSpec {
         sort: None,
         mode: None,
         locked: false,
+        title: None,
     }
 }
 
@@ -282,4 +283,26 @@ fn the_apply_mode_reads_its_setting() {
         ApplyMode::ReplaceAll,
         "the workspace's tabs only (RC-100-72)"
     );
+}
+
+#[test]
+fn a_workspace_tab_takes_the_thumbnails() {
+    let text = json!({
+        "version": 1,
+        "active": "left",
+        "left": {
+            "tabs": [{
+                "location": { "backend": "local", "path": "/photos" },
+                "mode": "thumbnails"
+            }],
+            "active_tab": 0
+        },
+        "right": {
+            "tabs": [{ "location": { "backend": "local", "path": "/srv" } }],
+            "active_tab": 0
+        }
+    })
+    .to_string();
+    let spec = WorkspaceSpec::parse(&text).expect("reads");
+    assert_eq!(spec.left.tabs[0].mode, Some(ListMode::Thumbnails));
 }

@@ -225,6 +225,7 @@ async fn an_install_waits_for_the_empty_queue() {
             sources: vec!["a.txt".into()],
             target: Some("docs".into()),
             options: rc_ops::JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");

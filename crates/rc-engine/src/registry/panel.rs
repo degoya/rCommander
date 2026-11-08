@@ -15,6 +15,16 @@ pub struct MaskRequest {
     pub mask: Option<String>,
 }
 
+/// The step of `panel.thumbnail_zoom` (RC-100-89).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ZoomStep {
+    /// The next larger tile.
+    In,
+    /// The next smaller tile.
+    Out,
+}
+
 /// This group's rows, sorted by id.
 pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
@@ -31,6 +41,11 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         id: "panel.context_menu",
         class: CommandClass::Read,
         summary: "Open the context menu of a panel's selection in the window",
+    },
+    CommandSpec {
+        id: "panel.cycle_separate_tree",
+        class: CommandClass::Read,
+        summary: "Turn the folder tree beside the panels off, to one for both, to one beside each, and off again (Ctrl+Shift+F8)",
     },
     CommandSpec {
         id: "panel.deselect_all",
@@ -51,6 +66,11 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         id: "panel.get_state",
         class: CommandClass::Read,
         summary: "A panel's path, cursor, selection and entry count; which panel is active",
+    },
+    CommandSpec {
+        id: "panel.git_status",
+        class: CommandClass::Read,
+        summary: "The git marks and branch a panel knows of its folder; starts no process",
     },
     CommandSpec {
         id: "panel.invert_selection",
@@ -120,12 +140,17 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "panel.set_view",
         class: CommandClass::Read,
-        summary: "Show a panel's entries in the full view (columns) or the brief view (names only)",
+        summary: "Show a panel's entries in the full view (columns), the brief view (names only), a column set, the comments view or the thumbnails",
     },
     CommandSpec {
         id: "panel.show_files",
         class: CommandClass::Read,
         summary: "Show a panel's files instead of its terminal; the shell keeps running",
+    },
+    CommandSpec {
+        id: "panel.show_tree",
+        class: CommandClass::Read,
+        summary: "Show the folder tree of a panel's drive in its place, or its files again (Ctrl+F8); the window's other panel follows the tree's cursor",
     },
     CommandSpec {
         id: "panel.sort",
@@ -136,6 +161,21 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         id: "panel.switch_active",
         class: CommandClass::Read,
         summary: "Make the other panel, or a named one, the active panel",
+    },
+    CommandSpec {
+        id: "panel.thumbnail_zoom",
+        class: CommandClass::Write,
+        summary: "Make the thumbnails' tiles a step larger or smaller (64 to 512 pixels); writes thumbnails.size",
+    },
+    CommandSpec {
+        id: "panel.toggle_auto_columns",
+        class: CommandClass::Write,
+        summary: "Switch the automatic column sets by folder mask on or off; the choice is stored",
+    },
+    CommandSpec {
+        id: "panel.toggle_comments",
+        class: CommandClass::Read,
+        summary: "Switch a panel between the comments view (name, extension, descript.ion comment) and the view before it",
     },
     CommandSpec {
         id: "panel.toggle_cursor_selection",
@@ -157,6 +197,11 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         class: CommandClass::Exec,
         summary: "Switch a panel between its files and its terminal (a shell starts when none runs)",
     },
+    CommandSpec {
+        id: "panel.toggle_watch",
+        class: CommandClass::Write,
+        summary: "Switch the file watcher on or off: shown folders are read again when they change; the choice is stored",
+    },
 ];
 
 /// This group's [`super::Command`] variants, each after its id: `command.rs` gathers the
@@ -165,6 +210,11 @@ macro_rules! commands {
     ($next:ident, $rest:tt, { $($done:tt)* }) => {
         $next! { $rest, { $($done)*
             "panel.get_state" => GetPanelState {
+                #[serde(default)]
+                panel: Option<PanelId>,
+            },
+            /// What the panel knows of its folder's git status (RC-100-97); runs nothing.
+            "panel.git_status" => GitStatus {
                 #[serde(default)]
                 panel: Option<PanelId>,
             },
@@ -241,11 +291,23 @@ macro_rules! commands {
                 #[serde(default)]
                 descending: Option<bool>,
             },
+            /// `full`, `brief`, `comments`, `thumbnails` (RC-100-89) or
+            /// `{"custom": {"set": <id>}}` (RC-100-90), chosen by hand: it stays until the panel
+            /// enters a folder of another set's mask.
             "panel.set_view" => SetListMode {
                 #[serde(default)]
                 panel: Option<PanelId>,
                 mode: ListMode,
             },
+            /// Ctrl+Shift+F2 (Total Commander's `cm_SrcComments`): the comments view, or back.
+            "panel.toggle_comments" => ToggleComments {
+                #[serde(default)]
+                panel: Option<PanelId>,
+            },
+            /// Total Commander's `cm_ToggleAutoViewModeSwitch`: `columns.auto_switch` switched.
+            "panel.toggle_auto_columns" => ToggleAutoColumns {},
+            /// Total Commander's `cm_SwitchWatchDirs`: `panels.watch` switched (RC-110-02).
+            "panel.toggle_watch" => ToggleWatch {},
             /// Hidden and system entries in both panels; the choice is stored.
             "panel.toggle_hidden" => ToggleHidden {
                 /// Show (`true`) or hide them; `None` switches.
@@ -315,6 +377,19 @@ macro_rules! commands {
                 #[serde(default)]
                 panel: Option<PanelId>,
             },
+            /// Ctrl+F8 (RC-100-88): the panel shows the folder tree of its drive, or its files.
+            "panel.show_tree" => ShowTree {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                /// The tree (`true`) or the files; `None` switches.
+                #[serde(default)]
+                show: Option<bool>,
+            },
+            /// Ctrl+Shift+F8 (RC-100-88): `panels.separate_tree` off, one, two, off.
+            "panel.cycle_separate_tree" => CycleSeparateTree {},
+            /// Ctrl and the mouse wheel over the thumbnails (RC-100-89): `thumbnails.size` a step
+            /// up or down; no key, as in Total Commander.
+            "panel.thumbnail_zoom" => ThumbnailZoom { step: crate::ZoomStep },
         } }
     };
 }

@@ -1,0 +1,7 @@
+{
+  "name": "{{PLUGIN_NAME}}",
+  "description": "Compares two key=value files by key, whatever their order.",
+  "codes": {
+    "{{PLUGIN_ID}}.duplicate_key": "The key {key} is there more than once in the {side} file; its last value counts."
+  }
+}

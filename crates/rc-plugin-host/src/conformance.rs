@@ -7,7 +7,8 @@
 //! author only through a person's bug report: a manifest field out of bounds, an import the
 //! manifest never granted, a world that does not match, and one behavioural question per kind
 //! (`questions.rs`) - for a viewer, what it does with an empty file; for a secret source and an
-//! inventory, what it does when its service does not answer (RC-100-33, RC-100-39).
+//! inventory, what it does when its service does not answer (RC-100-33, RC-100-39); for a compare
+//! plugin, what it finds between two identical files (RC-100-41).
 //!
 //! Adapted: rCommander's kinds (the viewer in stage 1; `docs/plugins.md`, "SDK" names the
 //! question of each later kind), no network to refuse (no viewer is granted one), and English
@@ -23,8 +24,8 @@ use serde::Serialize;
 mod questions;
 
 use crate::{
-    InventoryOptions, InventoryPlugin, PluginType, PluginVerifier, SecretsOptions, SecretsPlugin,
-    VerifiedPackage, ViewerOptions, ViewerPlugin, net_http,
+    CompareOptions, ComparePlugin, InventoryOptions, InventoryPlugin, PluginType, PluginVerifier,
+    SecretsOptions, SecretsPlugin, VerifiedPackage, ViewerOptions, ViewerPlugin, net_http,
 };
 
 /// What the `package` check covers, named because a run stops there when it fails.
@@ -124,6 +125,7 @@ pub(crate) enum Built {
     Viewer(Box<ViewerPlugin>),
     Secrets(Box<SecretsPlugin>),
     Inventory(Box<InventoryPlugin>),
+    Compare(Box<ComparePlugin>),
 }
 
 /// Builds the package as the host would.
@@ -162,6 +164,14 @@ fn instantiate(package: &VerifiedPackage) -> Result<Built, String> {
             InventoryOptions::default(),
         )
         .map(|inventory| Built::Inventory(Box::new(inventory)))
+        .map_err(|failure| format!("the component is refused: {failure}")),
+        // Its own settings at their defaults: a paid plugin runs unlicensed (RC-100-41).
+        PluginType::Compare => ComparePlugin::new(
+            &package.manifest,
+            &package.component,
+            CompareOptions::default(),
+        )
+        .map(|compare| Built::Compare(Box::new(compare)))
         .map_err(|failure| format!("the component is refused: {failure}")),
         PluginType::Unknown(ref other) => Err(format!("unknown plugin type `{other}`")),
     }

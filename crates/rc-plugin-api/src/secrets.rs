@@ -4,8 +4,19 @@
 //! A secret source answers rCommander: it hands a value to the host for a connection the person
 //! mapped, and receives none. It reaches its manager only through `http` on the loopback port its
 //! manifest grants (`docs/plugins.md`, "Secret source").
+//!
+//! A PAM system lends its secret instead (contract 0.5.0, RC-100-38): [`Secrets::checkout`] for a
+//! session, with a reason when the system asks for one, and [`Secrets::checkin`] when the session
+//! ends. rCommander asks only a source whose manifest says `[secrets] checkout = true`; every
+//! other one keeps the defaults, which answer `not-supported`.
 
-use crate::Failure;
+use std::fmt;
+
+use crate::{Failure, FailureKind};
+
+/// The failure code a source answers `checkout` with when the PAM system wants a reason and none
+/// was given: the window asks the person for one, and the next connect hands it over.
+pub const REASON_REQUIRED: &str = "checkout.reason_required";
 
 /// Whether the manager answers, as `status` reports it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -66,6 +77,28 @@ pub struct SecretEntry {
     pub url: Option<String>,
 }
 
+/// A secret lent for a session, as `checkout` answers it.
+#[derive(Clone, Eq, PartialEq)]
+pub struct Lease {
+    /// The system's own id of the lease, handed back to `checkin`.
+    pub id: String,
+    /// The secret itself.
+    pub value: String,
+    /// When the system takes it back by itself, in Unix seconds; `None` when it does not.
+    pub expires: Option<u64>,
+}
+
+impl fmt::Debug for Lease {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Lease")
+            .field("id", &self.id)
+            .field("value", &"[redacted]")
+            .field("expires", &self.expires)
+            .finish()
+    }
+}
+
 /// The answer to one `http.request`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HttpResponse {
@@ -112,6 +145,23 @@ pub trait Secrets {
         id: &str,
         field: SecretField,
     ) -> Result<String, Failure>;
+
+    /// Lends the secret `field` of entry `id` for a session; `reason` is the person's, when the
+    /// system asked for one ([`REASON_REQUIRED`]). Only a PAM system answers it.
+    fn checkout(
+        &mut self,
+        _host: &mut dyn SecretsHost,
+        _id: &str,
+        _field: SecretField,
+        _reason: Option<&str>,
+    ) -> Result<Lease, Failure> {
+        Err(Failure::new(FailureKind::NotSupported))
+    }
+
+    /// Gives the lease `lease_id` back; the system may change the secret then.
+    fn checkin(&mut self, _host: &mut dyn SecretsHost, _lease_id: &str) -> Result<(), Failure> {
+        Err(Failure::new(FailureKind::NotSupported))
+    }
 }
 
 #[cfg(test)]

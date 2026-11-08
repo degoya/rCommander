@@ -1,6 +1,8 @@
 //! The dialog's keyboard: everything works without the mouse.
 //!
-//! Enter starts, Escape closes without a change, F2 saves the preset. Tab and Shift+Tab walk the
+//! Enter starts, Escape closes without a change, F2 saves the preset, F5 is the next step after
+//! a run, Shift+F10 and Alt+M open the "More..." row (Total Commander's F10 menu: in rCommander F10
+//! closes every dialog, RC-080-17). Tab and Shift+Tab walk the
 //! dialog's focus ring - every field, switch, list and button (RC-080-16); the cursor keys move in
 //! the table, Ctrl+ArrowUp and Ctrl+ArrowDown move the row
 //! under the cursor (the counter follows the order). The labels name the Alt keys: Alt+N name
@@ -11,7 +13,7 @@
 use iced::widget::{Id, operation};
 use rc_engine::Chord;
 
-use super::{Field, Flag, MrMsg, PresetChoice};
+use super::{Field, Flag, MrMsg, NamesMsg, PresetChoice};
 use crate::app::{App, Effect};
 
 /// Gives the text field `field` the keys.
@@ -38,6 +40,9 @@ impl App {
                 _ => Vec::new(),
             };
         }
+        if chord.shift && !chord.ctrl && !chord.alt && key == "F10" {
+            return self.on_multi_rename(MrMsg::Names(NamesMsg::Toggle));
+        }
         if !plain {
             return Vec::new();
         }
@@ -46,6 +51,7 @@ impl App {
             "Escape" => return self.on_multi_rename(MrMsg::Close),
             "Enter" => return self.on_multi_rename(MrMsg::Start),
             "F2" => return self.on_multi_rename(MrMsg::SavePreset),
+            "F5" => return self.on_multi_rename(MrMsg::Names(NamesMsg::NextStep)),
             "ArrowUp" => dialog.list.step(-1),
             "ArrowDown" => dialog.list.step(1),
             "PageUp" => dialog.list.step(-page),
@@ -90,6 +96,7 @@ impl App {
             "o" => MrMsg::SortByName,
             "l" => MrMsg::Log(!dialog.log),
             "u" => MrMsg::Undo,
+            "m" => MrMsg::Names(NamesMsg::Toggle),
             _ => return Vec::new(),
         };
         self.on_multi_rename(message)

@@ -4,10 +4,10 @@
 # with the plugin's id (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.4.0"
+api_version = "0.6.0"
 id = "01a1aafa-df23-7a2d-aa5e-82bf3f2359dd"
 name = "C-family viewer"
-version = "0.1.1"
+version = "0.1.2"
 
 [match]
 # The language is the extension's (src/lang.rs, `Lang::from_name`): C; C and C++ headers and

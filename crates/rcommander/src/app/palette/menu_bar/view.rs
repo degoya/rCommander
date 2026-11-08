@@ -115,18 +115,29 @@ pub(in crate::app) fn with_menu<'a>(
 }
 
 /// One entry: its label with its access key, its key on the right while the menus show keys; a
-/// separator a line.
+/// separator a line, a submenu's title a heading.
 fn entry<'a>(
     item: &'a BarItem,
     index: usize,
     cursor: bool,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
-    let BarItem::Entry { id, text } = item else {
-        let line = container(Space::new().height(1)).width(Length::Fill);
-        return container(line.style(move |_| theme::divider(tokens)))
-            .padding([4, 6])
-            .into();
+    let (id, text) = match item {
+        BarItem::Entry { id, text } => (id, text),
+        // A submenu's title over its entries (`drawn::flatten`, RC-100-86): no choice.
+        BarItem::Submenu { text, .. } => {
+            return container(layout::caption(text, Some(tokens.text_secondary)))
+                .padding([0, 10])
+                .height(theme::ROW_HEIGHT)
+                .align_y(Alignment::Center)
+                .into();
+        }
+        BarItem::Separator => {
+            let line = container(Space::new().height(1)).width(Length::Fill);
+            return container(line.style(move |_| theme::divider(tokens)))
+                .padding([4, 6])
+                .into();
+        }
     };
     let (label, key) = text.split_once('\t').unwrap_or((text, ""));
     let key = if keys::shown() { key } else { "" };

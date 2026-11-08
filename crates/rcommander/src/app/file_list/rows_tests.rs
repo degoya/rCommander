@@ -11,6 +11,7 @@ fn entry(hidden: bool, windows: Option<WindowsFlags>) -> Entry {
         size: 1,
         modified: None,
         created: None,
+        accessed: None,
         attributes: Attributes {
             windows,
             ..Attributes::default()

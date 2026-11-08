@@ -57,7 +57,13 @@ const EXEC_CONFIRMED: &[&str] = &[
 
 /// The tools whose question the sweep never answers: they would act on the machine itself (a
 /// program started, a network drive dropped).
-const NEVER_CONFIRMED: &[&str] = &["file_open", "drives_unmap_network"];
+const NEVER_CONFIRMED: &[&str] = &[
+    "file_open",
+    "drives_unmap_network",
+    "user_commands_run",
+    "start_menu_run",
+    "button_bars_run",
+];
 
 /// The tools that must reach their core once their code is redeemed.
 const CORE: &[&str] = &[

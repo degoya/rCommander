@@ -1,6 +1,7 @@
 //! The archive dialogs (RC-030-03, RC-030-04): Alt+F5 packs, Alt+Shift+F5 packs and deletes the
 //! sources, Alt+F6 and Alt+F9 unpack - each first in a dialog, as in Total Commander - and the
-//! password an encrypted archive asks for while it unpacks.
+//! password an encrypted archive asks for while it unpacks. F5 into an archive and F8 inside one
+//! change it (RC-110-05, `add.rs`).
 //!
 //! The keymap names `archive.pack` and `archive.extract` without a target; such a command from a
 //! key opens its dialog here instead of running ([`App::open_archive_dialog`]). The dialog fixes
@@ -15,8 +16,11 @@
 //! typed text is a [`SecretString`] from the first key (wiped on drop, never in a `Debug` print
 //! of a message) and becomes a [`SecretParam`](rc_engine::SecretParam) when it is sent.
 
+mod add;
 mod password;
 mod view;
+
+pub use self::add::DeletePrompt;
 
 pub(super) use self::view::{PASSWORD_FIELD, TARGET_FIELD, body, overlay, title};
 
@@ -127,6 +131,8 @@ pub struct PackDialog {
     pub step: PackStep,
     /// The other panel's directory, which a relative name starts from.
     base: VfsPath,
+    /// The add mode (RC-110-05): `name` shows the place inside an archive, the format is fixed.
+    pub adding: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -156,6 +162,8 @@ pub enum ArchiveDialog {
     Pack(PackDialog),
     Extract(ExtractDialog),
     Password(PasswordPrompt),
+    /// F8 inside an archive (RC-110-05).
+    Delete(DeletePrompt),
 }
 
 /// Which dialog is open, for choosing what a message does.
@@ -164,6 +172,7 @@ enum Kind {
     Pack(PackStep),
     Extract,
     Password,
+    Delete,
 }
 
 /// Whether `event` is an extraction asking for a password.
@@ -235,6 +244,7 @@ impl App {
                     settings,
                     step: PackStep::Editing,
                     base: other,
+                    adding: false,
                 }))
             }
             Command::ArchiveExtract { settings, .. } => {
@@ -276,6 +286,7 @@ impl App {
             Some(ArchiveDialog::Pack(pack)) => Kind::Pack(pack.step),
             Some(ArchiveDialog::Extract(_)) => Kind::Extract,
             Some(ArchiveDialog::Password(_)) => Kind::Password,
+            Some(ArchiveDialog::Delete(_)) => Kind::Delete,
         };
         let effects = self.archive_step(kind, message);
         self.ask_waiting_password();
@@ -299,6 +310,7 @@ impl App {
             (Kind::Pack(_), ArchiveMsg::Confirm) => self.confirm_pack(),
             (Kind::Pack(_), ArchiveMsg::Checked(exists)) => self.checked_pack(exists),
             (Kind::Extract, ArchiveMsg::Confirm) => self.confirm_extract(),
+            (Kind::Delete, ArchiveMsg::Confirm) => self.confirm_delete(),
             (_, message) => {
                 match self.archive.as_mut() {
                     Some(ArchiveDialog::Pack(pack)) if pack.step == PackStep::Editing => {
@@ -320,6 +332,9 @@ impl App {
     /// OK in the pack dialog: first whether the archive exists, then (where it does, or the
     /// sources go) once more, then the job.
     fn confirm_pack(&mut self) -> Vec<Effect> {
+        if matches!(&self.archive, Some(ArchiveDialog::Pack(pack)) if pack.adding) {
+            return self.confirm_add();
+        }
         let Some(ArchiveDialog::Pack(pack)) = self.archive.as_mut() else {
             return Vec::new();
         };

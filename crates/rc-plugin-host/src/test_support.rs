@@ -13,7 +13,7 @@ pub fn viewer_component() -> Vec<u8> {
 }
 
 /// The same viewer built against the current contract, for a manifest naming it - the SDK's
-/// scaffold and the bundled plugins say `api_version = "0.4.0"`.
+/// scaffold says the current `api_version`, the bundled plugins one before it at most.
 #[must_use]
 pub fn current_viewer_component() -> Vec<u8> {
     testbed::Testbed::new()
@@ -33,6 +33,13 @@ pub fn current_secrets_component() -> Vec<u8> {
 #[must_use]
 pub fn current_inventory_component() -> Vec<u8> {
     testbed::inventory::InventoryBed::new().build()
+}
+
+/// A compare plugin built against the current contract that finds no change (RC-100-41) -
+/// standing in for the SDK's `compare` scaffold.
+#[must_use]
+pub fn current_compare_component() -> Vec<u8> {
+    testbed::compare::CompareBed::new().build()
 }
 
 /// A component importing `http`, which no viewer is granted.
@@ -212,6 +219,43 @@ public_key = "{public_key}"
 
 [metadata]
 description = "An inventory for tests."
+author = "rCommander tests"
+license = "MIT"
+min_app_version = "0.1.0"
+
+[limits]
+timeout_milliseconds = 1000
+"#,
+        api = rc_plugin_api::API_VERSION,
+    );
+    package_plugin(manifest.as_bytes(), component, &[], Some(key)).expect("a valid test package")
+}
+
+/// A package of the compare `component` (a `testbed::compare::CompareBed` built) as plugin `id`
+/// named `Test compare`, claiming `.json` and `.csv`, signed by `key` under `key_id`, with a 1 s
+/// time limit per call (RC-100-41's tests).
+///
+/// # Panics
+///
+/// The packager refuses it, which a test helper may.
+#[must_use]
+pub fn compare_package(id: &str, key_id: &str, key: &SigningKey, component: &[u8]) -> Vec<u8> {
+    let public_key = public_key_base64(key);
+    let manifest = format!(
+        r#"manifest_version = 1
+plugin_type = "compare"
+api_version = "{api}"
+id = "{id}"
+name = "Test compare"
+version = "1.0.0"
+key_id = "{key_id}"
+public_key = "{public_key}"
+
+[match]
+extensions = ["json", "csv"]
+
+[metadata]
+description = "A compare plugin for tests."
 author = "rCommander tests"
 license = "MIT"
 min_app_version = "0.1.0"

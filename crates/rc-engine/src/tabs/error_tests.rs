@@ -13,6 +13,16 @@ fn every_refusal() -> Vec<TabsError> {
         TabsError::HotlistTooDeep { max: 8 },
         TabsError::HotlistBadName { max: 200 },
         TabsError::HotlistBadPath,
+        TabsError::TabTitleInvalid { reason: "x" },
+        TabsError::SavedFilterInvalid { reason: "x" },
+        TabsError::SavedFilterNotFound { name: "x".into() },
+        TabsError::ListFileTooLarge {
+            max_bytes: 1,
+            max_lines: 1,
+        },
+        TabsError::ListFileNotLocal,
+        TabsError::ListFileExists,
+        TabsError::ListFileEmpty,
     ]
 }
 

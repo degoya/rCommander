@@ -3,7 +3,9 @@
 //! folder - `cmd /s /c` on Windows (`/k` with Shift+Enter, so the window stays open), `sh -c`
 //! elsewhere - in a console window of its own, as Total Commander does; nothing waits for it.
 //! Only a local folder runs a command: inside an archive or on a server there is no folder for
-//! the shell (the terminal panel and `ssh_exec` do that).
+//! the shell (the terminal panel and `ssh_exec` do that). `*` in front runs the line as
+//! administrator through `commands/elevate.rs` (RC-100-86): Windows' question is the
+//! confirmation, and outside Windows nothing starts (`run_as_admin_unsupported`).
 
 #[cfg(windows)]
 mod windows;
@@ -40,6 +42,18 @@ impl Engine {
                 }
                 start(command, &folder.path, keep_open)
                     .map_err(|source| EngineError::CommandLineFailed { source })?;
+                Ok(Outcome::Panel(self.snapshot(Some(id))))
+            }
+            Parsed::RunElevated(command) => {
+                if command.is_empty() {
+                    return Err(EngineError::CommandLineInvalid { reason: "empty" });
+                }
+                let folder = self.state().panel(id).path.clone();
+                if !runs_in(&folder) {
+                    return Err(EngineError::CommandLineLocalOnly);
+                }
+                self.run_elevated_line(command, &folder.path, keep_open)
+                    .await?;
                 Ok(Outcome::Panel(self.snapshot(Some(id))))
             }
         }

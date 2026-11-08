@@ -9,6 +9,7 @@ use crate::{
         FolderId, FtpDataMode, FtpEncoding, TreeResult, connection_from_row,
         endpoint::guard_endpoint,
         folders::require_folder,
+        jump,
         order::{self, Kind},
         select_connections,
         validate::Fields,
@@ -166,16 +167,20 @@ impl Db {
     ///
     /// # Errors
     ///
-    /// [`ConnectionError::ConnectionNotFound`], or the write fails.
+    /// [`ConnectionError::ConnectionNotFound`], [`ConnectionError::ConnectionIsJumpHost`] while
+    /// another connection names it as its jump host (RC-110-03), or the write fails.
     pub async fn delete_connection(&self, id: ConnectionId) -> TreeResult<()> {
         let mut writer = self.writer().await;
+        let mut tx = writer.begin_with("BEGIN IMMEDIATE").await?;
+        jump::guard_delete(&mut tx, id).await?;
         let done = sqlx::query("DELETE FROM connections WHERE id = ?")
             .bind(id.0)
-            .execute(&mut *writer)
+            .execute(&mut *tx)
             .await?;
         if done.rows_affected() == 0 {
             return Err(ConnectionError::ConnectionNotFound { id });
         }
+        tx.commit().await?;
         Ok(())
     }
 }
@@ -190,12 +195,13 @@ pub(super) async fn insert(
         require_folder(connection, folder).await?;
     }
     require_free_name(connection, folder, &fields.name, None).await?;
+    jump::check(connection, None, fields.kind, fields.jump_id).await?;
     let sort_order = next_sort_order(connection, folder).await?;
     let done = sqlx::query(
         "INSERT INTO connections (folder_id, name, kind, host, port, username, auth_method, \
          key_path, default_view, start_directory, notes, ftp_data_mode, ftp_encoding, \
-         theme_light, theme_dark, sort_order) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         theme_light, theme_dark, jump_id, sort_order) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(folder.map(|folder| folder.0))
     .bind(&fields.name)
@@ -212,6 +218,7 @@ pub(super) async fn insert(
     .bind(fields.ftp_encoding.map(FtpEncoding::as_str))
     .bind(&fields.theme_light)
     .bind(&fields.theme_dark)
+    .bind(fields.jump_id.map(|jump| jump.0))
     .bind(sort_order)
     .execute(&mut *connection)
     .await
@@ -229,10 +236,11 @@ pub(super) async fn apply_patch(
     let current = fetch(connection, id).await?;
     let fields = Fields::patched(&current, patch)?;
     require_free_name(connection, current.folder_id, &fields.name, Some(id)).await?;
+    jump::check(connection, Some(id), fields.kind, fields.jump_id).await?;
     sqlx::query(
         "UPDATE connections SET name = ?, kind = ?, host = ?, port = ?, username = ?, \
          auth_method = ?, key_path = ?, default_view = ?, start_directory = ?, notes = ?, \
-         ftp_data_mode = ?, ftp_encoding = ?, theme_light = ?, theme_dark = ?, \
+         ftp_data_mode = ?, ftp_encoding = ?, theme_light = ?, theme_dark = ?, jump_id = ?, \
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
     )
     .bind(&fields.name)
@@ -249,6 +257,7 @@ pub(super) async fn apply_patch(
     .bind(fields.ftp_encoding.map(FtpEncoding::as_str))
     .bind(&fields.theme_light)
     .bind(&fields.theme_dark)
+    .bind(fields.jump_id.map(|jump| jump.0))
     .bind(id.0)
     .execute(&mut *connection)
     .await

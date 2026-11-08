@@ -52,6 +52,11 @@ fn time_of(attrs: &FileAttributes) -> Option<SystemTime> {
     attrs.mtime.and_then(|secs| unix_time(u64::from(secs)))
 }
 
+/// The last access (`atime`) the server reports, if any.
+fn accessed_of(attrs: &FileAttributes) -> Option<SystemTime> {
+    attrs.atime.and_then(|secs| unix_time(u64::from(secs)))
+}
+
 /// The entry `name` with `attrs`; a link without its target (see [`link_entry`]).
 pub(crate) fn entry(name: String, attrs: &FileAttributes) -> Entry {
     let kind = match kind_of(attrs) {
@@ -76,6 +81,7 @@ pub(crate) fn entry(name: String, attrs: &FileAttributes) -> Entry {
         kind,
         modified: time_of(attrs),
         created: None,
+        accessed: accessed_of(attrs),
         attributes: mode.map(Attributes::from_mode).unwrap_or_default(),
     }
 }

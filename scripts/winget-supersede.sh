@@ -7,8 +7,8 @@
 #
 # Closed is a pull request that is open, authored by the account `gh` is signed in as (the
 # WINGET_TOKEN's), titled exactly `Add version: degoya.rCommander version X` (komac's title; older
-# komac wrote `New version:`, also taken), with X older than
-# the version just submitted - never one of another author, never a merged one, never one for the
+# komac wrote `New version:`, also taken; `New package: degoya.rCommander version X` while the
+# package is not yet in winget-pkgs, RC-100-85), with X older than the version just submitted - never one of another author, never a merged one, never one for the
 # same or a newer version (a re-run's duplicate stays for a human). Each gets the comment
 # "Superseded by #<new>". The new pull request's number comes from komac's log, else from the
 # open pull request titled with the submitted version; without one nothing is closed.
@@ -23,11 +23,14 @@ set -euo pipefail
 
 REPO="${RC_WINGET_REPO:-microsoft/winget-pkgs}"
 IDENTIFIER="degoya.rCommander"
-# The version from a title komac gives a pull request, `Add version: ...` or `New version: ...`.
-TITLE_SUFFIX=" version: ${IDENTIFIER} version "
+# The version from a title komac gives a pull request: `Add version: ...`, `New version: ...` or,
+# for a package not yet in the repository, `New package: ...`.
+TITLE_SUFFIX=": ${IDENTIFIER} version "
 title_version() {
     case "$1" in
-        "Add${TITLE_SUFFIX}"* | "New${TITLE_SUFFIX}"*) printf '%s' "${1#*"${TITLE_SUFFIX}"}" ;;
+        "Add version${TITLE_SUFFIX}"* | "New version${TITLE_SUFFIX}"* | "New package${TITLE_SUFFIX}"*)
+            printf '%s' "${1#*"${TITLE_SUFFIX}"}"
+            ;;
         *) return 1 ;;
     esac
 }

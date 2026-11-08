@@ -5,6 +5,8 @@ use rc_ops::DirUsage;
 use rc_vfs::{Details, Entry, PropertyCapabilities, VfsPath};
 use serde::{Deserialize, Serialize};
 
+use crate::viewer::exif::ExifSummary;
+
 /// One entry as the properties dialog shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemProperties {
@@ -19,6 +21,10 @@ pub struct ItemProperties {
     /// The `descript.ion` comment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    /// A photo's EXIF: camera, capture time, exposure, size, position (RC-100-99); only for a
+    /// JPEG, PNG or WebP that has it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exif: Option<ExifSummary>,
 }
 
 /// The properties of one or more entries.

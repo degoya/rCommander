@@ -78,6 +78,7 @@ pub(super) async fn copy(engine: &Engine, panel: PanelId, name: &str) -> JobSnap
             sources: vec![name.to_owned()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");
@@ -322,6 +323,7 @@ async fn ops_copy_reaches_an_ftp_server_by_its_location() {
             sources: vec![file.display().to_string()],
             target: Some("ftp://files/in".to_owned()),
             options: JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");

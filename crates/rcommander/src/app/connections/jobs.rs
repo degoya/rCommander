@@ -52,6 +52,8 @@ pub enum Then {
     SourceFound(u32),
     /// `secrets.source_map` or `.source_unmap`: the connection's references now.
     SourceMapped,
+    /// `secrets.checkout_reason`: whether a reason is held for the next checkout (RC-100-38).
+    SourceReason,
     /// `credentials.save` of the form: the shared credential as saved (RC-050-12).
     CredentialSaved,
     /// `settings.get` of `vault.shared_credentials`: whether credentials are offered.
@@ -61,6 +63,12 @@ pub enum Then {
     /// `connections.duplicate` of this connection: the copy, renamed next; a locked vault's
     /// refusal runs it again after the unlock (RC-050-15).
     Duplicated(ConnectionId),
+    /// `forwards.list` of the shown connection (RC-110-03).
+    Forwards,
+    /// `forwards.save`, `.start`, `.stop` or `.delete` from the panel.
+    ForwardDone,
+    /// `settings.get` of `ssh.forwards_lan`: whether other addresses than loopback are offered.
+    ForwardsLan,
 }
 
 /// A key file of an imported connection to take into the vault.

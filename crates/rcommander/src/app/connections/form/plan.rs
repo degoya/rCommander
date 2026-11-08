@@ -123,6 +123,9 @@ impl Form {
         draft.notes = optional(&self.notes);
         draft.theme_light = self.theme_light.clone();
         draft.theme_dark = self.theme_dark.clone();
+        draft.jump_id = self
+            .jump
+            .filter(|_| self.kind == rc_engine::ConnectionKind::Ssh);
         draft
     }
 
@@ -154,6 +157,8 @@ impl Form {
                 self.theme_dark.as_deref().unwrap_or_default(),
                 &original.theme_dark,
             ),
+            // No jump host is sent as 0, which clears it (RC-110-03).
+            jump_id: (self.jump != original.jump_id).then(|| self.jump.map_or(0, |jump| jump.0)),
             ..ConnectionPatch::default()
         }
     }

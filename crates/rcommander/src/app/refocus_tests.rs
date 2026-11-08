@@ -97,6 +97,7 @@ fn files(path: &VfsPath) -> Shown<'_> {
         files: true,
         plain: true,
         settled: true,
+        quiet: false,
     }
 }
 
@@ -149,6 +150,22 @@ fn a_terminal_a_flat_view_and_a_running_listing_are_left_alone() {
     for shown in [terminal, flat, listing] {
         assert!(!refreshes(shown, false, DEFAULTS));
     }
+}
+
+/// RC-110-02: a panel whose system watcher reported nothing since it was last read is as shown;
+/// coming back does not read it.
+#[test]
+fn a_panel_with_a_quiet_watcher_is_left_alone() {
+    let local = VfsPath::local("/home/me/work");
+    let quiet = Shown {
+        quiet: true,
+        ..files(&local)
+    };
+    assert!(!refreshes(quiet, false, DEFAULTS));
+    assert!(
+        refreshes(files(&local), false, DEFAULTS),
+        "a watcher that saw a change"
+    );
 }
 
 #[test]

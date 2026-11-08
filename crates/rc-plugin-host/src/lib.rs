@@ -16,7 +16,7 @@
 //! connection to Lister and Quick View is RC-100-13's.
 //!
 //! RC-100-39 adds the inventory kind ([`InventoryPlugin`]) and `{{secret:<slot>}}` markers in
-//! `http`.
+//! `http`; RC-100-41 the compare kind ([`ComparePlugin`]), two files compared by structure.
 //!
 //! RC-100-12 adds what a plugin author runs: the conformance run (`conformance`) and the
 //! completion of a bundled manifest from `plugins/metadata.toml` ([`complete_manifest`]).
@@ -25,6 +25,7 @@
 
 mod bindings;
 mod call_gate;
+mod compare;
 mod compile_cache;
 mod conformance;
 mod diagnostics;
@@ -68,6 +69,9 @@ pub mod test_support;
 pub mod testbed;
 
 pub use call_gate::CallSlot;
+pub use compare::{
+    CompareOptions, ComparePlugin, MAX_CHANGE_VALUE_CHARS, MAX_COLUMN_CHARS, MAX_PATH_CHARS,
+};
 pub use compile_cache::{
     prune::{CachePrune, prune_compile_cache},
     sha256_hex,
@@ -104,9 +108,9 @@ pub use manifest::{
     MAX_SECRET_SLOTS, MAX_SETTING_LINE_CHARS, MAX_SETTING_TEXT_CHARS, MagicManifest,
     ManifestDefaults, ManifestRejection, MatchRank, MatchSection, NAMES_MIN_APP_VERSION, NET_HTTP,
     NetHttp, PluginManifest, PluginMetadata, PluginType, SECRETS, SUPPORTED_API_VERSIONS,
-    SettingKind, SettingManifest, ViewerSection, check_app_version, complete_manifest,
-    describe_capability, name_matches, net_http, net_http_entered, parse_manifest, secret_slots,
-    valid_slot,
+    SecretsSection, SettingKind, SettingManifest, ViewerSection, check_app_version,
+    complete_manifest, describe_capability, name_matches, net_http, net_http_entered,
+    parse_manifest, secret_slots, valid_slot,
 };
 pub use package::{
     COMPONENT_MEMBER, MANIFEST_MEMBER, MAX_COMPONENT_BYTES, MAX_PACKAGE_BYTES, MAX_SIGNATURE_BYTES,
@@ -120,8 +124,8 @@ pub use preview::{KeyStatus, PackagePreview, Permissions, preview_package};
 pub use revocation::{RevokedDigests, RevokedKeys, format_package_digest, parse_package_digest};
 pub use runtime::CANCEL_GRACE;
 pub use secrets::{
-    MAX_ENTRY_ID_CHARS, MAX_ENTRY_TEXT_CHARS, MAX_ENTRY_TITLE_CHARS, MAX_QUERY_CHARS,
-    MAX_SEARCH_ENTRIES, MAX_SECRET_BYTES, SecretsOptions, SecretsPlugin,
+    Lease, MAX_ENTRY_ID_CHARS, MAX_ENTRY_TEXT_CHARS, MAX_ENTRY_TITLE_CHARS, MAX_QUERY_CHARS,
+    MAX_REASON_CHARS, MAX_SEARCH_ENTRIES, MAX_SECRET_BYTES, SecretsOptions, SecretsPlugin,
 };
 pub use sign::{key_fingerprint, sign_detached, verify_detached};
 pub use streams::{BytesSource, MAX_WINDOW_BYTES, MemorySink, SinkWriter, SourceReader};

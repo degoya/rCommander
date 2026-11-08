@@ -86,7 +86,8 @@ pub struct UpdateRefusal {
 }
 
 /// The codes of the engine's own refusals; a check, a download or an install carries one of
-/// `rc_update::UPDATE_ERROR_CODES` or `rc_update::install::INSTALL_CODES` instead.
+/// `rc_update::UPDATE_ERROR_CODES` or `rc_update::install::INSTALL_CODES` instead, and
+/// `app.make_portable` one of `rc_update::portable_mode::REFUSAL_CODES`.
 pub const REFUSAL_CODES: &[&str] = &[
     "update.not_started",
     "update.no_offer",
@@ -121,6 +122,8 @@ impl UpdateRefusal {
             .iter()
             .chain(rc_update::UPDATE_ERROR_CODES)
             .chain(rc_update::install::INSTALL_CODES)
+            // `app.make_portable`'s refusals (RC-100-95).
+            .chain(rc_update::portable_mode::REFUSAL_CODES)
         {
             if !codes.contains(code) {
                 codes.push(code);

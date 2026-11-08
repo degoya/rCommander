@@ -1,0 +1,13 @@
+{
+  "name": "Visor de Office",
+  "description": "Muestra el texto de documentos de Word, Excel y PowerPoint (docx, xlsx, pptx), y sus propiedades, hojas y diapositivas en forma de árbol.",
+  "codes": {
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.setting.sheet_rows": "Filas mostradas por hoja",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_many_entries": "El documento tiene más de 10.000 partes y no se lee.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_large": "Una parte del documento ocupa más de 64 MiB al descomprimirse y no se lee.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_compressed": "Una parte del documento ocupa más de 500 veces su tamaño comprimido al descomprimirse y no se lee.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_deep": "Una parte del documento anida su contenido a demasiada profundidad para leerla.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.damaged": "El documento está dañado, cifrado o comprimido de una forma que el visor no puede leer.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.not_office": "El archivo es un archivo zip, pero no un documento de Word, Excel o PowerPoint."
+  }
+}

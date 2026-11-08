@@ -10,8 +10,10 @@
 //! the bindings are generated from (RC-100-14): Wasmtime matches a `0.x` version only within its
 //! minor, so a component built against 0.1.0 would find no `rcommander:plugin/host@0.3.0` it
 //! imports. The interfaces of 0.1.0 are those of 0.2.0 without `settings`, 0.3.0 adds `http`
-//! for a secret source (RC-100-33) and 0.4.0 nothing but the inventory world (RC-100-39), so the
-//! functions of `host_impls.rs` serve every version in [`crate::SUPPORTED_API_VERSIONS`].
+//! for a secret source (RC-100-33), 0.4.0 nothing but the inventory world (RC-100-39), 0.5.0
+//! nothing but two exports of a secret source (RC-100-38) and 0.6.0 nothing but the compare world
+//! (RC-100-41), so the functions of `host_impls.rs` serve every version in
+//! [`crate::SUPPORTED_API_VERSIONS`].
 
 use wasmtime::{StoreContextMut, component::Linker};
 
@@ -58,6 +60,21 @@ pub(crate) fn link_secrets(
     }
     if http {
         link_http(linker, api_version)?;
+    }
+    Ok(())
+}
+
+/// Links what a compare plugin is made of (RC-100-41): `host`, `source` for the two files of the
+/// call, and `settings` when granted. It writes nothing, so no `sink` is linked.
+pub(crate) fn link_compare(
+    linker: &mut Linker<PluginStoreState>,
+    api_version: &str,
+    settings: bool,
+) -> wasmtime::Result<()> {
+    link_host(linker, api_version)?;
+    link_source(linker, api_version)?;
+    if settings {
+        link_settings(linker, api_version)?;
     }
     Ok(())
 }

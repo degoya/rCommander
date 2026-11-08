@@ -7,12 +7,16 @@
 //! (the modules below); how a value is checked against its row is `schema/check.rs`.
 
 pub(super) mod archive;
+pub(super) mod associations;
 pub(super) mod backup;
+pub(super) mod button_bar;
 mod check;
 pub(super) mod checksum;
 mod choices;
 mod colours;
+mod compare;
 mod delete;
+pub(super) mod disk_usage;
 mod drive_line;
 pub(super) mod drives;
 mod exchange;
@@ -20,6 +24,7 @@ mod file_ops;
 mod folders;
 mod fonts;
 pub(super) mod ftp;
+pub(super) mod git;
 pub(super) mod inventory;
 mod keys;
 mod language;
@@ -29,19 +34,27 @@ mod lookup;
 mod macos;
 mod mcp;
 mod mouse;
+mod panel_lists;
 mod plugins;
 mod quick_search;
+pub(super) mod remote_edit;
+pub(super) mod search;
 pub(super) mod sftp;
 pub(super) mod sort;
 mod ssh_agent;
+pub(super) mod ssh_certificates;
+pub(super) mod ssh_forwards;
 pub(super) mod terminal;
 mod themes;
+pub(super) mod thumbnails;
 pub(super) mod totp;
 mod transfers;
+pub(super) mod tree;
 mod types;
 pub(super) mod update;
 mod vault;
 pub(super) mod viewer;
+pub(super) mod watch;
 mod windows;
 pub(super) mod workspaces;
 pub(super) mod wsl_themes;
@@ -52,13 +65,14 @@ pub use colours::{
     COLOUR_KEYS, COLOUR_RULES_KEY, COLOUR_TOKENS, ColourRule, MAX_COLOUR_RULES, colour_key,
     colour_value, parse_colour_rules, write_colour_rules,
 };
+pub use compare::{COMPARE_ARGS_KEY, COMPARE_TOOL_KEY};
 pub use delete::PERMANENT_WITHOUT_TRASH_KEY;
 pub use drive_line::{DRIVE_LINE_BUTTONS_KEY, DRIVE_LINE_VOLUME_KEY};
 pub use exchange::{
     EXPORT_CONNECTIONS_KEY, EXPORT_ENCRYPTED_KEY, EXPORT_HOTLIST_KEY, EXPORT_SETTINGS_KEY,
     EXPORT_TRUST_KEY,
 };
-pub use file_ops::{COPY_LINKS_KEY, RENAME_UNDO_ON_FAILURE_KEY};
+pub use file_ops::{COPY_LINKS_KEY, RENAME_SELECTION_DIALOG_KEY, RENAME_UNDO_ON_FAILURE_KEY};
 pub use fonts::{
     DEFAULT_FONT_SIZE, LIST_FONT_KEY, LIST_FONT_SIZE_KEY, MARK_HIDDEN_KEY, MAX_FONT_SIZE,
     MIN_FONT_SIZE, NAME_CUT_KEY, NAME_TIP_DELAY_KEY, TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY,
@@ -77,8 +91,9 @@ pub use mcp::{
 };
 pub use mouse::{CLICK_CLEARS_MARKS_KEY, TAB_DRAG_KEY};
 pub use plugins::{
-    ASSOCIATIONS_KEY, CRASH_LIMIT_KEY, DEFAULT_RECENT_CALLS_SHOWN, DEVELOPMENT_MODE_KEY,
-    ENABLED_KEY, OUTPUT_LIMIT_KEY, RECENT_CALLS_SHOWN_KEY, VIEWER_TOKEN_COLORS_KEY,
+    ASSOCIATIONS_KEY, COMPARE_LIMIT_KEY, CRASH_LIMIT_KEY, DEFAULT_COMPARE_LIMIT_MIB,
+    DEFAULT_RECENT_CALLS_SHOWN, DEVELOPMENT_MODE_KEY, ENABLED_KEY, OUTPUT_LIMIT_KEY,
+    RECENT_CALLS_SHOWN_KEY, VIEWER_TOKEN_COLORS_KEY,
 };
 pub use quick_search::{
     QUICK_SEARCH_ANYWHERE_KEY, QUICK_SEARCH_CASE_KEY, QUICK_SEARCH_FILTERS_KEY,
@@ -151,6 +166,14 @@ pub const SETTINGS: &[SettingSpec] = &[
         protected: false,
         restart: false,
     },
+    button_bar::BUTTON_BAR,
+    button_bar::VERTICAL_BUTTON_BAR,
+    button_bar::HORIZONTAL_BAR,
+    button_bar::VERTICAL_BAR,
+    button_bar::ICON_SIZE,
+    button_bar::DRIVE_BAR,
+    button_bar::COMMAND_LINE,
+    button_bar::STATUS_BAR,
     SettingSpec {
         key: ALTERNATE_ROWS_KEY,
         page: SettingPage::Appearance,
@@ -174,11 +197,16 @@ pub const SETTINGS: &[SettingSpec] = &[
     fonts::VIEWER_FONT_SIZE,
     viewer::MARKDOWN_PREVIEW,
     viewer::MARKDOWN_SELECT,
+    viewer::MARKDOWN_HIGHLIGHT,
     viewer::PICTURE_MEGAPIXELS,
     viewer::DOS_EXTENSIONS,
     viewer::DOS_TIGHT_LINES,
     viewer::TEXT_ZOOM,
     viewer::TEXT_ZOOM_KEEP,
+    viewer::EXIF,
+    viewer::STEP_THROUGH_SELECTION,
+    viewer::CERTIFICATES,
+    viewer::CERT_EXPIRY_WARNING_DAYS,
     layout::EXT_WIDTH,
     layout::SIZE_WIDTH,
     layout::PACKED_WIDTH,
@@ -186,19 +214,39 @@ pub const SETTINGS: &[SettingSpec] = &[
     layout::RIGHTS_WIDTH,
     layout::OWNER_WIDTH,
     layout::OWNER_COLUMN,
+    layout::AUTO_SWITCH,
+    layout::AUTO_DEFAULT,
     layout::PANEL_SPLIT,
+    tree::SEPARATE_TREE,
+    tree::TREE_WIDTH,
     drive_line::VOLUME,
     drive_line::BUTTONS,
+    thumbnails::SIZE,
+    thumbnails::DISK_CACHE,
+    thumbnails::CACHE_MB,
+    thumbnails::REMOTE,
+    thumbnails::EXPLORER,
     folders::LEFT_START,
     folders::RIGHT_START,
     workspaces::APPLY_MODE,
     workspaces::ON_START,
+    panel_lists::FILTER_PER_TAB,
+    panel_lists::CONFIRM_CLOSE_ALL,
+    panel_lists::FREQUENT_SHOWN,
+    panel_lists::PROGRAMS,
+    panel_lists::IGNORE_ENABLED,
+    panel_lists::IGNORE_ENTRIES,
     quick_search::KEYS,
     quick_search::ANYWHERE,
     quick_search::CASE_SENSITIVE,
     quick_search::FILTERS,
+    search::ARCHIVES_DEFAULT,
+    search::EVERYTHING,
+    disk_usage::SIZE,
+    disk_usage::LARGEST,
     archive::ENTER_OPENS,
     archive::DECODER_MEMORY,
+    archive::VERIFY_UPDATE,
     checksum::ENTER_VERIFIES,
     SettingSpec {
         key: SELECT_FOLDERS_KEY,
@@ -225,6 +273,16 @@ pub const SETTINGS: &[SettingSpec] = &[
     drives::REFRESH_ON_FOCUS,
     drives::REFRESH_ON_FOCUS_NETWORK,
     drives::PORTABLE_DEVICES,
+    git::STATUS,
+    git::IGNORED,
+    git::BRANCH,
+    watch::WATCH,
+    watch::WATCH_CHANGES,
+    watch::WATCH_NETWORK,
+    watch::WATCH_EXCLUDE,
+    watch::WATCH_BACKGROUND,
+    watch::REFRESH_ON_PROMPT,
+    tree::OPEN_ON_ENTER,
     sort::SORT_NAMES,
     sort::SORT_NUMBERS,
     SettingSpec {
@@ -276,6 +334,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     vault::LOCK_ON_SESSION_LOCK,
     vault::WINCRED_SOURCE,
     vault::SHARED_CREDENTIALS,
+    vault::CHECKOUT_KEEP_REASON,
     mcp::HTTP_ENABLED,
     mcp::HTTP_PORT,
     mcp::HEADLESS_CODE,
@@ -314,6 +373,13 @@ pub const SETTINGS: &[SettingSpec] = &[
         protected: true,
         restart: false,
     },
+    git::PROGRAM,
+    associations::FILE_ASSOCIATIONS,
+    associations::ENABLED,
+    associations::ALL_MATCHES,
+    remote_edit::UPLOAD,
+    remote_edit::CHECK_SERVER_CHANGES,
+    remote_edit::OPEN_PROGRAMS,
     transfers::BUFFER,
     transfers::PER_CONNECTION,
     transfers::TOTAL,
@@ -323,6 +389,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     delete::PERMANENT_WITHOUT_TRASH,
     file_ops::COPY_LINKS,
     file_ops::RENAME_UNDO_ON_FAILURE,
+    file_ops::RENAME_SELECTION_DIALOG,
     SettingSpec {
         key: MKDIR_PREFILL_KEY,
         page: SettingPage::Transfers,
@@ -370,8 +437,13 @@ pub const SETTINGS: &[SettingSpec] = &[
     plugins::ASSOCIATIONS,
     plugins::DEVELOPMENT_MODE,
     plugins::RECENT_CALLS_SHOWN,
+    plugins::COMPARE_LIMIT,
     ssh_agent::AGENT_MAX_KEYS,
+    ssh_certificates::SSH_CERTIFICATES,
     totp::TOTP_AUTOFILL,
+    ssh_forwards::FORWARDS_LAN,
+    ssh_forwards::FORWARD_RECONNECT,
+    ssh_forwards::FORWARDS_IN_STATUS_BAR,
     backup::KEEP,
     ftp::RESOLVE_LINKS,
     ftp::ASK_PLAINTEXT,
@@ -387,4 +459,6 @@ pub const SETTINGS: &[SettingSpec] = &[
     update::AUTO_INSTALL,
     update::IDLE_MINUTES,
     update::RETENTION_DAYS,
+    compare::TOOL,
+    compare::ARGS,
 ];

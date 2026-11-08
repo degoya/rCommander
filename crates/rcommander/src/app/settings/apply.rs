@@ -31,6 +31,10 @@ impl App {
         if themes_page::concerns(key) {
             return vec![Effect::Task(self.themes_task())];
         }
+        // The button bars and the bars of the window they show or hide (RC-100-87).
+        if crate::app::button_bar::concerns(key) {
+            return vec![Effect::Task(self.button_bar_settings_task())];
+        }
         if key == MENU_BAR_KEY || key == MENU_BAR_STYLE_KEY {
             return vec![Effect::Task(self.menu_bar_task())];
         }
@@ -48,6 +52,18 @@ impl App {
         }
         if key == rc_engine::settings::WARN_SECRET_PROMPT_KEY {
             return vec![Effect::Task(self.login_scripts_warn_task())];
+        }
+        // The separate tree and when a panel follows a tree (RC-100-88).
+        if crate::app::tree::concerns(key) {
+            return vec![Effect::Task(self.tree_settings_task())];
+        }
+        // The rules the context menu offers (RC-100-91).
+        if crate::app::associations::concerns(key) {
+            return vec![Effect::Task(self.associations_task())];
+        }
+        // The thumbnails' size, caches and sources (RC-100-89).
+        if crate::app::thumbnails::concerns(key) {
+            return vec![Effect::Task(self.thumbnail_settings_task())];
         }
         let (true, Some(db)) = (key == THEME_KEY, self.db.clone()) else {
             return self.tabs_setting_changed(key);

@@ -27,6 +27,7 @@ mod light;
 mod mac;
 pub mod mnemonic;
 pub mod page_tabs;
+pub mod symbols;
 mod syntax;
 mod system;
 mod system_fonts;
@@ -187,6 +188,10 @@ impl ThemeChoice {
 
 /// An error, or a warning that something is lost for good: text, never a button's fill.
 pub const DANGER: Color = hex(0xC42B1C, 1.0);
+/// The palette's tone of success: something added (the diff, the git marks).
+pub const SUCCESS: Color = hex(0x0F7B0F, 1.0);
+/// The palette's tone of a warning: something changed (the diff, the git marks).
+pub const WARNING: Color = hex(0x9D5D00, 1.0);
 
 /// The iced theme the built-in widgets draw with, from the same tokens.
 pub fn iced_theme(tokens: &Tokens) -> Theme {
@@ -194,8 +199,8 @@ pub fn iced_theme(tokens: &Tokens) -> Theme {
         background: tokens.window,
         text: tokens.text,
         primary: tokens.accent,
-        success: hex(0x0F7B0F, 1.0),
-        warning: hex(0x9D5D00, 1.0),
+        success: SUCCESS,
+        warning: WARNING,
         danger: DANGER,
     };
     let name = if tokens.dark {

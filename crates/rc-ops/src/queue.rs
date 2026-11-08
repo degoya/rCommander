@@ -37,7 +37,8 @@ use lanes::{Lanes, Turn};
 pub use lists::{AT_ONCE, DEFAULT_LIST, MAX_LIST_NAME, QueueList, QueueListId, check_list_name};
 pub use order::QueueEntry;
 pub(crate) use placement::fold;
-use placement::{check_placement, check_placement_as, one_backend};
+pub(crate) use placement::one_backend;
+use placement::{check_placement, check_placement_as};
 pub use restore::is_saveable;
 pub(crate) use shared::JobShared;
 use task::run;
@@ -72,6 +73,10 @@ struct Hooks {
     reconnect: Option<Arc<dyn Reconnect>>,
     /// The read guard of the jobs an MCP call submits (`read_guard.rs`, RC-080-42).
     read_guards: Option<Arc<dyn crate::ReadGuards>>,
+    /// What lets go of an archive before an update replaces it (RC-110-05).
+    archive_release: Option<Arc<dyn crate::ArchiveRelease>>,
+    /// The panels' ignore list while it is on (RC-100-92, `ignore.rs`).
+    ignore: Option<Arc<dyn crate::IgnoreRule>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -144,7 +149,7 @@ impl Queue {
         self.inner.lanes.set_limits(limits);
     }
 
-    fn backend(&self, id: &BackendId) -> Result<Backend, OpsError> {
+    pub(crate) fn backend(&self, id: &BackendId) -> Result<Backend, OpsError> {
         lock(&self.inner.backends)
             .get(id)
             .cloned()
@@ -330,6 +335,12 @@ impl Queue {
                 }
                 Ok(((source_id, source), self.backend(&target.backend)?))
             }
+            JobKind::ArchiveUpdate {
+                archive,
+                add,
+                remove,
+                ..
+            } => crate::update::check(self, archive, add, remove),
             JobKind::Split { source, target, .. }
             | JobKind::Combine {
                 first: source,

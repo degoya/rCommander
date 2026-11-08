@@ -8,24 +8,16 @@
 //!
 //! [`App::apply`] is the one place state changes. It returns [`Effect`]s rather than running them,
 //! so the tests drive the app through a real engine without a window; [`App::update`] runs them
-//! (`effects.rs`); the messages and effects themselves are `message.rs`; the keys of the dialogs
-//! after the intercepts (`intercepts.rs`) are `dialog_keys.rs`. Drawing is `view.rs`, the
-//! windows and their dialog layers `dialog_windows.rs`, the start `startup.rs`; the drive bar and
-//! its menu are `drive_bar.rs`, the database dialog `database_dialog.rs`, the connection manager
-//! `connections.rs` with the login-script editor `login_scripts.rs`, the host-key dialogs
-//! `hostkeys.rs`, the FTPS certificate dialogs `cert_trust.rs`, the question of an MCP call
-//! `mcp_confirm.rs`, the offer to remove an unused vault `vault_offer.rs`; the folder tabs, the
-//! history list and the hotlist are `tabs.rs`; the file operations of the function keys are
-//! `file_ops.rs`; the command line, the quick search and the quick filter are `cmdline.rs`; the
-//! quick connection (Ctrl+N) is `quick_connect.rs`, the "Run command" dialog of an SSH connection
-//! `ssh_exec.rs`; the checksum, split and combine dialogs are `checksum/`; the multi-rename dialog
-//! (Ctrl+M) is `multi_rename.rs`; drag and drop and files on the clipboard are `drag.rs`;
-//! "Browse..." beside the path fields is `browse.rs`; the workspaces window (Ctrl+Shift+W,
-//! RC-100-68) is `workspaces.rs`.
+//! (`effects.rs`); the messages and effects themselves are `message.rs`, drawing is `view.rs`, the
+//! windows and their dialog layers `dialog_windows.rs`, the start `startup.rs`. Each dialog, bar
+//! and window has a module of its own below, named after it.
 
+mod access;
 mod archive_ops;
 mod archive_view;
+mod associations;
 mod browse;
+mod button_bar;
 mod cert_trust;
 mod checksum;
 mod cmdline;
@@ -72,14 +64,19 @@ mod ssh_exec;
 mod startup;
 mod status_bar;
 mod subscription;
+mod symbol_picker;
 mod tabs;
 mod terminal_copy;
 mod terminal_image;
 mod terminal_maximize;
 mod terminal_pane;
 mod terminal_view;
+mod thumbnails;
+mod tools;
+mod tree;
 mod trust;
 mod update_ui;
+mod user_commands;
 mod vault_ask;
 mod vault_offer;
 mod view;
@@ -89,7 +86,7 @@ mod workspaces;
 
 use std::sync::{Arc, Mutex};
 
-use iced::{Task, window};
+use iced::window;
 use rc_db::Db;
 use rc_engine::{Command, Engine, EngineEvent, Keymap, PanelId};
 use tokio::sync::mpsc;
@@ -205,6 +202,18 @@ pub struct App {
     quit: quit::Quit,
     /// The workspaces window, while it is open (RC-100-68).
     workspaces: Option<workspaces::WorkspaceWindow>,
+    /// The folder trees: in a panel, beside the panels, the dialog (RC-100-88).
+    tree: tree::TreeUi,
+    /// The own commands' window and the question for a program's parameters (RC-100-86).
+    user_commands: user_commands::UserCommandsUi,
+    /// The internal associations' window, while it is open (RC-100-91).
+    associations: Option<associations::AssocWindow>,
+    /// "Select duplicate files" and the disk-usage window (RC-100-98).
+    tools: tools::ToolsUi,
+    /// The thumbnails' tiles and their caches (RC-100-89).
+    thumbnails: thumbnails::Thumbnails,
+    /// The button bars, their menus and their window (RC-100-87).
+    button_bar: button_bar::ButtonBarUi,
 }
 
 impl App {
@@ -267,31 +276,13 @@ impl App {
             dialog_windows: dialog_windows::DialogWindows::default(),
             quit: quit::Quit::default(),
             workspaces: None,
+            tree: tree::TreeUi::default(),
+            user_commands: user_commands::UserCommandsUi::default(),
+            associations: None,
+            tools: tools::ToolsUi::default(),
+            thumbnails: thumbnails::Thumbnails::default(),
+            button_bar: button_bar::ButtonBarUi::default(),
         }
-    }
-
-    #[cfg(test)]
-    pub fn engine(&self) -> &Engine {
-        &self.engine
-    }
-
-    pub fn pane(&self, panel: PanelId) -> &Pane {
-        &self.panes[panel.index()]
-    }
-
-    fn pane_mut(&mut self, panel: PanelId) -> &mut Pane {
-        &mut self.panes[panel.index()]
-    }
-
-    pub fn update(&mut self, message: Message) -> Task<Message> {
-        let effects = self.apply(message);
-        let mut tasks: Vec<Task<Message>> = effects
-            .into_iter()
-            .map(|effect| self.perform(effect))
-            .collect();
-        tasks.push(self.request_icons());
-        tasks.push(self.sync_dialog_windows());
-        Task::batch(tasks)
     }
 
     /// Changes the app's state for `message` and says what is left to do.
@@ -383,16 +374,8 @@ impl App {
             }
             Message::Engine(event) => return self.on_engine(event),
             Message::EngineLagged => return self.reload(),
-            Message::Viewport(panel, size) => {
-                let rows = (size.height / theme::fonts::list().row_height()).floor() as usize;
-                self.pane_mut(panel).set_width(size.width);
-                self.pane_mut(panel).set_page_rows(rows);
-                self.engine.set_page_rows(panel, rows);
-            }
-            Message::Scroll(panel, delta) => {
-                let rows = theme::wheel::rows(delta, theme::fonts::list().row_height());
-                self.pane_mut(panel).scroll(rows);
-            }
+            Message::Viewport(panel, size) => self.viewport(panel, size),
+            Message::Scroll(panel, delta) => return self.wheel(panel, delta),
             Message::ScrollTo(panel, top) => self.pane_mut(panel).scroll_to(top),
             Message::Click(panel, row) => return vec![self.click(panel, row)],
             Message::Open(panel, row) => return self.double_click(panel, row),
@@ -451,6 +434,7 @@ impl App {
             Message::HostKey(message) => return self.on_host_key(message),
             Message::McpConfirm(message) => return self.on_mcp_confirm(message),
             Message::Icons(message) => return self.on_icons(message),
+            Message::Thumbnails(message) => return self.on_thumbnails(message),
             Message::Tabs(message) => return self.on_tabs(message),
             Message::FileOps(message) => return self.on_file_ops(message),
             Message::CmdLine(message) => return self.on_cmdline(message),
@@ -470,6 +454,11 @@ impl App {
             Message::Browse(message) => return self.on_browse(message),
             Message::Resize(message) => return self.on_resize(message),
             Message::Workspaces(message) => return self.on_workspaces(message),
+            Message::Tree(message) => return self.on_tree(message),
+            Message::UserCommands(message) => return self.on_user_commands(message),
+            Message::Associations(message) => return self.on_associations(message),
+            Message::Tools(message) => return self.on_tools(message),
+            Message::ButtonBar(message) => return self.on_button_bar(message),
             // The intercept closes the editor; without one open there is nothing to close. The
             // self-update's messages are its intercept's (`update_ui.rs`), `Refocus` the queue's.
             Message::CloseLoginScripts | Message::Update(_) | Message::Refocus(_) => {}

@@ -4,6 +4,10 @@
 macro_rules! arms {
     ($next:ident, $state:tt, $self:ident, { $($done:tt)* }) => {
         $next! { $state, $self, { $($done)*
+            Command::SetCheckoutReason {
+                connection_id,
+                reason,
+            } => $self.set_checkout_reason(connection_id, &reason).await,
             Command::ImportKey(crate::ImportKeyRequest {
                 connection_id,
                 path,

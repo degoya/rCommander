@@ -50,6 +50,7 @@ impl Node {
             size: self.data.as_ref().map_or(0, |data| data.len() as u64),
             modified: Some(self.modified),
             created: None,
+            accessed: None,
             attributes: Attributes {
                 mode: None,
                 readonly: self.readonly,

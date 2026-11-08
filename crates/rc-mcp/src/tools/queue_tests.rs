@@ -34,6 +34,7 @@ async fn copy(engine: &Engine, source: &str) -> JobId {
             sources: vec![source.into()],
             target: Some("docs".into()),
             options: JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");

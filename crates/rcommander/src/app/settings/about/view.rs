@@ -7,7 +7,8 @@ use iced::{
 use rc_engine::about::{About, AboutLink, AboutLinkKind};
 
 use super::{
-    AboutMsg, AboutPage, AboutTab, TABS, about_message, facts, licenses, link_messages, logo, shown,
+    AboutMsg, AboutPage, AboutTab, TABS, about_message, data_fact, facts, licenses, link_messages,
+    logo, shown,
 };
 use crate::{
     app::{
@@ -74,6 +75,8 @@ fn about_tab<'a>(
     for (name, value) in facts(&about) {
         build = build.push(fact(name, value, tokens));
     }
+    let (name, value) = data_fact(&about);
+    build = build.push(fact(name, value, tokens));
     for &(name, ref value) in update_facts {
         build = build.push(fact(name, value.clone(), tokens));
     }

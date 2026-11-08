@@ -1,0 +1,14 @@
+{
+  "name": "Visionneuse multimédia",
+  "description": "Affiche la durée, les codecs, les pistes et les tags des fichiers audio et vidéo, leur pochette et l'EXIF des photos TIFF, RAW et HEIC.",
+  "codes": {
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_audio": "Le fichier audio est endommagé, ou son contenu n'est pas au format qu'indique son extension.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_exif": "Les données EXIF de la photo sont endommagées.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_video": "Le fichier vidéo est endommagé : une partie est tronquée ou plus grande que le fichier.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_exif": "Aucune donnée EXIF n'a été trouvée dans les 8 premiers Mio de la photo.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_moov": "Le fichier vidéo n'a pas d'en-tête de film (moov) ; il est peut-être incomplet.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.not_media": "Le fichier n'est ni un fichier audio, ni un fichier vidéo, ni une photo que la visionneuse multimédia lit.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.setting.cover": "Afficher la pochette intégrée",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.too_large": "Une partie du fichier que la visionneuse doit lire (un tag, la pochette ou l'en-tête du film) dépasse ce qu'elle lit."
+  }
+}

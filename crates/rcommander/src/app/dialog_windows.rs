@@ -38,7 +38,8 @@
 //! a modeless dialog's window has the keyboard ([`App::question_to_front`]). The title bar's X
 //! and Alt+F4 do what Escape does in that window (the main window's quit as F10 does,
 //! `quit.rs`). Each dialog window opens where it was left (`window.dialog.<name>`), the first
-//! time centred over the main window. The books are `dialog_windows/book.rs`.
+//! time centred over the main window (`dialog_windows/placing.rs`). The books are
+//! `dialog_windows/book.rs`.
 
 mod book;
 mod dialog_window;
@@ -46,21 +47,23 @@ mod file_ops;
 mod front;
 mod kinds;
 mod own;
+mod placing;
 mod question_window;
 mod questions;
 
 use std::time::Instant;
 
 use iced::{
-    Element, Length, Point, Size, Task,
+    Element, Length, Task,
     widget::{Id, Space, Stack, opaque, operation},
-    window::{self, Position},
+    window,
 };
-use rc_db::Db;
 use rc_engine::Command;
 
 pub use self::book::{DialogWindow, DialogWindows};
 pub(super) use self::kinds::first_field;
+use self::placing::dialog_settings;
+pub use self::placing::load;
 
 /// A dialog's window on its way to the screen: `since` the update that opened it, `reused` when
 /// it was taken back hidden rather than made - for the time it took, in the debug log.
@@ -80,8 +83,7 @@ pub enum DialogWindowMsg {
     },
 }
 use super::{
-    App, Effect, Message, connections, mcp_confirm, settings, ssh_exec,
-    window_state::{Geometry, WindowChange},
+    App, Effect, Message, connections, mcp_confirm, ssh_exec, window_state::WindowChange,
     workspaces,
 };
 use crate::{
@@ -140,6 +142,15 @@ impl App {
                     .map(|window| workspaces::layer(window, self.workspaces_shown(), tokens)),
             );
         }
+        // The own commands' window, as the workspaces' (RC-100-86).
+        if !self.main_locked() && !self.windowed(DialogWindow::Commands) {
+            layers.extend(self.user_commands_layer(tokens));
+        }
+        // The list of server files being edited (RC-110-01), a card over the main window.
+        layers.extend(self.remote_edit_list_layer(tokens));
+        if !self.main_locked() && !self.windowed(DialogWindow::ButtonBar) {
+            layers.extend(self.button_bar_layer(tokens));
+        }
         layers
     }
 
@@ -179,7 +190,9 @@ impl App {
             return layers;
         }
         layers.extend(self.vault_offer_layer(tokens));
+        layers.extend(self.remote_edit_layer(tokens));
         layers.extend(self.quit_layer(tokens));
+        layers.extend(self.ask_layer(tokens));
         layers.extend(self.host_key_layer(tokens));
         layers.extend(self.cert_trust_layer(tokens));
         layers.extend(mcp_confirm::layer(&self.mcp_questions, tokens));
@@ -338,6 +351,10 @@ impl App {
         if kind == DialogWindow::Workspaces {
             return self.workspaces_focus();
         }
+        // The own commands' window opens on its Start menu's tree too (RC-100-86).
+        if kind == DialogWindow::Commands {
+            return self.user_commands_focus();
+        }
         first_field(kind).map_or_else(Task::none, |field| operation::focus(Id::new(field)))
     }
 
@@ -423,55 +440,6 @@ impl App {
             self.window.observe(change, maximized);
         }
     }
-}
-
-/// Where each dialog window was left, read before the main window opens.
-pub async fn load(db: &Db) -> Vec<(DialogWindow, Geometry)> {
-    let mut stored = Vec::new();
-    for kind in DialogWindow::ALL {
-        let geometry = db.get::<Geometry>(kind.key()).await.ok().flatten();
-        if let Some(geometry) = geometry.and_then(Geometry::sanitized) {
-            stored.push((kind, geometry));
-        }
-    }
-    stored
-}
-
-/// The window of `kind` at `geometry`: the app's icon, invisible until it is placed and owned
-/// (`platform::dialog_window::show`), closed by the app, not by iced; the dialogs' window class
-/// (`platform::window_class`).
-fn dialog_settings(kind: DialogWindow, geometry: Geometry) -> window::Settings {
-    let position = geometry.position.map_or(Position::Centered, |(x, y)| {
-        Position::Specific(Point::new(x, y))
-    });
-    let settings = without_drop(window::Settings {
-        size: Size::new(geometry.width, geometry.height),
-        position,
-        maximized: geometry.maximized,
-        min_size: Some(kind.min_size()),
-        visible: false,
-        icon: settings::window_icon(),
-        exit_on_close_request: false,
-        ..window::Settings::default()
-    });
-    platform::window_class::with_class(settings, platform::window_class::POPUP)
-}
-
-/// Files dropped on a dialog's window go nowhere: only the main window takes them.
-#[cfg(windows)]
-fn without_drop(settings: window::Settings) -> window::Settings {
-    window::Settings {
-        platform_specific: window::settings::PlatformSpecific {
-            drag_and_drop: false,
-            ..settings.platform_specific
-        },
-        ..settings
-    }
-}
-
-#[cfg(not(windows))]
-fn without_drop(settings: window::Settings) -> window::Settings {
-    settings
 }
 
 fn stacked(mut layers: Vec<Element<'_, Message>>) -> Element<'_, Message> {

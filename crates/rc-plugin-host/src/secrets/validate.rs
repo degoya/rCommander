@@ -1,6 +1,7 @@
 //! What a secret source asks and answers, held to the host's rules (`docs/plugins.md`,
 //! "Validation of plugin output"): ids it can be asked for again exactly, labels made safe to
-//! show, a value of a bounded size.
+//! show, a value of a bounded size; a lease's id as an entry's, its value as `get`'s
+//! (RC-100-38).
 
 use rc_plugin_api::secrets::{SecretEntry, SecretField, SourceState};
 use rc_plugin_types::{Failure, FailureKind};
@@ -23,11 +24,31 @@ pub const MAX_ENTRY_TITLE_CHARS: usize = 200;
 pub const MAX_ENTRY_TEXT_CHARS: usize = 512;
 /// The largest secret `get` answers: a private key in PEM fits many times over (64 KiB).
 pub const MAX_SECRET_BYTES: usize = 64 * 1024;
+/// The longest reason for a checkout handed to a plugin.
+pub const MAX_REASON_CHARS: usize = 500;
+
+/// A secret lent for a session, as `checkout` answered it (RC-100-38): the value only as a
+/// secret, so its `Debug` shows none.
+#[derive(Debug)]
+pub struct Lease {
+    /// The system's own id of the lease, handed back to `checkin` exactly.
+    pub id: String,
+    pub value: SecretString,
+    /// When the system takes it back by itself, in Unix seconds; `None` when it does not.
+    pub expires: Option<u64>,
+}
 
 /// Whether `id` can be handed to a plugin and back: not empty, not too long, no control
 /// character.
 pub(super) fn entry_id(id: &str) -> bool {
     !id.is_empty() && id.chars().count() <= MAX_ENTRY_ID_CHARS && !id.chars().any(char::is_control)
+}
+
+/// Whether `reason` can be handed to a plugin: some text, not too long, no control character.
+pub(super) fn reason(reason: &str) -> bool {
+    !reason.trim().is_empty()
+        && reason.chars().count() <= MAX_REASON_CHARS
+        && !reason.chars().any(char::is_control)
 }
 
 pub(super) fn state(state: wit::SourceState) -> SourceState {
@@ -92,4 +113,21 @@ pub(super) fn secret(value: String) -> Result<SecretString, Failure> {
         ));
     }
     Ok(SecretString::from(value.as_str()))
+}
+
+/// A lease `checkout` answered: its value held as [`secret`] holds `get`'s, wiped also when the
+/// lease is refused; its id one `checkin` can be handed exactly.
+pub(super) fn lease(raw: wit::Lease) -> Result<Lease, Failure> {
+    let value = secret(raw.value)?;
+    if !entry_id(&raw.id) {
+        return Err(failure::coded(
+            FailureKind::BadData,
+            codes::PLUGIN_BAD_OUTPUT,
+        ));
+    }
+    Ok(Lease {
+        id: raw.id,
+        value,
+        expires: raw.expires,
+    })
 }

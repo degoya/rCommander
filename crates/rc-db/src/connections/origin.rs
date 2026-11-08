@@ -85,12 +85,13 @@ impl Db {
             require_folder(&mut tx, folder).await?;
         }
         require_free_name(&mut tx, folder, &fields.name, None).await?;
+        super::jump::check(&mut tx, None, fields.kind, fields.jump_id).await?;
         let sort_order = next_sort_order(&mut tx, folder).await?;
         let done = sqlx::query(
             "INSERT INTO connections (folder_id, name, kind, host, port, username, auth_method, \
              key_path, default_view, start_directory, notes, ftp_data_mode, ftp_encoding, \
-             theme_light, theme_dark, sort_order, import_source, import_key) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             theme_light, theme_dark, jump_id, sort_order, import_source, import_key) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(folder.map(|folder| folder.0))
         .bind(&fields.name)
@@ -107,6 +108,7 @@ impl Db {
         .bind(fields.ftp_encoding.map(FtpEncoding::as_str))
         .bind(&fields.theme_light)
         .bind(&fields.theme_dark)
+        .bind(fields.jump_id.map(|jump| jump.0))
         .bind(sort_order)
         .bind(source)
         .bind(key)

@@ -30,7 +30,7 @@ pub use grants::{
 pub use names::{NAMES_MIN_APP_VERSION, name_matches};
 pub use sections::{
     Capabilities, KNOWN_CAPABILITIES, MagicManifest, MatchRank, MatchSection, PluginMetadata,
-    PluginType, SettingKind, SettingManifest, ViewerSection,
+    PluginType, SecretsSection, SettingKind, SettingManifest, ViewerSection,
 };
 pub(crate) use settings::resolve_settings;
 pub use settings::{MAX_SETTING_LINE_CHARS, MAX_SETTING_TEXT_CHARS};
@@ -41,10 +41,17 @@ pub const MANIFEST_VERSION: u32 = 1;
 
 /// Versions of `rcommander:plugin` this build links a plugin against: the contract and the ones
 /// before it. A viewer's interfaces are the same in each, 0.1.0 without `settings` (RC-100-14);
-/// 0.3.0 adds `http` and the secrets world (RC-100-33), 0.4.0 the inventory world (RC-100-39) -
-/// a 0.3.0 viewer or secret source runs unchanged.
-pub const SUPPORTED_API_VERSIONS: &[&str] =
-    &["0.1.0", "0.2.0", "0.3.0", rc_plugin_api::API_VERSION];
+/// 0.3.0 adds `http` and the secrets world (RC-100-33), 0.4.0 the inventory world (RC-100-39),
+/// 0.5.0 `checkout` and `checkin` to the secrets world (RC-100-38), 0.6.0 the compare world
+/// (RC-100-41) - a 0.3.0 viewer or secret source runs unchanged.
+pub const SUPPORTED_API_VERSIONS: &[&str] = &[
+    "0.1.0",
+    "0.2.0",
+    "0.3.0",
+    "0.4.0",
+    "0.5.0",
+    rc_plugin_api::API_VERSION,
+];
 
 /// The largest `manifest.toml` read.
 pub const MAX_MANIFEST_BYTES: usize = 1024 * 1024;
@@ -99,6 +106,9 @@ pub struct PluginManifest {
     /// Required for `plugin_type = "viewer"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer: Option<ViewerSection>,
+    /// Only for `plugin_type = "secrets"` (contract 0.5.0; RC-100-38).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secrets: Option<SecretsSection>,
     #[serde(default)]
     pub capabilities: Capabilities,
     pub metadata: PluginMetadata,
@@ -114,6 +124,13 @@ impl PluginManifest {
     pub fn timeout_milliseconds(&self) -> u64 {
         self.limits
             .timeout_or(self.plugin_type.default_timeout_milliseconds())
+    }
+
+    /// Whether the plugin is a PAM system that lends its secret (`[secrets] checkout = true`).
+    #[must_use]
+    pub fn lends_secrets(&self) -> bool {
+        self.plugin_type == PluginType::Secrets
+            && self.secrets.is_some_and(|section| section.checkout)
     }
 }
 

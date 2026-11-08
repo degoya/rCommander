@@ -8,8 +8,8 @@
 use rc_vfs::VfsPath;
 use serde::{Deserialize, Serialize};
 
-use super::{history::History, title::titles};
-use crate::{ListMode, PanelId, PanelState, SortOrder};
+use super::{frequent::FrequentFolder, history::History, title::titles};
+use crate::{ListMode, PanelId, PanelState, SortOrder, file_filter::FileFilter};
 
 /// A tab's id: unique among both panels' tabs while the engine runs, never reused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -29,16 +29,25 @@ pub struct Tab {
     pub history: History,
     /// The entry the cursor stood on when the tab was left.
     pub cursor: Option<String>,
+    /// The name a person gave the tab (`tabs.rename`, RC-100-92); `None` shows its folder's.
+    pub title: Option<String>,
+    /// Its file filter (Ctrl+F10, Ctrl+F11, Ctrl+F12; RC-100-92); the panel's own while the tab is
+    /// active.
+    pub file_filter: FileFilter,
 }
 
 /// A tab as a command reports it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TabView {
     pub id: TabId,
-    /// The folder's last part; told apart by its parent, or a number, where two are equal.
+    /// The name a person gave the tab, else the folder's last part; told apart by its parent,
+    /// or a number, where two are equal.
     pub title: String,
     pub path: VfsPath,
     pub locked: bool,
+    /// Whether `title` is a name a person gave the tab (RC-100-92).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub renamed: bool,
     /// Whether the panel shows this tab.
     pub active: bool,
 }
@@ -97,6 +106,9 @@ impl TabSet {
 pub struct Tabs {
     sets: [TabSet; 2],
     next_id: u64,
+    /// The most visited folders, most first, as last read (RC-100-92): the lower end of the
+    /// history list.
+    frequent: Vec<FrequentFolder>,
 }
 
 impl Tabs {
@@ -110,6 +122,7 @@ impl Tabs {
         let mut tabs = Self {
             sets: [empty(), empty()],
             next_id: 1,
+            frequent: Vec::new(),
         };
         for (panel, state) in [(PanelId::Left, left), (PanelId::Right, right)] {
             let tab = tabs.new_tab(state.path.clone(), state.sort, state.mode);
@@ -137,6 +150,8 @@ impl Tabs {
             mode,
             locked: false,
             cursor: None,
+            title: None,
+            file_filter: FileFilter::All,
         }
     }
 
@@ -187,6 +202,7 @@ impl Tabs {
         tab.sort = state.sort;
         tab.mode = state.mode;
         tab.cursor = state.cursor_entry().map(|entry| entry.name.clone());
+        tab.file_filter.clone_from(&state.filter.files);
     }
 
     /// Adds `tab` right after the active one and makes it active; its index.
@@ -236,7 +252,8 @@ impl Tabs {
         Some(to)
     }
 
-    /// The panel's tabs as commands report them; the active one as `state` shows it.
+    /// The panel's tabs as commands report them; the active one as `state` shows it. A tab a
+    /// person named shows that name; the others their folders', told apart among themselves.
     #[must_use]
     pub fn views(&self, panel: PanelId, state: &PanelState) -> Vec<TabView> {
         let set = self.set(panel);
@@ -258,12 +275,56 @@ impl Tabs {
             .enumerate()
             .map(|(index, (title, (tab, path)))| TabView {
                 id: tab.id,
-                title,
+                renamed: tab.title.is_some(),
+                title: tab.title.clone().unwrap_or(title),
                 path: path.clone(),
                 locked: tab.locked,
                 active: index == set.active,
             })
             .collect()
+    }
+
+    /// Gives tab `tab` of `panel` the name `title`, or its folder's again with `None`; `false`
+    /// when the panel has no such tab.
+    pub fn rename(&mut self, panel: PanelId, tab: TabId, title: Option<String>) -> bool {
+        let set = self.set_mut(panel);
+        match set.index_of(tab) {
+            Some(index) => {
+                set.tabs[index].title = title;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Closes every tab of `panel` but the active one, the locked ones only with
+    /// `include_locked`; how many closed.
+    pub fn close_all(&mut self, panel: PanelId, include_locked: bool) -> usize {
+        let set = self.set_mut(panel);
+        let shown = set.tabs[set.active].id;
+        let before = set.tabs.len();
+        set.tabs
+            .retain(|tab| tab.id == shown || (tab.locked && !include_locked));
+        set.active = set.index_of(shown).unwrap_or(0);
+        before - set.tabs.len()
+    }
+
+    /// The most visited folders, most first, as last read.
+    #[must_use]
+    pub fn frequent(&self) -> &[FrequentFolder] {
+        &self.frequent
+    }
+
+    /// The most visited folders as read now.
+    pub fn set_frequent(&mut self, frequent: Vec<FrequentFolder>) {
+        self.frequent = frequent;
+    }
+
+    /// Every tab of `panel` takes `filter` (`tabs.filter_per_tab` off: one filter per panel).
+    pub fn filter_all(&mut self, panel: PanelId, filter: &FileFilter) {
+        for tab in &mut self.set_mut(panel).tabs {
+            tab.file_filter.clone_from(filter);
+        }
     }
 }
 

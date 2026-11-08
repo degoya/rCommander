@@ -114,3 +114,57 @@ fn an_unknown_archive_kind_is_refused() {
         Some("update.archive_unknown")
     );
 }
+
+/// RC-100-95: a portable copy keeps its data and its marker beside the program; the switch
+/// moves neither, even from an archive that carries both.
+#[test]
+fn the_portable_switch_leaves_data_and_marker() {
+    use crate::install::fixture::{write, zip_archive};
+    use crate::portable_mode::{DATA_DIR, MARKER};
+    let mut fixture = Fixture::zip();
+    let data = fixture.install.join(DATA_DIR);
+    write(&data.join("rcommander.db"), "the portable database");
+    write(&data.join("plugins").join("state.json"), "the plugins");
+    write(&fixture.install.join(MARKER), "the marker");
+    let folder = "rcommander-2.0.0-windows-x64";
+    let files: Vec<(String, &str)> = vec![
+        (format!("{folder}/rcommander.exe"), "new program"),
+        (
+            format!("{folder}/VERSION.txt"),
+            crate::install::fixture::NEW,
+        ),
+        (
+            format!("{folder}/{DATA_DIR}/rcommander.db"),
+            "a database from the archive",
+        ),
+        (format!("{folder}/{MARKER}"), "a marker from the archive"),
+    ];
+    let artifact = fixture.journal.plan.artifact.clone();
+    zip_archive(&artifact, &files);
+    let bytes = std::fs::read(&artifact).expect("artifact");
+    fixture.journal.plan.sha256 = crate::sign::hex_sha256(&bytes);
+    fixture.journal.plan.size = bytes.len() as u64;
+
+    stage(&mut fixture.journal).expect("stage");
+    assert_eq!(
+        fixture.journal.entries,
+        vec!["VERSION.txt", "rcommander.exe"]
+    );
+    switch(&mut fixture.journal).expect("switch");
+    assert_eq!(
+        fixture.read("rcommander.exe").as_deref(),
+        Some("new program")
+    );
+    let kept = |relative: &str| std::fs::read_to_string(fixture.install.join(relative)).ok();
+    assert_eq!(
+        kept("data/rcommander.db").as_deref(),
+        Some("the portable database")
+    );
+    assert_eq!(
+        kept("data/plugins/state.json").as_deref(),
+        Some("the plugins")
+    );
+    assert_eq!(kept(MARKER).as_deref(), Some("the marker"));
+    assert!(!fixture.journal.previous_dir().join(DATA_DIR).exists());
+    assert!(!fixture.journal.previous_dir().join(MARKER).exists());
+}

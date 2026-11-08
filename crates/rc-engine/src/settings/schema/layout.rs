@@ -1,10 +1,11 @@
 //! The file lists' column widths and the divider between the panels (RC-010-20): dragged in the
 //! window, stored here, shared by both panels. A width is in pixels at the default list font
 //! size; the window scales it with the chosen size (RC-010-17). The owner column is switched on
-//! here too (RC-060-02), the menu bar off (RC-080-18) and its style (RC-100-66). None is
-//! protected.
+//! here too (RC-060-02), the menu bar off (RC-080-18) and its style (RC-100-66), and the column
+//! sets' automatic switch by folder (RC-100-90). None is protected.
 
 use super::{Choice, SettingKind, SettingPage, SettingSpec};
+use crate::columns::{AUTO_DEFAULT_KEY, AUTO_SWITCH_KEY};
 
 /// The extension column's width.
 pub const EXT_WIDTH_KEY: &str = "columns.ext_width";
@@ -151,6 +152,48 @@ pub(super) const MENU_BAR_STYLE: SettingSpec = SettingSpec {
     },
     label: "setting.appearance.menu_bar_style",
     help: "setting.appearance.menu_bar_style.help",
+    protected: false,
+    restart: false,
+};
+
+/// On by default, as Total Commander's "Auto switch mode" once a rule is set: a panel entering a
+/// folder a column set's mask matches shows that set (RC-100-90).
+pub(super) const AUTO_SWITCH: SettingSpec = SettingSpec {
+    key: AUTO_SWITCH_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.columns.auto_switch",
+    help: "setting.columns.auto_switch.help",
+    protected: false,
+    restart: false,
+};
+
+const AUTO_DEFAULTS: &[Choice] = &[
+    Choice {
+        value: "unchanged",
+        label: "setting.columns.auto_default.unchanged",
+    },
+    Choice {
+        value: "full",
+        label: "setting.columns.auto_default.full",
+    },
+    Choice {
+        value: "brief",
+        label: "setting.columns.auto_default.brief",
+    },
+];
+
+/// Where no mask matches the view stays, as Total Commander's `<default>` mode leaves it
+/// "unchanged" (RC-100-90).
+pub(super) const AUTO_DEFAULT: SettingSpec = SettingSpec {
+    key: AUTO_DEFAULT_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Choice {
+        choices: AUTO_DEFAULTS,
+        default: "unchanged",
+    },
+    label: "setting.columns.auto_default",
+    help: "setting.columns.auto_default.help",
     protected: false,
     restart: false,
 };

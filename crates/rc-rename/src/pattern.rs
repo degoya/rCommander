@@ -8,18 +8,35 @@
 //!   `[N1]` one character, `[N2-5]` characters 2 to 5, `[N2,5]` five characters from 2,
 //!   `[N2-]` from 2 to the end, `[N-8,5]` five from the 8th-last, `[N-8-5]` from the 8th-last to
 //!   the 5th-last, `[N2--5]` from 2 to the 5th-last, `[N-5-]` from the 5th-last to the end;
+//! - `[B0]` ... `[B9]` the parent, grandparent, great-grandparent folder and so on; `[B+0]` ...
+//!   `[B+9]` the path from the root: the drive (or server), the first folder, the second; each
+//!   takes a range after `_`, `[B0_2-5]`;
 //! - `[C]` the counter with the rule's settings, `[C10+5:3]` with its own (start, step, digits;
-//!   each part optional), `:a` for as many digits as the last number needs;
+//!   each part optional), `:a` for as many digits as the last number needs, `[C+1/100]` a step
+//!   of a hundredth (the whole part: `[C+1/100]\[N]` puts every 100 entries in a subfolder);
+//!   `[Caa+1]` counts in letters from `aa` (`[CAAA]` upper case; after `zz` comes `aaa`);
 //! - `[Y]` year, `[y]` two-digit year, `[M]` month, `[D]` day, `[h]` hour (24), `[H]` hour (12),
-//!   `[m]` minute, `[s]` second, `[i]` am/pm, `[i1]` a/p - the modification time; several in one
-//!   bracket, `[YMD]`, `[hms]`; `[T1]` (modification time, the default) is accepted;
+//!   `[m]` minute, `[s]` second, `[i]` am/pm, `[i1]` a/p; several in one bracket, `[YMD]`,
+//!   `[hms]`; `[d]` and `[t]` the date and the time in the local format, `/` as `-` and `:` as
+//!   `.`; they read the modification time, or after `[T2]` the time the dialog was opened,
+//!   after `[T3]` the time the options last changed, `[T1]` the modification time again - each
+//!   with an optional offset, `[T1+60m]` (`s`, `m`, `h`, `D`, `M`, `Y`);
+//! - `[S]` the size in bytes (a folder's is 0); `[X]` the clipboard's text, `*?:|"<>` as `_`,
+//!   an error when it is empty, `[X+]` nothing then;
+//! - `[I]` or `[I1]` ignore the dots in folder names from here on (`[N]` the whole name, `[E]`
+//!   empty), `[I0]` back;
 //! - `[U]`, `[L]`, `[F]` upper case, lower case, first letter of each word upper case from here
-//!   on, `[n]` the case as rendered again;
+//!   on, `[f]` the same with English title words (`of`, `the`, ...) lower case but at the start
+//!   and the end, `[n]` the case as rendered again;
 //! - `[[]` and `[]]` a literal `[` and `]`.
 //!
-//! Anything else in brackets is an error with its position, never silently literal text.
+//! The switches `[T...]` and `[I]` carry from the name mask into the extension mask. Anything
+//! else in brackets is an error with its position, never silently literal text; Total
+//! Commander's `[T4]` (EXIF) and `[=plugin.field]` among them.
 
+use crate::args::{counter, letters, path_level, range, time_switch};
 use crate::case::CaseMode;
+use crate::clock::TimeSwitch;
 use crate::error::{PatternError, PatternErrorKind};
 
 /// A parsed mask.
@@ -51,12 +68,30 @@ pub enum Token {
     Parent(Range),
     /// `[G...]`: the grandparent folder's name.
     Grandparent(Range),
+    /// `[B0...]` ... `[B9...]`: the folder that many levels above the parent (0 the parent).
+    Ancestor(u8, Range),
+    /// `[B+0...]` ... `[B+9...]`: a part of the path from the root (0 the drive or server).
+    FromRoot(u8, Range),
     /// `[C...]`: the counter.
     Counter(CounterSpec),
-    /// A part of the modification time.
+    /// `[Caa+1]`: the counter in letters.
+    Letters(LetterCounter),
+    /// A part of the time the switches choose.
     Date(DatePart),
-    /// `[U]`, `[L]`, `[F]`, `[n]`: the case of everything after it.
+    /// `[d]`: the date in the local format.
+    LocalDate,
+    /// `[t]`: the time in the local format.
+    LocalTime,
+    /// `[S]`: the size in bytes.
+    Size,
+    /// `[X]` (`optional: false`) and `[X+]`: the clipboard's text.
+    Clipboard { optional: bool },
+    /// `[U]`, `[L]`, `[F]`, `[f]`, `[n]`: the case of everything after it.
     Case(CaseMode),
+    /// `[I]`, `[I1]` (on) and `[I0]` (off): ignore the dots in folder names.
+    IgnoreFolderDots(bool),
+    /// `[T1]`, `[T2]`, `[T3]` with an optional offset: the time the date placeholders read.
+    Time(TimeSwitch),
 }
 
 /// Which characters a placeholder takes. Positions count from 1; a negative position counts
@@ -83,6 +118,21 @@ pub struct CounterSpec {
     pub step: Option<i64>,
     /// The number of digits.
     pub width: Option<CounterWidth>,
+    /// `[C+1/100]`: the step is divided by this, and the counter shows the whole part.
+    pub divisor: Option<u32>,
+}
+
+/// A counter in letters, `[Caa+1]`: `aa`, `ab`, ... `zz`, `aaa`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LetterCounter {
+    /// The first value, `a` being 0: what the letters spell.
+    pub start: u64,
+    /// The least number of letters: as many as the mask has.
+    pub width: u32,
+    /// `[CAA]`: upper case letters.
+    pub upper: bool,
+    /// What each further entry adds; the rule's step when `None`.
+    pub step: Option<i64>,
 }
 
 /// How many digits a counter has.
@@ -197,15 +247,24 @@ fn placeholder(body: &str, tokens: &mut Vec<Token>) -> Result<(), PatternErrorKi
     let arguments = || PatternErrorKind::Arguments {
         text: body.to_owned(),
     };
+    let unknown = || PatternErrorKind::Unknown {
+        text: body.to_owned(),
+    };
     let token = match body {
         "" => return Err(PatternErrorKind::Empty),
-        // The modification time is the default time source already.
-        "T1" => return Ok(()),
         "U" => Token::Case(CaseMode::Upper),
         "L" => Token::Case(CaseMode::Lower),
         "F" => Token::Case(CaseMode::WordsUpper),
+        "f" => Token::Case(CaseMode::Title),
         "n" => Token::Case(CaseMode::Unchanged),
         "i1" => Token::Date(DatePart::AmPmShort),
+        "d" => Token::LocalDate,
+        "t" => Token::LocalTime,
+        "S" => Token::Size,
+        "X" => Token::Clipboard { optional: false },
+        "X+" => Token::Clipboard { optional: true },
+        "I" | "I1" => Token::IgnoreFolderDots(true),
+        "I0" => Token::IgnoreFolderDots(false),
         _ => {
             let dates: Option<Vec<DatePart>> = body.chars().map(DatePart::from_letter).collect();
             if let Some(dates) = dates {
@@ -221,97 +280,29 @@ fn placeholder(body: &str, tokens: &mut Vec<Token>) -> Result<(), PatternErrorKi
                 Some('A') => Token::FileName(range(rest).ok_or_else(arguments)?),
                 Some('P') => Token::Parent(range(rest).ok_or_else(arguments)?),
                 Some('G') => Token::Grandparent(range(rest).ok_or_else(arguments)?),
-                Some('C') => Token::Counter(counter(rest).ok_or_else(arguments)?),
-                _ => {
-                    return Err(PatternErrorKind::Unknown {
-                        text: body.to_owned(),
-                    });
+                Some('C') if rest.starts_with(|c: char| c.is_ascii_alphabetic()) => {
+                    Token::Letters(letters(rest).ok_or_else(arguments)?)
                 }
+                Some('C') => Token::Counter(counter(rest).ok_or_else(arguments)?),
+                Some('B') => match rest.strip_prefix('+') {
+                    Some(rest) => {
+                        let (level, range) = path_level(rest).ok_or_else(arguments)?;
+                        Token::FromRoot(level, range)
+                    }
+                    None => {
+                        let (level, range) = path_level(rest).ok_or_else(arguments)?;
+                        Token::Ancestor(level, range)
+                    }
+                },
+                // `[T4]`, the EXIF date, is not offered.
+                Some('T') if rest.starts_with('4') => return Err(unknown()),
+                Some('T') => Token::Time(time_switch(rest).ok_or_else(arguments)?),
+                _ => return Err(unknown()),
             }
         }
     };
     tokens.push(token);
     Ok(())
-}
-
-/// The range after `N`, `E`, `A`, `P` or `G`: nothing, `x`, `x-y`, `x-`, `x,n`. After a
-/// negative start the end counts from the end too (`[N-8-5]`); after a positive one it does
-/// only with its own minus (`[N2--5]`).
-fn range(text: &str) -> Option<Range> {
-    if text.is_empty() {
-        return Some(Range::All);
-    }
-    let (from, rest) = leading_position(text)?;
-    if rest.is_empty() {
-        return Some(Range::At(from));
-    }
-    if let Some(count) = rest.strip_prefix(',') {
-        let count = u64::try_from(unsigned(count)?).ok()?;
-        return (count > 0).then_some(Range::Count(from, count));
-    }
-    let to = rest.strip_prefix('-')?;
-    if to.is_empty() {
-        return Some(Range::Span(from, None));
-    }
-    let (to, rest) = leading_position(to)?;
-    if !rest.is_empty() {
-        return None;
-    }
-    let to = if from < 0 && to > 0 { -to } else { to };
-    Some(Range::Span(from, Some(to)))
-}
-
-/// A position at the start of `text` - an optional `-` and digits, not 0 - and what follows.
-fn leading_position(text: &str) -> Option<(i64, &str)> {
-    let (negative, digits) = match text.strip_prefix('-') {
-        Some(digits) => (true, digits),
-        None => (false, text),
-    };
-    let end = digits
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(digits.len());
-    let value = unsigned(&digits[..end]).filter(|value| *value != 0)?;
-    Some((if negative { -value } else { value }, &digits[end..]))
-}
-
-/// `[start][+step][:width|:a]` after `C`.
-fn counter(text: &str) -> Option<CounterSpec> {
-    let (rest, width) = match text.split_once(':') {
-        Some((rest, "a")) => (rest, Some(CounterWidth::Auto)),
-        Some((rest, width)) => {
-            let width = u32::try_from(unsigned(width)?)
-                .ok()
-                .filter(|width| *width <= MAX_COUNTER_WIDTH)?;
-            (rest, Some(CounterWidth::Digits(width)))
-        }
-        None => (text, None),
-    };
-    let (start, step) = match rest.split_once('+') {
-        Some((start, step)) => (start, Some(signed(step)?)),
-        None => (rest, None),
-    };
-    let start = if start.is_empty() {
-        None
-    } else {
-        Some(signed(start)?)
-    };
-    Some(CounterSpec { start, step, width })
-}
-
-/// An optional `-` and decimal digits.
-fn signed(text: &str) -> Option<i64> {
-    match text.strip_prefix('-') {
-        Some(digits) => unsigned(digits).map(|value| -value),
-        None => unsigned(text),
-    }
-}
-
-/// Decimal digits only, no sign.
-fn unsigned(text: &str) -> Option<i64> {
-    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    text.parse().ok()
 }
 
 #[cfg(test)]

@@ -39,6 +39,19 @@ pub struct HostKeyQuestion {
     /// in the dialog (RC-080-12).
     #[serde(default)]
     pub stored_types: Vec<String>,
+    /// The hop of a chain of jump hosts the key was presented to (RC-110-03); `None` for a
+    /// direct session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hop: Option<HopLabel>,
+}
+
+/// One session of a chain of jump hosts (RC-110-03): `index` of `total`, counted from the first
+/// jump host to the target, and the name of its connection - "hop 1 of 3: bastion".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HopLabel {
+    pub index: usize,
+    pub total: usize,
+    pub name: String,
 }
 
 /// Why the key needs a person.
@@ -103,6 +116,22 @@ impl Engine {
         port: u16,
         offered: OfferedKey,
     ) -> Result<(), EngineError> {
+        self.check_host_key_at(host, port, offered, None).await
+    }
+
+    /// [`Engine::check_host_key`] for the hop `hop` of a chain of jump hosts (RC-110-03): a
+    /// question filed says which one.
+    ///
+    /// # Errors
+    ///
+    /// As [`Engine::check_host_key`].
+    pub(crate) async fn check_host_key_at(
+        &self,
+        host: &str,
+        port: u16,
+        offered: OfferedKey,
+        hop: Option<HopLabel>,
+    ) -> Result<(), EngineError> {
         let host = normalize_host(host);
         let verdict = trust::verify(self.db()?, &host, port, offered).await?;
         match verdict {
@@ -129,6 +158,7 @@ impl Engine {
                     offered,
                     kind: HostKeyQuestionKind::Unknown,
                     stored_types,
+                    hop,
                 });
                 let error = EngineError::HostKeyUnknown {
                     host: question.host.clone(),
@@ -150,6 +180,7 @@ impl Engine {
                     offered,
                     kind: HostKeyQuestionKind::Changed { stored },
                     stored_types: Vec::new(),
+                    hop,
                 });
                 let error = EngineError::HostKeyChanged {
                     host: question.host.clone(),

@@ -7,10 +7,12 @@ use iced::Element;
 use super::DialogWindow;
 use crate::{
     app::{
-        App, Message, archive_ops,
+        App, Message, archive_ops, associations, button_bar,
         checksum::{self, ChecksumWindow},
         connections, database_dialog, drive_bar, file_ops, multi_rename, properties, quick_connect,
-        search, settings, ssh_exec, tabs, workspaces,
+        search, settings, ssh_exec, tabs,
+        tools::{disk_usage_view, select_duplicates_view},
+        tree, user_commands, workspaces,
     },
     i18n::t,
     theme::{Tokens, layout},
@@ -78,6 +80,22 @@ impl App {
                 own && self.login_scripts.is_some(),
             ),
             (DialogWindow::Workspaces, own && self.workspaces.is_some()),
+            (DialogWindow::Tree, own && self.tree.dialog.is_some()),
+            (
+                DialogWindow::Commands,
+                own && self.user_commands.window.is_some(),
+            ),
+            // Always a window of its own, as the settings: their Programs page opens it.
+            (DialogWindow::Associations, self.associations.is_some()),
+            (
+                DialogWindow::SelectDuplicates,
+                own && self.tools.select_open(),
+            ),
+            (DialogWindow::DiskUsage, own && self.tools.usage.is_some()),
+            (
+                DialogWindow::ButtonBar,
+                own && self.button_bar.window.is_some(),
+            ),
         ];
         let open = open
             .into_iter()
@@ -186,6 +204,36 @@ impl App {
                 .workspaces
                 .as_ref()
                 .map(|window| workspaces::body(window, self.workspaces_shown(), tokens)),
+            DialogWindow::Tree => self
+                .tree
+                .dialog
+                .as_ref()
+                .map(|dialog| tree::dialog_body(dialog, tokens)),
+            DialogWindow::Commands => self
+                .user_commands
+                .window
+                .as_ref()
+                .map(|window| user_commands::body(window, self.user_commands_shown(), tokens)),
+            DialogWindow::Associations => self
+                .associations
+                .as_ref()
+                .map(|window| associations::body(window, tokens)),
+            DialogWindow::SelectDuplicates => self
+                .tools
+                .select
+                .as_ref()
+                .filter(|dialog| dialog.open)
+                .map(|dialog| select_duplicates_view::body(dialog, tokens)),
+            DialogWindow::DiskUsage => self
+                .tools
+                .usage
+                .as_ref()
+                .map(|window| disk_usage_view::body(window, tokens)),
+            DialogWindow::ButtonBar => self
+                .button_bar
+                .window
+                .as_ref()
+                .map(|window| button_bar::window_body(window, &self.button_bar.bars, tokens)),
         };
         body.map(|body| layout::window_body(body, tokens))
             .into_iter()
@@ -232,6 +280,12 @@ impl App {
             | DialogWindow::Progress => self.file_ops_title(kind),
             DialogWindow::Question(question) => return self.question_title(question),
             DialogWindow::Workspaces => t!("workspaces.title"),
+            DialogWindow::Tree => tree::dialog_title(),
+            DialogWindow::Commands => t!("user_commands.title"),
+            DialogWindow::Associations => t!("associations.title"),
+            DialogWindow::SelectDuplicates => select_duplicates_view::title(),
+            DialogWindow::DiskUsage => disk_usage_view::title(),
+            DialogWindow::ButtonBar => t!("button_bar.title"),
         };
         title.to_owned()
     }
@@ -256,6 +310,9 @@ pub(in crate::app) fn first_field(kind: DialogWindow) -> Option<&'static str> {
         DialogWindow::Transfer | DialogWindow::NewItem => Some(file_ops::FIELD_ID),
         DialogWindow::Question(question) => question.first_field(),
         DialogWindow::Workspaces => Some(workspaces::FILTER_FIELD),
+        DialogWindow::Commands => Some(user_commands::FILTER_FIELD),
+        DialogWindow::Associations => Some(associations::FILTER_FIELD),
+        DialogWindow::ButtonBar => Some(button_bar::NAME_FIELD),
         DialogWindow::Settings
         | DialogWindow::Queue
         | DialogWindow::Search
@@ -268,7 +325,10 @@ pub(in crate::app) fn first_field(kind: DialogWindow) -> Option<&'static str> {
         | DialogWindow::Delete
         | DialogWindow::Conflict
         | DialogWindow::JobError
-        | DialogWindow::Progress => None,
+        | DialogWindow::Progress
+        | DialogWindow::Tree
+        | DialogWindow::SelectDuplicates
+        | DialogWindow::DiskUsage => None,
     }
 }
 

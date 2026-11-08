@@ -148,6 +148,7 @@ async fn num_slash_brings_back_the_selection_a_file_operation_took() {
             sources: Vec::new(),
             target: Some("docs".into()),
             options: rc_ops::JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("a copy job");

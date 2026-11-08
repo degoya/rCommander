@@ -8,27 +8,32 @@
 //! `keyboard-interactive` prompt when the server offers only that. A question the connection's
 //! code pattern matches gets the one-time code of its stored seed (RC-060-08, `auth_prompts.rs`),
 //! made at the moment it is asked; a prompt a person would have to answer (a second hidden one,
-//! an echoed one, a code question without a seed) is not guessed at.
+//! an echoed one, a code question without a seed) is not guessed at. A key with an OpenSSH user
+//! certificate - stored with it, or held by an agent - offers the certificate first (RC-060-09,
+//! `auth_cert.rs`, `auth_agent.rs`).
 
 use std::sync::Arc;
 
 use russh::{
     MethodKind,
     client::{AuthResult, Handle, KeyboardInteractiveAuthResponse},
-    keys::{Algorithm, HashAlg, PrivateKeyWithHashAlg, PublicKey, agent::AgentIdentity},
+    keys::{Algorithm, HashAlg, PrivateKeyWithHashAlg},
 };
 use secrecy::{ExposeSecret as _, SecretString};
-use tokio::time::timeout;
 
-use super::agent_offer::offer_order;
+use self::agents::by_agent;
+use self::cert::Signed;
 use super::auth_prompts::{Answer, answers};
 use crate::recover::LogPanic as _;
 use crate::{
-    PrivateKeyError,
-    agent::{self, AGENT_WAIT},
-    private_key,
+    CertificateError, PrivateKeyError, private_key,
     ssh::{AuthKind, AuthUsed, Credentials, SessionOptions, SshError, handler::ClientHandler},
 };
+
+#[path = "auth_agent.rs"]
+mod agents;
+#[path = "auth_cert.rs"]
+mod cert;
 
 /// The rounds of `keyboard-interactive` questions answered at most.
 const MAX_PROMPT_ROUNDS: usize = 4;
@@ -41,6 +46,8 @@ enum Attempt {
     Refused,
     /// The key could not be opened; the next method still gets its turn.
     KeyUnusable(PrivateKeyError),
+    /// Refused, or its certificate not sent, for a reason the certificate tells (RC-060-09).
+    Certificate(CertificateError),
     Accepted(AuthUsed),
 }
 
@@ -49,8 +56,9 @@ enum Attempt {
 /// # Errors
 ///
 /// [`SshError::AuthFailed`] naming the methods tried, [`SshError::Key`] when the key does not
-/// open and nothing else got in, a credential source's failure (a locked vault) at once, and a
-/// lost connection.
+/// open and nothing else got in, [`SshError::Certificate`] when a certificate was not sent or
+/// refused for a reason it tells and nothing else got in, a credential source's failure (a
+/// locked vault) at once, and a lost connection.
 pub(super) async fn authenticate(
     handle: &mut Handle<ClientHandler>,
     user: &str,
@@ -59,10 +67,11 @@ pub(super) async fn authenticate(
 ) -> Result<AuthUsed, SshError> {
     let mut tried = Vec::new();
     let mut key_failure = None;
+    let mut certificate_failure = None;
     for kind in &options.auth_order {
         let attempt = match kind {
             AuthKind::Agent => by_agent(handle, user, options).await?,
-            AuthKind::Key => by_key(handle, user, credentials).await?,
+            AuthKind::Key => by_key(handle, user, options, credentials).await?,
             AuthKind::Password => by_password(handle, user, options, credentials).await?,
         };
         match attempt {
@@ -71,111 +80,39 @@ pub(super) async fn authenticate(
             Attempt::KeyUnusable(error) => {
                 key_failure.get_or_insert(error);
             }
+            Attempt::Certificate(error) => {
+                tried.push(*kind);
+                certificate_failure.get_or_insert(error);
+            }
             Attempt::Accepted(used) => return Ok(used),
         }
         if handle.is_closed() {
             break;
         }
     }
-    Err(key_failure.map_or(SshError::AuthFailed { tried }, SshError::Key))
-}
-
-/// The keys of every agent: the connection's own key first, then the others in the agents'
-/// order, at most [`SessionOptions::max_agent_keys`] of them; only the chosen one when a
-/// fingerprint is set. An agent that does not answer is passed over.
-async fn by_agent(
-    handle: &mut Handle<ClientHandler>,
-    user: &str,
-    options: &SessionOptions,
-) -> Result<Attempt, SshError> {
-    let mut agents = Vec::new();
-    for source in &options.agents {
-        let mut agent = match agent::connect(source).await {
-            Ok(agent) => agent,
-            Err(error) => {
-                tracing::debug!(%error, "SSH agent not used");
-                continue;
-            }
-        };
-        let identities = match timeout(AGENT_WAIT, agent.request_identities()).await {
-            Ok(Ok(identities)) => identities,
-            Ok(Err(error)) => {
-                tracing::debug!(%error, agent = %source.kind(), "SSH agent did not list its keys");
-                continue;
-            }
-            Err(_) => {
-                tracing::debug!(agent = %source.kind(), "SSH agent did not answer in time");
-                continue;
-            }
-        };
-        // A certificate needs another flow; a plain key further down may still do.
-        let keys: Vec<PublicKey> = identities
-            .into_iter()
-            .filter_map(|identity| match identity {
-                AgentIdentity::PublicKey { key, .. } => Some(key),
-                _ => None,
-            })
-            .collect();
-        agents.push((source.kind(), agent, keys));
-    }
-    let listed: Vec<Vec<String>> = agents
-        .iter()
-        .map(|(_, _, keys)| {
-            keys.iter()
-                .map(|key| key.fingerprint(HashAlg::Sha256).to_string())
-                .collect()
-        })
-        .collect();
-    let order = offer_order(
-        &listed,
-        options.agent_fingerprint.as_deref(),
-        options.own_key.as_deref(),
-        options.max_agent_keys,
-    );
-    for &(index, key_index) in &order {
-        let (Some((kind, agent, keys)), Some(fingerprints)) =
-            (agents.get_mut(index), listed.get(index))
-        else {
-            continue;
-        };
-        let (Some(key), Some(fingerprint)) = (keys.get(key_index), fingerprints.get(key_index))
-        else {
-            continue;
-        };
-        let hash = rsa_hash(handle, key).await?;
-        match handle
-            .authenticate_publickey_with(user, key.clone(), hash, agent)
-            .await
-        {
-            Ok(result) if result.success() => {
-                return Ok(Attempt::Accepted(AuthUsed::Agent {
-                    source: *kind,
-                    fingerprint: fingerprint.clone(),
-                }));
-            }
-            Ok(_) => {}
-            Err(error) => tracing::debug!(%error, "the SSH agent did not sign"),
-        }
-        if handle.is_closed() {
-            return Err(SshError::ConnectionLost);
-        }
-    }
-    Ok(if order.is_empty() {
-        Attempt::Skipped
-    } else {
-        Attempt::Refused
+    Err(match (key_failure, certificate_failure) {
+        (Some(error), _) => SshError::Key(error),
+        (None, Some(error)) => SshError::Certificate(error),
+        (None, None) => SshError::AuthFailed { tried },
     })
 }
 
-/// The connection's private key with its passphrase.
+/// The connection's private key with its passphrase; with its certificate first when one is
+/// stored and certificates are used (RC-060-09). A certificate not sent or refused leaves the key
+/// to try alone; when that is refused too, the certificate's reason is the answer.
 async fn by_key(
     handle: &mut Handle<ClientHandler>,
     user: &str,
+    options: &SessionOptions,
     credentials: &dyn Credentials,
 ) -> Result<Attempt, SshError> {
-    let Some(material) = credentials.private_key().await? else {
+    let Some(mut material) = credentials.private_key().await? else {
         return Ok(Attempt::Skipped);
     };
+    let certificate = material
+        .certificate
+        .take()
+        .filter(|_| options.use_certificates);
     let opened = tokio::task::spawn_blocking(move || {
         private_key::decode(
             material.key.expose_secret(),
@@ -188,20 +125,38 @@ async fn by_key(
     .await
     .log_panic("remote.private_key_decode");
     let key = match opened {
-        Ok(Ok(key)) => key,
+        Ok(Ok(key)) => Arc::new(key),
         Ok(Err(error)) => return Ok(Attempt::KeyUnusable(error)),
         Err(_) => return Ok(Attempt::KeyUnusable(PrivateKeyError::Unknown)),
     };
     let fingerprint = key.public_key().fingerprint(HashAlg::Sha256).to_string();
-    let hash = rsa_hash(handle, key.public_key()).await?;
+    let mut certificate_failure = None;
+    if let Some(text) = certificate {
+        match cert::with_stored(handle, user, &key, &text).await? {
+            Signed::In { key_id } => {
+                return Ok(Attempt::Accepted(AuthUsed::Key {
+                    fingerprint,
+                    certificate: Some(key_id),
+                }));
+            }
+            Signed::Out(failure) => certificate_failure = failure,
+        }
+        if handle.is_closed() {
+            return Err(SshError::ConnectionLost);
+        }
+    }
+    let hash = rsa_hash(handle, &key.algorithm()).await?;
     let result = handle
-        .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), hash))
+        .authenticate_publickey(user, PrivateKeyWithHashAlg::new(key, hash))
         .await
         .map_err(|error| SshError::transport(&error))?;
     Ok(if result.success() {
-        Attempt::Accepted(AuthUsed::Key { fingerprint })
+        Attempt::Accepted(AuthUsed::Key {
+            fingerprint,
+            certificate: None,
+        })
     } else {
-        Attempt::Refused
+        certificate_failure.map_or(Attempt::Refused, Attempt::Certificate)
     })
 }
 
@@ -300,13 +255,13 @@ async fn keyboard_interactive(
     Ok(Attempt::Refused)
 }
 
-/// The signature hash for an RSA key: the best the server names, SHA-256 when it names none;
-/// `None` for every other key type.
+/// The signature hash for an RSA key (or certificate) of `algorithm`: the best the server
+/// names, SHA-256 when it names none; `None` for every other key type.
 async fn rsa_hash(
     handle: &Handle<ClientHandler>,
-    key: &PublicKey,
+    algorithm: &Algorithm,
 ) -> Result<Option<HashAlg>, SshError> {
-    if !matches!(key.algorithm(), Algorithm::Rsa { .. }) {
+    if !matches!(algorithm, Algorithm::Rsa { .. }) {
         return Ok(None);
     }
     match handle.best_supported_rsa_hash().await {

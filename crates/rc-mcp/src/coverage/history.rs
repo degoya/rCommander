@@ -7,4 +7,8 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
     ("history.forward", Coverage::Covered("history_forward")),
     ("history.jump", Coverage::Covered("history_jump")),
     ("history.list", Coverage::Covered("history_list")),
+    (
+        "history.open_frequent",
+        Coverage::Covered("history_open_frequent"),
+    ),
 ];

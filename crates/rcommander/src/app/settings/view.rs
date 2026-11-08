@@ -16,7 +16,7 @@ use rc_engine::{
 };
 
 use super::{
-    Page, SettingsDialog, SettingsMessage,
+    Page, SettingsDialog, SettingsMessage, columns_page,
     draft::{Draft, Field, Limit},
     fonts_page, host_keys_view, mcp_log_view, mcp_page, plugins_view, shortcuts_view,
     tabs::{self, Tab, Tabs},
@@ -25,6 +25,7 @@ use super::{
 use crate::{
     app::{
         Message,
+        associations::AssocMsg,
         browse::{self, PathField},
         connections::{ConnMsg, TcImportMsg},
         database_dialog::{DatabaseMsg, DialogMode},
@@ -67,9 +68,27 @@ impl SettingsDialog {
             Some(draft) if tab == Some(Tab::Shortcuts) => {
                 shortcuts_view::view(&self.shortcuts, draft, tokens)
             }
-            // The themes and their editor, then the colours by file type (RC-100-50).
-            Some(draft) if tab == Some(Tab::Themes) => scrollable(
-                container(themes_page::view(&self.themes, draft, tokens)).padding([0, 12]),
+            // The themes and their editor, then the colours by file type (RC-100-50); a row's
+            // context menu over them (RC-110-09).
+            Some(draft) if tab == Some(Tab::Themes) => themes_page::with_menu(
+                &self.themes,
+                scrollable(
+                    container(themes_page::view(&self.themes, draft, tokens)).padding([0, 12]),
+                )
+                .id(themes_page::SCROLL_ID)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
+                tokens,
+            ),
+            // The column sets and their editor, then the automatic switch's rows (RC-100-90).
+            Some(draft) if tab == Some(Tab::Columns) => scrollable(
+                column![
+                    columns_page::view(&self.columns, tokens),
+                    page_view(self.page, tab, draft, tokens),
+                ]
+                .spacing(16)
+                .padding([0, 12]),
             )
             .width(Length::Fill)
             .height(Length::Fill)
@@ -80,6 +99,18 @@ impl SettingsDialog {
                     .height(Length::Fill)
                     .into()
             }
+            // The thumbnails' rows, then their disk cache and its button (RC-100-89).
+            Some(draft) if tab == Some(Tab::Thumbnails) => scrollable(
+                column![
+                    page_view(self.page, tab, draft, tokens),
+                    super::thumbnails_page::cache(self.thumbnail_cache, tokens),
+                ]
+                .spacing(16)
+                .padding([0, 12]),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
             // The rights and the token, then the agents' calls (RC-080-66).
             Some(draft) if self.page == Page::Mcp => scrollable(
                 column![
@@ -330,6 +361,13 @@ fn setting_row<'a>(
         .into(),
         SettingKind::Font { .. } => fonts_page::control(key, draft, tokens),
         SettingKind::ColourRules { .. } => super::colours_page::rules(draft, tokens),
+        // The rules are the window's to edit, beside the settings (RC-100-91).
+        SettingKind::FileAssociations { .. } => layout::secondary_button(
+            t!("settings.associations.edit"),
+            Some(Message::Associations(AssocMsg::Open)),
+        ),
+        // The ignore list, a field per line (RC-100-92).
+        SettingKind::MaskLines { .. } => super::lines_field::lines(key, text),
         // The keymap's deviations are the Shortcuts tab's table (`tabs::shows`), never drawn here;
         // the themes and RC-100-43's colours are the Themes tab's (`themes_page.rs`).
         SettingKind::Colour { .. }
@@ -339,6 +377,8 @@ fn setting_row<'a>(
         | SettingKind::Associations { .. }
         | SettingKind::Source { .. }
         | SettingKind::Proxy { .. }
+        | SettingKind::Arguments { .. }
+        | SettingKind::Drives { .. }
         | SettingKind::Keymap { .. } => text_input("", text)
             .on_input(move |text| wrap(SettingsMessage::Edit(key, text)))
             .width(240)

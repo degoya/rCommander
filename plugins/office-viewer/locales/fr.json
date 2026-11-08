@@ -1,0 +1,13 @@
+{
+  "name": "Visionneuse Office",
+  "description": "Affiche le texte des documents Word, Excel et PowerPoint (docx, xlsx, pptx), ainsi que leurs propriétés, feuilles et diapositives sous forme d'arbre.",
+  "codes": {
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.setting.sheet_rows": "Lignes affichées par feuille",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_many_entries": "Le document compte plus de 10 000 parties et n'est pas lu.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_large": "Une partie du document se décompresse en plus de 64 Mio et n'est pas lue.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_compressed": "Une partie du document se décompresse en plus de 500 fois sa taille compressée et n'est pas lue.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_deep": "Une partie du document imbrique son contenu trop profondément pour être lue.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.damaged": "Le document est endommagé, chiffré ou compressé d'une manière que la visionneuse ne sait pas lire.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.not_office": "Le fichier est une archive zip, mais pas un document Word, Excel ou PowerPoint."
+  }
+}

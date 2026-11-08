@@ -16,6 +16,10 @@
 //! A shared credential (`credentials.rs`, RC-050-12) sits in a folder beside the connections:
 //! a user and secrets that any number of connections point at.
 //!
+//! An SSH connection may name another as its jump host (`jump.rs`, RC-110-03), checked inside
+//! every write for cycles, the chain's length and the kinds; its local port forwards are
+//! `forwards.rs`'s.
+//!
 //! No plaintext secret passes through here. The queries name their columns, so the encrypted
 //! columns of migration 0006 are never read into these types; a connection carries only whether
 //! each is set ([`crate::SecretFlags`]) and a stored key's public half ([`crate::StoredKey`]). The
@@ -25,7 +29,9 @@ mod credentials;
 mod endpoint;
 mod error;
 mod folders;
+mod forwards;
 mod import;
+mod jump;
 mod model;
 mod order;
 mod origin;
@@ -43,7 +49,9 @@ pub use credentials::{
 };
 pub use endpoint::{EndpointRule, moves_endpoint};
 pub use error::ConnectionError;
+pub use forwards::{Forward, ForwardDraft, LOOPBACK, MAX_FORWARDS};
 pub use import::{ImportCandidate, ImportResult, ImportStatus, ImportTarget};
+pub use jump::MAX_JUMPS;
 pub use model::{
     AuthMethod, Connection, ConnectionDraft, ConnectionFolder, ConnectionId, ConnectionKind,
     ConnectionPatch, ConnectionTree, CredentialId, DefaultView, FolderDeletion, FolderId,
@@ -89,7 +97,8 @@ macro_rules! select_connections {
             $crate::connections::theme_column!("theme_dark"),
             ", sort_order, created_at, updated_at, password_enc IS NOT NULL AS has_password, \
              key_enc IS NOT NULL AS has_key, passphrase_enc IS NOT NULL AS has_passphrase, \
-             key_type, key_fingerprint, key_comment, key_public, credential_id, ",
+             key_type, key_fingerprint, key_comment, key_public, credential_id, jump_id, \
+             key_certificate, key_certificate_info, ",
             "totp_seed_enc IS NOT NULL AS has_totp_seed FROM connections ",
             $tail
         )
@@ -169,6 +178,7 @@ pub(crate) fn connection_from_row(row: &SqliteRow) -> sqlx::Result<Connection> {
         credential_id: row
             .try_get::<Option<i64>, _>("credential_id")?
             .map(CredentialId),
+        jump_id: row.try_get::<Option<i64>, _>("jump_id")?.map(ConnectionId),
     })
 }
 

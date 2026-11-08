@@ -235,3 +235,67 @@ async fn a_preset_is_saved_listed_renamed_and_deleted() {
     .await;
     assert_eq!(deleted["presets"], json!([]), "{deleted}");
 }
+
+/// The new names of a preview, or the answer when it has none.
+fn news(preview: &Value) -> Vec<&str> {
+    preview["plan"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("items: {preview}"))
+        .iter()
+        .filter_map(|item| item["new"].as_str())
+        .collect()
+}
+
+#[tokio::test]
+async fn the_context_and_new_names_reach_the_plan() {
+    let (_root, context) = setup().await;
+    let client = connect(&context).await;
+    let preview = call(
+        &client,
+        "multi_rename_preview",
+        json!({
+            "names": ["a.txt", "b.txt"],
+            "name_mask": "[f][X]_[T2][hm]_[T3][hm]_[S]",
+            "clipboard": "the end of: it",
+            "opened_at": "2026-11-07T08:15:00",
+            "changed_at": "2026-11-07T09:30:00"
+        }),
+    )
+    .await;
+    assert_eq!(
+        news(&preview),
+        [
+            "The End of_ It_0815_0930_5.txt",
+            "The End of_ It_0815_0930_5.txt"
+        ]
+    );
+    let listed = call(
+        &client,
+        "multi_rename_preview",
+        json!({
+            "names": ["a.txt", "b.txt"],
+            "new_names": ["one.txt"],
+            "case": "title"
+        }),
+    )
+    .await;
+    assert_eq!(news(&listed), ["One.Txt", "b.txt"]);
+    assert_eq!(
+        listed["plan"]["items"][1]["conflict"]["kind"], "names_missing",
+        "{listed}"
+    );
+    let empty = call(
+        &client,
+        "multi_rename_preview",
+        json!({"names": ["a.txt"], "name_mask": "[X]"}),
+    )
+    .await;
+    assert_eq!(empty["code"], "rename_clipboard_empty", "{empty}");
+    let bad = call(
+        &client,
+        "multi_rename_preview",
+        json!({"names": ["a.txt"], "opened_at": "yesterday"}),
+    )
+    .await;
+    assert_eq!(bad["code"], "invalid_params", "{bad}");
+}

@@ -87,9 +87,12 @@ impl Credentials for QuickCredentials {
                 code: error.code(),
                 message: error.to_string(),
             })?;
+        // The certificate beside the key file comes with it (RC-060-09); the session leaves it
+        // out while `ssh.certificates` is off.
         Ok(Some(KeyMaterial {
             key,
             passphrase: self.connection.passphrase.clone(),
+            certificate: crate::sessions::beside_certificate(path).await,
         }))
     }
 }
@@ -323,10 +326,12 @@ impl Engine {
             keepalive: Duration::from_secs(u64::from(crate::sessions::DEFAULT_KEEPALIVE_SECS)),
             agents: self.agent_sources().await?,
             max_agent_keys: self.agent_max_keys().await,
+            use_certificates: self.setting_on(crate::settings::SSH_CERTIFICATES_KEY).await,
             ..SessionOptions::default()
         };
         let gate = Arc::new(EngineGate {
             engine: self.clone(),
+            hop: None,
         });
         let credentials = QuickCredentials { connection };
         Ok(SshSession::connect(&target, &options, gate, &credentials, cancel).await?)

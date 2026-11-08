@@ -22,6 +22,10 @@ pub struct SecretSourceInfo {
     pub state: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    /// A PAM system that lends its secret for a session (`[secrets] checkout = true`,
+    /// RC-100-38).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lends: bool,
 }
 
 /// One entry a search found: what the person picks it by, never a value.
@@ -66,9 +70,15 @@ pub enum SecretSourcesOutcome {
         connection_id: ConnectionId,
         mappings: Vec<SecretSourceRef>,
     },
+    /// `secrets.checkout_reason`: whether a reason is held for the connection's next checkout
+    /// now (RC-100-38).
+    Reason {
+        connection_id: ConnectionId,
+        held: bool,
+    },
 }
 
-fn answer(outcome: SecretSourcesOutcome) -> Outcome {
+pub(super) fn answer(outcome: SecretSourcesOutcome) -> Outcome {
     Outcome::SecretSources(Box::new(outcome))
 }
 
@@ -131,11 +141,13 @@ impl Engine {
                 name: Self::wincred_source().name,
                 state: SourceState::Ready.as_str().to_owned(),
                 code: None,
+                lends: false,
             });
         }
         for package in self.installed_sources().await {
             let source = format!("{PLUGIN_SOURCE_PREFIX}{}", package.manifest.id);
             let name = package.manifest.name.clone();
+            let lends = package.manifest.lends_secrets();
             let (state, code) = match self.build_source(package).await {
                 Ok(loaded) => match loaded.status().await {
                     Ok(state) => (state.as_str().to_owned(), None),
@@ -154,6 +166,7 @@ impl Engine {
                 name,
                 state,
                 code,
+                lends,
             });
         }
         sources

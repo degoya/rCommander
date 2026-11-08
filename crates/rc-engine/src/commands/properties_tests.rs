@@ -196,3 +196,37 @@ async fn without_a_kind_unix_makes_a_symbolic_link() {
     ));
     assert!(root.path().join("to-dir").join("a").exists());
 }
+
+/// A photo names its EXIF (RC-100-99); a file of another name is not opened for it, nor a
+/// photo without EXIF.
+#[tokio::test]
+async fn a_photo_names_its_exif_fields() {
+    let (root, engine) = engine().await;
+    let jpeg =
+        crate::viewer::exif_fixtures::jpeg_with(&crate::viewer::exif_fixtures::camera_tiff());
+    fs::write(root.path().join("photo.jpg"), &jpeg).expect("write");
+    fs::write(root.path().join("photo.bin"), &jpeg).expect("write");
+    fs::write(
+        root.path().join("plain.jpg"),
+        [0xFF, 0xD8, 0xFF, 0xDA, 0, 2],
+    )
+    .expect("write");
+    let Outcome::Properties(report) = engine
+        .dispatch(properties(
+            &["photo.jpg", "photo.bin", "plain.jpg", "top.txt"],
+            false,
+        ))
+        .await
+        .expect("properties")
+    else {
+        panic!("properties expected");
+    };
+    let exif = report.items[0].exif.as_ref().expect("EXIF of the photo");
+    assert_eq!(exif.camera.as_deref(), Some("Canon EOS R5"));
+    assert_eq!(exif.taken.as_deref(), Some("2024-05-01 12:34:56"));
+    assert_eq!(exif.gps.as_deref(), Some("48.856667, 2.294444"));
+    assert!(
+        report.items[1..].iter().all(|item| item.exif.is_none()),
+        "not by its name, no EXIF, no photo"
+    );
+}

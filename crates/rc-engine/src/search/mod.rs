@@ -8,11 +8,22 @@
 //! two runs over an unchanged tree report the same hits in the same order - what the paging of
 //! `files.search` relies on when its walk was not kept ([`pages`]). Symbolic links are not followed unless asked, and then with a
 //! cycle guard. A search stops at the next entry or chunk once its [`SearchCancel`] is set.
+//!
+//! With [`SearchQuery::archives`] the walk searches the archives on the machine's own drives like
+//! folders ([`archive`], RC-100-93); the find-files dialog may take its candidates from
+//! Everything instead of walking ([`everything`], Windows only, never for MCP).
+//!
+//! With [`SearchQuery::duplicates`] the files found are grouped into duplicates instead of
+//! reported one by one ([`duplicates`], RC-100-98).
 
+mod archive;
 mod content;
+mod duplicates;
+pub mod everything;
 mod filters;
 mod mask;
 pub(crate) mod pages;
+mod select_duplicates;
 mod walk;
 
 use std::sync::{
@@ -24,7 +35,14 @@ use rc_vfs::{Entry, VfsPath};
 use serde::{Deserialize, Serialize};
 
 pub use content::{ContentQuery, TextEncoding};
+pub use duplicates::{DuplicateFile, DuplicateGroup, DuplicateQuery};
+pub(crate) use duplicates::{DuplicateReport, Finder};
 pub use filters::{Filters, KindFilter};
+pub use select_duplicates::{
+    DatePick, DuplicateRule, DuplicateSelection, Keep, SizePick, default_keep, duplicate_folders,
+    folder_matches,
+};
+pub(crate) use select_duplicates::{Listed, apply as apply_selection};
 pub(crate) use walk::Walk;
 
 use crate::EngineError;
@@ -50,6 +68,12 @@ pub struct SearchQuery {
     pub follow_symlinks: bool,
     /// Leave hidden entries out, and do not enter hidden directories.
     pub skip_hidden: bool,
+    /// Search archives like folders, as Total Commander's "Search archives" does (RC-100-93):
+    /// zip, 7z and tar files on the machine's own drives (WSL included) are entered, never an
+    /// archive inside one; an archive counts as one level below its folder.
+    pub archives: bool,
+    /// Group the files found into duplicates (RC-100-98): only files, never inside an archive.
+    pub duplicates: Option<DuplicateQuery>,
 }
 
 impl SearchQuery {
@@ -57,9 +81,12 @@ impl SearchQuery {
     ///
     /// # Errors
     ///
-    /// [`EngineError::InvalidSearch`] for a regular expression that does not compile or an
-    /// empty content text.
+    /// [`EngineError::InvalidSearch`] for a regular expression that does not compile, an
+    /// empty content text or a duplicate search without size and contents.
     pub(crate) fn compile(&self) -> Result<Compiled, EngineError> {
+        if let Some(duplicates) = self.duplicates {
+            duplicates.check()?;
+        }
         Ok(Compiled {
             names: mask::NameMatcher::new(&self.name, self.name_regex, self.case_sensitive)?,
             content: self
@@ -71,6 +98,7 @@ impl SearchQuery {
             max_depth: self.max_depth,
             follow_symlinks: self.follow_symlinks,
             skip_hidden: self.skip_hidden,
+            archives: self.archives && self.duplicates.is_none(),
         })
     }
 }
@@ -84,6 +112,7 @@ pub(crate) struct Compiled {
     max_depth: Option<u32>,
     follow_symlinks: bool,
     skip_hidden: bool,
+    archives: bool,
 }
 
 /// Stops a running search; clones share the flag.
@@ -120,6 +149,10 @@ pub struct SearchStats {
     pub hits: u64,
     /// Directories and files that could not be read.
     pub skipped: u64,
+    /// A duplicate search found more files than it compares (`MAX_FLAT_ENTRIES`) and compared
+    /// the first ones only (RC-100-98).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
 }
 
 /// What a running search reports, in order; [`SearchEvent::Finished`] comes last.
@@ -135,6 +168,9 @@ pub enum SearchEvent {
     /// A directory or file that could not be read, with the code of its error; the search
     /// goes on.
     Skipped { path: VfsPath, code: &'static str },
+    /// A group of duplicate files, after the walk of a duplicate search (RC-100-98); such a
+    /// search reports no [`SearchEvent::Hit`].
+    Duplicates(DuplicateGroup),
     /// The search ended: through everything, or cancelled.
     Finished { stats: SearchStats, cancelled: bool },
 }

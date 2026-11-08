@@ -8,7 +8,7 @@ use std::sync::Arc;
 use iced::Task;
 
 use super::{
-    ViewerMessage,
+    ViewerMessage, copy,
     document::DocumentMessage,
     lister::{Lister, Request},
     load, wrap,
@@ -77,6 +77,11 @@ impl App {
                         load::open(self.engine.clone(), lister.path.clone(), self.db.clone());
                     Task::perform(opening, move |opened| {
                         wrap(ViewerMessage::Reloaded(id, opened))
+                    })
+                }
+                Request::CopyAll => {
+                    Task::perform(copy::whole_text(file, lister.detected), move |copied| {
+                        wrap(ViewerMessage::Copied(id, copied))
                     })
                 }
                 preview => self.preview_task(lister, file, preview),

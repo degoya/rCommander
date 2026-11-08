@@ -10,7 +10,9 @@ Fluent UI System Icons
 
 The icons on the buttons are a subset of Fluent UI System Icons
 (https://github.com/microsoft/fluentui-system-icons), compiled into rcommander.exe as the font
-crates/rcommander/resources/icons/rcommander-icons.ttf.
+crates/rcommander/resources/icons/rcommander-icons.ttf. The symbol collection for own commands
+and button bar buttons is a second subset of the same icons, compiled in as the font
+crates/rcommander/resources/icons/rcommander-symbols.ttf.
 
 MIT License
 

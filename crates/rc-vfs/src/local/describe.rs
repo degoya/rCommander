@@ -126,6 +126,7 @@ fn describe(
         size: if shown.is_file() { shown.len() } else { 0 },
         modified: shown.modified().ok(),
         created: shown.created().ok(),
+        accessed: shown.accessed().ok(),
         attributes: platform::attributes(&shown),
         hidden,
         kind,

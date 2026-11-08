@@ -14,6 +14,8 @@ fn tab(panel: &str, position: i64, location: &str, history: &[(i64, &str)]) -> S
         location: location.to_owned(),
         sort: r#"{"key":"name","descending":false}"#.to_owned(),
         mode: r#""full""#.to_owned(),
+        title: None,
+        file_filter: "null".to_owned(),
         history: history
             .iter()
             .map(|(step, location)| StoredVisit {
@@ -105,4 +107,16 @@ async fn the_sweep_takes_the_oldest_folders_of_every_tab_first() {
         assert_eq!(loaded.history.first().map(|visit| visit.step), Some(-50));
         assert_eq!(loaded.history.last().map(|visit| visit.step), Some(-1));
     }
+}
+
+#[tokio::test]
+async fn a_tab_name_and_file_filter_come_back() {
+    let db = db().await;
+    let mut named = tab("left", 0, "l0", &[]);
+    named.title = Some("Sources".to_owned());
+    named.file_filter = r#"{"kind":"programs"}"#.to_owned();
+    db.save_tabs(std::slice::from_ref(&named))
+        .await
+        .expect("save");
+    assert_eq!(db.load_tabs().await.expect("load"), vec![named]);
 }

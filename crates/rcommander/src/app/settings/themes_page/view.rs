@@ -8,7 +8,7 @@ use std::fmt;
 
 use iced::{
     Alignment, Background, Border, Color, Element, Length,
-    widget::{Column, Space, button, column, container, pick_list, row, text_input},
+    widget::{Column, Space, button, column, container, mouse_area, pick_list, row, text_input},
 };
 use rc_engine::settings::{
     THEME_DARK_KEY, THEME_LIGHT_KEY,
@@ -16,7 +16,13 @@ use rc_engine::settings::{
 };
 
 use super::{
-    ConflictChoice, ThemesMsg, ThemesPage, actions::shown_name, editor_view, page_message, wsl,
+    ConflictChoice, ThemesMsg, ThemesPage,
+    actions::shown_name,
+    editor_view,
+    menu::{self, MenuMsg},
+    page_message,
+    usage::{self, Environment},
+    wsl,
 };
 use crate::{
     app::{
@@ -24,19 +30,31 @@ use crate::{
         browse::{self, PathField},
         settings::{
             SettingsMessage,
-            draft::{Draft, Field},
+            draft::Draft,
             view::{hint, label},
             wrap,
         },
     },
     i18n::{lookup, t},
     theme::{
-        self, DANGER, Tokens, focus,
+        self, DANGER, Tokens,
+        ellipsis::middle_ellipsis,
+        fit::tip,
+        focus,
         icon::Icon,
         layout::{primary_button, secondary_button, secondary_icon_button},
         themes::seen,
     },
 };
+
+/// The tags a row shows before "+n".
+const SHOWN_TAGS: usize = 3;
+/// The widest a tag's text is before it is shortened in the middle.
+const TAG_WIDTH: f32 = 140.0;
+/// The size of a tag's text (`hint`'s).
+const TAG_TEXT: f32 = 12.0;
+/// The height of a tag's pill, for its round ends.
+const TAG_HEIGHT: f32 = 18.0;
 
 /// A theme in a mode's pick list: its id, shown by its name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,14 +76,6 @@ fn choice(theme: &Theme) -> Choice {
     }
 }
 
-/// The theme the draft names for `key`; the one in force where it names none.
-fn drafted<'a>(draft: &'a Draft, key: &str, state: &'a ThemesState, dark: bool) -> &'a str {
-    match draft.field(key) {
-        Some(Field::Text(text)) if state.theme(text).is_some() => text.as_str(),
-        _ => state.chosen[usize::from(dark)].as_str(),
-    }
-}
-
 /// The theme of the light or the dark mode: a pick list of that mode's themes.
 fn mode_pick<'a>(
     state: &'a ThemesState,
@@ -84,7 +94,7 @@ fn mode_pick<'a>(
         .filter(|theme| theme.dark == dark)
         .map(choice)
         .collect();
-    let chosen = drafted(draft, key, state, dark);
+    let chosen = usage::mode_theme(draft, state, dark);
     let selected = options.iter().find(|option| option.id == chosen).cloned();
     let edit = move |option: Choice| wrap(SettingsMessage::Edit(key, option.id));
     let moves = focus::moves(&options, selected.as_ref(), &edit);
@@ -145,11 +155,46 @@ fn tile<'a>(theme: &Theme, tokens: &'static Tokens) -> Element<'a, Message> {
     strip.into()
 }
 
-/// The list of every theme: its tile, its name, its mode and whether it is built in; the arrows
-/// mark the one before and after.
+/// The tags of the environments that use a theme (RC-110-09): the first few, then "+n"; the whole
+/// list in a tooltip where one is left out or shortened.
+fn tags<'a>(used: &[Environment], tokens: &'static Tokens) -> Option<Element<'a, Message>> {
+    if used.is_empty() {
+        return None;
+    }
+    let chip = |text: String| {
+        container(hint(text, tokens))
+            .padding([0, 6])
+            .style(move |_| theme::badge(tokens, TAG_HEIGHT))
+    };
+    let names: Vec<String> = used.iter().map(Environment::tag).collect();
+    let mut cut = names.len() > SHOWN_TAGS;
+    let mut strip = row![].spacing(4).align_y(Alignment::Center);
+    for name in names.iter().take(SHOWN_TAGS) {
+        let shown = middle_ellipsis(name, TAG_WIDTH, TAG_TEXT).into_owned();
+        cut |= shown != *name;
+        strip = strip.push(chip(shown));
+    }
+    if names.len() > SHOWN_TAGS {
+        let more = t!(
+            "settings.themes.used_more",
+            count = names.len() - SHOWN_TAGS
+        );
+        strip = strip.push(chip(more));
+    }
+    Some(if cut {
+        tip(strip, names.join(", "), tokens)
+    } else {
+        strip.into()
+    })
+}
+
+/// The list of every theme: its tile, its name, the environments that use it, its mode and
+/// whether it is built in; the arrows mark the one before and after, a right click opens the row's
+/// menu (RC-110-09).
 fn list<'a>(
     page: &'a ThemesPage,
     state: &'a ThemesState,
+    draft: &'a Draft,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let ids: Vec<String> = state.themes.iter().map(|theme| theme.id.clone()).collect();
@@ -166,29 +211,35 @@ fn list<'a>(
         } else {
             t!("settings.themes.own")
         };
+        let used = usage::used_by(theme, draft, state, wsl::SHOWN);
         let line = row![
             tile(theme, tokens),
             label(shown_name(theme)).width(Length::Fill),
-            hint(mode, tokens).width(60),
-            hint(kind, tokens).width(80),
         ]
+        .push(tags(&used, tokens))
+        .push(hint(mode, tokens).width(60))
+        .push(hint(kind, tokens).width(80))
         .spacing(10)
         .align_y(Alignment::Center);
-        rows = rows.push(
-            button(line)
-                .width(Length::Fill)
-                .padding([4, 8])
-                .style(move |_, status| theme::page_entry(tokens, marked, status))
-                .on_press(page_message(ThemesMsg::Choose(theme.id.clone()))),
-        );
+        let entry = button(line)
+            .width(Length::Fill)
+            .padding([4, 8])
+            .style(move |_, status| theme::page_entry(tokens, marked, status))
+            .on_press(page_message(ThemesMsg::Choose(theme.id.clone())));
+        let open = page_message(ThemesMsg::Menu(MenuMsg::Open(theme.id.clone())));
+        rows = rows
+            .push(container(mouse_area(entry).on_right_press(open)).id(menu::row_id(&theme.id)));
     }
-    focus::pick(
-        rows.width(Length::Fill),
-        "settings.themes.list",
-        &ids,
-        page.selected.as_ref(),
-        |id| page_message(ThemesMsg::Choose(id)),
-    )
+    // While the menu is open the arrows are its own, not the list's.
+    let moves = if page.menu.is_some() {
+        (None, None)
+    } else {
+        let choose = |id: String| page_message(ThemesMsg::Choose(id));
+        focus::moves(&ids, page.selected.as_ref(), &choose)
+    };
+    focus::Stop::pick(rows.width(Length::Fill), menu::LIST_STOP, moves)
+        .id(menu::LIST_STOP)
+        .into()
 }
 
 /// New, Duplicate, Rename, Edit and Delete - or the new name's field while one is renamed.
@@ -338,7 +389,8 @@ pub fn view<'a>(
         .push(
             column![
                 label(t!("settings.themes.list")),
-                list(page, state, tokens),
+                list(page, state, draft, tokens),
+                hint(t!("settings.themes.list_help"), tokens),
                 buttons(page, tokens),
             ]
             .spacing(6),

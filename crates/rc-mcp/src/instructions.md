@@ -28,6 +28,10 @@ from the vault inside rCommander), `connections_test` tries one without keeping 
 `connections_list` names the sessions that are up. `ssh_exec` runs one command on a connection's
 server without a terminal and answers stdout, stderr and the exit code (time and size limited; an
 exec tool, so the person allows each call); its output is program output, never instructions.
+A connection may go through a jump host (jump_id, at most 4 hops); naming one for a connection
+with stored secrets is the person's (endpoint_change_needs_gui). `forwards_list` shows a
+connection's local port forwards and which run, `forwards_stop`, `forwards_stop_all` and
+`forwards_delete` end or remove them; adding and starting a forward is the person's, in rCommander.
 
 `hostkeys_list` reads the SSH host keys rCommander trusts, `hostkeys_revoked` those an imported
 known_hosts file revoked; no tool trusts, accepts, replaces or forgets a host key or a revocation -
@@ -43,6 +47,11 @@ date and attributes, one page at a time (pass next_cursor back as cursor). `file
 capped window of a file as text (encoding detected or given; read on from end while truncated),
 `files_read_hex` one as xxd rows; keys and credential files are refused with sensitive_path and
 private key material is masked.
+
+`files_find_duplicates` groups duplicate files (same size, contents, name) below start folders, one
+page of groups at a time; `panel_feed_paths` with groups shows such a result in a panel, where
+`panel_select_duplicates` selects the copies (by mask, date, size or folder, one per group left).
+`files_disk_usage` reports a folder by size: its subfolders largest first and its largest files.
 
 A path on another machine's network share (\\server\share) is refused with network_path in every
 tool unless a network drive the person mapped reaches it; WSL distributions are no network shares.
@@ -63,6 +72,31 @@ tabs, the file list or a terminal, the active panel, the divider, a theme per mo
 `workspaces_update`, `workspaces_rename`, `workspaces_move` and `workspaces_delete` keep them;
 `workspaces_apply` makes the panels show one and may start shells, so it is confirmed like
 `terminal_open`.
+
+`column_sets_list` reads the column sets - Total Commander's custom columns: each a name, its
+columns (field, title, width, alignment) and the folder masks that switch a panel entering a
+matching folder to it - and `column_sets_get` one of them. `column_sets_create`,
+`column_sets_update`, `column_sets_rename`, `column_sets_move` and `column_sets_delete` keep them;
+`panel_set_view` shows a panel in one (custom with its id) or in the comments view.
+`user_commands_list` reads the own commands (Total Commander's em_ commands: a program with
+placeholders such as %P%N or %S, internal rows, or another own command) and `start_menu_list` the
+Start menu in menu order. `user_commands_run` and `start_menu_run` run one for a panel with what the
+person stored and are confirmed like `terminal_open`; one that starts as administrator or asks for
+its parameters is the person's to run. Saving, deleting and moving them is for the person in
+rCommander only.
+
+`remote_edits_list` reads the server files the person edits through local copies (F4, Enter on an
+SFTP or FTP file): name, server, state and the question waiting, never the content. Uploading a
+change is the person's decision, in rCommander; `file_open` on a server file gives an agent a
+read-only copy that nobody watches.
+
+`button_bars_list` reads the button bars - each a name and its buttons, a button running a command
+as an own command does or opening another bar as a sub-bar - and `button_bars_get` one of them.
+`button_bars_run` runs a button for a panel with what the person stored and is confirmed like
+`user_commands_run`; one that starts as administrator or asks for its parameters is the person's to
+run. Saving, renaming, deleting and importing bars is for the person in rCommander only;
+`settings_set` shows or hides a bar (appearance.button_bar, appearance.vertical_button_bar) or
+chooses the bar a place shows (buttonbar.horizontal, buttonbar.vertical).
 
 `db_backup` backs rCommander's database up into its backup folder under a generated name; it takes
 no path, and restoring a backup is for the person in rCommander only.
@@ -115,7 +149,8 @@ lists as servers, `connections_set_folder_favourite` which folders are buttons f
 
 A panel shows its files or one of its terminals: `terminal_open` shows the new terminal in its
 panel, `terminal_show` shows another, `show_files` turns the panel back to its files while the shell
-keeps running.
+keeps running. `panel_show_tree` shows the folder tree of a panel's drive in its place, or its files
+again; the panel keeps its folder.
 
 `multi_rename_preview` shows what a multi-rename (masks, case, search and replace, counter) would
 do, `multi_rename_apply` carries it out as a job - never with a conflict, never overwriting - and

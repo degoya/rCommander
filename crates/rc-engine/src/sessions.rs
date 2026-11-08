@@ -35,7 +35,7 @@ use tokio_util::sync::CancellationToken;
 use crate::recover::LockOrRecover as _;
 use crate::{ConnectionId, EngineError};
 
-pub(crate) use sources::{EngineCredentials, EngineGate};
+pub(crate) use sources::{EngineCredentials, EngineGate, beside_certificate};
 pub(crate) use totp::check_seed;
 
 /// The keepalive interval of a connection without its own, in seconds.
@@ -192,6 +192,9 @@ pub struct SessionStatus {
     pub host_key_fingerprint: Option<String>,
     /// The channels open on it.
     pub channels: usize,
+    /// The jump hosts it runs through, by connection name, the first one first (RC-110-03).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub via: Vec<String>,
 }
 
 /// What `connections.test` found.
@@ -202,6 +205,9 @@ pub struct SessionTestReport {
     pub host_key: OfferedKey,
     /// Connect, handshake and login, in milliseconds.
     pub duration_ms: u64,
+    /// The jump hosts it went through, by connection name, the first one first (RC-110-03).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hops: Vec<String>,
 }
 
 /// What happened to a connection's session.
@@ -284,10 +290,12 @@ pub(crate) struct Live {
     pub idle_close: Option<Duration>,
     /// Set when the session is closed on purpose, so its end is not reported as lost.
     pub closing: AtomicBool,
+    /// The jump hosts it runs through, by connection name (RC-110-03).
+    hops: Vec<String>,
 }
 
 impl Live {
-    pub(crate) fn new(session: SshSession, idle_close_secs: u32) -> Self {
+    pub(crate) fn new(session: SshSession, idle_close_secs: u32, hops: Vec<String>) -> Self {
         Self {
             session,
             channels: AtomicUsize::new(0),
@@ -296,6 +304,7 @@ impl Live {
             idle_close: (idle_close_secs > 0)
                 .then(|| Duration::from_secs(u64::from(idle_close_secs))),
             closing: AtomicBool::new(false),
+            hops,
         }
     }
 
@@ -311,6 +320,7 @@ impl Live {
             login: Some(self.session.auth().clone()),
             host_key_fingerprint: Some(self.session.host_key().fingerprint.clone()),
             channels: self.channels.load(Ordering::SeqCst),
+            via: self.hops.clone(),
         }
     }
 }
@@ -321,6 +331,8 @@ impl Live {
 #[derive(Default)]
 pub(crate) struct SessionPool {
     slots: Mutex<HashMap<ConnectionId, Arc<Slot>>>,
+    /// The running port forwards, which ride on the sessions (RC-110-03).
+    pub(crate) forwards: crate::forwards::ForwardDesk,
 }
 
 /// One connection's place in the pool.
@@ -394,6 +406,7 @@ impl Slot {
                 login: None,
                 host_key_fingerprint: None,
                 channels: 0,
+                via: Vec::new(),
             }),
             _ => None,
         }

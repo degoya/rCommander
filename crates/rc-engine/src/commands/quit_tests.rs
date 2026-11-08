@@ -18,6 +18,7 @@ async fn waiting_job(engine: &Engine) {
             sources: vec!["a.txt".into()],
             target: Some("docs".into()),
             options: JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");
@@ -76,4 +77,33 @@ async fn quit_is_the_windows_only() {
         .await
         .expect_err("gui only");
     assert_eq!(refused.code(), "gui_only");
+}
+
+/// RC-110-01: quitting names the server files whose change is not on the server, with their
+/// server; the unchanged ones are not named.
+#[tokio::test]
+async fn quit_names_the_changed_server_files() {
+    use crate::remote_edit::{OpenRemote, test_support::Rig};
+
+    let rig = Rig::new(&[("/etc/a.conf", "a"), ("/etc/b.conf", "b")]).await;
+    for path in ["/etc/a.conf", "/etc/b.conf"] {
+        let how = OpenRemote {
+            program: Some("vi".into()),
+            ..OpenRemote::default()
+        };
+        rig.engine
+            .edit_remote(Rig::at(path), how)
+            .await
+            .expect("opened");
+    }
+    assert!(rig.engine.unsaved_remote_edits().is_empty(), "no question");
+    rig.save(rig.edit("b.conf").id, "b2").await;
+    let named: Vec<(String, String)> = rig
+        .engine
+        .unsaved_remote_edits()
+        .into_iter()
+        .map(|edit| (edit.name, edit.server))
+        .collect();
+    assert_eq!(named, [("b.conf".to_owned(), "#7".to_owned())]);
+    assert_eq!(rig.engine.finish_remote_edits(), 1);
 }

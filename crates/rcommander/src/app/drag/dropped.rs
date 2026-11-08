@@ -128,6 +128,7 @@ pub fn transfer(
             sources,
             target: None,
             options,
+            rename_mask: None,
         };
         return Ok(if moving {
             Command::OpsMove(request)

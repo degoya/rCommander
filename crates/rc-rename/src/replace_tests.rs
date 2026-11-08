@@ -161,3 +161,44 @@ fn substitution_replaces_the_whole_name_when_the_search_matches() {
         assert_eq!(applied(&search, text), expected, "{search:?} on {text}");
     }
 }
+
+#[test]
+fn wildcards_in_plain_search() {
+    let cases = [
+        // `?` is one character, `*` as few as possible.
+        (search("IMG_????", "Photo"), "IMG_0042_x", "Photo_x"),
+        (search("a*c", "-"), "abcabc", "--"),
+        (search("a?c", "-"), "abc ac axyc", "- ac axyc"),
+        // The n-th wildcard of the replacement inserts what the n-th of the search matched.
+        (
+            search("IMG_*_*", "* from *"),
+            "IMG_0042_party",
+            "0042 from party",
+        ),
+        (search("? - *", "*, ?"), "A - Song", "A, Song"),
+        (search("x*y", "[*]"), "x12y x3y", "[12] [3]"),
+        // More wildcards in the replacement than in the search: nothing for the extra ones.
+        (search("a?", "?*b"), "az", "zb"),
+        // Several terms: wildcards in the search only.
+        (search("img_*_|dsc", "p_"), "img_1_2 DSC", "p_2 p_"),
+        // Case is ignored as for any plain search.
+        (search("img*1", "x"), "IMG001", "x"),
+    ];
+    for (search, text, expected) in cases {
+        assert_eq!(
+            applied(&search, text),
+            expected,
+            "{} -> {} in {text}",
+            search.find,
+            search.replace
+        );
+    }
+    // Without wildcards in the search, the replacement's are taken as they are.
+    assert_eq!(applied(&search("a", "*"), "abc"), "*bc");
+    // With several terms a wildcard replacement is refused.
+    for (find, replace) in [("a*|b", "*"), ("a*", "x|*"), ("a|b*", "?")] {
+        let error = search(find, replace).compile().expect_err("refused");
+        assert_eq!(error, RenameError::ReplaceWildcards, "{find} -> {replace}");
+        assert_eq!(error.code(), "rename_replace_wildcards");
+    }
+}

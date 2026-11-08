@@ -1,5 +1,6 @@
-use super::{CounterSpec, CounterWidth, DatePart, Range, Token, parse};
+use super::{CounterSpec, CounterWidth, DatePart, LetterCounter, Range, Token, parse};
 use crate::case::CaseMode;
+use crate::clock::{OffsetUnit, TimeOffset, TimeSource, TimeSwitch};
 use crate::error::{PatternError, PatternErrorKind};
 
 fn tokens(mask: &str) -> Vec<Token> {
@@ -11,7 +12,14 @@ fn tokens(mask: &str) -> Vec<Token> {
 
 #[test]
 fn every_placeholder_parses_to_its_tokens() {
-    let counter = |start, step, width| vec![Token::Counter(CounterSpec { start, step, width })];
+    let counter = |start, step, width| {
+        vec![Token::Counter(CounterSpec {
+            start,
+            step,
+            width,
+            divisor: None,
+        })]
+    };
     let digits = |width| Some(CounterWidth::Digits(width));
     let dates = |parts: &[DatePart]| parts.iter().map(|part| Token::Date(*part)).collect();
     let cases: Vec<(&str, Vec<Token>)> = vec![
@@ -64,7 +72,7 @@ fn every_placeholder_parses_to_its_tokens() {
             "[hms]",
             dates(&[DatePart::Hour, DatePart::Minute, DatePart::Second]),
         ),
-        ("[T1]", vec![]),
+        ("[T1]", vec![Token::Time(TimeSwitch::default())]),
         ("[U]", vec![Token::Case(CaseMode::Upper)]),
         ("[L]", vec![Token::Case(CaseMode::Lower)]),
         ("[F]", vec![Token::Case(CaseMode::WordsUpper)]),
@@ -87,6 +95,7 @@ fn literal_text_and_placeholders_alternate() {
                 start: None,
                 step: None,
                 width: Some(CounterWidth::Digits(3)),
+                divisor: None,
             }),
             Token::Literal(" (".to_owned()),
             Token::Name(Range::All),
@@ -109,15 +118,16 @@ fn a_bad_placeholder_is_an_error_at_its_position() {
         ("[N[E]", 0, PatternErrorKind::Unclosed),
         ("ab]", 2, PatternErrorKind::StrayBracket),
         ("x[]", 1, PatternErrorKind::Empty),
-        ("[X]", 0, unknown("X")),
+        ("[Q]", 0, unknown("Q")),
         ("[m]_[Yq]", 4, unknown("Yq")),
-        // Total Commander placeholders rCommander does not offer (yet).
-        ("[d]", 0, unknown("d")),
-        ("[t]", 0, unknown("t")),
-        ("[S]", 0, unknown("S")),
+        // Total Commander placeholders rCommander does not offer; `[R]` is not Total
+        // Commander's at all.
         ("[R]", 0, unknown("R")),
-        ("[T2]", 0, unknown("T2")),
+        ("[T4]", 0, unknown("T4")),
+        ("[T4+1D]", 0, unknown("T4+1D")),
         ("[=plugin.field]", 0, unknown("=plugin.field")),
+        ("[X-]", 0, unknown("X-")),
+        ("[I2]", 0, unknown("I2")),
         ("[2-5]", 0, unknown("2-5")),
         // Double Commander's forms are not Total Commander's.
         ("[V:hint]", 0, unknown("V:hint")),
@@ -133,12 +143,128 @@ fn a_bad_placeholder_is_an_error_at_its_position() {
         ("[C+]", 0, arguments("C+")),
         ("[C:x]", 0, arguments("C:x")),
         ("[C:33]", 0, arguments("C:33")),
-        ("[Caa+1]", 0, arguments("Caa+1")),
-        ("[C+1/100]", 0, arguments("C+1/100")),
+        ("[CaA]", 0, arguments("CaA")),
+        ("[Caa+]", 0, arguments("Caa+")),
+        ("[Caa:3]", 0, arguments("Caa:3")),
+        ("[Caaaaaaaaaaaaa]", 0, arguments("Caaaaaaaaaaaaa")),
+        ("[C+1/0]", 0, arguments("C+1/0")),
+        ("[C+1/]", 0, arguments("C+1/")),
+        ("[C/100]", 0, arguments("C/100")),
+        ("[B]", 0, arguments("B")),
+        ("[B10]", 0, arguments("B10")),
+        ("[B+]", 0, arguments("B+")),
+        ("[B0_]", 0, arguments("B0_")),
+        ("[B0-2]", 0, arguments("B0-2")),
+        ("[T]", 0, arguments("T")),
+        ("[T5]", 0, arguments("T5")),
+        ("[T1+60]", 0, arguments("T1+60")),
+        ("[T1+60x]", 0, arguments("T1+60x")),
+        ("[T1*60m]", 0, arguments("T1*60m")),
+        ("[T1+9999999m]", 0, arguments("T1+9999999m")),
         // Positions count characters, not bytes.
         ("\u{e4}\u{f6}[Q]", 2, unknown("Q")),
     ];
     for (mask, position, kind) in cases {
         assert_eq!(parse(mask), Err(PatternError { position, kind }), "{mask}");
     }
+}
+
+#[test]
+fn the_placeholders_of_rc_100_96_parse() {
+    let switch = |source, offset| vec![Token::Time(TimeSwitch { source, offset })];
+    let offset = |amount, unit| Some(TimeOffset { amount, unit });
+    let letters = |start, width, upper, step| {
+        vec![Token::Letters(LetterCounter {
+            start,
+            width,
+            upper,
+            step,
+        })]
+    };
+    let cases: Vec<(&str, Vec<Token>)> = vec![
+        ("[S]", vec![Token::Size]),
+        ("[f]", vec![Token::Case(CaseMode::Title)]),
+        ("[I]", vec![Token::IgnoreFolderDots(true)]),
+        ("[I1]", vec![Token::IgnoreFolderDots(true)]),
+        ("[I0]", vec![Token::IgnoreFolderDots(false)]),
+        ("[X]", vec![Token::Clipboard { optional: false }]),
+        ("[X+]", vec![Token::Clipboard { optional: true }]),
+        ("[d]", vec![Token::LocalDate]),
+        ("[t]", vec![Token::LocalTime]),
+        ("[Caa+1]", letters(0, 2, false, Some(1))),
+        ("[CAAA]", letters(0, 3, true, None)),
+        ("[Cba]", letters(26, 2, false, None)),
+        ("[Cz+-2]", letters(25, 1, false, Some(-2))),
+        (
+            "[C+1/100]",
+            vec![Token::Counter(CounterSpec {
+                start: None,
+                step: Some(1),
+                width: None,
+                divisor: Some(100),
+            })],
+        ),
+        (
+            "[C5+2/10:3]",
+            vec![Token::Counter(CounterSpec {
+                start: Some(5),
+                step: Some(2),
+                width: Some(CounterWidth::Digits(3)),
+                divisor: Some(10),
+            })],
+        ),
+        ("[T2]", switch(TimeSource::Opened, None)),
+        ("[T3]", switch(TimeSource::Changed, None)),
+        (
+            "[T1+60m]",
+            switch(TimeSource::Modified, offset(60, OffsetUnit::Minutes)),
+        ),
+        (
+            "[T2-1D]",
+            switch(TimeSource::Opened, offset(-1, OffsetUnit::Days)),
+        ),
+        (
+            "[T3+2Y]",
+            switch(TimeSource::Changed, offset(2, OffsetUnit::Years)),
+        ),
+        (
+            "[T1+5M]",
+            switch(TimeSource::Modified, offset(5, OffsetUnit::Months)),
+        ),
+        (
+            "[T1+5s]",
+            switch(TimeSource::Modified, offset(5, OffsetUnit::Seconds)),
+        ),
+        (
+            "[T1+5h]",
+            switch(TimeSource::Modified, offset(5, OffsetUnit::Hours)),
+        ),
+        ("[B0]", vec![Token::Ancestor(0, Range::All)]),
+        ("[B9]", vec![Token::Ancestor(9, Range::All)]),
+        (
+            "[B0_2-5]",
+            vec![Token::Ancestor(0, Range::Span(2, Some(5)))],
+        ),
+        ("[B+0]", vec![Token::FromRoot(0, Range::All)]),
+        (
+            "[B+1_2-5]",
+            vec![Token::FromRoot(1, Range::Span(2, Some(5)))],
+        ),
+    ];
+    for (mask, expected) in cases {
+        assert_eq!(tokens(mask), expected, "{mask}");
+    }
+}
+
+#[test]
+fn r_is_an_unknown_placeholder() {
+    assert_eq!(
+        parse("[N]_[R]"),
+        Err(PatternError {
+            position: 4,
+            kind: PatternErrorKind::Unknown {
+                text: "R".to_owned(),
+            },
+        })
+    );
 }

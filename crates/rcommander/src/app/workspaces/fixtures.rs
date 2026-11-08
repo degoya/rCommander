@@ -11,6 +11,7 @@ pub fn tab(path: &str) -> TabSpec {
         sort: None,
         mode: None,
         locked: false,
+        title: None,
     }
 }
 

@@ -57,6 +57,9 @@ pub struct InventoryOptions {
     pub secrets: Vec<(String, SecretString)>,
     /// Loopback ports no plugin reaches whatever was entered: rCommander's MCP port.
     pub refused_ports: Vec<u16>,
+    /// The TLS of an HTTPS address (RC-100-40): the system roots, then the certificate the
+    /// person trusted for its host and port (RC-070-02). `None`: the system roots alone.
+    pub tls: Option<rustls::ClientConfig>,
 }
 
 /// An inventory compiled and linked, ready to be asked.
@@ -140,6 +143,7 @@ impl InventoryPlugin {
                 Some(HttpGrant::entered(
                     address,
                     secrets,
+                    options.tls,
                     manifest.limits.max_response_bytes,
                     sandbox.timeout(),
                 )?)

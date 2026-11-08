@@ -247,6 +247,7 @@ async fn fed_paths_show_flat_once_each_and_missing_ones_are_counted() {
                 "gone.txt".into(),
                 far.display().to_string(),
             ],
+            groups: Vec::new(),
         })
         .await
         .expect("feed");
@@ -275,6 +276,7 @@ async fn feeding_too_many_paths_or_into_no_folder_is_refused() {
             panel: None,
             root: None,
             paths: vec!["a.txt".to_owned(); MAX_FLAT_ENTRIES + 1],
+            groups: Vec::new(),
         })
         .await
         .expect_err("refused");
@@ -284,6 +286,7 @@ async fn feeding_too_many_paths_or_into_no_folder_is_refused() {
             panel: None,
             root: Some("a.txt".into()),
             paths: Vec::new(),
+            groups: Vec::new(),
         })
         .await
         .expect_err("refused");
@@ -310,6 +313,7 @@ async fn a_view_stops_at_its_limit_and_says_so() {
         size: 1,
         modified: None,
         created: None,
+        accessed: None,
         attributes: rc_vfs::Attributes::default(),
         hidden: false,
         owner: None,

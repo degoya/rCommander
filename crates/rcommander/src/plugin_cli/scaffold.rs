@@ -24,6 +24,8 @@ pub enum PluginKind {
     Secrets,
     /// A server inventory whose hosts become connections (contract 0.4.0).
     Inventory,
+    /// Two files compared by structure beside the line diff (contract 0.6.0).
+    Compare,
 }
 
 impl PluginKind {
@@ -33,6 +35,7 @@ impl PluginKind {
             Self::Viewer => VIEWER,
             Self::Secrets => SECRETS,
             Self::Inventory => INVENTORY,
+            Self::Compare => COMPARE,
         }
     }
 }
@@ -170,6 +173,50 @@ pub(super) const INVENTORY: &[(&str, &str)] = &[
     (
         "wit/rcommander.wit",
         include_str!("../../../../sdk/templates/inventory/wit/rcommander.wit"),
+    ),
+];
+
+/// `sdk/templates/compare`, file by file (RC-100-41).
+pub(super) const COMPARE: &[(&str, &str)] = &[
+    (
+        "CHANGES.md",
+        include_str!("../../../../sdk/templates/compare/CHANGES.md"),
+    ),
+    (
+        "Cargo.toml",
+        include_str!("../../../../sdk/templates/compare/Cargo.toml"),
+    ),
+    (
+        "README.md",
+        include_str!("../../../../sdk/templates/compare/README.md"),
+    ),
+    (
+        "locales/en.json",
+        include_str!("../../../../sdk/templates/compare/locales/en.json"),
+    ),
+    (
+        "manifest.toml",
+        include_str!("../../../../sdk/templates/compare/manifest.toml"),
+    ),
+    (
+        "src/guest.rs",
+        include_str!("../../../../sdk/templates/compare/src/guest.rs"),
+    ),
+    (
+        "src/lib.rs",
+        include_str!("../../../../sdk/templates/compare/src/lib.rs"),
+    ),
+    (
+        "src/lib_tests.rs",
+        include_str!("../../../../sdk/templates/compare/src/lib_tests.rs"),
+    ),
+    (
+        "src/types.rs",
+        include_str!("../../../../sdk/templates/compare/src/types.rs"),
+    ),
+    (
+        "wit/rcommander.wit",
+        include_str!("../../../../sdk/templates/compare/wit/rcommander.wit"),
     ),
 ];
 

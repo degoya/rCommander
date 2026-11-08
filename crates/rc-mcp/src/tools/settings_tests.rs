@@ -95,6 +95,9 @@ async fn settings_set_cannot_change_the_token_or_the_rights() {
         ("vault.lock_on_session_lock", json!(false)),
         ("vault.wincred_source", json!(false)),
         ("vault.shared_credentials", json!(false)),
+        // RC-100-97: only the person lets git run, and names the program it runs.
+        ("panels.git_status", json!("local")),
+        ("panels.git_program", json!("/tmp/evil")),
     ];
     for (key, value) in attempts {
         let refused = call(

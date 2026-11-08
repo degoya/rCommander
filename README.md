@@ -8,24 +8,36 @@
 A two-panel file manager in the tradition of Total Commander and Double Commander, written in
 Rust.
 
-- Two panels with tabs; each panel shows either the file list or a terminal.
+- Two panels with tabs; each panel shows either the file list or a terminal. The lists offer a
+  folder tree, thumbnails, git status, your own column sets, and refresh themselves when a
+  folder changes.
 - WSL distributions, SSH servers and phones or cameras on USB (MTP, Windows and Linux) in the
   drive bar, next to the local drives.
 - A small SSH connection manager: servers, keys, credentials, login scripts and one-time codes
   for two-factor logins, stored encrypted behind an optional master password; inventory plugins
   keep connections in step with NetBox, Proxmox or another system.
-- Copying local to remote and remote to remote over SFTP and FTP/FTPS; multi-rename.
+- Copying local to remote and remote to remote over SFTP and FTP/FTPS, with Total Commander's
+  rename masks; multi-rename; files on a server open for editing through a local copy whose
+  saves go back up. SSH connections can go through jump hosts, forward ports and log in with
+  OpenSSH user certificates.
+- Your own commands, a Start menu, button bars with icons (and Total Commander's .bar files) and internal
+  associations; find files inside archives and through Everything, duplicate files and a disk
+  usage view; archives changed in place.
 - A viewer (Lister and Quick View) whose bundled plugins colour JSON (with JSONC, JSON5 and
   JSON Lines), XML, YAML, CSV, SQL, configuration files, shell, PowerShell, batch and Python
   scripts, Dockerfiles, Makefiles, server configuration (nginx, Apache, SSH), diffs, logs, web code, SVG,
   C-like languages from C to Rust, Terraform/HCL, Protocol Buffers, GraphQL, Ruby, Perl, Lua,
-  VBScript, reStructuredText, LaTeX, BibTeX and Visual Studio solutions - chosen by the file's
-  extension or its whole name.
+  VBScript, reStructuredText, LaTeX, BibTeX, Visual Studio solutions and to-do lists - chosen by
+  the file's extension or its whole name - and show Office documents, the text of PDFs and the
+  details of pictures, audio and video. Built in: certificates and keys with their checks (no
+  private key is ever shown), coloured .env and other credential files that no plugin sees, and
+  a Markdown preview with coloured code.
 - Colour themes for the whole window and the terminal, built in or your own, switched from the
   command palette or a key, and a theme per connection or WSL distribution so each server's
   panel and terminal stand out.
 - Workspaces: both panels' tabs, servers and terminals saved under a name and brought back in
   one step.
+- A portable mode that keeps all data beside the program.
 - Every action is also available to AI agents through a built-in MCP server.
 - In English, German, French and Spanish.
 
@@ -51,6 +63,10 @@ are needed:
 Every release lists its files with their SHA-256 in `SHA256SUMS`, and carries a `.deb` and an
 `.rpm` package for each Linux architecture. An unpacked package updates itself: by default a new
 version installs when you quit rCommander (Settings > Updates).
+
+To carry rCommander on a USB stick with its settings, connections and plugins, unpack the Windows
+zip or the Linux tarball there and choose *Make this copy portable...* in the database dialog
+(Configuration > Database...): from the next start the data lives in `data` beside the program.
 
 ### Package managers
 

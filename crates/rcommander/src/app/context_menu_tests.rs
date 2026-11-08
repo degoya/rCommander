@@ -266,7 +266,7 @@ fn own_entries(choices: &[Choice]) -> Box<ContextMenu> {
     menu.items = choices
         .iter()
         .map(|choice| Item {
-            label: "entry",
+            label: "entry".to_owned(),
             choice: choice.clone(),
         })
         .collect();

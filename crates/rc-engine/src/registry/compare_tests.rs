@@ -42,3 +42,27 @@ fn sync_apply_starts_from_the_proposal_and_confirms_no_delete() {
         assert_eq!(opened.spec().class, CommandClass::Read);
     }
 }
+
+/// RC-100-94: Ctrl+Shift+F3's command runs a program, so it is Exec; copying blocks writes.
+#[test]
+fn compare_by_content_runs_a_program_and_apply_blocks_writes() {
+    let by_content: Command =
+        serde_json::from_str(r#"{"command":"compare.by_content","params":{}}"#)
+            .expect("deserializes");
+    assert_eq!(
+        by_content,
+        Command::CompareByContent(crate::compare::ByContentRequest::default())
+    );
+    assert_eq!(by_content.spec().class, CommandClass::Exec);
+    let apply: Command = serde_json::from_str(
+        r#"{"command":"compare.apply_blocks","params":{"left":"a","right":"b","blocks":[1],"direction":"right_to_left"}}"#,
+    )
+    .expect("deserializes");
+    let Command::ApplyBlocks(request) = &apply else {
+        panic!("compare.apply_blocks, got {apply:?}");
+    };
+    assert_eq!(request.blocks, [1]);
+    assert_eq!(request.direction, crate::compare::Direction::RightToLeft);
+    assert_eq!(request.expect_left, crate::compare::FileStamp::default());
+    assert_eq!(apply.spec().class, CommandClass::Write);
+}

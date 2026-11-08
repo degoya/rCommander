@@ -5,7 +5,7 @@
 use std::{sync::OnceLock, time::SystemTime};
 
 use chrono::{DateTime, Local};
-use rc_engine::EntryKind;
+use rc_engine::{Entry, EntryKind};
 
 use crate::i18n::t;
 
@@ -125,6 +125,24 @@ pub fn rights(kind: &EntryKind, mode: Option<u32>) -> String {
         });
     }
     text
+}
+
+/// An entry's attributes as a column set's `attributes` column shows them (RC-100-90): the
+/// Windows flags as Total Commander writes them, `r` read-only, `a` archive, `h` hidden, `s`
+/// system, `-` for one not set; off Windows the rights as [`rights`] writes them.
+pub fn attributes(entry: &Entry) -> String {
+    let Some(flags) = entry.attributes.windows else {
+        return rights(&entry.kind, entry.attributes.mode);
+    };
+    [
+        (entry.attributes.readonly, 'r'),
+        (flags.archive, 'a'),
+        (flags.hidden, 'h'),
+        (flags.system, 's'),
+    ]
+    .into_iter()
+    .map(|(set, mark)| if set { mark } else { '-' })
+    .collect()
 }
 
 /// The bytes `text` names, as Total Commander takes a size: bytes, or a number with `k`, `m` or

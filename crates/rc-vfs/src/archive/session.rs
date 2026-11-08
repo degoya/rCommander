@@ -125,6 +125,12 @@ impl Sessions {
         pipe::opened(reader, &path).await
     }
 
+    /// Ends the producer parked in the slot, if any: dropping its way in ends its wait, and it
+    /// closes the archive file as it ends (RC-110-05).
+    pub(crate) fn close(&self) {
+        drop(lock(&self.slot).take());
+    }
+
     /// The way to the producer parked for `stamp`; one parked for an archive file that changed
     /// since is let go.
     fn take(&self, stamp: Stamp) -> Option<Sender<Request>> {

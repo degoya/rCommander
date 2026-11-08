@@ -106,6 +106,10 @@ pub(crate) struct Setup {
     pub(crate) resume: Resumption,
     /// The read guard of a job an MCP call submitted (`read_guard.rs`); `None` otherwise.
     pub(crate) read_guard: Option<crate::read_guard::JobGuard>,
+    /// What lets go of an archive before an update replaces it (RC-110-05).
+    pub(crate) archive_release: Option<Arc<dyn crate::ArchiveRelease>>,
+    /// The panels' ignore list, while it is on (RC-100-92).
+    pub(crate) ignore: Option<Arc<dyn crate::IgnoreRule>>,
 }
 
 /// What a transfer needs to survive a lost connection and a restart (RC-060-07).
@@ -161,6 +165,10 @@ pub(crate) struct Runner {
     pub(crate) restored: bool,
     /// How archives are read when unpacking.
     pub(crate) archive: ArchiveSettings,
+    /// What lets go of an archive before an update replaces it (RC-110-05).
+    pub(crate) archive_release: Option<Arc<dyn crate::ArchiveRelease>>,
+    /// What a copy's or a move's walk leaves out (`ignore.rs`); `None` for every other job.
+    pub(crate) ignore: Option<Arc<dyn crate::IgnoreRule>>,
     meter: Meter,
     throttle: Throttle,
     /// The progress moved since the snapshot last took it (RC-080-45).
@@ -196,6 +204,8 @@ impl Runner {
             mark: setup.resume.mark,
             restored: setup.resume.restored,
             archive: setup.archive,
+            archive_release: setup.archive_release,
+            ignore: setup.ignore,
             meter: Meter::default(),
             throttle: Throttle::new(setup.progress_interval),
             unpublished: false,
@@ -205,6 +215,17 @@ impl Runner {
 
     /// Does the job; the progress at its end comes with the outcome.
     pub(crate) async fn run(&mut self, kind: &JobKind) -> Result<(), Stop> {
+        // Only a copy's or a move's walk leaves out what the ignore list hides (`ignore.rs`).
+        let transfer = matches!(
+            kind,
+            JobKind::Copy { .. }
+                | JobKind::Move { .. }
+                | JobKind::CopyAs { .. }
+                | JobKind::MoveAs { .. }
+        );
+        if !transfer {
+            self.ignore = None;
+        }
         match kind {
             JobKind::Copy { sources, target } => self.transfer(sources, target, false).await,
             JobKind::Move { sources, target } => self.transfer(sources, target, true).await,
@@ -232,6 +253,22 @@ impl Runner {
                 target,
                 settings,
             } => self.pack(sources, target, settings).await,
+            JobKind::ArchiveUpdate {
+                archive,
+                add,
+                under,
+                remove,
+                settings,
+            } => {
+                let change = crate::update::Change {
+                    archive,
+                    add,
+                    under,
+                    remove,
+                    settings,
+                };
+                self.archive_update(&change).await
+            }
             JobKind::ChecksumCreate { .. }
             | JobKind::ChecksumVerify { .. }
             | JobKind::Split { .. }

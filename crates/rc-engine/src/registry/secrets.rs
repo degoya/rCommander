@@ -1,5 +1,5 @@
-//! Stored secrets of the connections (RC-050-03), and the sources a secret can be taken from
-//! instead of the vault (RC-100-34).
+//! Stored secrets of the connections (RC-050-03), the sources a secret can be taken from instead
+//! of the vault (RC-100-34), and the reason a PAM system lends one for (RC-100-38).
 
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +19,11 @@ pub struct ImportKeyRequest {
 
 /// This group's rows, sorted by id.
 pub(super) const COMMANDS: &[CommandSpec] = &[
+    CommandSpec {
+        id: "secrets.checkout_reason",
+        class: CommandClass::GuiOnly,
+        summary: "The reason a PAM system is given when the connection's next login checks out its secret",
+    },
     CommandSpec {
         id: "secrets.import_key",
         class: CommandClass::GuiOnly,
@@ -51,6 +56,12 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
 macro_rules! commands {
     ($next:ident, $rest:tt, { $($done:tt)* }) => {
         $next! { $rest, { $($done)*
+            /// Asked for by [`crate::EngineEvent::CheckoutReasonNeeded`]; an empty reason
+            /// forgets the one held (RC-100-38).
+            "secrets.checkout_reason" => SetCheckoutReason {
+                connection_id: ConnectionId,
+                reason: String,
+            },
             "secrets.import_key" => ImportKey(ImportKeyRequest),
             "secrets.source_map" => MapSecretSource(SecretSourceRef),
             "secrets.source_search" => SearchSecretSource {

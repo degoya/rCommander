@@ -107,10 +107,15 @@ impl Engine {
         id: PanelId,
         path: VfsPath,
     ) -> Result<Outcome, EngineError> {
-        let (sort, mode, show_hidden) = {
+        let (sort, mode, show_hidden, files) = {
             let state = self.state();
             let panel = state.panel(id);
-            (panel.sort, panel.mode, state.show_hidden)
+            (
+                panel.sort,
+                panel.mode,
+                state.show_hidden,
+                panel.filter.files.clone(),
+            )
         };
         let vfs = self.vfs(&path)?;
         let entries = list_sorted(&vfs, &path, sort, show_hidden).await?;
@@ -124,15 +129,19 @@ impl Engine {
             }
             let (panel, tabs) = split(state, id);
             tabs.sync(id, panel);
-            let tab = tabs.new_tab(path.clone(), sort, mode);
+            let mut tab = tabs.new_tab(path.clone(), sort, mode);
+            // A new tab shows the files the panel shows (RC-100-92).
+            tab.file_filter.clone_from(&files);
             tabs.insert_active(id, tab);
             *panel = tab_state(panel, path, entries, (sort, mode), show_hidden, None);
+            panel.set_file_filter(files);
             panel.archive = archive;
         }
         self.publish(EngineEvent::Panel {
             panel: id,
             change: PanelChange::Navigated,
         });
+        self.columns_follow(id, false).await;
         Ok(self.tabs_outcome(id))
     }
 
@@ -177,6 +186,7 @@ impl Engine {
             shown.path.clone_from(&path);
             let listing = (shown.sort, shown.mode);
             let cursor = shown.cursor.take();
+            let files = shown.file_filter.clone();
             *panel = tab_state(
                 panel,
                 path,
@@ -185,12 +195,14 @@ impl Engine {
                 show_hidden,
                 cursor.as_deref(),
             );
+            panel.set_file_filter(files);
             panel.archive = archive;
         }
         self.publish(EngineEvent::Panel {
             panel: id,
             change: PanelChange::Navigated,
         });
+        self.columns_follow(id, false).await;
         Ok(self.tabs_outcome(id))
     }
 

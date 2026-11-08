@@ -44,6 +44,21 @@ fn one_of_each() -> Vec<SshError> {
         SshError::Key(PrivateKeyError::Unknown),
         SshError::Key(PrivateKeyError::PassphraseNeeded),
         SshError::Key(PrivateKeyError::PassphraseWrong),
+        SshError::Certificate(CertificateError::Invalid),
+        SshError::Certificate(CertificateError::KeyMismatch),
+        SshError::Certificate(CertificateError::Expired {
+            key_id: "id".to_owned(),
+            valid_before: 1,
+        }),
+        SshError::Certificate(CertificateError::NotYetValid {
+            key_id: "id".to_owned(),
+            valid_after: 1,
+        }),
+        SshError::Certificate(CertificateError::Principal {
+            key_id: "id".to_owned(),
+            user: "tester".to_owned(),
+            principals: vec!["root".to_owned()],
+        }),
         SshError::AuthFailed {
             tried: vec![AuthKind::Password],
         },
@@ -62,6 +77,7 @@ fn one_of_each() -> Vec<SshError> {
             | SshError::HostKeyUnreadable(_)
             | SshError::Credential(_)
             | SshError::Key(_)
+            | SshError::Certificate(_)
             | SshError::AuthFailed { .. }
             | SshError::ConnectionLost
             | SshError::Protocol { .. } => {}

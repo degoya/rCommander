@@ -58,8 +58,23 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
         "sqlx's ledger of applied migrations: one row per migration file",
     ),
     (
+        "button_bars",
+        "one row per button bar a person made or imported (RC-100-87), the first start's \
+         \"Default\" among them; a person removes them, at most 64",
+    ),
+    (
+        "column_sets",
+        "one row per column set a person made (RC-100-90); a person removes them, an edit \
+         replaces its row",
+    ),
+    (
         "connection_folders",
         "one row per folder of the connection tree the person made",
+    ),
+    (
+        "connection_forwards",
+        "at most 32 rows per SSH connection: the local port forwards a person set up \
+         (RC-110-03); deleted with the connection",
     ),
     (
         "connection_session_prefs",
@@ -68,8 +83,9 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
     ),
     (
         "connections",
-        "one row per saved connection, with its encrypted secrets (0006) and the source an \
-         import read it from (0007); a person or an import adds them, a person removes them",
+        "one row per saved connection, with its encrypted secrets (0006), the source an \
+         import read it from (0007) and its jump host (0028); a person or an import adds them, \
+         a person removes them",
     ),
     (
         "credentials",
@@ -137,6 +153,11 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
         "one row per setting key; a key is replaced, never appended",
     ),
     (
+        "start_menu_items",
+        "one row per entry, submenu or separator of the Start menu a person made (RC-100-86); \
+         a person removes them, at most 512",
+    ),
+    (
         "tabs",
         "one row per open folder tab of the two panels, rewritten whole when the app ends",
     ),
@@ -149,6 +170,11 @@ pub const DURABLE_TABLES: &[(&str, &str)] = &[
         "tls_certificates",
         "at most one row per FTPS host and port: the certificate a person trusted; removed by a \
          person, never appended",
+    ),
+    (
+        "user_commands",
+        "one row per own command (em_) a person made or imported (RC-100-86); a person removes \
+         them, at most 512",
     ),
     (
         "vault_meta",

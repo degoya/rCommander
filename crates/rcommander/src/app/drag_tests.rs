@@ -74,7 +74,11 @@ async fn release_over_right(harness: &mut Harness) {
         let shift = harness.app.modifiers_held().shift;
         drag(
             harness,
-            DragMsg::Settled(Some(Pointer { across: 0.8, shift })),
+            DragMsg::Settled(Some(Pointer {
+                across: 0.8,
+                down: 0.5,
+                shift,
+            })),
         )
         .await;
     } else {
@@ -215,6 +219,7 @@ async fn files_dropped_onto_a_panel_are_copied_into_its_folder() {
     drag(&mut harness, DragMsg::FileDropped(file.clone())).await;
     drag(&mut harness, DragMsg::FileDropped(file.clone())).await;
     let pointer = Pointer {
+        down: 0.5,
         across: 0.8,
         shift: false,
     };
@@ -254,6 +259,7 @@ async fn hostile_or_pointless_drops_start_no_job() {
     )
     .await;
     let left = Pointer {
+        down: 0.5,
         across: 0.2,
         shift: false,
     };
@@ -374,6 +380,7 @@ async fn drop_at(harness: &mut Harness, file: &Path, across: f32) {
     drag(harness, DragMsg::FileDropped(file.to_owned())).await;
     let pointer = Pointer {
         across,
+        down: 0.5,
         shift: false,
     };
     drag(harness, DragMsg::Settled(Some(pointer))).await;

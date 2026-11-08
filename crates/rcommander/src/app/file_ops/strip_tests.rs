@@ -117,6 +117,7 @@ async fn four_jobs(harness: &mut Harness) -> [JobId; 4] {
             sources: vec![name.into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         })
     };
     let holder = run(harness, copy("a.txt")).await;

@@ -30,6 +30,8 @@ mod validate;
 use call::Shared;
 /// The call helpers the secrets kind shares (RC-100-33).
 pub(crate) use call::{Ended, WALL_CLOCK_FACTOR, bounded, infallible, settle};
+/// The rules of a plugin's own codes and parameters, a compare plugin's notices' too (RC-100-41).
+pub(crate) use convert::{plugin_code, plugin_params};
 use guest::ViewerIndices;
 pub use session::{ImageOutput, MAX_NEEDLE_CHARS, TextOutput, ViewerSession};
 pub use tree::{

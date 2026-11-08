@@ -60,6 +60,10 @@ impl ConnectionManager {
                 form.set_shared(shared);
                 Field::Credential
             }
+            ConnMsg::Jump(jump) => {
+                form.set_jump(jump);
+                Field::Jump
+            }
             ConnMsg::Toggle(field) => {
                 form.toggle(field);
                 field

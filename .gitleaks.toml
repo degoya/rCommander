@@ -21,6 +21,12 @@ paths = [
 ]
 
 [[allowlists]]
+description = "Throw-away certificates and keys generated with OpenSSL and ssh-keygen for rc-cert's tests (the certificate viewer, RC-110-08)"
+paths = [
+    '''^crates/rc-cert/tests/fixtures/[^/]+$''',
+]
+
+[[allowlists]]
 description = "Made-up private keys (armour around a few base64 words, no key) in the tests of the key-format check and the stored secrets (RC-050-03); the real throw-away keys are fixtures above"
 targetRules = ["private-key"]
 paths = [

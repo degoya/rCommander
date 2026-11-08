@@ -22,7 +22,12 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "history.list",
         class: CommandClass::Read,
-        summary: "The folders of the tab's history, oldest first, and the one shown (Alt+Down)",
+        summary: "The folders of the tab's history, oldest first, and the one shown (Alt+Down); and the most visited folders",
+    },
+    CommandSpec {
+        id: "history.open_frequent",
+        class: CommandClass::Read,
+        summary: "Show one of the most visited folders by its index in history.list's frequent",
     },
 ];
 
@@ -35,6 +40,13 @@ macro_rules! commands {
             "history.forward" => HistoryForward(PanelRequest),
             "history.list" => HistoryList(PanelRequest),
             "history.jump" => HistoryJump(HistoryJumpRequest),
+            /// One of the most visited folders, by its index in `history.list`'s `frequent`
+            /// (RC-100-92).
+            "history.open_frequent" => HistoryOpenFrequent {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                index: usize,
+            },
         } }
     };
 }

@@ -78,6 +78,10 @@ pub enum Dialog {
     SshConfigImport,
     /// The workspaces window asking the name of a new workspace of the panels (RC-100-68).
     SaveWorkspace,
+    /// The settings' Columns tab: the column sets (RC-100-90).
+    ColumnSets,
+    /// A file or the clipboard first, then a selection or list command (RC-100-92).
+    Lists(super::lists::ListDialog),
 }
 
 /// The menu bar's messages, through [`PaletteMsg::MenuBar`].
@@ -193,6 +197,12 @@ fn items(menu: &Menu, keymap: &Keymap, entries: &[Entry]) -> Vec<BarItem> {
         };
         items.push(BarItem::Entry { id, text });
     }
+    // The Start menu ends with its entries (RC-100-86).
+    let start = super::user_commands::menu_items(menu.id, keymap);
+    if !start.is_empty() && items.last().is_some_and(|last| *last != BarItem::Separator) {
+        items.push(BarItem::Separator);
+    }
+    items.extend(start);
     if items.last() == Some(&BarItem::Separator) {
         items.pop();
     }
@@ -312,16 +322,28 @@ impl App {
                 Some(Slot::Entry(name)) => self.run_menu_entry(name),
                 Some(Slot::Dialog(_, dialog)) => self.open_menu_dialog(dialog),
                 Some(Slot::Separator) => Vec::new(),
-                // A workspace of the Workspaces menu (RC-100-68).
-                None => super::workspaces::key_id(&id)
-                    .map(|id| self.apply_workspace_now(id))
-                    .unwrap_or_default(),
+                // A workspace of the Workspaces menu (RC-100-68), an entry of the Start menu
+                // (RC-100-86).
+                None => match super::workspaces::key_id(&id) {
+                    Some(id) => self.apply_workspace_now(id),
+                    None => super::user_commands::chosen(&id)
+                        .map(|run| vec![Effect::Dispatch(self.active, vec![run])])
+                        .unwrap_or_default(),
+                },
             },
         }
     }
 
     /// What the palette's row `name` runs.
     fn run_menu_entry(&mut self, name: &str) -> Vec<Effect> {
+        // Compare by content with Shift held: the diff window even with an external compare
+        // tool set, as Total Commander does (RC-100-94).
+        if name == "compare.by_content" && self.modifiers_held().shift {
+            return vec![Effect::Dispatch(
+                self.active,
+                vec![rc_engine::Command::OpenDiff {}],
+            )];
+        }
         let entries = super::entries(&self.keymap, &reach::standard(), self.drive_bar.network);
         match entries.into_iter().find(|entry| entry.name == name) {
             Some(entry) => self.run_palette(entry.action),
@@ -347,6 +369,8 @@ impl App {
                 effects
             }
             Dialog::SaveWorkspace => self.apply(Message::Workspaces(WsMsg::SaveCurrentAs)),
+            Dialog::ColumnSets => self.configure_columns(),
+            Dialog::Lists(dialog) => self.open_list_dialog(dialog),
         }
     }
 
@@ -397,8 +421,9 @@ impl App {
         platform::relabel(main, build(&self.keymap, &entries)).discard()
     }
 
-    /// The bar's entries again after the workspaces changed (RC-100-68): the drawn bar's menus
-    /// made anew, the system's Workspaces menu filled again.
+    /// The bar's entries again after the workspaces (RC-100-68) or the Start menu (RC-100-86)
+    /// changed: the drawn bar's menus made anew, the system's Workspaces and Start menus filled
+    /// again.
     pub(in crate::app) fn refill_menu_bar(&mut self) -> Task<Message> {
         if self.drawn_bar_shown() {
             self.rebuild_drawn_menus();

@@ -11,11 +11,19 @@ use std::collections::HashSet;
 
 use super::{
     Block, Located, MAX_IDENTITY_FILES, MAX_IGNORED_OPTIONS, Reader, SourceLine, WarningKind,
+    forward::{self, Parsed},
     lex::Directive,
 };
 
 /// The options a candidate takes.
-const IMPORTED: &[&str] = &["hostname", "user", "port", "identityfile", "proxyjump"];
+const IMPORTED: &[&str] = &[
+    "hostname",
+    "user",
+    "port",
+    "identityfile",
+    "proxyjump",
+    "localforward",
+];
 
 /// The candidates under one `Host` line, and what they all hold already.
 #[derive(Debug, Clone)]
@@ -70,6 +78,10 @@ impl Reader<'_> {
             }
             return;
         }
+        if keyword == "localforward" {
+            self.local_forward(block, &directive.args, source);
+            return;
+        }
         let Some(value) = directive.args.into_iter().next() else {
             let keyword = directive.keyword;
             self.warn(source, WarningKind::MissingArgument { keyword });
@@ -112,6 +124,30 @@ impl Reader<'_> {
                     draft.proxy_jump = Some(jump);
                 }
                 _ => {}
+            }
+        }
+    }
+}
+
+impl Reader<'_> {
+    /// A `LocalForward` line: one more forward of every candidate of the block, up to
+    /// [`rc_db::connections::MAX_FORWARDS`] each (RC-110-03).
+    fn local_forward(&mut self, block: &HostBlock, args: &[String], source: SourceLine) {
+        let spec = match forward::parse(args) {
+            Parsed::Forward(spec) => spec,
+            Parsed::Lowered(spec) => {
+                self.warn(source, WarningKind::ForwardBindLowered);
+                spec
+            }
+            Parsed::Invalid => {
+                self.warn(source, WarningKind::InvalidForward);
+                return;
+            }
+        };
+        for &index in &block.targets {
+            let forwards = &mut self.hosts[index].local_forwards;
+            if forwards.len() < rc_db::connections::MAX_FORWARDS && !forwards.contains(&spec) {
+                forwards.push(spec.clone());
             }
         }
     }

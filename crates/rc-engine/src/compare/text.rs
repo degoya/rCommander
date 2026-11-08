@@ -1,13 +1,16 @@
-//! Line comparison of two text files: decoding, the line diff (the `similar` crate, Myers with
-//! a deadline), the rows of a side-by-side view, jumping between differences, and a unified
-//! diff for agents.
+//! Line comparison of two text files: decoding and its reverse ([`encode`], for the edit mode of
+//! RC-100-94), the line diff (the `similar` crate, Myers with a deadline), the rows of a
+//! side-by-side view, jumping between differences, and a unified diff for agents.
 
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use similar::{Algorithm, DiffOp};
 
-use crate::viewer::{TextEncoding, detect_whole, encoding::decode as decode_as};
+use crate::viewer::{
+    TextEncoding, detect_whole,
+    encoding::{decode as decode_as, encode_char},
+};
 
 /// How long the line diff may search for the shortest edit; past it the diff is still correct,
 /// only not minimal (a pathological pair of files cannot hold the comparison up).
@@ -67,6 +70,10 @@ pub struct Line {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextFile {
     pub encoding: Encoding,
+    /// The file starts with a byte order mark: always with [`Encoding::Utf8Bom`], never with
+    /// [`Encoding::Utf8`] or [`Encoding::Windows1252`], either way with UTF-16.
+    #[serde(default)]
+    pub bom: bool,
     pub lines: Vec<Line>,
 }
 
@@ -103,8 +110,87 @@ pub fn decode(bytes: &[u8]) -> Option<TextFile> {
     }
     Some(TextFile {
         encoding,
+        bom: detected.bom_len > 0,
         lines: split_lines(&text),
     })
+}
+
+/// A character [`encode`] cannot write in the file's encoding: Windows-1252 has no such one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Unmappable {
+    /// The line it is on, from 0.
+    pub line: usize,
+    pub character: char,
+}
+
+/// `file` as bytes - its byte order mark, then each line in its encoding with its own ending:
+/// the reverse of [`decode`], so the edit mode writes back what it read.
+///
+/// # Errors
+///
+/// A line holds a character Windows-1252 cannot write.
+pub fn encode(file: &TextFile) -> Result<Vec<u8>, Unmappable> {
+    let codec = match file.encoding {
+        Encoding::Utf8 | Encoding::Utf8Bom => TextEncoding::Utf8,
+        Encoding::Utf16Le => TextEncoding::Utf16Le,
+        Encoding::Utf16Be => TextEncoding::Utf16Be,
+        Encoding::Windows1252 => TextEncoding::Windows1252,
+    };
+    let mut bytes = Vec::new();
+    let marked = match file.encoding {
+        Encoding::Utf8Bom => true,
+        Encoding::Utf16Le | Encoding::Utf16Be => file.bom,
+        Encoding::Utf8 | Encoding::Windows1252 => false,
+    };
+    if marked {
+        bytes.extend_from_slice(codec.bom());
+    }
+    for (index, line) in file.lines.iter().enumerate() {
+        put(&mut bytes, &line.text, codec).map_err(|character| Unmappable {
+            line: index,
+            character,
+        })?;
+        put(&mut bytes, line.ending.as_str(), codec).map_err(|character| Unmappable {
+            line: index,
+            character,
+        })?;
+    }
+    Ok(bytes)
+}
+
+/// `text` in `codec` after `bytes`; the first character it cannot write otherwise.
+fn put(bytes: &mut Vec<u8>, text: &str, codec: TextEncoding) -> Result<(), char> {
+    match codec {
+        TextEncoding::Utf8 => bytes.extend_from_slice(text.as_bytes()),
+        TextEncoding::Utf16Le => bytes.extend(text.encode_utf16().flat_map(u16::to_le_bytes)),
+        TextEncoding::Utf16Be => bytes.extend(text.encode_utf16().flat_map(u16::to_be_bytes)),
+        _ => {
+            for character in text.chars() {
+                // ASCII is itself in every single-byte code page; the rest is looked up.
+                if let Ok(byte) = u8::try_from(character)
+                    && byte.is_ascii()
+                {
+                    bytes.push(byte);
+                    continue;
+                }
+                bytes.extend(encode_char(character, codec).ok_or(character)?);
+            }
+        }
+    }
+    Ok(())
+}
+
+impl LineEnding {
+    /// The ending as text: empty for [`LineEnding::None`].
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::Lf => "\n",
+            Self::CrLf => "\r\n",
+            Self::Cr => "\r",
+        }
+    }
 }
 
 fn split_lines(text: &str) -> Vec<Line> {

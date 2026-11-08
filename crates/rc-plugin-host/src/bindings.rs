@@ -1,4 +1,4 @@
-//! Generated bindings for `rcommander:plugin@0.4.0`: the records and the host traits.
+//! Generated bindings for `rcommander:plugin@0.6.0`: the records and the host traits.
 //!
 //! As rDownloader's `crates/rd-plugin-host/src/component.rs` and `extension/bindings.rs` at commit
 //! 26c8592a6 generate them: async imports and exports. One `bindgen!` per world; the secrets world
@@ -7,7 +7,7 @@
 //! written once. The generated linker and export lookup name the current version alone, so
 //! `link.rs`, `viewer/guest.rs`, `secrets/guest.rs` and `inventory/guest.rs` do both under the
 //! manifest's version instead (RC-100-14). The inventory world (RC-100-39) maps `http` onto the
-//! secrets world's as well.
+//! secrets world's as well; the compare world (RC-100-41) `source` onto the viewer's.
 
 wasmtime::component::bindgen!({
     path: "../rc-plugin-api/wit",
@@ -43,6 +43,22 @@ pub(crate) mod inventory_world {
             "rcommander:plugin/host": crate::bindings::rcommander::plugin::host,
             "rcommander:plugin/settings": crate::bindings::rcommander::plugin::settings,
             "rcommander:plugin/http": crate::bindings::secrets_world::rcommander::plugin::http,
+        },
+    });
+}
+
+/// The compare world's own interface: the `compare` export (RC-100-41).
+pub(crate) mod compare_world {
+    wasmtime::component::bindgen!({
+        path: "../rc-plugin-api/wit",
+        world: "compare-plugin",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "rcommander:plugin/types": crate::bindings::rcommander::plugin::types,
+            "rcommander:plugin/host": crate::bindings::rcommander::plugin::host,
+            "rcommander:plugin/source": crate::bindings::rcommander::plugin::source,
+            "rcommander:plugin/settings": crate::bindings::rcommander::plugin::settings,
         },
     });
 }

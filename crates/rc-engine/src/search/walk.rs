@@ -3,6 +3,13 @@
 //! Pulling ([`Walk::next`]) keeps the walk a plain value: the streaming search pumps it into a
 //! channel, the paged command stops pulling once its page is full. Memory holds the directory
 //! being searched and the folders still to enter, never the hits.
+//!
+//! An archive file, when archives are searched, waits among the folders of its directory and is
+//! opened when its turn comes ([`super::archive`]); its folders carry the archive along and drop
+//! it with the last one. Fed Everything's candidates instead of start folders, the walk lists
+//! nothing and judges each candidate as it would have met it ([`candidates`]).
+
+mod candidates;
 
 use std::{
     collections::HashSet,
@@ -11,10 +18,12 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-use rc_vfs::{BackendId, Entry, EntryKind, Vfs, VfsError, VfsPath};
+use rc_vfs::{ArchiveLimits, BackendId, Entry, EntryKind, Vfs, VfsError, VfsPath};
 
+use self::candidates::Candidates;
 use super::{
     Compiled, SearchCancel, SearchEvent, SearchHit, SearchStats,
+    archive::{self, Scope},
     content::{ContentMatcher, Scan},
     filters::shape,
 };
@@ -36,6 +45,10 @@ struct Dir {
     real: PathBuf,
     depth: u32,
     links: u32,
+    /// The archive it lies in; `None` on the walk's own backend.
+    scope: Option<Arc<Scope>>,
+    /// An archive file to open and search from its root, not a directory to list.
+    archive: bool,
 }
 
 /// The directory being searched.
@@ -54,6 +67,10 @@ pub(crate) struct Walk {
     cancel: SearchCancel,
     /// The read guard of an MCP search: the files whose contents it never reads.
     guard: Option<ReadGuard>,
+    /// The limits archives open with; `None` when no archive is entered.
+    limits: Option<ArchiveLimits>,
+    /// Everything's candidates, when they stand in for the folders.
+    candidates: Option<Candidates>,
     stack: Vec<Dir>,
     current: Option<Listing>,
     /// Real directories entered through a link: each is searched once.
@@ -82,14 +99,20 @@ impl Walk {
                 path,
                 depth: 0,
                 links: 0,
+                scope: None,
+                archive: false,
             })
             .collect();
+        let limits =
+            (query.archives && archive::searched_on(&backend)).then(ArchiveLimits::default);
         Self {
             vfs,
             backend,
             query,
             cancel,
             guard: None,
+            limits,
+            candidates: None,
             stack,
             current: None,
             visited: HashSet::new(),
@@ -105,6 +128,18 @@ impl Walk {
     pub(crate) fn guarded(mut self, guard: Option<ReadGuard>) -> Self {
         self.guard = guard;
         self
+    }
+
+    /// The walk opening archives within `limits` (the engine's decoder memory), when it enters
+    /// any.
+    pub(crate) fn with_archive_limits(mut self, limits: ArchiveLimits) -> Self {
+        self.limits = self.limits.map(|_| limits);
+        self
+    }
+
+    /// Whether the walk enters archives.
+    pub(crate) fn enters_archives(&self) -> bool {
+        self.limits.is_some()
     }
 
     /// The counts so far.
@@ -127,7 +162,7 @@ impl Walk {
                     dir: self
                         .current
                         .as_ref()
-                        .map(|listing| self.at(&listing.dir.path)),
+                        .map(|listing| self.at(&listing.dir, &listing.dir.path)),
                     stats: self.stats,
                 });
             }
@@ -140,10 +175,25 @@ impl Walk {
             if let Some(done) = self.current.take() {
                 self.stack.extend(done.subdirs.into_iter().rev());
             }
-            let Some(dir) = self.stack.pop() else {
+            if self.candidates.is_some() {
+                match self.next_candidate().await {
+                    Some(Some(event)) => return Some(event),
+                    Some(None) => continue,
+                    None => return Some(self.finish(false)),
+                }
+            }
+            let Some(mut dir) = self.stack.pop() else {
                 return Some(self.finish(false));
             };
-            match self.vfs.list(&dir.path).await {
+            if dir.archive {
+                match self.enter(&dir).await {
+                    Ok(Some(root)) => dir = root,
+                    Ok(None) => continue,
+                    Err((path, code)) => return Some(SearchEvent::Skipped { path, code }),
+                }
+            }
+            let vfs = Arc::clone(dir.scope.as_ref().map_or(&self.vfs, |scope| &scope.vfs));
+            match vfs.list(&dir.path).await {
                 Ok(mut entries) => {
                     entries.sort_by(|a, b| a.name.cmp(&b.name));
                     self.stats.dirs += 1;
@@ -156,10 +206,41 @@ impl Walk {
                 Err(error) => {
                     self.stats.skipped += 1;
                     return Some(SearchEvent::Skipped {
-                        path: self.at(&dir.path),
+                        path: self.at(&dir, &dir.path),
                         code: error.code(),
                     });
                 }
+            }
+        }
+    }
+
+    /// The root of the archive file `file`, as the next folder to list; `None` when the file is
+    /// no archive after all. An archive the MCP read guard keeps is never opened: opening it
+    /// reads it. The error is where and why it was skipped.
+    async fn enter(&mut self, file: &Dir) -> Result<Option<Dir>, (VfsPath, &'static str)> {
+        let Some(limits) = self.limits else {
+            return Ok(None);
+        };
+        let at = self.at(file, &file.path);
+        if let Some(guard) = self.guard
+            && guard.refuses_off_thread(&file.path).await.is_some()
+        {
+            self.stats.skipped += 1;
+            return Err((at, "sensitive_path"));
+        }
+        match archive::open(&self.vfs, &self.backend, &file.path, limits).await {
+            Ok(Some(scope)) => Ok(Some(Dir {
+                path: PathBuf::from("/"),
+                real: PathBuf::from("/"),
+                depth: file.depth,
+                links: 0,
+                scope: Some(Arc::new(scope)),
+                archive: false,
+            })),
+            Ok(None) => Ok(None),
+            Err(error) => {
+                self.stats.skipped += 1;
+                Err((at, error.code()))
             }
         }
     }
@@ -174,9 +255,14 @@ impl Walk {
         }
     }
 
-    fn at(&self, path: &Path) -> VfsPath {
+    /// `path` of the directory `dir` as a location: in its archive, or on the walk's backend.
+    fn at(&self, dir: &Dir, path: &Path) -> VfsPath {
+        self.located(dir.scope.as_deref(), path)
+    }
+
+    fn located(&self, scope: Option<&Scope>, path: &Path) -> VfsPath {
         VfsPath {
-            backend: self.backend.clone(),
+            backend: scope.map_or_else(|| self.backend.clone(), |scope| scope.backend.clone()),
             path: path.to_path_buf(),
         }
     }
@@ -188,34 +274,67 @@ impl Walk {
         if self.query.skip_hidden && entry.hidden {
             return None;
         }
+        // What the ignore list hides is neither found nor entered (RC-100-92).
+        let listing = self.current.as_ref()?;
+        if crate::ignore_list::ignored(&self.at(&listing.dir, &listing.dir.path), &entry) {
+            return None;
+        }
         let listing = self.current.as_mut()?;
         let path = listing.dir.path.join(&entry.name);
-        let (file, dir) = shape(&entry);
+        let (_, dir) = shape(&entry);
         if dir && let Some(sub) = descend(&self.query, &mut self.visited, &listing.dir, &entry) {
             listing.subdirs.push(sub);
         }
+        if self.limits.is_some()
+            && let Some(file) = archive_below(&self.query, &listing.dir, &entry)
+        {
+            listing.subdirs.push(file);
+        }
+        let scope = listing.dir.scope.clone();
+        self.judge(path, scope, entry).await
+    }
+
+    /// The entry at `path` (in the archive `scope`, if any) reported when it matches: by name,
+    /// the filters, and its content.
+    async fn judge(
+        &mut self,
+        path: PathBuf,
+        scope: Option<Arc<Scope>>,
+        entry: Entry,
+    ) -> Option<SearchEvent> {
+        let (file, dir) = shape(&entry);
         if !self.query.names.matches(&entry.name, dir)
             || !self.query.filters.admits(&entry, self.now)
         {
             return None;
         }
+        let at = self.located(scope.as_deref(), &path);
         if let Some(content) = &self.query.content {
             let link = matches!(entry.kind, EntryKind::Symlink { .. });
             if !file || (link && !self.query.follow_symlinks) {
                 return None;
             }
             // A guarded file is never read, so neither its presence among the hits nor its
-            // absence tells about its contents: it only counts as skipped.
-            if let Some(guard) = self.guard
+            // absence tells about its contents: it only counts as skipped. An archive's entry is
+            // judged by its name.
+            let guard = self.guard.map(|guard| {
+                if scope.is_some() {
+                    guard.by_name()
+                } else {
+                    guard
+                }
+            });
+            if let Some(guard) = guard
                 && guard.refuses_off_thread(&path).await.is_some()
             {
                 self.stats.skipped += 1;
                 return Some(SearchEvent::Skipped {
-                    path: self.at(&path),
+                    path: at,
                     code: "sensitive_path",
                 });
             }
-            let scan = scan_file(&*self.vfs, &path, content, &mut self.buf, &self.cancel).await;
+            let vfs = scope.as_ref().map_or(&self.vfs, |scope| &scope.vfs);
+            let scan = scan_file(&**vfs, &path, content, &mut self.buf, &self.cancel).await;
             match scan {
                 Ok(Scan::Found) if !content.not_containing => {}
                 Ok(Scan::Absent) if content.not_containing => {}
@@ -223,18 +342,34 @@ impl Walk {
                 Err(error) => {
                     self.stats.skipped += 1;
                     return Some(SearchEvent::Skipped {
-                        path: self.at(&path),
+                        path: at,
                         code: error.code(),
                     });
                 }
             }
         }
         self.stats.hits += 1;
-        Some(SearchEvent::Hit(SearchHit {
-            path: self.at(&path),
-            entry,
-        }))
+        Some(SearchEvent::Hit(SearchHit { path: at, entry }))
     }
+}
+
+/// The archive file `entry` of `parent` to search like a folder, if it is one by its name and
+/// the depth limit and the directory exclusions allow it; never one inside an archive.
+fn archive_below(query: &Compiled, parent: &Dir, entry: &Entry) -> Option<Dir> {
+    let depth = parent.depth + 1;
+    let wanted = parent.scope.is_none()
+        && matches!(entry.kind, EntryKind::File)
+        && archive::candidate(&entry.name)
+        && !query.max_depth.is_some_and(|max| depth > max)
+        && query.names.enters(&entry.name);
+    wanted.then(|| Dir {
+        path: parent.path.join(&entry.name),
+        real: parent.real.join(&entry.name),
+        depth,
+        links: parent.links,
+        scope: None,
+        archive: true,
+    })
 }
 
 /// The subdirectory `entry` of `parent` to enter, if the depth limit, the directory
@@ -256,8 +391,11 @@ fn descend(
             real: parent.real.join(&entry.name),
             depth,
             links: parent.links,
+            scope: parent.scope.clone(),
+            archive: false,
         }),
-        EntryKind::Symlink { target, .. } if query.follow_symlinks => {
+        // An archive shows its links and never follows them.
+        EntryKind::Symlink { target, .. } if query.follow_symlinks && parent.scope.is_none() => {
             if parent.links >= MAX_LINKS {
                 return None;
             }
@@ -272,6 +410,8 @@ fn descend(
                 real,
                 depth,
                 links: parent.links + 1,
+                scope: None,
+                archive: false,
             })
         }
         _ => None,

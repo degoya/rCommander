@@ -112,6 +112,34 @@ pub enum OpsError {
     /// through): following it would copy without end, so it is not followed (RC-080-63).
     #[error("{}: the link leads back into its own path; not followed", path.display())]
     LinkLoop { path: PathBuf },
+    /// An archive that is not changed in place of its kind (RC-110-05): a compressed tar, a
+    /// single compressed file, a zip behind a prefix (a self-extractor), a tar with sparse files.
+    #[error("{}: this archive cannot be changed; unpack it and pack it anew", path.display())]
+    ArchiveNotModifiable { path: PathBuf },
+    /// An archive with encrypted entries or an encrypted header, or an encrypted entry to add
+    /// from another archive: never changed, no password is asked for to write (RC-110-05).
+    #[error("{}: the archive holds encrypted entries; it is not changed", path.display())]
+    ArchiveEncrypted { path: PathBuf },
+    /// The archive file changed while the update ran (another job, another program): the new
+    /// archive is thrown away, the changed one stays (RC-110-05).
+    #[error("{}: the archive changed meanwhile; nothing was changed", path.display())]
+    ArchiveChanged { path: PathBuf },
+    /// The archive file is open elsewhere and cannot be replaced: it stays as it was.
+    #[error("{}: the archive is in use and cannot be replaced", path.display())]
+    ArchiveInUse { path: PathBuf },
+    /// An archive inside an archive or on a server: changed only on a local drive, as packing.
+    #[error("{}: only an archive on a local drive can be changed", path.display())]
+    ArchiveNotLocal { path: PathBuf },
+    /// The archive file is read-only.
+    #[error("{}: the archive file is read-only", path.display())]
+    ArchiveFileReadOnly { path: PathBuf },
+    /// The drive has not room for the new archive beside the old one.
+    #[error("{}: not enough space: {needed} bytes needed, {free} free", path.display())]
+    NotEnoughSpace {
+        path: PathBuf,
+        needed: u64,
+        free: u64,
+    },
 }
 
 impl OpsError {
@@ -147,6 +175,13 @@ impl OpsError {
         "sensitive_path",
         "links_unsupported",
         "link_loop",
+        "archive_not_modifiable",
+        "archive_encrypted",
+        "archive_changed",
+        "archive_in_use",
+        "archive_not_local",
+        "archive_file_read_only",
+        "not_enough_space",
     ];
 
     /// The stable code.
@@ -183,6 +218,13 @@ impl OpsError {
             Self::Sensitive { .. } => "sensitive_path",
             Self::LinksUnsupported { .. } => "links_unsupported",
             Self::LinkLoop { .. } => "link_loop",
+            Self::ArchiveNotModifiable { .. } => "archive_not_modifiable",
+            Self::ArchiveEncrypted { .. } => "archive_encrypted",
+            Self::ArchiveChanged { .. } => "archive_changed",
+            Self::ArchiveInUse { .. } => "archive_in_use",
+            Self::ArchiveNotLocal { .. } => "archive_not_local",
+            Self::ArchiveFileReadOnly { .. } => "archive_file_read_only",
+            Self::NotEnoughSpace { .. } => "not_enough_space",
         }
     }
 

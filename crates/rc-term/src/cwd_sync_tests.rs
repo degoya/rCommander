@@ -275,3 +275,17 @@ fn without_the_apps_integration_every_mark_counts() {
     let (outcome, _) = sync.follow(Path::new("/elsewhere"));
     assert_eq!(outcome, FollowOutcome::Sent);
 }
+
+/// The prompt after a line the person entered says a command ended (RC-110-02); the prompt
+/// after a `cd` the app typed does not, nor the second mark of the same prompt.
+#[test]
+fn a_prompt_after_an_entered_line_is_a_return() {
+    let mut sync = bash();
+    assert!(!mark(&mut sync, PROMPT).returned, "the first prompt");
+    sync.on_input(b"touch a\r");
+    assert!(mark(&mut sync, PROMPT).returned);
+    assert!(!mark(&mut sync, INPUT).returned, "once per prompt");
+    let (outcome, _) = sync.follow(Path::new("/elsewhere"));
+    assert_eq!(outcome, FollowOutcome::Sent);
+    assert!(!mark(&mut sync, PROMPT).returned, "the app's cd");
+}

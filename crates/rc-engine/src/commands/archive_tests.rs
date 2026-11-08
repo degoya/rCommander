@@ -199,12 +199,14 @@ async fn changes_inside_an_archive_are_refused_and_f5_copies_out() {
             sources: vec!["hello.txt".into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
         Command::OpsCopy(crate::TransferRequest {
             panel: Some(PanelId::Right),
             sources: vec![],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
     ] {
         assert_eq!(code(run(&engine, command).await), "archive_read_only");
@@ -216,6 +218,7 @@ async fn changes_inside_an_archive_are_refused_and_f5_copies_out() {
             sources: vec!["hello.txt".into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
     )
     .await;
@@ -349,6 +352,7 @@ async fn f5_copies_a_folder_out_of_an_archive_with_its_structure() {
             sources: vec!["deep".into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
     )
     .await;
@@ -424,6 +428,7 @@ async fn f5_out_of_an_archive_asks_and_skip_all_answers_every_conflict() {
             sources: vec!["docs".into(), "hello.txt".into(), "empty.txt".into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
     )
     .await;

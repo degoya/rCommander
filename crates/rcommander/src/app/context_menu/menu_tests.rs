@@ -26,6 +26,7 @@ fn pane(cursor: usize, selected: &[&str], page: usize) -> Pane {
             size: 0,
             modified: None,
             created: None,
+            accessed: None,
             attributes: Attributes::default(),
             hidden: false,
             owner: None,
@@ -45,7 +46,9 @@ fn pane(cursor: usize, selected: &[&str], page: usize) -> Pane {
         flat: None,
         archive: None,
         dir_sizes: Default::default(),
+        columns: Default::default(),
         listing: None,
+        git: None,
     };
     let mut pane = Pane::new(state);
     pane.set_page_rows(page);
@@ -200,7 +203,7 @@ fn above_the_explorer_s_menu_stand_copy_rename_and_rcommander_s_properties() {
     let properties = |list: &[super::Item]| {
         list.iter()
             .find(|item| item.key() == Some(&chord("Alt+Enter")))
-            .map(|item| item.label)
+            .map(|item| item.label.clone())
     };
     assert_ne!(properties(&over), properties(&alone), "whose properties");
 }

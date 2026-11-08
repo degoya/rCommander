@@ -128,7 +128,7 @@ impl Engine {
                 if let Some(key) = read(SecretKind::Key).await? {
                     ready.push(Ready::Key {
                         key,
-                        info: info.clone(),
+                        info: Box::new(info.clone()),
                         passphrase,
                     });
                 }
@@ -168,6 +168,9 @@ fn draft_of(source: &Connection, name: String) -> ConnectionDraft {
         // The copy draws in the source's colours (RC-100-51).
         theme_light: source.theme_light.clone(),
         theme_dark: source.theme_dark.clone(),
+        // The jump host goes with the copy, the port forwards do not: their ports would collide
+        // (RC-110-03).
+        jump_id: source.jump_id,
     }
 }
 

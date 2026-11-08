@@ -33,6 +33,8 @@ pub const ALL_CODES: &[&str] = &[
     codes::PLUGIN_SECRET_MISSING,
     codes::PLUGIN_SECRET_TARGET_NOT_ALLOWED,
     codes::PLUGIN_INVENTORY_TOO_LARGE,
+    // A compare plugin's (RC-100-41).
+    codes::PLUGIN_COMPARE_TOO_LARGE,
 ];
 
 /// The code of a failure the host answered: its own code, or [`PLUGIN_FAILED`].

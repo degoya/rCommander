@@ -1,7 +1,7 @@
 # Markup viewer
 
-rCommander's bundled viewer plugin for reStructuredText, LaTeX and BibTeX, in one plugin with a
-lexer per format (RC-100-83). It offers one view, **highlighted**: the text coloured like an
+rCommander's bundled viewer plugin for reStructuredText, LaTeX, BibTeX (RC-100-83) and
+TaskPaper/PlainTasks to-do lists (RC-110-07), in one plugin with a lexer per format. It offers one view, **highlighted**: the text coloured like an
 editor.
 
 ## Formats
@@ -12,28 +12,29 @@ The format is the file's extension, in any case; the content is never guessed fr
 | --- | --- | --- |
 | reStructuredText | `.rst` | section titles - a line above an underline, so every line is lexed with the next beside it - overlines, transitions and table borders; explicit markup: directives (`.. note::`, `.. code-block:: python`) with their options and indented content, targets `.. _name: url`, footnotes and citations `.. [1]`, substitution definitions `.. \|name\| image::`, comments with their indented block; field lists `:Author:`; bullets, enumerators (`1.`, `#.`, `(a)`, `iv.`), line blocks; doctests `>>>`; a paragraph ending in `::` and the literal block after it; inline markup: `**strong**`, `*emphasis*`, ``` ``literal`` ```, `` `text` `` with a role before or after it (`:ref:`, `:py:func:`), references `` `text <url>`_ ``, `name_`, `name__`, `\|substitution\|`, `[1]_`, and addresses `https://...` |
 | LaTeX | `.tex`, `.sty` | commands (`@` a letter, as in a package) and control symbols (`\\`, `\%`); `%` comments; braces and brackets; math in `$...$`, `$$...$$`, `\(...\)`, `\[...\]` over lines - its text a string, its commands keywords - which a blank line ends, as TeX does; the environment of `\begin` and `\end`; packages and classes; the keys of `\label`, `\ref`, `\cite` and their kin, past an optional argument; files of `\input`, `\include`, `\includegraphics`; the command `\newcommand`, `\def`, `\let` define; `#1`; `&`, `~`, `^`, `_`; the environments `verbatim`, `Verbatim`, `lstlisting`, `minted` and `comment` up to their `\end`; `\verb\|...\|` |
+| To-do list | `.todo`, `.taskpaper` | TaskPaper's and PlainTasks' plain text: projects (a line ending in `:`, tags may follow it); tasks by their mark - open (`-`, `*`, `☐`, `□`, `❍`, `❑`, `[ ]`), done (`✔`, `✓`, `☑`, `+`, `[x]`, `[X]`) or cancelled (`✘`, `✗`), the mark followed by a blank; tags `@name` after a blank, with a value in parentheses (`@due(26-05-12)`); the date tags `@done`, `@started`, `@due`, `@created`, `@cancelled`, `@lasted`, `@wasted`, `@estimated`, `@today`; a task done or cancelled - by its mark, or by `@done` or `@cancelled` - dimmed; PlainTasks' archive rule (`--- ✄ ---`, `＿＿＿`); every other line a note, plain but for its tags. `todo.txt` and a file named `TODO` are other formats and not read as to-do lists |
 | BibTeX | `.bib` | entries `@type{key, field = value}` or with parentheses: the type, the citation key (also on the next line), fields, values in braces (nested) or quotes over lines, numbers, abbreviations (`jan`, an `@string`'s name) and `#` joining them; `@string` and `@preamble` without a key; `@comment`, and every text between entries a comment, as BibTeX ignores it |
 
 ## Classes
 
 The formats are no code, so a class names a role:
 
-| Class | reStructuredText | LaTeX | BibTeX |
-| --- | --- | --- | --- |
-| **keyword** | section titles, directive names, `**strong**` | commands | entry types `@article` |
-| **key** | fields and options, targets, substitutions, footnote and citation labels | labels, references and citation keys, `#1` | field names |
-| **type-name** | references and addresses, a code block's language | environments, packages and classes | citation keys |
-| **function** | roles | the command a definition names | - |
-| **literal** | `*emphasis*` | - | abbreviations |
-| **string** | literals, literal and code blocks, interpreted text, doctests | math, verbatim text, `\verb`, files | values |
-| **number** | enumerators | - | numbers |
-| **comment** | comments | `%` comments, the `comment` environment | text between entries, `@comment` |
-| **operator**, **punctuation** | bullets, `>>>`; adornments, borders, `..`, `::` | math delimiters, control symbols, `& ~ ^ _`; braces | `=`, `#`; braces, commas |
-| **invalid** | - | math a blank line ends or the file leaves open, a verbatim environment left open | a value the file leaves open |
+| Class | reStructuredText | LaTeX | BibTeX | To-do list |
+| --- | --- | --- | --- | --- |
+| **keyword** | section titles, directive names, `**strong**` | commands | entry types `@article` | projects |
+| **key** | fields and options, targets, substitutions, footnote and citation labels | labels, references and citation keys, `#1` | field names | - |
+| **type-name** | references and addresses, a code block's language | environments, packages and classes | citation keys | date tags `@done`, `@due` |
+| **function** | roles | the command a definition names | - | other tags `@high` |
+| **literal** | `*emphasis*` | - | abbreviations | the mark of a task done |
+| **string** | literals, literal and code blocks, interpreted text, doctests | math, verbatim text, `\verb`, files | values | a tag's value that starts with no digit |
+| **number** | enumerators | - | numbers | a tag's date, time or number |
+| **comment** | comments | `%` comments, the `comment` environment | text between entries, `@comment` | the text of a task done or cancelled, the archive rule |
+| **operator**, **punctuation** | bullets, `>>>`; adornments, borders, `..`, `::` | math delimiters, control symbols, `& ~ ^ _`; braces | `=`, `#`; braces, commas | the mark of an open task; a project's `:`, a value's parentheses |
+| **invalid** | - | math a blank line ends or the file leaves open, a verbatim environment left open | a value the file leaves open | the mark of a task cancelled |
 
 What reaches from one line into the next: an indented reStructuredText block and the literal
 block a `::` promises, whether a line underlines a title; LaTeX math and verbatim environments;
-a BibTeX entry, its key still to come, and a value over lines. Inline markup over lines is not
+a BibTeX entry, its key still to come, and a value over lines; nothing in a to-do list. Inline markup over lines is not
 followed: markup the line does not close stays text; an end-string is looked for at most 4096
 bytes on.
 
@@ -66,7 +67,8 @@ ahead a bounded distance only, so their time is linear in the file. A line is co
   to one
 - `src/lexer.rs` - the state a line starts in, the openings `open` sees left open, the
   dispatch; `src/lexer/rst.rs` reStructuredText's lines and blocks, `src/lexer/inline.rs` its
-  inline markup, `src/lexer/latex.rs`, `src/lexer/bibtex.rs`, `src/lexer/cursor.rs` the cursor
+  inline markup, `src/lexer/latex.rs`, `src/lexer/bibtex.rs`, `src/lexer/todo.rs`, `src/lexer/cursor.rs` the
+  cursor
 - `src/tokens.rs` - the tokens of the lines asked for, a line's text decoded, the next line read
   ahead
 - `src/lines.rs` - the line index; `src/reader.rs` - the windows read and the lines of each

@@ -60,7 +60,8 @@ impl Preset {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dialog {
     pub panel: PanelId,
-    /// Never `Rename`: Shift+F6 edits in the list ([`InlineRename`]).
+    /// `Rename` only for several selected entries (RC-110-04); one is renamed in the list
+    /// ([`InlineRename`]).
     pub kind: FileDialog,
     /// The target, the folder's or the file's name; unused for a delete.
     pub text: String,
@@ -99,8 +100,12 @@ fn sources(state: &PanelState, on_parent: bool) -> Option<(Vec<String>, usize, O
     }
 }
 
+/// The mask that keeps every name, Total Commander's `*.*`.
+pub const KEEP_NAMES: &str = "*.*";
+
 /// `location` (a path here, `sftp://<name>/<path>` on a server) as a target to copy into: with
-/// a separator at its end, `/` on a server.
+/// a separator at its end, `/` on a server, and the mask [`KEEP_NAMES`] after it, as Total
+/// Commander offers it (RC-110-04).
 fn into(location: &str) -> String {
     let mut text = location.to_owned();
     let separator = if text.contains("://") {
@@ -111,6 +116,7 @@ fn into(location: &str) -> String {
     if !text.ends_with(['/', separator]) {
         text.push(separator);
     }
+    text.push_str(KEEP_NAMES);
     text
 }
 
@@ -118,7 +124,9 @@ impl Dialog {
     /// The dialog `kind` for `panel`, whose state is `state` and whose other panel shows
     /// `other` (its location as text); `None` when it has nothing to work on (the cursor on
     /// `..`, nothing selected). F7 offers the name under the cursor, file or folder, as Total
-    /// Commander does; Shift+F4 only a file's.
+    /// Commander does; Shift+F4 only a file's. Shift+F5 and Shift+F6 on several selected
+    /// entries offer the mask `*.*` for their own folder (RC-110-04); Shift+F6 on one entry
+    /// opens nothing here (the list's editor).
     pub fn open(
         kind: FileDialog,
         panel: PanelId,
@@ -140,18 +148,27 @@ impl Dialog {
                 let (sources, count, single) = sources(state, on_parent)?;
                 (sources, count, single, String::new())
             }
-            // One entry: the only selected one, else the one under the cursor.
-            FileDialog::CopyHere => {
-                let name = match sources(state, on_parent)? {
-                    (_, 1, Some(name)) => name,
-                    _ if on_parent => return None,
-                    _ => state.cursor_entry()?.name.clone(),
-                };
-                (vec![name.clone()], 1, Some(name.clone()), name)
-            }
+            // Several selected: a mask for each; one entry: the only selected one, else the
+            // one under the cursor.
+            FileDialog::CopyHere => match sources(state, on_parent)? {
+                (sources, count, None) if count > 1 => {
+                    (sources, count, None, KEEP_NAMES.to_owned())
+                }
+                (_, 1, Some(name)) => (vec![name.clone()], 1, Some(name.clone()), name),
+                _ if on_parent => return None,
+                _ => {
+                    let name = state.cursor_entry()?.name.clone();
+                    (vec![name.clone()], 1, Some(name.clone()), name)
+                }
+            },
             FileDialog::Mkdir => (Vec::new(), 0, None, cursor_name.unwrap_or_default()),
             FileDialog::NewText => (Vec::new(), 0, None, cursor_file.unwrap_or_default()),
-            FileDialog::Rename => return None,
+            FileDialog::Rename => match sources(state, on_parent)? {
+                (sources, count, None) if count > 1 => {
+                    (sources, count, None, KEEP_NAMES.to_owned())
+                }
+                _ => return None,
+            },
         };
         Some(Self {
             panel,
@@ -221,7 +238,7 @@ impl Dialog {
     pub fn transfers(&self) -> bool {
         matches!(
             self.kind,
-            FileDialog::Copy | FileDialog::CopyHere | FileDialog::Move
+            FileDialog::Copy | FileDialog::CopyHere | FileDialog::Move | FileDialog::Rename
         )
     }
 
@@ -230,22 +247,33 @@ impl Dialog {
         self.transfers() || matches!(self.kind, FileDialog::Delete | FileDialog::DeletePermanent)
     }
 
-    /// The characters to select when the field gets the keys: the name without its extension
-    /// for Shift+F5, everything otherwise.
-    pub fn selection(&self) -> Option<usize> {
-        (self.kind == FileDialog::CopyHere).then(|| stem_len(&self.text))
+    /// The characters to select when the field gets the keys, from and to: the name without
+    /// its extension for Shift+F5 on one entry; none, the cursor before the mask, for a target
+    /// that ends with `*.*` after a folder (F5, F6); everything otherwise (`None`).
+    pub fn selection(&self) -> Option<(usize, usize)> {
+        if self.kind == FileDialog::CopyHere && self.count == 1 {
+            return Some((0, stem_len(&self.text)));
+        }
+        let folder = self.text.strip_suffix(KEEP_NAMES)?;
+        let caret = folder.chars().count();
+        (caret > 0).then_some((caret, caret))
     }
 
     /// The command OK runs and what follows its job; the error code when the text will not do.
     ///
     /// # Errors
     ///
-    /// `invalid_name` for an empty target or name, or a new file's name that is no plain name.
+    /// `invalid_name` for an empty target or name, or a new file's name that is no plain name;
+    /// `mask_unchanged` for several entries copied or renamed in their folder by `*.*`.
     pub fn submit(&self) -> Result<(Command, FollowUp), &'static str> {
         let panel = Some(self.panel);
         let text = self.text.trim();
         if self.has_field() && text.is_empty() {
             return Err("invalid_name");
+        }
+        let in_place = matches!(self.kind, FileDialog::CopyHere | FileDialog::Rename);
+        if in_place && self.count > 1 && matches!(text, KEEP_NAMES | "*") {
+            return Err("mask_unchanged");
         }
         let options = JobOptions {
             on_conflict: self.preset.choice(),
@@ -306,6 +334,7 @@ impl Dialog {
                         path: Some(text.to_owned()),
                         program: ExternalProgram::Editor,
                         create: true,
+                        cursor_only: false,
                     },
                     FollowUp::Cursor(first_part(text)),
                 )

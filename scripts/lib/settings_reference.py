@@ -5,7 +5,7 @@ the authority for which settings exist and in which order; each row is evaluated
 (settings_reference_rust.py), its constants and `const fn` helpers followed into
 schema/<area>.rs and into other crates (rc_ops, rc_vault, rc_plugin_host). The words - label, help,
 choices, page and tab titles - are crates/rcommander/locales/en.json's; the dialog's page order
-and its Appearance tabs are the window's (app/settings.rs `Page::ALL`, settings/view.rs,
+and its Appearance tabs are the window's (settings/page.rs `Page::ALL`, settings/view.rs,
 settings/tabs.rs `APPEARANCE`); what is protected beyond a row's flag is lookup.rs's prefixes. The
 Rust tests hold the same data against the compiled program (settings tests, tabs_tests).
 
@@ -30,7 +30,7 @@ SCHEMA = "crates/rc-engine/src/settings/schema.rs"
 # The schema's types (`SettingKind`, `SettingPage`), split from SCHEMA to keep it under 500 lines.
 TYPES = "crates/rc-engine/src/settings/schema/types.rs"
 LOOKUP = "crates/rc-engine/src/settings/schema/lookup.rs"
-DIALOG = "crates/rcommander/src/app/settings.rs"
+DIALOG = "crates/rcommander/src/app/settings/page.rs"
 VIEW = "crates/rcommander/src/app/settings/view.rs"
 TABS = "crates/rcommander/src/app/settings/tabs.rs"
 CATALOGUE = "crates/rcommander/locales/en.json"
@@ -69,6 +69,10 @@ KINDS = {
     "Proxy": "Empty for the system's proxy, `direct`, or `http(s)://host:port` without a login",
     "Theme": "The id of a colour theme, built in (such as `fluent-dark`, `nord-light`) or the person's own; one of the other mode or none at all draws with Fluent",
     "WslThemes": "Lines, one per WSL distribution: its name, a tab, a light theme's id and a dark theme's id after another tab, either empty for the window's",
+    "Arguments": "A program's arguments: words, double quotes round one with spaces; `%1` is the left file, `%2` the right one",
+    "FileAssociations": "The internal associations as a JSON list of rules, edited in the window *Internal associations...*; empty for none",
+    "Drives": "Drive letters such as `DE`; a backslash stands for every network share (UNC path); empty for none",
+    "MaskLines": "Lines, one entry each: a name or a mask (`*.bak`), a path (`%USERPROFILE%\\AppData`), `\\Path` on every drive, a `\\` at the end for folders only; at most 1000 lines",
 }
 
 PLUGINS_NOTE = """

@@ -14,9 +14,12 @@ use rc_plugin_host::{
     },
 };
 
+use rc_plugin_types::{Failure, FailureKind};
+
 use super::{
     InventoryOutcome, InventoryReport, InventorySource, InventorySourceId, InventorySourceRequest,
-    commands::entry, schedule::due,
+    commands::{INVENTORY_UNLICENSED, entry, inventory_failure_code},
+    schedule::due,
 };
 use crate::{
     Command, ConnectionKind, DefaultView, Engine, EngineError, Outcome, SecretParam, test_support,
@@ -276,4 +279,38 @@ fn a_source_is_due_after_its_minutes() {
     assert!(!due(&source(stamp(10)), 60, now));
     assert!(due(&source(stamp(61)), 60, now));
     assert!(!due(&source(Some("not a time".into())), 60, now));
+}
+
+/// RC-100-40: a paid inventory without a valid licence key answers `access-denied` with its own
+/// code `<id>.unlicensed`; the window names it, and no other answer is taken for it.
+#[test]
+fn a_paid_inventory_without_a_licence_is_named_so() {
+    let unlicensed = Failure::coded(FailureKind::AccessDenied, &format!("{ID}.unlicensed"));
+    assert_eq!(inventory_failure_code(&unlicensed), INVENTORY_UNLICENSED);
+    let other_kind = Failure::coded(FailureKind::Io, &format!("{ID}.unlicensed"));
+    assert_eq!(inventory_failure_code(&other_kind), "plugin_failed");
+    let own_words = Failure::coded(FailureKind::AccessDenied, &format!("{ID}.token_refused"));
+    assert_eq!(inventory_failure_code(&own_words), "plugin_failed");
+    let host = Failure::coded(FailureKind::BadData, "plugin_inventory_too_large");
+    assert_eq!(inventory_failure_code(&host), "plugin_inventory_too_large");
+}
+
+/// RC-100-40: an HTTPS address is checked with the FTPS certificate trust (a self-signed
+/// Proxmox node is asked about, `rc-remote`'s `ftp/tls_tests.rs`); any other address has none.
+#[tokio::test]
+async fn an_https_inventory_gets_the_certificate_trust() {
+    let setup = Setup::new(&two_hosts()).await;
+    for (address, checked) in [
+        ("https://pve.example.net:8006/", true),
+        ("https://[2001:db8::5]/", true),
+        ("http://127.0.0.1:8000/", false),
+        ("not an address", false),
+    ] {
+        let tls = setup
+            .engine
+            .inventory_tls(address)
+            .await
+            .expect("the trust");
+        assert_eq!(tls.is_some(), checked, "{address}");
+    }
 }

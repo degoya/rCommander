@@ -165,6 +165,7 @@ async fn waiting_copy(harness: &mut Harness, root: &Path) {
         sources: vec!["abc.txt".into()],
         target: Some(root.join("out").to_string_lossy().into_owned()),
         options: rc_engine::JobOptions::default(),
+        rename_mask: None,
     });
     let engine = harness.app.engine().clone();
     let Ok(rc_engine::Outcome::Job(job)) = engine.dispatch(copy).await else {

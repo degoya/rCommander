@@ -3,10 +3,10 @@
 # the manifest it packages. A failure code starts with the plugin's id (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.4.0"
+api_version = "0.6.0"
 id = "01a1aafa-409f-715f-b096-2782e53c4ab0"
 name = "Schema viewer"
-version = "0.1.0"
+version = "0.1.1"
 
 [match]
 # The language is the extension's (src/lang.rs, `Lang::from_name`): Protocol Buffers; GraphQL

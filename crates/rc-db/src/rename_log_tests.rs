@@ -129,3 +129,37 @@ fn the_log_is_retained_with_the_undo_bounds() {
         }
     );
 }
+
+#[tokio::test]
+async fn the_run_before_is_the_one_logged_earlier() {
+    let db = db().await;
+    db.log_rename_run("1", "d", &[("a", "b")])
+        .await
+        .expect("log");
+    db.log_rename_run("2", "d", &[("b", "c")])
+        .await
+        .expect("log");
+    db.log_rename_run("3", "e", &[("x", "y")])
+        .await
+        .expect("log");
+    let before = |run: &'static str| {
+        let db = db.clone();
+        async move {
+            db.rename_run_before(run)
+                .await
+                .expect("read")
+                .map(|run| run.run)
+        }
+    };
+    assert_eq!(before("3").await.as_deref(), Some("2"));
+    assert_eq!(before("2").await.as_deref(), Some("1"));
+    assert_eq!(before("1").await, None);
+    assert_eq!(before("unknown").await, None);
+    let second = db
+        .rename_run_before("3")
+        .await
+        .expect("read")
+        .expect("a run");
+    assert!(second.is_complete());
+    assert_eq!(second.steps[0].from, "b");
+}

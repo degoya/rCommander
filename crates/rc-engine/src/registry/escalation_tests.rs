@@ -51,6 +51,16 @@ fn escalated() -> Vec<Command> {
                 settings.overwrite = true;
             }
         }),
+        changed("archive.add", |command| {
+            if let Command::ArchiveAdd { settings, .. } = command {
+                settings.delete_sources = true;
+            }
+        }),
+        changed("archive.add", |command| {
+            if let Command::ArchiveAdd { options, .. } = command {
+                options.on_conflict = Some(ConflictChoice::Overwrite);
+            }
+        }),
         changed("sync.apply", |command| {
             if let Command::SyncApply(request) = command {
                 request.run.deletes_confirmed = true;
@@ -86,6 +96,14 @@ fn escalated() -> Vec<Command> {
                 change.mode = Some(0o664);
             }
         }),
+        changed("usercmd.run", |command| {
+            if let Command::RunUserCommand { params, .. } = command {
+                *params = Some("%N".into());
+            }
+        }),
+        sample("start_menu.run"),
+        // The sample hands a button files (RC-100-87).
+        sample("button_bar.run"),
     ]
 }
 
@@ -127,6 +145,18 @@ fn plain() -> Vec<Command> {
         changed("file.set_attributes", |command| {
             if let Command::SetFileAttributes { change, .. } = command {
                 change.mode = Some(0o755);
+            }
+        }),
+        sample("usercmd.run"),
+        changed("start_menu.run", |command| {
+            if let Command::RunStartItem { params, .. } = command {
+                *params = None;
+            }
+        }),
+        changed("button_bar.run", |command| {
+            if let Command::RunButton { files, params, .. } = command {
+                files.clear();
+                *params = None;
             }
         }),
     ]
@@ -179,7 +209,10 @@ fn every_row_is_a_stricter_class_of_a_command() {
         let command = spec(row.id).expect("the row names a command");
         assert_eq!(command.class.stricter(row.class), row.class, "{}", row.id);
         assert_ne!(command.class, row.class, "{}", row.id);
-        let stored = matches!(row.id, "diagnostics.set_retention" | "queue.load");
+        let stored = matches!(
+            row.id,
+            "diagnostics.set_retention" | "queue.load" | "file.open"
+        );
         assert!(
             stored || reached.contains(&row.id),
             "{} is never reached",

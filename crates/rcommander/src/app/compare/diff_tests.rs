@@ -2,7 +2,11 @@ use std::{fmt::Write as _, sync::Arc};
 
 use rc_engine::{
     VfsPath,
-    compare::{TextDiff, TextOptions, text::decode},
+    compare::{
+        EditSession, Origin, TextDiff, TextOptions,
+        edit::SideFile,
+        text::{TextFile, decode},
+    },
 };
 
 use super::{DiffOption, DiffWindow, Loaded, Shown};
@@ -15,14 +19,24 @@ fn window() -> DiffWindow {
         let changed = if line == 20 || line == 70 { "x" } else { "" };
         let _ = writeln!(right, "line {line}{changed}");
     }
-    let diff = TextDiff::compute(
+    let (left, right) = (
         decode(left.as_bytes()).expect("text"),
         decode(right.as_bytes()).expect("text"),
-        &TextOptions::default(),
     );
+    let side = |file: &TextFile, name: &str| SideFile {
+        file: file.clone(),
+        origin: Origin {
+            path: VfsPath::local(name),
+            size: 0,
+            modified: None,
+        },
+        read_only: None,
+    };
+    let session = EditSession::new(side(&left, "/l/a"), side(&right, "/r/a"));
+    let diff = TextDiff::compute(left, right, &TextOptions::default());
     let mut window = DiffWindow::new(VfsPath::local("/l/a"), VfsPath::local("/r/a"), 1);
     window.set_page(10);
-    window.loaded(Ok(Loaded::Text(Arc::new(diff))));
+    window.loaded(Ok(Loaded::Text(Arc::new(diff), Box::new(session))));
     window
 }
 

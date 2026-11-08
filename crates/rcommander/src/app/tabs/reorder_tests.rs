@@ -215,7 +215,13 @@ async fn the_tab_menu_shows_the_keymaps_keys() {
     };
     assert_eq!(
         keys(&harness),
-        [None, None, Some(crate::keymap::label_text("Ctrl+W"))]
+        [
+            None,
+            None,
+            Some(crate::keymap::label_text("Ctrl+W")),
+            None,
+            None
+        ]
     );
 
     let settings = TabsMessage::Settings {
@@ -224,7 +230,7 @@ async fn the_tab_menu_shows_the_keymaps_keys() {
     };
     harness.send(Message::Tabs(settings)).await;
     harness.send(menu).await;
-    assert_eq!(keys(&harness), [None, None, None]);
+    assert_eq!(keys(&harness), [None, None, None, None, None]);
     crate::app::context_menu::keys::set_shown(true);
 }
 

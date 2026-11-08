@@ -1,0 +1,46 @@
+# rCommander's bundled Office viewer (RC-100-99). The fields every bundled plugin shares are in
+# plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code and a setting's label start with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0 and later: `settings`, through which `open` reads `sheet_rows`.
+api_version = "0.6.0"
+id = "01a1b720-fdc2-7718-851e-092f28c86d2f"
+name = "Office viewer"
+version = "0.1.0"
+
+[match]
+# Word, Excel and PowerPoint as Office Open XML, with and without macros; `probe` takes a zip
+# whose central directory has `[Content_Types].xml`. No magic: `PK` would claim every zip.
+extensions = ["docx", "docm", "xlsx", "xlsm", "pptx", "pptm"]
+magic = []
+# 1 GiB. Only the zip's central directory and the XML parts a view needs are read through
+# `read-at`, never a picture, video or embedded object, so the file's size costs nothing by
+# itself; a presentation with embedded video easily passes the 256 MiB a text viewer takes.
+max_size = 1073741824
+
+[viewer]
+# The text first; the properties with the sheets or slides as a tree beside it.
+outputs = ["text", "tree"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else; a relationship to a
+# file or a URL outside the package is not followed.
+[capabilities]
+
+[metadata]
+description = "Shows the text of Word, Excel and PowerPoint documents (docx, xlsx, pptx), and their properties, sheets and slides as a tree."
+
+# One part inflates to at most 64 MiB, and a workbook's shared strings stay in memory while its
+# sheets are written, beside the parsing buffers and a text window: beyond the default 64 MiB
+# (RC-100-99: Office up to 256 MiB). Inflating and parsing a 64 MiB part is compute the default
+# fuel does not cover, and `text` of a large workbook reads every sheet in one call, which on a
+# slow remote takes a while.
+[limits]
+memory_bytes = 268435456
+fuel = 20000000000
+timeout_milliseconds = 60000
+
+[[settings]]
+key = "sheet_rows"
+type = "choice"
+values = ["1000", "10000", "100000"]
+default = "10000"

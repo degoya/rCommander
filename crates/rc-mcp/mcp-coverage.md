@@ -13,6 +13,8 @@ asks by.
 | `agent.list_identities` | read | `ssh_agent_identities` | The keys the running SSH agents hold (ssh-agent, OpenSSH service, Pageant): type, comment, fingerprint; never key bytes |
 | `archive.list` | read | `archives_list` | The entries of a directory inside an archive, with packed size, encrypted and unsafe-name marks |
 | `archive.test` | read | `archives_test` | Test archives in the background: read every entry and check its CRC; damaged and encrypted entries are listed |
+| `archive.add` | write (destructive when it deletes its sources or on_conflict overwrites) | `archives_add` | Add files and folders to an existing zip, 7z or tar archive (into a folder inside it) as a queued job; the archive is rewritten beside itself and replaced when complete |
+| `archive.delete` | destructive | `archives_delete` | Remove entries from a zip, 7z or tar archive for good (no recycle bin) as a queued job; the archive is rewritten beside itself and replaced when complete |
 | `archive.extract` | write (destructive when on_conflict overwrites) | `archives_extract` | Unpack archives into a directory as a queued job: each into its own folder, by mask, with or without paths |
 | `archive.pack` | write (destructive when it deletes its sources or replaces an archive) | `archives_pack` | Pack files and folders into a new zip, 7z or tar archive (gz, xz, bz2, zst) as a queued job |
 | `archive.password` | gui_only | omitted: GUI only: human decision | Answer an extraction's password question; the password lives for that job only |
@@ -29,6 +31,8 @@ asks by.
 | `checksum.verify` | read | `files_checksum_verify` | Check the files a checksum file lists: ok, mismatch, missing per line |
 | `cmdline.run` | exec | omitted: starts a program in a console window for the person at the screen; agents run commands with terminal_open and terminal_send_input (exec, confirmed) | Run a command line in a panel's folder: cd and a drive move the panel, any other line starts in the system's shell in a console window |
 | `panel.filter` | read | `panel_filter` | Show only the entries of a panel whose names match a filter (* and ? as wildcards), or every entry again |
+| `compare.apply_blocks` | write | `files_compare_apply` | Copy blocks of differing lines of two compared text files to the other side and save it |
+| `compare.by_content` | exec | omitted: starts the compare program a person configured, at the window | Compare two files in the external compare tool of the settings, else in the diff window |
 | `compare.dirs` | read | `dirs_compare` | Compare two directory trees and propose a synchronization, row by row |
 | `compare.files` | read | `files_compare` | Compare two files by content: first differing byte, line diff for text |
 | `compare.open_diff` | read | omitted: opens the diff window; files_compare compares | Open the diff window for two files, picked as compare.files picks them |
@@ -57,10 +61,12 @@ asks by.
 | `drives.list` | read | `drives_list` | The drive bar: drives with kind, volume and free space, portable devices, WSL distributions, servers |
 | `drives.map_network` | gui_only | omitted: GUI only: human decision | Map a network share to a free drive letter; Windows asks the person for the credentials |
 | `drives.unmap_network` | destructive | `drives_unmap_network` | Disconnect a network drive; with open files only when forced, which may lose unsaved data |
+| `file.associations` | gui_only | omitted: GUI only: human decision | Open the internal associations' window |
 | `file.combine` | write | `files_combine` | Put split parts (.001 or .crc) back together into a new file, CRC checked |
-| `file.open` | exec | `file_open` | Open the entry under a panel's cursor or a path: show a directory, start a program, open a file in its associated program |
+| `file.open` | exec (gui_only when the file's internal association starts as administrator, asks for its parameters or runs a row stricter than exec) | `file_open` | Open the entry under a panel's cursor or a path: show a directory, start a program, open a file by its internal association or in the program the system associates with it |
+| `file.run_association` | exec | omitted: starts a program a person associated, from that person's context menu; file_open runs a file's open command as Enter does | Run a command of a file's internal association, as its context menu entry does |
 | `file.split` | write | `files_split` | Split a file into parts of a given size with a Total Commander .crc file |
-| `file.open_external` | exec | omitted: starts the viewer or editor a person configured, for that person at the window; file_open hands a file to the system | Open a file in the viewer or editor of the settings, or the system's program (F3, F4, Shift+F4) |
+| `file.open_external` | exec | omitted: starts the viewer or editor a person configured, for that person at the window; file_open hands a file to the system | Open a file in the viewer or editor of the settings, or the system's program (F3, F4, Shift+F4, Alt+F3, Shift+F3) |
 | `ops.copy_to` | write | omitted: the F5 dialog's typed target; agents copy into a directory with ops_copy | Copy to a typed target: into a directory, or one entry under a new name (the F5 dialog) |
 | `ops.dialog` | read | omitted: GUI dialog; the operation itself is an ops_* tool | Open a file-operation dialog in the window: copy, move, rename, new folder, delete, new text file |
 | `ops.move_to` | write | omitted: the F6 dialog's typed target; agents move into a directory with ops_move | Move to a typed target: into a directory, or one entry renamed (the F6 dialog) |
@@ -90,6 +96,7 @@ asks by.
 | `login_scripts.set_secret` | gui_only | omitted: GUI only: human decision | Store a secret encrypted with a login script, under a label |
 | `login_scripts.update` | write (exec when it sets steps) | `login_scripts_update` | Change a login script's name, steps or timeouts (no secrets) |
 | `multi_rename.apply` | write | `multi_rename_apply` | Rename entries of a folder by masks, case and search and replace, as a queued job logged for undo; refused while the preview has conflicts |
+| `multi_rename.next_step` | read | omitted: the agent passes names itself | The names of a multi-rename's entries after the latest run, as the sources of a next step |
 | `multi_rename.open_dialog` | read | omitted: purely visual; the preview is multi_rename_preview | Open the multi-rename dialog in the window on a panel's selection, or the entry under its cursor |
 | `multi_rename.preset_delete` | destructive | `multi_rename_preset_delete` | Delete a saved multi-rename preset |
 | `multi_rename.preset_list` | read | `multi_rename_preset_list` | List the saved multi-rename presets by name, each with its rule, and the rule last used |
@@ -114,10 +121,12 @@ asks by.
 | `panel.cancel_io` | read | omitted: Escape in the window for a drive that does not answer; an MCP call ends at its time limit or when the client cancels it | Stop the calls that wait on a drive or share that does not answer; they end with cancelled |
 | `panel.change_drive` | read | `panel_change_drive` | Show a drive in a panel, in the directory the panel last showed on it |
 | `panel.context_menu` | read | omitted: GUI only: shell menu | Open the context menu of a panel's selection in the window |
+| `panel.cycle_separate_tree` | read | omitted: writes only panels.separate_tree; settings_set does the same | Turn the folder tree beside the panels off, to one for both, to one beside each, and off again (Ctrl+Shift+F8) |
 | `panel.deselect_all` | read | `panel_select` | Deselect every entry of a panel |
 | `panel.deselect_by_mask` | read | `panel_deselect_by_mask` | Deselect the files matching a Total Commander mask such as *.txt;*.md (directories with a trailing backslash) |
 | `panel.drive_menu` | read | omitted: opens a menu in the window; drives_list and panel_change_drive do what it offers | Open a panel's drive menu in the window |
 | `panel.get_state` | read | `get_panel_state` | A panel's path, cursor, selection and entry count; which panel is active |
+| `panel.git_status` | read | `panel_git_status` | The git marks and branch a panel knows of its folder; starts no process |
 | `panel.invert_selection` | read | `panel_select` | Select the entries of a panel that are not selected, and deselect the others |
 | `panel.list_dir` | read | `list_dir` | The entries of a directory (a panel's by default), without moving a panel |
 | `panel.move_cursor` | read | omitted: a keyboard step; set_cursor reaches any entry by index or name, and a page depends on the window | Move a panel's cursor a step: up, down, a page, to the first or last entry |
@@ -131,14 +140,19 @@ asks by.
 | `panel.select_extension` | read | `panel_select` | Select or deselect every file with the extension of the entry under the cursor |
 | `panel.select_range` | read | omitted: a keyboard range from the cursor; panel_select takes masks and toggle_selection names | Move the cursor a step and give the entries passed the opposite of the cursor entry's selection |
 | `panel.set_cursor` | read | `set_cursor` | Put a panel's cursor on an entry, by index or name |
-| `panel.set_view` | read | `panel_set_view` | Show a panel's entries in the full view (columns) or the brief view (names only) |
+| `panel.set_view` | read | `panel_set_view` | Show a panel's entries in the full view (columns), the brief view (names only), a column set, the comments view or the thumbnails |
 | `panel.show_files` | read | `show_files` | Show a panel's files instead of its terminal; the shell keeps running |
+| `panel.show_tree` | read | `panel_show_tree` | Show the folder tree of a panel's drive in its place, or its files again (Ctrl+F8); the window's other panel follows the tree's cursor |
 | `panel.sort` | read | `panel_sort` | Sort a panel by name, extension, size or date; the same key again turns the direction around |
 | `panel.switch_active` | read | `switch_active_panel` | Make the other panel, or a named one, the active panel |
+| `panel.thumbnail_zoom` | write | omitted: writes only thumbnails.size; settings_set does the same | Make the thumbnails' tiles a step larger or smaller (64 to 512 pixels); writes thumbnails.size |
+| `panel.toggle_auto_columns` | write | omitted: settings_set with columns.auto_switch does the same | Switch the automatic column sets by folder mask on or off; the choice is stored |
+| `panel.toggle_comments` | read | omitted: panel_set_view with comments does the same | Switch a panel between the comments view (name, extension, descript.ion comment) and the view before it |
 | `panel.toggle_cursor_selection` | read | omitted: the Insert key; toggle_selection names the entries | Select or deselect the entry under a panel's cursor, then move the cursor down |
 | `panel.toggle_hidden` | read | `panel_show_hidden` | Show or hide hidden and system entries in both panels; the choice is kept |
 | `panel.toggle_selection` | read | `toggle_selection` | Select or deselect entries of a panel by name |
 | `panel.toggle_terminal` | exec | omitted: a toggle depends on what the window shows; terminal_open, terminal_show and show_files name the result | Switch a panel between its files and its terminal (a shell starts when none runs) |
+| `panel.toggle_watch` | write | omitted: settings_set changes panels.watch | Switch the file watcher on or off: shown folders are read again when they change; the choice is stored |
 | `connections.quick_connect` | gui_only | omitted: GUI only: human decision | Connect to an SSH server by host, user and password or key, saved or not, and show it |
 | `files.stat` | read | `files_stat` | One entry by its path, local, ftp:// or sftp://<connection>/<path>: kind, size, time |
 | `clipboard.copy_names` | read | omitted: the desktop clipboard, of no use to an agent; list_dir names the entries | The names, full paths or details of the selected entries as text for the clipboard, one line each |
@@ -147,6 +161,8 @@ asks by.
 | `file.properties` | read | `files_properties` | Properties of entries: kind, link target, sizes, times, attributes, owner, comment, sums |
 | `file.set_attributes` | write (destructive when the mode makes it writable by its group (g+w)) | `files_set_attributes` | Change attributes, Unix mode and times of entries, optionally down their folders |
 | `file.set_comment` | write | `files_set_comment` | Set or remove an entry's comment in the folder's descript.ion |
+| `files.disk_usage` | read | `files_disk_usage` | What a folder holds by size: its subfolders to a depth, largest first, and its largest files |
+| `files.disk_usage_dialog` | read | omitted: opens a window; files_disk_usage reports the sizes | Open the disk-usage window in the window for a panel's folder |
 | `panel.cancel_dir_sizes` | read | omitted: stops the window's size column count; an MCP call stops when the client cancels it | Stop counting folder sizes for a panel's size column |
 | `panel.count_dir_content` | read | omitted: fills the window's size column; files_dir_size answers the sizes | Count the size of every folder of a panel for its size column, in the background |
 | `panel.select_and_size` | read | omitted: the Space key: toggle_selection and files_dir_size do its two halves | Space: flip the selection of the entry under the cursor and count it when it is a folder |
@@ -159,9 +175,12 @@ asks by.
 | `plugins.resume` | gui_only | omitted: GUI only: human decision | Let a plugin suspended after repeated failures run again |
 | `plugins.rollback` | gui_only | omitted: GUI only: human decision | Run the previous installed version of a plugin instead of the current one |
 | `files.find_dialog` | read | omitted: opens a dialog in the window; files_search runs the search and panel_feed_paths shows its hits in a panel | Open the find-files dialog in the window, starting in a panel's folder |
+| `files.find_duplicates` | read | `files_find_duplicates` | Find duplicate files below start folders by size, name and contents, group by group |
 | `files.search` | read | `files_search` | Find files and folders by name masks or regex, content, size, date and attributes, page by page |
 | `panel.branch_view` | read | `panel_branch_view` | Show every file below a panel's folder (or its selected folders) flat, or leave that view |
 | `panel.feed_paths` | read | `panel_feed_paths` | Show given files and folders, such as search hits, flat in a panel |
+| `panel.select_duplicates` | read | `panel_select_duplicates` | Select files of a duplicate search result in a panel by mask, date, size or folder, leaving one per group if asked |
+| `secrets.checkout_reason` | gui_only | omitted: GUI only: human decision | The reason a PAM system is given when the connection's next login checks out its secret |
 | `secrets.import_key` | gui_only | omitted: GUI only: human decision | Take a private key file (OpenSSH, PEM, PKCS#8, PuTTY ppk) and its passphrase into the vault |
 | `secrets.source_map` | gui_only | omitted: GUI only: human decision | Take a connection's password, key or passphrase from an entry of a secret source instead of the vault |
 | `secrets.source_search` | read | `credential_sources_search` | Search a secret source: entry ids, titles, users and addresses, never a value |
@@ -201,17 +220,20 @@ asks by.
 | `panel.swap` | read | `panel_swap` | Swap the folders of the two panels (Ctrl+U), or their whole tab rows (Ctrl+Shift+U) |
 | `panel.transfer` | read | `panel_transfer` | Show the folder under a panel's cursor, or the panel's own, in the left or right panel (Ctrl+Left, Ctrl+Right) |
 | `tabs.close` | read | `tab_close` | Close a tab of a panel, the active one by default; the last tab stays |
+| `tabs.close_all` | read | `tab_close_all` | Close every tab of a panel but the active one; locked tabs stay unless included |
 | `tabs.copy_to_other` | read | `tab_copy_to_other` | Copy a tab of a panel to the end of the other panel's tabs |
 | `tabs.list` | read | `tab_list` | A panel's tabs: id, title, folder, whether locked and which one is shown |
 | `tabs.lock` | read | `tab_lock` | Lock or unlock a tab; a locked tab opens every new folder in a new tab |
 | `tabs.move` | read | `tab_move` | Move a tab of a panel to another place in its row, as dragging it in the tab bar does |
 | `tabs.next` | read | omitted: Ctrl+Tab, a keyboard step; tab_select names the tab | Show the next tab of a panel, or the previous one (Ctrl+Tab, Ctrl+Shift+Tab) |
 | `tabs.open` | read | `tab_open` | Open a folder in a new tab: the panel's own, the one under the cursor, or a path; in this or the other panel |
+| `tabs.rename` | read | `tab_rename` | Give a tab its own name, kept in every folder it shows; a blank name shows the folder's again |
 | `tabs.select` | read | `tab_select` | Show a tab of a panel by its id |
 | `history.back` | read | `history_back` | Show the folder before the current one in the tab's history (Alt+Left) |
 | `history.forward` | read | `history_forward` | Show the folder after the current one in the tab's history (Alt+Right) |
 | `history.jump` | read | `history_jump` | Show a folder of the tab's history by its index in history.list |
-| `history.list` | read | `history_list` | The folders of the tab's history, oldest first, and the one shown (Alt+Down) |
+| `history.list` | read | `history_list` | The folders of the tab's history, oldest first, and the one shown (Alt+Down); and the most visited folders |
+| `history.open_frequent` | read | `history_open_frequent` | Show one of the most visited folders by its index in history.list's frequent |
 | `hotlist.add` | write | `hotlist_add` | Add a folder to the hotlist, by default the panel's own, optionally with a folder for the other panel |
 | `hotlist.add_folder` | write | `hotlist_add_folder` | Add a folder (a submenu) to the hotlist |
 | `hotlist.delete` | destructive | `hotlist_delete` | Remove a hotlist entry, or a hotlist folder with everything in it |
@@ -241,6 +263,7 @@ asks by.
 | `queue.start` | write | `queue_start` | Start a list of the queue: its jobs run as their lanes free up |
 | `queue.window` | read | omitted: opens a window; the queue_ tools do what it offers | Open the queue window: every job with its state, progress and lane |
 | `app.about` | read | `app_about` | Which build runs: version, commit, build time, platform, licence, authors and addresses |
+| `app.make_portable` | gui_only | omitted: GUI only: human decision | Make this copy portable: a checked copy of the database and the installed plugins into data beside the program, then the marker rcommander.portable; takes effect at the next start |
 | `app.quit` | gui_only | omitted: GUI only: human decision | Quit rCommander; with transfers running or waiting the window asks first |
 | `update.check` | read | `update_check` | Check for a newer rCommander now against the signed manifest; changes no file |
 | `update.download` | gui_only | omitted: GUI only: human decision | Download the offered version, kept only when its size and SHA-256 match the manifest |
@@ -260,5 +283,56 @@ asks by.
 | `workspaces.move` | write | `workspaces_move` | Give a workspace another place in the list |
 | `workspaces.rename` | write | `workspaces_rename` | Give a workspace another name |
 | `workspaces.update` | write | `workspaces_update` | Change a workspace's name, panels or themes |
+| `forwards.delete` | write | `forwards_delete` | Delete a saved port forward of a connection, stopping it first when it runs |
+| `forwards.list` | read | `forwards_list` | A connection's local port forwards with whether each runs, or every running one |
+| `forwards.save` | gui_only | omitted: GUI only: human decision | Add or change a local port forward of an SSH connection: its port here and its target |
+| `forwards.start` | gui_only | omitted: GUI only: human decision | Start a local port forward: listen on its port and carry each connection over the SSH session |
+| `forwards.stop` | write | `forwards_stop` | Stop a running port forward: its listener and every connection through it close |
+| `forwards.stop_all` | write | `forwards_stop_all` | Stop every running port forward, or those of one connection |
+| `column_sets.create` | write | `column_sets_create` | Save a new column set: a name, its columns (field, title, width, alignment) and folder masks |
+| `column_sets.delete` | destructive | `column_sets_delete` | Delete a column set; a panel or tab showing it shows the full view |
+| `column_sets.get` | read | `column_sets_get` | One column set: its name, columns and folder masks |
+| `column_sets.list` | read | `column_sets_list` | The column sets in their order, which also decides whose folder mask wins |
+| `column_sets.move` | write | `column_sets_move` | Give a column set another place in the list |
+| `column_sets.rename` | write | `column_sets_rename` | Give a column set another name |
+| `column_sets.update` | write | `column_sets_update` | Change a column set's columns and folder masks |
+| `start_menu.delete` | gui_only | omitted: GUI only: human decision | Delete a row of the Start menu; a submenu with everything in it |
+| `start_menu.list` | read | `start_menu_list` | The Start menu in menu order: entries with their commands, submenus, separators |
+| `start_menu.manager` | gui_only | omitted: GUI only: human decision | Open the own commands' window at its Start menu tab (Change Start menu...) |
+| `start_menu.move` | gui_only | omitted: GUI only: human decision | Give a row of the Start menu another place or submenu |
+| `start_menu.run` | exec (gui_only when it starts as administrator, asks for its parameters, gets them from the caller or runs a row stricter than exec) | `start_menu_run` | Run an entry of the Start menu for a panel: its program, internal rows or own command |
+| `start_menu.save` | gui_only | omitted: GUI only: human decision | Save a row of the Start menu: an entry with its command, a submenu or a separator |
+| `usercmd.delete` | gui_only | omitted: GUI only: human decision | Delete an own command |
+| `usercmd.list` | read | `user_commands_list` | The own commands (em_) with their programs, parameters, rows and tooltips |
+| `usercmd.manager` | gui_only | omitted: GUI only: human decision | Open the own commands' window |
+| `usercmd.run` | exec (gui_only when it starts as administrator, asks for its parameters, gets them from the caller or runs a row stricter than exec) | `user_commands_run` | Run an own command (em_) for a panel: its program with the placeholders filled in, its internal rows or another own command |
+| `usercmd.save` | gui_only | omitted: GUI only: human decision | Save an own command: a program with parameters, internal rows or another own command |
+| `remote_edit.close` | gui_only | omitted: GUI only: human decision | Stop editing a server file: its local copy goes (Done, Discard) |
+| `remote_edit.list` | read | `remote_edits_list` | The server files being edited through local copies: name, server, path, state and the question waiting, never their content |
+| `remote_edit.skip` | gui_only | omitted: GUI only: human decision | Leave a server file's change in its copy for now (Not now, Cancel, Later) |
+| `remote_edit.upload` | gui_only | omitted: GUI only: human decision | Upload a server file's copy: checked first, over the server's file, as a copy beside it or in place |
+| `remote_edit.window` | gui_only | omitted: GUI only: human decision | Open the list of server files being edited |
+| `filters.delete` | read | `filters_delete` | Delete a saved file filter by its name |
+| `filters.list` | read | `filters_list` | The saved file filters (Ctrl+F12), each a name and a mask |
+| `filters.rename` | read | `filters_rename` | Give a saved file filter another name |
+| `filters.save` | read | `filters_save` | Save a file filter's mask under a name, replacing one of the same name |
+| `panel.file_filter` | read | `panel_file_filter` | Show all files (Ctrl+F10, also lifts the quick filter), only programs (Ctrl+F11) or the files a mask matches (Ctrl+F12); folders always show |
+| `panel.load_list` | read | `panel_load_list` | Show the paths of a list file in a panel as a flat view, missing ones skipped and counted |
+| `panel.save_selection` | read | `panel_save_selection` | Keep the panel's selection in memory; panel.restore_selection (Num /) brings it back |
+| `panel.selection_from_file` | read | `panel_selection_from_file` | Select the entries a text file names, one per line (UTF-8, UTF-16 or ANSI); missing names are counted |
+| `panel.selection_from_text` | read | `panel_selection_from_text` | Select the entries a text names, one per line, as the window reads it from the clipboard |
+| `panel.selection_to_file` | write | `panel_selection_to_file` | Write the names of the panel's selection to a new text file, one per line (UTF-8) |
+| `panel.toggle_ignore_list` | read | `panel_toggle_ignore_list` | Switch the ignore list on or off: the names and paths it lists never show in the panels, the search and copies |
+| `button_bar.delete` | gui_only | omitted: GUI only: human decision | Delete a button bar; not one another bar opens as its sub-bar |
+| `button_bar.focus` | read | omitted: moves the window's keyboard focus; nothing an agent reads | Give the keyboard to the button bar or the vertical button bar (Alt+Shift+F11, Alt+Shift+F12) |
+| `button_bar.get` | read | `button_bars_get` | One button bar with its buttons: commands, sub-bars, symbols, tooltips, separators |
+| `button_bar.import` | gui_only | omitted: GUI only: human decision | Import a Total Commander .bar file and its sub-bars as button bars |
+| `button_bar.import_preview` | gui_only | omitted: GUI only: human decision | Read a Total Commander .bar file and its sub-bars into what an import would make |
+| `button_bar.list` | read | `button_bars_list` | Every button bar with its buttons |
+| `button_bar.manager` | gui_only | omitted: GUI only: human decision | Open the button bars' window (Configuration > Button bar...) |
+| `button_bar.rename` | gui_only | omitted: GUI only: human decision | Rename a button bar |
+| `button_bar.run` | exec (gui_only when it gets files or parameters from the caller, or its command starts as administrator, asks for its parameters or runs a row stricter than exec) | `button_bars_run` | Run a button of a bar for a panel: its program, internal rows or own command; files dropped on a program's button follow its parameters |
+| `button_bar.save` | gui_only | omitted: GUI only: human decision | Save a button bar: its name and buttons, each a command or a sub-bar, or a separator |
+| `view.toggle_bar` | read | omitted: agents switch a bar with settings_set | Show or hide a bar of the window: the button bar, the vertical one, the drive bar, the command line, the status bar or the function-key bar |
 
-250 commands: 174 covered, 76 omitted.
+324 commands: 215 covered, 109 omitted.

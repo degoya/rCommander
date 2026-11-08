@@ -292,4 +292,87 @@ mod with_a_shell {
             .await
             .expect("close");
     }
+
+    /// The panel `panel` lists `name`.
+    fn lists(engine: &Engine, panel: PanelId, name: &str) -> bool {
+        engine.panel(panel).index_of(name).is_some()
+    }
+
+    /// RC-110-02: a file made in the terminal shows in the other panel once the shell is back at
+    /// its prompt - with `panels.watch` off (its default), no watcher at all.
+    #[tokio::test]
+    async fn the_prompt_refreshes_without_a_watcher() {
+        let (_root, engine) = engine().await;
+        engine.start_watching();
+        let terminal = expect_terminal(
+            engine
+                .dispatch(Command::OpenTerminal {
+                    panel: Some(PanelId::Left),
+                    shell: Some("sh".into()),
+                    distro: None,
+                    cwd: None,
+                    size: None,
+                })
+                .await
+                .expect("open"),
+        )
+        .terminal;
+        prompt(&engine, terminal).await;
+        assert!(!engine.watch_quiet(PanelId::Right), "nothing is watched");
+        // The command, then the prompt mark a shell integration writes (OSC 133;A).
+        engine
+            .dispatch(Command::SendInput {
+                terminal,
+                text: "touch made.txt; printf '\\033]133;A\\033\\\\'\r".into(),
+            })
+            .await
+            .expect("input");
+        let started = std::time::Instant::now();
+        while !lists(&engine, PanelId::Right, "made.txt") {
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "the right panel was not read again"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// RC-110-02: `terminal.refresh_panels_on_prompt` off, a prompt reads nothing.
+    #[tokio::test]
+    async fn the_prompt_switch_off_reads_nothing() {
+        let (_root, engine) =
+            test_support::engine_with_db(&[("sub/", ""), ("notes.txt", "n")]).await;
+        engine.start_watching();
+        let terminal =
+            expect_terminal(engine.dispatch(open(Some("sh"), None)).await.expect("open")).terminal;
+        assert!(engine.shell_returned(terminal).await, "on by default");
+        engine
+            .dispatch(Command::SetSetting {
+                key: crate::settings::REFRESH_ON_PROMPT_KEY.into(),
+                value: serde_json::Value::Bool(false),
+            })
+            .await
+            .expect("stored");
+        assert!(!engine.shell_returned(terminal).await);
+        engine
+            .dispatch(Command::CloseTerminal { terminal })
+            .await
+            .expect("close");
+    }
+}
+
+/// RC-100-95: a portable copy writes zsh's integration beside its data, not into the profile.
+#[test]
+fn zsh_integration_lives_in_the_portable_folder() {
+    let data = std::path::PathBuf::from("stick").join("data");
+    let portable = rc_db::DataLocation::Portable(data.clone());
+    assert_eq!(
+        super::shell_integration(&portable),
+        Some(data.join("shell-integration"))
+    );
+    if let Ok(user) = rc_db::DataLocation::user() {
+        let base = super::shell_integration(&user).expect("a local data folder");
+        assert!(!base.starts_with(&data));
+        assert!(base.ends_with("shell-integration"));
+    }
 }

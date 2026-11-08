@@ -14,12 +14,15 @@ use rc_engine::settings::{SettingPage, SettingSpec};
 
 use super::{
     App, Effect, Message,
+    button_bar::{BbMsg, WinMsg},
     checksum::ChecksumMsg,
     connections::{ConnMsg, Edit, ImportMsg, RdmImportMsg, TcImportMsg},
     database_dialog::DatabaseMsg,
-    multi_rename::{Field, MrMsg},
+    multi_rename::{Field, MrMsg, NamesMsg},
+    palette::lists::ListDialog,
     quick_connect::QuickMsg,
     settings::{PluginsMsg, SettingsMessage, ThemesMsg},
+    user_commands::{CmdMsg, OwnMsg, UcMsg},
 };
 use crate::{
     i18n::t,
@@ -40,7 +43,8 @@ pub enum PathField {
     /// The database dialog: the file an export goes to, the export to import (RC-080-19).
     ConfigExport,
     ConfigImport,
-    /// A path setting of the settings dialog: a start folder, the viewer or the editor.
+    /// A path setting of the settings dialog: a start folder, the viewer, the editor, the
+    /// compare tool or the git program (RC-100-97).
     Setting(&'static SettingSpec),
     /// The import's `ssh_config` file.
     SshConfig,
@@ -57,6 +61,18 @@ pub enum PathField {
     PluginPackage,
     /// The `.rctheme` file the Themes tab imports or exports (RC-100-50).
     ThemeFile,
+    /// The multi-rename tool's file of new names, one per line (RC-100-96).
+    RenameNames,
+    /// The selection's file, written or read, and a list file (RC-100-92).
+    SelectionSave,
+    SelectionLoad,
+    ListFile,
+    /// A button's program, its symbol and a `.bar` file to import (RC-100-87).
+    ButtonProgram,
+    ButtonIcon,
+    BarImport,
+    /// An own command's symbol (RC-100-86), chosen as a button's.
+    OwnCommandIcon,
 }
 
 impl PathField {
@@ -102,6 +118,39 @@ impl PathField {
                 };
                 (kind, vec![exports, all], Fallback::Dialog)
             }
+            Self::ButtonProgram => (
+                Kind::Open,
+                vec![
+                    Filter {
+                        label: t!("browse.filter.programs"),
+                        spec: "*.exe;*.cmd;*.bat;*.com",
+                    },
+                    all,
+                ],
+                Fallback::Dialog,
+            ),
+            Self::ButtonIcon | Self::OwnCommandIcon => (
+                Kind::Open,
+                vec![
+                    Filter {
+                        label: t!("browse.filter.icons"),
+                        spec: "*.ico;*.exe;*.dll;*.png;*.bmp",
+                    },
+                    all,
+                ],
+                Fallback::Dialog,
+            ),
+            Self::BarImport => (
+                Kind::Open,
+                vec![
+                    Filter {
+                        label: t!("browse.filter.bars"),
+                        spec: "*.bar",
+                    },
+                    all,
+                ],
+                Fallback::Dialog,
+            ),
             Self::Setting(spec) if spec.page == SettingPage::Programs => (
                 Kind::Open,
                 vec![
@@ -171,6 +220,29 @@ impl PathField {
                 ],
                 Fallback::Dialog,
             ),
+            Self::SelectionSave | Self::SelectionLoad | Self::ListFile => {
+                let kind = if self == Self::SelectionSave {
+                    Kind::Save
+                } else {
+                    Kind::Open
+                };
+                let text = Filter {
+                    label: t!("browse.filter.text"),
+                    spec: "*.txt",
+                };
+                (kind, vec![text, all], Fallback::Dialog)
+            }
+            Self::RenameNames => (
+                Kind::Open,
+                vec![
+                    Filter {
+                        label: t!("browse.filter.text"),
+                        spec: "*.txt",
+                    },
+                    all,
+                ],
+                Fallback::Dialog,
+            ),
             Self::RenameLog => (
                 Kind::Save,
                 vec![
@@ -205,13 +277,28 @@ impl PathField {
             Self::WcxFtp => Message::Connections(ConnMsg::TcImport(TcImportMsg::Ftp(path))),
             Self::RdmExport => Message::Connections(ConnMsg::RdmImport(RdmImportMsg::Path(path))),
             Self::RenameLog => Message::MultiRename(MrMsg::Text(Field::LogPath, path)),
+            Self::RenameNames => Message::MultiRename(MrMsg::Names(NamesMsg::File(path))),
             Self::ChecksumTarget => Message::Checksum(ChecksumMsg::Target(path)),
             Self::PluginPackage => {
                 Message::Settings(SettingsMessage::Plugins(PluginsMsg::Path(path)))
             }
             Self::ThemeFile => Message::Settings(SettingsMessage::Themes(ThemesMsg::File(path))),
+            Self::SelectionSave => super::palette::lists::picked(ListDialog::SelectionToFile, path),
+            Self::SelectionLoad => {
+                super::palette::lists::picked(ListDialog::SelectionFromFile, path)
+            }
+            Self::ListFile => super::palette::lists::picked(ListDialog::LoadList, path),
+            Self::ButtonProgram => bar_window(WinMsg::Cmd(CmdMsg::Command(path))),
+            Self::ButtonIcon => bar_window(WinMsg::IconPath(path)),
+            Self::BarImport => bar_window(WinMsg::ImportPath(path)),
+            Self::OwnCommandIcon => Message::UserCommands(UcMsg::Own(OwnMsg::IconPath(path))),
         }
     }
+}
+
+/// `message` for the button bars' window.
+fn bar_window(message: WinMsg) -> Message {
+    Message::ButtonBar(BbMsg::Window(message))
 }
 
 /// The button and the dialog's answer.

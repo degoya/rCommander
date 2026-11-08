@@ -86,6 +86,7 @@ async fn copy_left_to_right(engine: &Engine, name: &str) -> JobSnapshot {
             sources: vec![name.to_owned()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");

@@ -263,7 +263,7 @@ impl RcMcpServer {
 #[tool_router(router = properties_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Properties of files and folders: name, kind (file, dir, symlink with target and target_kind), size, modified, created, attributes (readonly, Unix mode, Windows hidden/system/archive), details (accessed, allocated bytes on disk, links, uid/gid), the descript.ion comment, and with count=true each folder's contents (bytes, files, dirs, hard_links counted once, unreadable). Several entries get a total. capabilities says what can be changed there (links, windows_flags, set_created). Reads only metadata, never contents."
+        description = "Properties of files and folders: name, kind (file, dir, symlink with target and target_kind), size, modified, created, attributes (readonly, Unix mode, Windows hidden/system/archive), details (accessed, allocated bytes on disk, links, uid/gid), the descript.ion comment, and with count=true each folder's contents (bytes, files, dirs, hard_links counted once, unreadable). Several entries get a total. capabilities says what can be changed there (links, windows_flags, set_created). A JPEG, PNG or WebP photo also gets exif: camera, lens, taken, exposure, width, height and gps (decimal degrees), read from its EXIF block alone. Reads only metadata, never other contents."
     )]
     pub(crate) async fn files_properties(
         &self,

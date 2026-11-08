@@ -17,7 +17,9 @@ use super::{
     Tab, TabId, TabSet, Tabs,
     commands::{split, tab_state},
     history::History,
+    rename::checked_title,
 };
+use crate::file_filter::FileFilter;
 use crate::{
     DETAIL_TIMEOUT, Engine, EngineError, EngineEvent, ListMode, PanelChange, PanelId, SortOrder,
 };
@@ -65,6 +67,8 @@ fn stored_rows(tabs: &Tabs) -> Vec<StoredTab> {
                 location,
                 sort: serde_json::to_string(&tab.sort).unwrap_or_default(),
                 mode: serde_json::to_string(&tab.mode).unwrap_or_default(),
+                title: tab.title.clone(),
+                file_filter: tab.file_filter.stored(),
                 history,
             });
         }
@@ -85,6 +89,12 @@ fn tab_from_row(row: &StoredTab) -> Option<Tab> {
         mode: serde_json::from_str::<ListMode>(&row.mode).unwrap_or_default(),
         locked: row.locked,
         cursor: None,
+        // Read back as untrusted: a name that no longer fits is dropped.
+        title: row
+            .title
+            .as_deref()
+            .and_then(|title| checked_title(title).ok().flatten()),
+        file_filter: FileFilter::from_stored(&row.file_filter),
     })
 }
 
@@ -208,12 +218,14 @@ impl Engine {
                 show_hidden,
                 None,
             );
+            live.set_file_filter(shown.file_filter.clone());
             live.archive = archive;
         }
         self.publish(EngineEvent::Panel {
             panel,
             change: PanelChange::Navigated,
         });
+        self.columns_follow(panel, false).await;
         Ok(())
     }
 }

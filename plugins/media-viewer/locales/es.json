@@ -1,0 +1,14 @@
+{
+  "name": "Visor multimedia",
+  "description": "Muestra la duración, los códecs, las pistas y las etiquetas de los archivos de audio y vídeo, su portada y el EXIF de las fotos TIFF, RAW y HEIC.",
+  "codes": {
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_audio": "El archivo de audio está dañado, o su contenido no tiene el formato que indica su extensión.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_exif": "Los datos EXIF de la foto están dañados.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_video": "El archivo de vídeo está dañado: una parte está cortada o es mayor que el archivo.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_exif": "No se encontraron datos EXIF en los primeros 8 MiB de la foto.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_moov": "El archivo de vídeo no tiene cabecera de película (moov); puede que esté incompleto.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.not_media": "El archivo no es un archivo de audio, de vídeo ni una foto que lea el visor multimedia.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.setting.cover": "Mostrar la portada incrustada",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.too_large": "Una parte del archivo que el visor debe leer (una etiqueta, la portada o la cabecera de la película) es mayor de lo que lee."
+  }
+}

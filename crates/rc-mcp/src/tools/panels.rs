@@ -132,7 +132,7 @@ impl From<Entry> for EntryView {
 #[serde(untagged)]
 enum View {
     Listing(ListingView),
-    Panel(PanelSnapshot),
+    Panel(Box<PanelSnapshot>),
     /// What the panel commands never answer; passed through as the engine serializes it.
     Other(Box<Outcome>),
     Vault(VaultStatus),
@@ -144,7 +144,7 @@ fn view(outcome: Outcome) -> View {
             path,
             entries: entries.into_iter().map(EntryView::from).collect(),
         }),
-        Outcome::Panel(snapshot) => View::Panel(snapshot),
+        Outcome::Panel(snapshot) => View::Panel(Box::new(snapshot)),
         Outcome::Vault(status) => View::Vault(status),
         // The panel commands answer nothing else.
         other => View::Other(Box::new(other)),

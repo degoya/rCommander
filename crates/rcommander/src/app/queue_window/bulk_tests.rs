@@ -42,6 +42,7 @@ async fn setup() -> (TempDir, Harness, [JobId; 4]) {
             sources: vec!["a.txt".into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
     )
     .await);
@@ -90,6 +91,7 @@ async fn waiting(harness: &mut Harness, root: &std::path::Path, name: &str) -> J
             sources: vec![name.into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
     )
     .await)

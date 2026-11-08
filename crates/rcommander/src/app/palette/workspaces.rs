@@ -152,7 +152,7 @@ static IDS: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 
 /// `name` as an id that lives as long as the bar: the one made before, or a new one kept for the
 /// rest of the run - one per workspace seen, so they stay few.
-fn interned(name: String) -> &'static str {
+pub(super) fn interned(name: String) -> &'static str {
     let mut ids = IDS.lock_or_recover("workspaces.ids");
     if let Some(id) = ids.iter().copied().find(|id| *id == name) {
         return id;

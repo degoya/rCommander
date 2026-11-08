@@ -52,6 +52,17 @@ fn one_of_each_own() -> Vec<OpsError> {
         },
         OpsError::LinksUnsupported { path: path() },
         OpsError::LinkLoop { path: path() },
+        OpsError::ArchiveNotModifiable { path: path() },
+        OpsError::ArchiveEncrypted { path: path() },
+        OpsError::ArchiveChanged { path: path() },
+        OpsError::ArchiveInUse { path: path() },
+        OpsError::ArchiveNotLocal { path: path() },
+        OpsError::ArchiveFileReadOnly { path: path() },
+        OpsError::NotEnoughSpace {
+            path: path(),
+            needed: 2,
+            free: 1,
+        },
     ];
     for sample in &samples {
         match sample {
@@ -84,7 +95,14 @@ fn one_of_each_own() -> Vec<OpsError> {
             | OpsError::RenameUndoFailed { .. }
             | OpsError::Sensitive { .. }
             | OpsError::LinksUnsupported { .. }
-            | OpsError::LinkLoop { .. } => {}
+            | OpsError::LinkLoop { .. }
+            | OpsError::ArchiveNotModifiable { .. }
+            | OpsError::ArchiveEncrypted { .. }
+            | OpsError::ArchiveChanged { .. }
+            | OpsError::ArchiveInUse { .. }
+            | OpsError::ArchiveNotLocal { .. }
+            | OpsError::ArchiveFileReadOnly { .. }
+            | OpsError::NotEnoughSpace { .. } => {}
         }
     }
     samples

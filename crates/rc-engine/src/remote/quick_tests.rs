@@ -364,6 +364,7 @@ async fn a_copy_reaches_a_quick_connection_by_its_drive_name() {
             sources: vec![file.display().to_string()],
             target: Some(target),
             options: rc_ops::JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");

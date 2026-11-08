@@ -6,9 +6,9 @@ use rc_db::connections::ImportStatus;
 use serde::{Deserialize, Serialize};
 
 use super::tc_password::TcPassword;
-use crate::{ConnectionKind, PanelId};
+use crate::{CommandRef, ConnectionKind, PanelId, StartItemKind};
 
-/// The root folder of the hotlist and of the connection tree the import fills.
+/// The root folder of the hotlist, of the connection tree and of the Start menu the import fills.
 pub const DEFAULT_FOLDER: &str = "Imported from Total Commander";
 
 /// The prefix of the `import_source` of an imported connection.
@@ -32,6 +32,8 @@ pub struct TcParts {
     pub connections: bool,
     /// The colours, the rules by file type and the file lists' font (RC-050-14).
     pub look: bool,
+    /// The own commands of `usercmd.ini` and the Start menu of `[user]` (RC-100-86).
+    pub commands: bool,
 }
 
 impl Default for TcParts {
@@ -41,6 +43,7 @@ impl Default for TcParts {
             tabs: true,
             connections: true,
             look: true,
+            commands: true,
         }
     }
 }
@@ -136,6 +139,47 @@ pub struct TcLookRow {
     pub status: TcRowStatus,
 }
 
+/// One own command of `usercmd.ini` (RC-100-86).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TcCommandRow {
+    /// The section's name in lower case (`em_<name>`), what `only` names.
+    pub key: String,
+    /// The own command's name rCommander keeps; the section's name when it is none.
+    pub name: String,
+    /// What rCommander runs; `None` when skipped.
+    pub action: Option<CommandRef>,
+    pub tooltip: String,
+    /// The symbol's file and index (`button=file,index`).
+    pub icon_path: String,
+    pub icon_index: i64,
+    /// Total Commander's `cm_*` names rCommander does not know: kept as written, running them
+    /// answers `user_command_unknown_row`.
+    pub unknown_rows: Vec<String>,
+    pub selected: bool,
+    #[serde(flatten)]
+    pub status: TcRowStatus,
+}
+
+/// One row of the Start menu of `wincmd.ini [user]` (RC-100-86).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TcStartRow {
+    /// `start<N>` for `menuN`, what `only` names.
+    pub key: String,
+    /// What the menu shows; empty for a separator.
+    pub title: String,
+    /// The submenus it is in, outermost first, below [`DEFAULT_FOLDER`].
+    pub folders: Vec<String>,
+    /// An entry, a submenu (`-Name`) or a separator (`-`).
+    pub kind: StartItemKind,
+    /// An entry's command; `None` for the other kinds and when skipped.
+    pub action: Option<CommandRef>,
+    /// As [`TcCommandRow::unknown_rows`].
+    pub unknown_rows: Vec<String>,
+    pub selected: bool,
+    #[serde(flatten)]
+    pub status: TcRowStatus,
+}
+
 /// What `import.total_commander` read, planned and did.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TcImportReport {
@@ -148,8 +192,15 @@ pub struct TcImportReport {
     pub tabs: Vec<TcTabRow>,
     pub connections: Vec<TcConnectionRow>,
     pub look: Vec<TcLookRow>,
+    /// The `usercmd.ini` read beside `wincmd.ini`; `None` when not found or not needed.
+    pub usercmd_ini: Option<String>,
+    /// The own commands (RC-100-86).
+    pub commands: Vec<TcCommandRow>,
+    /// The Start menu, in menu order (RC-100-86).
+    pub start_menu: Vec<TcStartRow>,
     /// Codes of what was not read: `wincmd_not_found`, `ftp_ini_not_found`, `value_too_long`,
-    /// `dir_menu_redirected`; the window's text is `tc_import.warning.<code>`.
+    /// `dir_menu_redirected`, `start_menu_keys` (the Start menu's `keyN`, which the import
+    /// leaves out); the window's text is `tc_import.warning.<code>`.
     pub warnings: Vec<String>,
 }
 

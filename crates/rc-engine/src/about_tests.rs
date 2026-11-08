@@ -56,3 +56,18 @@ fn unknown_is_no_value() {
         Some("2026-10-18T12:00:00Z")
     );
 }
+
+/// RC-100-95: the answer names the data folder and whether the copy is portable.
+#[test]
+fn the_answer_names_the_data_folder() {
+    let answer = about();
+    assert_eq!(
+        answer.data_dir,
+        rc_db::data_dir().ok().map(|dir| dir.display().to_string())
+    );
+    assert_eq!(answer.portable, rc_db::is_portable());
+    // A process that never chose: the user's folder.
+    assert!(!answer.portable);
+    let json = serde_json::to_value(&answer).expect("json");
+    assert!(json.get("data_dir").is_some() && json.get("portable").is_some());
+}

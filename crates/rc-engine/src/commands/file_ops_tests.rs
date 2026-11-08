@@ -226,6 +226,7 @@ async fn f3_without_an_external_viewer_opens_the_internal_viewer() {
             path: None,
             program: ExternalProgram::Viewer,
             create: false,
+            cursor_only: false,
         })
         .await
         .expect("opened");
@@ -235,6 +236,7 @@ async fn f3_without_an_external_viewer_opens_the_internal_viewer() {
         Some(EngineEvent::ViewFile {
             panel: PanelId::Left,
             path: VfsPath::local(root.path()).join("a.txt"),
+            files: crate::ListerFiles::Panel,
         })
     );
     assert_eq!(launched(&file), None);
@@ -248,6 +250,7 @@ async fn shift_f4_creates_a_missing_file_and_never_a_bad_name() {
         path: Some(path.into()),
         program: ExternalProgram::Editor,
         create: true,
+        cursor_only: false,
     };
     engine.dispatch(open("notes.txt")).await.expect("created");
     let made = root.path().join("notes.txt");
@@ -291,6 +294,7 @@ async fn f3_with_an_external_viewer_set_hands_the_file_to_it() {
             path: Some("b.txt".into()),
             program: ExternalProgram::Viewer,
             create: false,
+            cursor_only: false,
         })
         .await
         .expect("opened");
@@ -341,12 +345,13 @@ async fn f3_inside_an_archive_views_the_entry() {
             path: Some("docs/readme.md".into()),
             program: ExternalProgram::Viewer,
             create: false,
+            cursor_only: false,
         })
         .await
         .expect("opened");
     let mut viewed = None;
     while let Ok(event) = events.try_recv() {
-        if let EngineEvent::ViewFile { panel, path } = event {
+        if let EngineEvent::ViewFile { panel, path, .. } = event {
             viewed = Some((panel, path));
         }
     }
@@ -367,6 +372,7 @@ async fn f4_inside_an_archive_hands_the_editor_a_temporary_copy() {
             path: Some("hello.txt".into()),
             program: ExternalProgram::Editor,
             create: false,
+            cursor_only: false,
         })
         .await
         .expect("opened");

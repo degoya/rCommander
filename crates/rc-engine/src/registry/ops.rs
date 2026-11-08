@@ -22,6 +22,11 @@ pub struct TransferRequest {
     pub target: Option<String>,
     #[serde(default)]
     pub options: JobOptions,
+    /// Total Commander's rename mask for every entry, as in `target\*.bak` (RC-110-04): `?`
+    /// takes a character of the old name, `*` its rest; name and extension apart. `None` keeps
+    /// the names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rename_mask: Option<String>,
 }
 
 /// The parameters of `ops.delete`.

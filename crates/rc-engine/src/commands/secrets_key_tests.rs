@@ -87,6 +87,7 @@ async fn an_ed25519_key_and_an_encrypted_rsa_key_round_trip() {
                 .take(2)
                 .collect::<Vec<_>>()
                 .join(" "),
+            certificate: None,
         })
     );
     assert!(stored.secrets.has_key && !stored.secrets.has_passphrase);

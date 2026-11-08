@@ -9,6 +9,7 @@ pub mod drag_out;
 pub mod file_dialog;
 pub mod gpu_loss;
 pub mod key_label;
+pub mod locale_format;
 pub mod menu_bar;
 pub mod popup_menus;
 pub mod taskbar;

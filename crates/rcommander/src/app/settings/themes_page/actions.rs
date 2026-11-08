@@ -315,7 +315,10 @@ impl App {
                 }
                 _ => Vec::new(),
             },
-            ThemesMsg::Read(_) | ThemesMsg::Answered(_) | ThemesMsg::Editor(_) => Vec::new(),
+            ThemesMsg::Read(_)
+            | ThemesMsg::Answered(_)
+            | ThemesMsg::Editor(_)
+            | ThemesMsg::Menu(_) => Vec::new(),
         };
         if restyle {
             self.restyle_terminals();

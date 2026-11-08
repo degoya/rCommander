@@ -36,6 +36,16 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         summary: "Set or remove an entry's comment in the folder's descript.ion",
     },
     CommandSpec {
+        id: "files.disk_usage",
+        class: CommandClass::Read,
+        summary: "What a folder holds by size: its subfolders to a depth, largest first, and its largest files",
+    },
+    CommandSpec {
+        id: "files.disk_usage_dialog",
+        class: CommandClass::Read,
+        summary: "Open the disk-usage window in the window for a panel's folder",
+    },
+    CommandSpec {
         id: "panel.cancel_dir_sizes",
         class: CommandClass::Read,
         summary: "Stop counting folder sizes for a panel's size column",
@@ -120,6 +130,25 @@ macro_rules! commands {
                 path: Option<String>,
                 #[serde(default)]
                 comment: Option<String>,
+            },
+            // RC-100-98: the disk-usage analysis.
+            "files.disk_usage" => DiskUsage {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                /// The folder, absolute or relative; the panel's folder when `None`.
+                #[serde(default)]
+                path: Option<String>,
+                /// Levels of subfolders reported, 1 to 3; 1 when `None`.
+                #[serde(default)]
+                depth: Option<u32>,
+                /// Folders per level and largest files; 20 when `None`, at most 1000.
+                #[serde(default)]
+                limit: Option<usize>,
+            },
+            /// Ctrl+Shift+L: the window opens the disk-usage window for the panel's folder.
+            "files.disk_usage_dialog" => DiskUsageDialog {
+                #[serde(default)]
+                panel: Option<PanelId>,
             },
             "panel.cancel_dir_sizes" => CancelDirSizes {
                 #[serde(default)]

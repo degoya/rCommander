@@ -1,0 +1,10 @@
+{
+  "name": "Visionneuse PDF",
+  "description": "Affiche le texte d'un PDF page par page, et son titre, son auteur, ses dates, ses pages et sa version sous forme d'arborescence.",
+  "codes": {
+    "01a1b720-fdd6-75dd-a577-079e819e4742.too_large": "Le PDF dépasse 64 Mio et n'est pas lu.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.damaged": "Le fichier n'est pas un PDF lisible.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.password_required": "Le PDF est protégé par un mot de passe ; rCommander ne peut pas l'afficher.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.encryption": "Le PDF est chiffré d'une manière que cette visionneuse ne sait pas lire."
+  }
+}

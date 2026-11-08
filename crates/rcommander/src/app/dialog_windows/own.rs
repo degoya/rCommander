@@ -83,6 +83,10 @@ impl App {
             },
             DialogWindow::Lister(id) => Some(self.lister_input(id, message)),
             DialogWindow::Workspaces => self.workspaces_intercept(message),
+            DialogWindow::Commands => self.user_commands_intercept(message),
+            DialogWindow::Associations => self.associations_intercept(message),
+            DialogWindow::DiskUsage => self.tools_intercept(message),
+            DialogWindow::ButtonBar => self.button_bar_window_intercept(message),
             DialogWindow::Settings
             | DialogWindow::Queue
             | DialogWindow::MultiRename
@@ -100,6 +104,8 @@ impl App {
             | DialogWindow::Conflict
             | DialogWindow::JobError
             | DialogWindow::Progress
+            | DialogWindow::Tree
+            | DialogWindow::SelectDuplicates
             // A question's window takes its input before (`questions.rs`).
             | DialogWindow::Question(_) => None,
         };

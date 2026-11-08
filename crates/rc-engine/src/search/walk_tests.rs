@@ -1,10 +1,11 @@
 use std::{path::Path, sync::Arc};
 
-use rc_vfs::{BackendId, LocalFs};
+use rc_vfs::{ArchiveLimits, BackendId, LocalFs};
 use tempfile::TempDir;
 
 use super::Walk;
-use crate::search::{ContentQuery, SearchCancel, SearchEvent, SearchQuery, SearchStats};
+use crate::archives::tests::fixture;
+use crate::search::{ContentQuery, Filters, SearchCancel, SearchEvent, SearchQuery, SearchStats};
 use crate::test_support;
 
 /// ```text
@@ -56,7 +57,9 @@ async fn hits(root: &Path, query: &SearchQuery) -> (Vec<String>, SearchStats) {
                 assert!(!cancelled);
                 return (found, stats);
             }
-            SearchEvent::Progress { .. } | SearchEvent::Skipped { .. } => {}
+            SearchEvent::Progress { .. }
+            | SearchEvent::Skipped { .. }
+            | SearchEvent::Duplicates(_) => {}
         }
     }
     panic!("the walk ended without Finished");
@@ -265,7 +268,9 @@ async fn a_guarded_file_is_skipped_by_a_content_search_whatever_it_holds() {
             match event {
                 SearchEvent::Hit(_) => found += 1,
                 SearchEvent::Skipped { code, .. } => refused.push(code),
-                SearchEvent::Progress { .. } | SearchEvent::Finished { .. } => {}
+                SearchEvent::Progress { .. }
+                | SearchEvent::Finished { .. }
+                | SearchEvent::Duplicates(_) => {}
             }
         }
         assert_eq!(found, 0, "not_containing {not_containing}");
@@ -279,4 +284,191 @@ async fn a_guarded_file_is_skipped_by_a_content_search_whatever_it_holds() {
         ["a.txt"],
         "a name search lists it, without reading it"
     );
+}
+
+/// A folder with `plain.txt`, each multi-entry fixture of rc-vfs (zip, 7z, the tars) and the
+/// archives a search has to skip.
+fn archives(names: &[&str]) -> TempDir {
+    let root = test_support::tree(&[("plain.txt", "hello archive")]);
+    for name in names {
+        std::fs::copy(fixture(name), root.path().join(name)).expect("copy the fixture");
+    }
+    root
+}
+
+const TREES: &[&str] = &[
+    "tree.7z",
+    "tree.tar",
+    "tree.tar.bz2",
+    "tree.tar.gz",
+    "tree.tar.xz",
+    "tree.tar.zst",
+    "tree.zip",
+];
+
+/// The hits as `archive!/path` (or the path below `root`), the skipped with their codes.
+async fn archive_hits(
+    root: &Path,
+    query: &SearchQuery,
+    limits: ArchiveLimits,
+    guard: Option<crate::read_guard::ReadGuard>,
+) -> (Vec<String>, Vec<&'static str>) {
+    let mut walk = walk(root, query, SearchCancel::default())
+        .with_archive_limits(limits)
+        .guarded(guard);
+    let (mut found, mut skipped) = (Vec::new(), Vec::new());
+    while let Some(event) = walk.next().await {
+        match event {
+            SearchEvent::Hit(hit) => found.push(match crate::archive_file(&hit.path) {
+                Some(file) => format!(
+                    "{}!{}",
+                    file.path.file_name().expect("a name").to_string_lossy(),
+                    hit.path.path.to_string_lossy().replace('\\', "/")
+                ),
+                None => hit
+                    .path
+                    .path
+                    .strip_prefix(root)
+                    .expect("below")
+                    .to_string_lossy()
+                    .into(),
+            }),
+            SearchEvent::Skipped { code, .. } => skipped.push(code),
+            SearchEvent::Progress { .. }
+            | SearchEvent::Finished { .. }
+            | SearchEvent::Duplicates(_) => {}
+        }
+    }
+    (found, skipped)
+}
+
+fn in_archives(query: SearchQuery) -> SearchQuery {
+    SearchQuery {
+        archives: true,
+        ..query
+    }
+}
+
+/// Every multi-entry format is searched like a folder: by name, size, date and content.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn finds_names_and_text_inside_archives() {
+    let root = archives(TREES);
+    let limits = ArchiveLimits::default();
+    let by_name = archive_hits(root.path(), &in_archives(named("readme.md")), limits, None).await;
+    let expected: Vec<String> = TREES
+        .iter()
+        .map(|name| format!("{name}!/docs/readme.md"))
+        .collect();
+    assert_eq!(by_name, (expected, Vec::new()));
+
+    // The fixtures' entries are 3000 bytes at most and dated 2024-05-17 12:34:56 UTC.
+    let sized = in_archives(SearchQuery {
+        filters: Filters {
+            min_size: Some(3000),
+            modified_before: Some(1_715_949_296),
+            ..Filters::default()
+        },
+        ..named("*")
+    });
+    let (found, _) = archive_hits(root.path(), &sized, limits, None).await;
+    let expected: Vec<String> = TREES
+        .iter()
+        .map(|name| format!("{name}!/deep/nested/data.bin"))
+        .collect();
+    assert_eq!(found, expected);
+
+    let text = in_archives(SearchQuery {
+        content: Some(ContentQuery {
+            text: "INSIDE AN ARCHIVE".to_owned(),
+            ..ContentQuery::default()
+        }),
+        // `*.md`: the plain `tree.tar` holds the text unpacked, so it is a hit of its own.
+        ..named("*.md")
+    });
+    let (found, skipped) = archive_hits(root.path(), &text, limits, None).await;
+    let expected: Vec<String> = TREES
+        .iter()
+        .map(|name| format!("{name}!/docs/readme.md"))
+        .collect();
+    assert_eq!((found, skipped), (expected, Vec::new()));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn archives_stay_closed_by_default() {
+    let root = archives(&["tree.zip"]);
+    let (found, _) = archive_hits(root.path(), &named("*"), ArchiveLimits::default(), None).await;
+    assert_eq!(
+        found,
+        ["plain.txt", "tree.zip"],
+        "the archive is a file, not entered"
+    );
+    let top = in_archives(SearchQuery {
+        max_depth: Some(0),
+        ..named("*")
+    });
+    let (found, _) = archive_hits(root.path(), &top, ArchiveLimits::default(), None).await;
+    assert_eq!(
+        found,
+        ["plain.txt", "tree.zip"],
+        "an archive is one level below its folder"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn nested_archives_are_not_entered() {
+    let root = archives(&[]);
+    let inner = std::fs::read(fixture("tree.zip")).expect("the fixture");
+    let outer = test_support::stored_zip(&[("inner.zip", &inner), ("note.txt", b"x")]);
+    std::fs::write(root.path().join("outer.zip"), outer).expect("write");
+    let query = in_archives(named("*.zip;hello.txt;note.txt"));
+    let (found, skipped) = archive_hits(root.path(), &query, ArchiveLimits::default(), None).await;
+    assert_eq!(
+        found,
+        ["outer.zip", "outer.zip!/inner.zip", "outer.zip!/note.txt"]
+    );
+    assert_eq!(skipped, Vec::<&str>::new());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_password_or_a_bomb_skips_and_goes_on() {
+    let root = archives(&["bomb.tar.gz", "encrypted-aes.zip", "tree.zip"]);
+    let strict = ArchiveLimits {
+        max_ratio: 100,
+        ratio_threshold: 1 << 20,
+        ..ArchiveLimits::default()
+    };
+    let text = in_archives(SearchQuery {
+        content: Some(ContentQuery {
+            text: "hello".to_owned(),
+            ..ContentQuery::default()
+        }),
+        ..named("*.txt")
+    });
+    let (found, mut skipped) = archive_hits(root.path(), &text, strict, None).await;
+    skipped.sort_unstable();
+    assert_eq!(skipped, ["archive_limit", "password_required"]);
+    assert_eq!(
+        found,
+        [
+            "plain.txt",
+            "tree.zip!/hello.txt",
+            "tree.zip!/conformance/a.txt"
+        ],
+        "the search goes on after both"
+    );
+}
+
+/// The MCP read guard keeps an archive closed: opening it would read it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_archive_the_guard_keeps_is_not_opened() {
+    fn secret_zip(path: &Path) -> Option<&'static str> {
+        (path.file_name()? == "tree.zip").then_some("a test secret")
+    }
+    let root = archives(&["tree.zip", "tree.7z"]);
+    let guard = crate::read_guard::ReadGuard::new(secret_zip, &BackendId::Local);
+    let query = in_archives(named("hello.txt"));
+    let (found, skipped) =
+        archive_hits(root.path(), &query, ArchiveLimits::default(), Some(guard)).await;
+    assert_eq!(found, ["tree.7z!/hello.txt"]);
+    assert_eq!(skipped, ["sensitive_path"]);
 }

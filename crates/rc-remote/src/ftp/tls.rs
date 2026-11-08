@@ -307,6 +307,44 @@ impl TlsSession {
     }
 }
 
+/// The TLS of an HTTPS client to one server (an inventory source, RC-100-40): the FTPS verifier -
+/// the system roots, then the trust hook with the last word - and the refusal of its last
+/// handshake. A self-signed certificate (a Proxmox node) passes only when the person trusted it
+/// (RC-070-02); verification is never turned off.
+pub struct HttpsTls {
+    config: rustls::ClientConfig,
+    rejected: RejectionSlot,
+}
+
+impl HttpsTls {
+    /// The TLS for `host` on `port`, decided by `trust`.
+    ///
+    /// # Errors
+    ///
+    /// [`FtpError::Tls`] when the protocol versions cannot be set up.
+    pub fn new(host: &str, port: u16, trust: Arc<dyn CertificateTrust>) -> Result<Self, FtpError> {
+        let setup = TlsSetup::new(host, port, trust)?;
+        let rejected = RejectionSlot::default();
+        let mut config = rustls::ClientConfig::clone(&setup.config);
+        config
+            .dangerous()
+            .set_certificate_verifier(setup.parts.verifier(Arc::clone(&rejected)));
+        Ok(Self { config, rejected })
+    }
+
+    /// The client configuration, for `reqwest`'s `tls_backend_preconfigured`.
+    #[must_use]
+    pub fn client_config(&self) -> rustls::ClientConfig {
+        self.config.clone()
+    }
+
+    /// The certificate a handshake of this client was refused for, if one was.
+    #[must_use]
+    pub fn rejection(&self) -> Option<CertificateRejection> {
+        self.rejected.lock_or_recover("tls.rejected").clone()
+    }
+}
+
 /// TLS on a data connection to `host`, with its control connection's session
 /// ([`TlsSetup::session`]): its verifier and its resumption store, the refusal slot emptied
 /// first.

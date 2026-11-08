@@ -19,11 +19,12 @@ use super::{
 use crate::i18n::{self, t};
 
 impl Lister {
-    /// Whether the image view shows the document's picture rather than the file's.
+    /// Whether the image view shows the document's picture rather than the file's: not for a
+    /// photo's EXIF document, whose picture is the file (RC-100-99).
     pub(super) fn document_picture(&self) -> bool {
         self.document
             .as_ref()
-            .is_some_and(|document| document.offers(DocView::Image))
+            .is_some_and(|document| document.offers(DocView::Image) && !document.file_picture())
     }
 
     /// Whether the document's text is not the Lister's file yet.

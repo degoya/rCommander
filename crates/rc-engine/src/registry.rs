@@ -26,8 +26,10 @@ mod app;
 mod archive;
 mod archive_ops;
 mod backup;
+mod button_bars;
 mod certificates;
 mod checksum;
+mod column_sets;
 mod command_line;
 mod compare;
 mod connections;
@@ -35,6 +37,7 @@ mod diagnostics;
 mod drives;
 mod file;
 mod file_ops;
+mod forwards;
 mod history;
 mod hostkeys;
 mod hotlist;
@@ -46,10 +49,12 @@ mod mcp;
 mod multi_rename;
 mod ops;
 mod panel;
+mod panel_lists;
 mod plugins;
 mod properties;
 mod queue;
 mod remote;
+mod remote_edit;
 mod search;
 mod secrets;
 mod sessions;
@@ -60,6 +65,7 @@ mod tabs;
 mod terminal;
 mod theme;
 mod update;
+mod user_commands;
 mod vault;
 mod viewer;
 mod workspaces;
@@ -76,14 +82,15 @@ pub use diagnostics::{ErrorLogRequest, RetentionRequest};
 pub(crate) use escalation::overwrites;
 pub use escalation::{ESCALATIONS, Escalation, escalation};
 pub use file::{CombineRequest, SplitRequest};
+pub use forwards::SaveForwardRequest;
 pub use import::{
     ConfigExportRequest, ConfigImportRequest, RdmImportRequest, SshConfigImportRequest,
     TcImportRequest, TcPasswordsRequest,
 };
 pub use ops::{DeleteRequest, TransferRequest};
-pub use panel::MaskRequest;
+pub use panel::{MaskRequest, ZoomStep};
 pub use remote::QuickConnectRequest;
-pub use search::SearchRequest;
+pub use search::{DuplicatesRequest, SearchRequest};
 pub use secrets::ImportKeyRequest;
 pub use ssh_exec::SshExecRequest;
 pub use vocabulary::{CommandClass, CommandSpec, CursorStep, CursorTarget};
@@ -144,6 +151,12 @@ macro_rules! command_groups {
             update,
             theme,
             workspaces,
+            forwards,
+            column_sets,
+            user_commands,
+            remote_edit,
+            panel_lists,
+            button_bars,
         ] }
     };
 }
@@ -216,3 +229,15 @@ mod samples;
 #[cfg(test)]
 #[path = "registry_samples_more.rs"]
 mod samples_more;
+
+#[cfg(test)]
+#[path = "registry_samples_forwards.rs"]
+mod samples_forwards;
+
+#[cfg(test)]
+#[path = "registry_samples_duplicates.rs"]
+mod samples_duplicates;
+
+#[cfg(test)]
+#[path = "registry_samples_panel_lists.rs"]
+mod samples_panel_lists;

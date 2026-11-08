@@ -1,0 +1,40 @@
+[package]
+name = "rc-tc-host"
+description = "The host process for Total Commander's plugin DLLs (spike RC-100-02): its protocol, the bridge rCommander drives it with, and the rc-tc-host binary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# The library is portable and holds no `unsafe`: the framing, the JSON-RPC messages, the credit
+# window, the request loop over a `TcPlugin`, and the bridge that starts and drives the host. The
+# binary is the one place that loads a TC DLL; its FFI lives in `src/host/windows/`, the only
+# `unsafe` of this crate, and elsewhere a stub answers every plugin request with "unsupported".
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "rc-tc-host"
+path = "src/host/main.rs"
+
+[dependencies]
+rc-process = { path = "../rc-process" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The DLL itself (`LoadLibraryExW`, `GetProcAddress`) and a WLX preview's bitmap (`GetDIBits`):
+# bare extern functions neither std nor winsafe has; the version already in the workspace.
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

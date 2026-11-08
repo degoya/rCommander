@@ -9,10 +9,13 @@ fn the_extension_names_the_format_in_any_case() {
         ("mystyle.sty", Lang::Latex),
         ("refs.bib", Lang::Bibtex),
         ("REFS.BIB", Lang::Bibtex),
+        ("work.todo", Lang::Todo),
+        ("Home.TODO", Lang::Todo),
+        ("plan.taskpaper", Lang::Todo),
     ] {
         assert_eq!(Lang::from_name(name), Some(lang), "{name}");
     }
-    for name in ["notes.txt", "rst", "", "x.md", "a.cls"] {
+    for name in ["notes.txt", "rst", "", "x.md", "a.cls", "todo.txt", "TODO"] {
         assert_eq!(Lang::from_name(name), None, "{name}");
     }
 }
@@ -26,7 +29,7 @@ fn the_manifest_claims_every_extension_the_viewer_reads() {
         .find(|line| line.starts_with("extensions = ["))
         .expect("the manifest names its extensions");
     let extensions: Vec<&str> = line.split('"').skip(1).step_by(2).collect();
-    assert_eq!(extensions.len(), 4, "{extensions:?}");
+    assert_eq!(extensions.len(), 6, "{extensions:?}");
     let mut found = Vec::new();
     for extension in extensions {
         let lang = Lang::from_name(&format!("file.{extension}"));
@@ -34,7 +37,7 @@ fn the_manifest_claims_every_extension_the_viewer_reads() {
         found.extend(lang);
     }
     assert!(
-        [Lang::Rst, Lang::Latex, Lang::Bibtex]
+        [Lang::Rst, Lang::Latex, Lang::Bibtex, Lang::Todo]
             .iter()
             .all(|lang| found.contains(lang))
     );

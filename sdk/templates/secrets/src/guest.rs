@@ -63,6 +63,29 @@ impl Guest for Component {
         };
         crate::get(&mut Bridge, &id, field).map_err(to_wit)
     }
+
+    /// A password manager lends nothing: only a PAM system's plugin, whose manifest says
+    /// `[secrets] checkout = true`, answers these two (contract 0.5.0), and rCommander asks no
+    /// other.
+    fn checkout(
+        _id: String,
+        _field: wit::SecretField,
+        _reason: Option<String>,
+    ) -> Result<wit::Lease, wit_types::Failure> {
+        Err(not_supported())
+    }
+
+    fn checkin(_lease_id: String) -> Result<(), wit_types::Failure> {
+        Err(not_supported())
+    }
+}
+
+fn not_supported() -> wit_types::Failure {
+    wit_types::Failure {
+        kind: wit_types::FailureKind::NotSupported,
+        code: None,
+        params: Vec::new(),
+    }
 }
 
 fn to_wit(failure: Failure) -> wit_types::Failure {

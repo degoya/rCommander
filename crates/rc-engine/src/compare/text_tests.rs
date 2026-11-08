@@ -195,3 +195,67 @@ fn a_file_of_too_many_lines_is_not_read_as_text() {
     let below = decode(&vec![b'\n'; MAX_LINES - 1]).expect("text");
     assert_eq!(below.lines.len(), MAX_LINES - 1);
 }
+
+/// UTF-16 of `text` in the given byte order, after `mark` when asked.
+fn utf16(text: &str, big: bool, mark: bool) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    if mark {
+        bytes.extend_from_slice(if big { b"\xFE\xFF" } else { b"\xFF\xFE" });
+    }
+    for unit in text.encode_utf16() {
+        bytes.extend(if big {
+            unit.to_be_bytes()
+        } else {
+            unit.to_le_bytes()
+        });
+    }
+    bytes
+}
+
+/// RC-100-94: what the edit mode writes back is what it read - every encoding, with and without
+/// a mark, mixed line endings and a last line without one.
+#[test]
+fn encode_reverses_decode_for_every_encoding() {
+    let mixed = "first\r\nsecond\nthird\rlast";
+    let samples: Vec<(Vec<u8>, Encoding)> = vec![
+        (mixed.as_bytes().to_vec(), Encoding::Utf8),
+        (
+            b"gr\xC3\xBC\xC3\x9Fe\r\n\xE2\x82\xAC\n".to_vec(),
+            Encoding::Utf8,
+        ),
+        (
+            [b"\xEF\xBB\xBF".as_slice(), mixed.as_bytes()].concat(),
+            Encoding::Utf8Bom,
+        ),
+        (utf16(mixed, false, true), Encoding::Utf16Le),
+        (utf16(mixed, true, true), Encoding::Utf16Be),
+        (
+            utf16("first line\r\nsecond\n", false, false),
+            Encoding::Utf16Le,
+        ),
+        (
+            b"gr\xFC\xDF\r\n\x80 \x93q\x94\n\x81".to_vec(),
+            Encoding::Windows1252,
+        ),
+        (Vec::new(), Encoding::Utf8),
+    ];
+    for (bytes, encoding) in samples {
+        let file = decode(&bytes).expect("text");
+        assert_eq!(file.encoding, encoding, "{bytes:?}");
+        assert_eq!(encode(&file).expect("encodes"), bytes, "{encoding:?}");
+    }
+}
+
+#[test]
+fn a_character_windows_1252_lacks_is_named_with_its_line() {
+    let mut file = decode(b"a\r\nb\r\n\xFC").expect("text");
+    assert_eq!(file.encoding, Encoding::Windows1252);
+    file.lines[1].text = "\u{4e2d}".into();
+    assert_eq!(
+        encode(&file),
+        Err(Unmappable {
+            line: 1,
+            character: '\u{4e2d}'
+        })
+    );
+}

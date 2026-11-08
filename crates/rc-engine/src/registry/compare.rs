@@ -5,6 +5,16 @@ use super::{CommandClass, CommandSpec};
 /// This group's rows, sorted by id.
 pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
+        id: "compare.apply_blocks",
+        class: CommandClass::Write,
+        summary: "Copy blocks of differing lines of two compared text files to the other side and save it",
+    },
+    CommandSpec {
+        id: "compare.by_content",
+        class: CommandClass::Exec,
+        summary: "Compare two files in the external compare tool of the settings, else in the diff window",
+    },
+    CommandSpec {
         id: "compare.dirs",
         class: CommandClass::Read,
         summary: "Compare two directory trees and propose a synchronization, row by row",
@@ -43,6 +53,8 @@ macro_rules! commands {
         $next! { $rest, { $($done)*
             // The compare commands keep their parameters in a struct of their module.
             "compare.files" => CompareFiles(FileCompareRequest),
+            "compare.apply_blocks" => ApplyBlocks(ApplyBlocksRequest),
+            "compare.by_content" => CompareByContent(ByContentRequest),
             "compare.dirs" => CompareDirs(DirCompareRequest),
             "compare.open_diff" => OpenDiff {},
             "compare.select_differences" => SelectDifferences {

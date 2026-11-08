@@ -259,3 +259,17 @@ fn cmd_comes_from_the_system_folder() {
     let program = PathBuf::from(command.get_program());
     assert!(program.ends_with("System32\\cmd.exe"), "{program:?}");
 }
+
+/// `*` outside Windows: refused with `run_as_admin_unsupported`, and nothing starts - not even
+/// without elevation (RC-100-86).
+#[cfg(not(windows))]
+#[tokio::test]
+async fn a_star_outside_windows_starts_nothing() {
+    let root = tree();
+    let engine = engine(root.path()).await;
+    let error = run(&engine, "*ls", false).await.expect_err("refused");
+    assert_eq!(error.code(), "run_as_admin_unsupported");
+    assert!(started_in(&root.path().join("work")).is_empty());
+    let empty = run(&engine, "*", false).await.expect_err("refused");
+    assert_eq!(empty.code(), "command_line_invalid");
+}

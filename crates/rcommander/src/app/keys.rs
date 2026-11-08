@@ -35,6 +35,17 @@ pub enum PromptKind {
     Deselect,
     /// A directory for the panel.
     Path,
+    /// A mask for the panel's file filter (Ctrl+F12, RC-100-92).
+    FileFilter,
+    /// A tab's own name (the tab menu's "Rename tab", RC-100-92); empty clears it.
+    TabTitle(rc_engine::TabId),
+}
+
+impl PromptKind {
+    /// Whether the prompt asks for a mask: it starts on the kept masks and keeps what it ran.
+    pub fn takes_masks(self) -> bool {
+        matches!(self, Self::Select | Self::Deselect | Self::FileFilter)
+    }
 }
 
 /// An open prompt and what was typed so far.
@@ -99,6 +110,11 @@ impl App {
         if self.keymap.window_key(&chord, view) == Some(super::tabs::LIST_KEY) {
             return self.open_tab_list(active);
         }
+        // Alt+F10 and Shift+Tab: the tree dialog and the separate tree's keyboard (RC-100-88).
+        let window_key = self.keymap.window_key(&chord, view).map(str::to_owned);
+        if let Some(effects) = window_key.and_then(|name| self.tree_window_key(&name)) {
+            return effects;
+        }
         let Some(command) = self.keymap.lookup(&chord, view).cloned() else {
             return Vec::new();
         };
@@ -114,6 +130,12 @@ impl App {
             return effects;
         }
         match command {
+            // Num+ over a duplicate result: "Select duplicate files" (RC-100-98).
+            Command::SelectByMask(rc_engine::MaskRequest { mask: None, .. })
+                if self.shows_duplicates(active) =>
+            {
+                return self.open_select_duplicates(active);
+            }
             Command::SelectByMask(rc_engine::MaskRequest { mask: None, .. }) => {
                 return self.open_prompt(active, PromptKind::Select);
             }
@@ -125,6 +147,10 @@ impl App {
                 last: false,
                 ..
             } => return self.open_filter(active),
+            // Ctrl+F12 asks for the mask (RC-100-92).
+            Command::SetFileFilter { filter: None, .. } => {
+                return self.open_prompt(active, PromptKind::FileFilter);
+            }
             // Alt+F5 and Alt+F9 ask in their dialog first (RC-030-03, RC-030-04).
             Command::ArchivePack { target: None, .. }
             | Command::ArchiveExtract { target: None, .. } => {
@@ -178,14 +204,21 @@ impl App {
     pub(super) fn open_prompt(&mut self, panel: PanelId, kind: PromptKind) -> Vec<Effect> {
         let text = match kind {
             PromptKind::Path => self.location_text(&self.pane(panel).state.path),
-            PromptKind::Select | PromptKind::Deselect => self
+            PromptKind::Select | PromptKind::Deselect | PromptKind::FileFilter => self
                 .mask_history
                 .first()
                 .cloned()
                 .unwrap_or_else(|| "*.*".to_owned()),
+            PromptKind::TabTitle(tab) => self
+                .engine
+                .tabs(panel)
+                .into_iter()
+                .find(|view| view.id == tab)
+                .map(|view| view.title)
+                .unwrap_or_default(),
         };
         // A mask prompt starts on the newest kept mask, when there is one.
-        let recalled = (kind != PromptKind::Path && !self.mask_history.is_empty()).then_some(0);
+        let recalled = (kind.takes_masks() && !self.mask_history.is_empty()).then_some(0);
         self.prompt = Some(Prompt {
             panel,
             kind,
@@ -197,7 +230,7 @@ impl App {
 
     /// ArrowUp (`by` 1, older) or ArrowDown (-1, newer) in a mask prompt: the next kept mask.
     fn recall(&mut self, by: isize) -> Vec<Effect> {
-        let Some(prompt) = self.prompt.as_mut().filter(|p| p.kind != PromptKind::Path) else {
+        let Some(prompt) = self.prompt.as_mut().filter(|p| p.kind.takes_masks()) else {
             return Vec::new();
         };
         let next = match prompt.recalled {
@@ -242,13 +275,15 @@ impl App {
         else {
             return Vec::new();
         };
-        if text.trim().is_empty() {
+        // An empty name gives the tab its folder's name again.
+        if text.trim().is_empty() && !matches!(kind, PromptKind::TabTitle(_)) {
             return Vec::new();
         }
         let command = match kind {
+            // `%LOCALAPPDATA%\x` typed into the path bar, as in Total Commander (RC-100-92).
             PromptKind::Path => Command::Navigate {
                 panel: Some(panel),
-                path: text,
+                path: rc_engine::user_commands::expand_variables(&text),
             },
             PromptKind::Select | PromptKind::Deselect => {
                 mru::MASKS.remember(&mut self.mask_history, &text);
@@ -260,9 +295,21 @@ impl App {
                     Command::DeselectByMask(rc_engine::MaskRequest { panel, mask })
                 }
             }
+            PromptKind::FileFilter => {
+                mru::MASKS.remember(&mut self.mask_history, &text);
+                Command::SetFileFilter {
+                    panel: Some(panel),
+                    filter: Some(rc_engine::FileFilter::Mask(text)),
+                }
+            }
+            PromptKind::TabTitle(tab) => Command::RenameTab {
+                panel: Some(panel),
+                tab: Some(tab),
+                title: Some(text),
+            },
         };
         let mut effects = vec![Effect::Dispatch(panel, vec![command])];
-        if kind != PromptKind::Path
+        if kind.takes_masks()
             && let Some(db) = self.db.clone()
         {
             effects.push(Effect::Task(

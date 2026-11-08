@@ -30,7 +30,7 @@ use crate::recover::LockOrRecover as _;
 use crate::recover::LogPanic as _;
 
 /// Bytes per read of a source.
-const BUFFER: usize = 256 * 1024;
+pub(crate) const BUFFER: usize = 256 * 1024;
 
 /// What one archive member is.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +144,7 @@ impl Feed {
     }
 
     /// Fails once the job is cancelled; waits while it is paused.
-    fn checkpoint(&self) -> io::Result<()> {
+    pub(crate) fn checkpoint(&self) -> io::Result<()> {
         if self.control.is_paused() {
             self.handle
                 .block_on(self.control.checkpoint())

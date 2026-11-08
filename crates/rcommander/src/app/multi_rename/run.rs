@@ -124,6 +124,9 @@ impl App {
             Answer::Logged(Err(error)) => {
                 dialog.status = Status::Error(t!("multi_rename.log_failed", error = error));
             }
+            answer @ (Answer::Names(_) | Answer::Editing(_) | Answer::NextStep(_)) => {
+                return self.mr_names_answer(answer);
+            }
         }
         Vec::new()
     }
@@ -150,6 +153,7 @@ impl App {
             follow: FollowUp::Refresh,
             background: true,
             result: Ok(vec![queued.job]),
+            detail: None,
             refused: None,
         };
         let mut effects = self.on_file_ops(FileOpsMsg::Submitted(Box::new(submitted)));
@@ -183,7 +187,9 @@ impl App {
         let completed = state == JobState::Completed;
         let mut effects = Vec::new();
         if running.undo {
-            if completed && let Some(names) = dialog.undo_names.take() {
+            // An undo leaves no run to go on from (F5).
+            dialog.next_names = None;
+            if completed && let Some(names) = dialog.undo_names.pop() {
                 dialog.list.set_names(names);
             }
             dialog.status = if completed {
@@ -229,9 +235,10 @@ impl App {
                     ));
                 }
                 dialog.list.set_names(names);
-                dialog.undo_names = Some(running.before);
+                dialog.ran(running.before);
                 dialog.status = Status::Info(t!("multi_rename.done", count = running.pairs.len()));
             } else {
+                dialog.next_names = None;
                 let job = self.engine.ops().job(job).ok();
                 dialog.status = Status::Error(stopped_text(job.as_ref()));
             }

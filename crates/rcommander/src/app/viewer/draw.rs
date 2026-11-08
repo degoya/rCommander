@@ -28,7 +28,7 @@ use rc_engine::{
 };
 
 use super::{
-    ViewerMessage,
+    ViewerMessage, copy,
     find::{BarKind, FindOption},
     lister::{Lister, Shown, Zoom},
     quick::{DirSummary, QuickShown},
@@ -170,7 +170,7 @@ fn text_view<'a>(lister: &'a Lister, tokens: &'static Tokens) -> Element<'a, Mes
     let editor = text_editor(&lister.content)
         .highlight_with::<SpanHighlighter>(highlights, spans::format)
         .on_action(move |action| wrap(ViewerMessage::Editor(id, action)))
-        .key_binding(read_only)
+        .key_binding(move |press| copy::lister_keys(id, press))
         .font(font.font)
         .size(font.size)
         .line_height(LineHeight::Absolute(lister.line_height().into()))

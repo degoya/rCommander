@@ -8,6 +8,10 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         Coverage::Covered("multi_rename_apply"),
     ),
     (
+        "multi_rename.next_step",
+        Coverage::Omitted("the agent passes names itself"),
+    ),
+    (
         "multi_rename.open_dialog",
         Coverage::Omitted("purely visual; the preview is multi_rename_preview"),
     ),

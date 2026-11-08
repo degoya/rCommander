@@ -1,0 +1,34 @@
+[package]
+name = "rc-plugin-office-viewer"
+description = "rCommander's bundled Office viewer plugin: the text and properties of Word, Excel and PowerPoint documents (OOXML)"
+# The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+# Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").
+license = "MIT"
+publish = false
+
+# The package is read by the plugin's own zip reader (src/package.rs): stored parts as they are,
+# Deflate through flate2 on miniz_oxide (pure Rust, as svg-viewer uses it on wasm32). The zip
+# crate is not a dependency: on wasm32 it pulls getrandom with `wasm_js`, and so wasm-bindgen,
+# into the component. quick-xml reads each part as a stream. The guest binding (src/guest.rs)
+# needs wit-bindgen on wasm32 only, against `crates/rc-plugin-api/wit`.
+[dependencies]
+flate2.workspace = true
+quick-xml = { version = "0.41", default-features = false }
+
+# The tests write their packages with zip's writer, natively only.
+[dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen.workspace = true
+
+[lib]
+# `rlib`, as the other bundled viewers: `cargo test` runs the logic natively; the component is
+# linked for wasm32 by `scripts/build-plugins.sh` alone, with `cargo rustc --crate-type cdylib`.
+crate-type = ["rlib"]
+
+[lints]
+workspace = true

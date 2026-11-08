@@ -16,7 +16,9 @@ use super::questions::Question;
 /// "Run command" -, and the file operations' dialogs (stage 2): copy and move (F5, F6, Shift+F5),
 /// a new folder or text file (F7, Shift+F4), delete (F8, Shift+F8), a job's conflict and error
 /// questions and its progress window - and the small questions, one at a time (`questions.rs`) -
-/// and the workspaces window (RC-100-68).
+/// and the workspaces window (RC-100-68), the tree dialog (Alt+F10, RC-100-88), the own
+/// commands' window (RC-100-86), "Select duplicate files" and the disk-usage window (RC-100-98),
+/// the button bars' window (RC-100-87) - and the internal associations' window (RC-100-91),
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DialogWindow {
     Settings,
@@ -45,11 +47,23 @@ pub enum DialogWindow {
     Question(Question),
     /// The workspaces window (RC-100-68).
     Workspaces,
+    /// The tree dialog (Alt+F10, RC-100-88).
+    Tree,
+    /// The own commands' window, with the Start menu's tab (RC-100-86).
+    Commands,
+    /// The internal associations' window (RC-100-91).
+    Associations,
+    /// "Select duplicate files" (Num+ over a duplicate result, RC-100-98).
+    SelectDuplicates,
+    /// The disk-usage window (Ctrl+Shift+L, RC-100-98).
+    DiskUsage,
+    /// The button bars' window (RC-100-87).
+    ButtonBar,
 }
 
 impl DialogWindow {
     /// Every kept place once: `Lister(0)` stands for every Lister, which share one.
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 41] = [
         Self::Settings,
         Self::Queue,
         Self::Connections,
@@ -78,11 +92,19 @@ impl DialogWindow {
         Self::Question(Question::Certificate),
         Self::Question(Question::VaultOffer),
         Self::Question(Question::Quit),
+        Self::Question(Question::RemoteEdit),
         Self::Question(Question::Unlock),
         Self::Question(Question::ArchivePassword),
         Self::Question(Question::LargeFetch),
         Self::Question(Question::SyncConfirm),
         Self::Workspaces,
+        Self::Tree,
+        Self::Question(Question::AskParams),
+        Self::Commands,
+        Self::Associations,
+        Self::SelectDuplicates,
+        Self::DiskUsage,
+        Self::ButtonBar,
     ];
 
     /// Whether the main window takes no input while it is open: the settings, as Total
@@ -110,7 +132,9 @@ impl DialogWindow {
             | Self::Delete
             | Self::Conflict
             | Self::JobError
-            | Self::Progress => true,
+            | Self::Progress
+            | Self::Tree
+            | Self::SelectDuplicates => true,
             Self::Queue
             | Self::Connections
             | Self::Search
@@ -118,7 +142,11 @@ impl DialogWindow {
             | Self::Checksum
             | Self::LoginScripts
             | Self::Lister(_)
-            | Self::Workspaces => false,
+            | Self::Workspaces
+            | Self::Commands
+            | Self::Associations
+            | Self::DiskUsage
+            | Self::ButtonBar => false,
             Self::Question(question) => question.modal(),
         }
     }
@@ -197,6 +225,12 @@ impl DialogWindow {
             Self::Progress => "window.dialog.progress",
             Self::Question(question) => question.key(),
             Self::Workspaces => "window.dialog.workspaces",
+            Self::Tree => "window.dialog.tree",
+            Self::Commands => "window.dialog.user_commands",
+            Self::Associations => "window.dialog.associations",
+            Self::SelectDuplicates => "window.dialog.select_duplicates",
+            Self::DiskUsage => "window.dialog.disk_usage",
+            Self::ButtonBar => "window.dialog.button_bar",
         }
     }
 
@@ -228,6 +262,12 @@ impl DialogWindow {
             Self::Progress => Size::new(720.0, 280.0),
             Self::Question(question) => question.default_size(),
             Self::Workspaces => Size::new(1000.0, 680.0),
+            Self::Tree => Size::new(560.0, 560.0),
+            Self::Commands => Size::new(1000.0, 680.0),
+            Self::Associations => Size::new(1000.0, 680.0),
+            Self::SelectDuplicates => Size::new(680.0, 600.0),
+            Self::DiskUsage => Size::new(900.0, 640.0),
+            Self::ButtonBar => Size::new(1000.0, 680.0),
         }
     }
 
@@ -259,6 +299,12 @@ impl DialogWindow {
             Self::Progress => Size::new(520.0, 250.0),
             Self::Question(question) => question.min_size(),
             Self::Workspaces => Size::new(760.0, 480.0),
+            Self::Tree => Size::new(400.0, 360.0),
+            Self::Commands => Size::new(760.0, 480.0),
+            Self::Associations => Size::new(760.0, 480.0),
+            Self::SelectDuplicates => Size::new(560.0, 480.0),
+            Self::DiskUsage => Size::new(620.0, 420.0),
+            Self::ButtonBar => Size::new(760.0, 480.0),
         }
     }
 }

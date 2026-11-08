@@ -178,3 +178,38 @@ fn times_and_modes_parse() {
     // Writable by the group is taken; the gate asks (RC-080-66).
     assert_eq!(parse_mode("664"), Some(0o664));
 }
+
+/// A JPEG whose EXIF block names its camera: IFD0 with `Make` = "Canon".
+fn photo() -> Vec<u8> {
+    let mut tiff = b"II*\0\x08\0\0\0".to_vec();
+    tiff.extend(1u16.to_le_bytes());
+    tiff.extend(0x010Fu16.to_le_bytes());
+    tiff.extend(2u16.to_le_bytes());
+    tiff.extend(6u32.to_le_bytes());
+    // The value after the header (8), the count (2), one entry (12) and the next IFD (4).
+    tiff.extend(26u32.to_le_bytes());
+    tiff.extend(0u32.to_le_bytes());
+    tiff.extend(b"Canon\0");
+    let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE1];
+    jpeg.extend(u16::try_from(tiff.len() + 8).expect("small").to_be_bytes());
+    jpeg.extend(b"Exif\0\0");
+    jpeg.extend(&tiff);
+    jpeg.extend([0xFF, 0xD9]);
+    jpeg
+}
+
+/// `files_properties` names a photo's EXIF fields (RC-100-99); a text file has none.
+#[tokio::test]
+async fn files_properties_names_a_photos_exif() {
+    let (root, context) = setup().await;
+    std::fs::write(root.path().join("photo.jpg"), photo()).expect("photo");
+    let client = connect(&context).await;
+    let stat = call(
+        &client,
+        "files_properties",
+        json!({ "paths": ["photo.jpg", "top.txt"] }),
+    )
+    .await;
+    assert_eq!(stat["items"][0]["exif"]["camera"], "Canon", "{stat}");
+    assert!(stat["items"][1].get("exif").is_none(), "{stat}");
+}

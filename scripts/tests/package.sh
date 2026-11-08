@@ -5,6 +5,8 @@
 # run with exit 3, so a run that gets past the checks of scripts/lib/package.sh ends there. A
 # package of the same version from another commit or a dirty tree, an empty version and a
 # failing scripts/set-version.sh --check stop the run before it; RC_REPACK=1 replaces the package.
+# A stage that carries the portable mode's marker or a data folder beside the program is never
+# packaged (RC-100-95).
 #
 # Pure bash and python3, a second.
 #
@@ -120,5 +122,39 @@ expect_output "and names both commits" "built from commit deadbeef; this build i
 tarball_built_from "$HEAD_COMMIT"
 package linux
 expect_status "linux: the same commit builds again" 3
+
+# The portable mode (RC-100-95): rc_package_zip refuses a stage with the marker or with data
+# beside the program, and packs one without.
+STAGES="$SCRATCH/stages"
+zip_stage() {
+    rm -f "$STAGES/stage.zip"
+    run_status bash -c 'source "$1/scripts/lib/package.sh" && rc_package_zip "$2" stage "$3"' \
+        _ "$ROOT" "$STAGES" "$STAGES/stage.zip"
+}
+mkdir -p "$STAGES/stage/plugins"
+printf 'program\n' > "$STAGES/stage/rcommander.exe"
+printf 'package\n' > "$STAGES/stage/plugins/data"
+zip_stage
+expect_status "a stage without marker or data beside the program is zipped" 0
+expect_true "the zip is written" '[[ -f "$STAGES/stage.zip" ]]'
+
+: > "$STAGES/stage/rcommander.portable"
+zip_stage
+expect_status "the portable marker stops the zip" 1
+expect_output "and is named" "stage/rcommander.portable"
+expect_true "no zip is written" '[[ ! -e "$STAGES/stage.zip" ]]'
+rm -f "$STAGES/stage/rcommander.portable"
+
+mkdir -p "$STAGES/stage/data"
+zip_stage
+expect_status "a data folder beside the program stops the zip" 1
+expect_output "and is named" "stage/data"
+rm -rf "$STAGES/stage/data"
+
+mkdir -p "$STAGES/stage/data"
+mv "$STAGES/stage/rcommander.exe" "$STAGES/stage/rcommander"
+run_status bash -c 'source "$1/scripts/lib/package.sh" && rc_package_unportable "$2"' \
+    _ "$ROOT" "$STAGES/stage"
+expect_status "linux: data beside rcommander is refused before the tarball" 1
 
 finish_tests package

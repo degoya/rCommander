@@ -14,6 +14,7 @@ fn entry(name: &str, dir: bool, size: u64, age: u64) -> Entry {
         size,
         modified: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000 - age)),
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,
@@ -272,4 +273,73 @@ fn merging_new_entries_is_sorting_the_whole() {
             }
         }
     }
+}
+
+fn timed(name: &str, created: u64, accessed: u64) -> Entry {
+    Entry {
+        created: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(created)),
+        accessed: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(accessed)),
+        ..entry(name, false, 0, 0)
+    }
+}
+
+/// A column set's keys (RC-100-90): creation and last access start newest first, the comment
+/// from A.
+#[test]
+fn created_and_accessed_sort_by_their_times_newest_first() {
+    assert!(SortKey::Created.descending_first());
+    assert!(SortKey::Accessed.descending_first());
+    assert!(!SortKey::Comment.descending_first());
+    let names = |key| {
+        let mut entries = vec![timed("a", 1, 30), timed("b", 3, 10), timed("c", 2, 20)];
+        sort_entries(
+            &mut entries,
+            SortOrder::default().choose(key),
+            Names::WINDOWS,
+        );
+        entries
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(SortKey::Created), ["b", "c", "a"]);
+    assert_eq!(names(SortKey::Accessed), ["a", "c", "b"]);
+}
+
+#[test]
+fn comments_sort_after_the_folders_and_an_entry_without_one_comes_first() {
+    let comments: crate::columns::FolderComments = [
+        ("file10.txt".to_owned(), "zebra".to_owned()),
+        ("FILE2.MD".to_owned(), "apple".to_owned()),
+        ("src".to_owned(), "b-folder".to_owned()),
+        ("docs".to_owned(), "a-folder".to_owned()),
+    ]
+    .into_iter()
+    .collect();
+    let names = |descending| {
+        sort_by_comments(listing(), descending, Names::WINDOWS, &comments)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        names(false),
+        ["docs", "src", "a", "b.rs", "File2.md", "file10.txt"],
+        "case does not count for the name looked up; no comment sorts first, then by name"
+    );
+    assert_eq!(
+        names(true),
+        ["src", "docs", "file10.txt", "File2.md", "b.rs", "a"]
+    );
+    let mut by_key = listing();
+    sort_entries(
+        &mut by_key,
+        SortOrder::default().choose(SortKey::Comment),
+        Names::WINDOWS,
+    );
+    assert_eq!(
+        by_key.first().map(|entry| entry.name.as_str()),
+        Some("docs"),
+        "without the comments the key sorts by name"
+    );
 }

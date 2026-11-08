@@ -13,7 +13,8 @@
 //! Alt+Enter properties, RC-020-06). For entries the menu also copies their names or full paths
 //! to the clipboard, as Total Commander's `cm_CopyNamesToClip` and `cm_CopyFullNamesToClip` do,
 //! which have no key of their own there (`clipboard.copy_names`). Checksum files only also get
-//! "Verify checksums", Ctrl+Shift+F10's check (RC-020-10).
+//! "Verify checksums", Ctrl+Shift+F10's check (RC-020-10). Above all of them stand the commands
+//! of the file's internal association, each "(internal)", as in Total Commander (RC-100-91).
 
 use iced::{Point, Rectangle};
 use rc_engine::{Chord, NameFormat, PanelId};
@@ -123,12 +124,14 @@ pub enum Choice {
     /// The names or full paths of the selection, or of the entry under the cursor, to the
     /// clipboard, one line each.
     CopyNames(NameFormat),
+    /// The command `verb` of the internal association of the file `name` (RC-100-91).
+    Association { name: String, verb: String },
 }
 
 /// One of rCommander's entries: its label and what it runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Item {
-    pub label: &'static str,
+    pub label: String,
     pub choice: Choice,
 }
 
@@ -137,9 +140,24 @@ impl Item {
     pub fn key(&self) -> Option<&Chord> {
         match &self.choice {
             Choice::Key(chord) => Some(chord),
-            Choice::CopyNames(_) => None,
+            Choice::CopyNames(_) | Choice::Association { .. } => None,
         }
     }
+}
+
+/// The entries of the internal association's commands `verbs` for the file `name`, each with
+/// "(internal)" as Total Commander marks them (RC-100-91).
+pub fn association_items(name: &str, verbs: &[String]) -> Vec<Item> {
+    verbs
+        .iter()
+        .map(|verb| Item {
+            label: t!("context_menu.internal", command = verb.as_str()),
+            choice: Choice::Association {
+                name: name.to_owned(),
+                verb: verb.clone(),
+            },
+        })
+        .collect()
 }
 
 /// The clipboard entries under the keys' entries, for entries only.
@@ -167,7 +185,7 @@ pub fn items(
         let standard: Chord = action.keys().parse().ok()?;
         let chord = key(&standard)?;
         Some(Item {
-            label: action.label(over_shell),
+            label: action.label(over_shell).to_owned(),
             choice: Choice::Key(chord),
         })
     });
@@ -176,7 +194,7 @@ pub fn items(
         Target::Entries(_) => &COPY,
     };
     let copies = copies.iter().map(|&format| Item {
-        label: copy_label(format),
+        label: copy_label(format).to_owned(),
         choice: Choice::CopyNames(format),
     });
     keys.chain(copies).collect()
@@ -265,7 +283,7 @@ impl ContextMenu {
     /// Win32 menu.
     pub fn key(&mut self, chord: &Chord) -> MenuAction {
         if menu_letter::is_letter(chord) {
-            let labels = self.items.iter().map(|item| Some(item.label));
+            let labels = self.items.iter().map(|item| Some(item.label.as_str()));
             return match menu_letter::letter(&chord.key, labels, self.cursor) {
                 Letter::None => MenuAction::Stay,
                 Letter::Move(index) => {

@@ -53,7 +53,7 @@ fn entry<'a>(
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let line = row![
-        line(item.label).width(Length::Fill),
+        line(item.label.as_str()).width(Length::Fill),
         line(item.key().and_then(keys::of_chord).unwrap_or_default()).color(tokens.text_secondary),
     ]
     .spacing(16)

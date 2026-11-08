@@ -36,6 +36,7 @@ pub use grants::{MAX_MCP_GRANTS, McpGrant};
 #[path = "mcp_pins.rs"]
 mod pins;
 pub(crate) use pins::check as check_mcp_pin;
+pub(crate) use pins::current_pins;
 pub use pins::{McpFrozenPanel, McpPin, with_mcp_pins};
 
 #[path = "mcp_judged.rs"]

@@ -3,10 +3,10 @@
 # A failure code starts with the plugin's id (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.4.0"
+api_version = "0.6.0"
 id = "01a1aafa-5f73-7283-b0c1-88b39b363fa9"
 name = "SQL viewer"
-version = "0.1.1"
+version = "0.1.2"
 
 [match]
 # Scripts, schema and data scripts, and the dialects' own: PostgreSQL's `psql` scripts and

@@ -14,17 +14,23 @@ use rc_vfs::Entry;
 
 use crate::{
     Engine, EngineError, EngineEvent, Outcome, PanelChange, PanelId, PanelState,
+    file_filter::FileFilter,
     quick_search::{MAX_PATTERN, NameMatch, filtered},
+    state::by_name,
 };
 
-/// A panel's quick filter.
+/// A panel's quick filter, and beside it its file filter (Ctrl+F10, Ctrl+F11, Ctrl+F12;
+/// RC-100-92, `file_filter.rs`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QuickFilter {
     /// The text in force; `None` while every entry shows.
     pub pattern: Option<String>,
     /// The last text set in this panel, which Ctrl+Shift+S applies again; kept across folders.
     pub last: Option<String>,
-    /// The whole listing in the panel's order while a text is in force.
+    /// The file filter in force: unlike the text it stays when the panel shows another folder,
+    /// and it hides files only.
+    pub files: FileFilter,
+    /// The whole listing in the panel's order while a text or a file filter is in force.
     listed: Option<Arc<[Entry]>>,
 }
 
@@ -42,50 +48,69 @@ impl PanelState {
     /// stays on its entry when it is still shown, else goes to the first one; selected names no
     /// longer shown are deselected.
     pub(crate) fn set_filter(&mut self, pattern: Option<String>) {
+        if pattern.as_deref().and_then(NameMatch::filter).is_some() {
+            self.filter.last.clone_from(&pattern);
+            self.filter.pattern = pattern;
+        } else {
+            self.filter.pattern = None;
+        }
+        self.refilter();
+    }
+
+    /// The file filter `files` over the listing (RC-100-92), the quick filter kept; cursor and
+    /// selection as [`PanelState::set_filter`] leaves them.
+    pub(crate) fn set_file_filter(&mut self, files: FileFilter) {
+        self.filter.files = files;
+        self.refilter();
+    }
+
+    /// The listing shown again through both filters as they are now.
+    fn refilter(&mut self) {
         let listed = self.listed();
         let at = self.cursor_entry().map(|entry| entry.name.clone());
-        match pattern.as_deref().and_then(NameMatch::filter) {
-            Some(matcher) => {
-                self.entries = filtered(&listed, &matcher).into();
-                self.selection.retain(|name| matcher.matches(name));
-                self.filter.listed = Some(listed);
-                self.filter.last.clone_from(&pattern);
-                self.filter.pattern = pattern;
-            }
-            None => {
-                self.entries = listed;
-                self.filter.listed = None;
-                self.filter.pattern = None;
-            }
+        self.relist(listed);
+        if self.filter.listed.is_some() {
+            let shown = by_name(&self.entries);
+            self.selection
+                .retain(|name| shown.contains_key(name.as_str()));
         }
         self.cursor = at.and_then(|name| self.index_of(&name)).unwrap_or(0);
     }
 
     /// A new listing in the panel's order, filtered as the panel is.
     pub(crate) fn relist(&mut self, listed: Arc<[Entry]>) {
-        match self.filter.pattern.as_deref().and_then(NameMatch::filter) {
-            Some(matcher) => {
-                self.entries = filtered(&listed, &matcher).into();
-                self.filter.listed = Some(listed);
-            }
-            None => {
-                self.entries = listed;
-                self.filter.listed = None;
-            }
+        let text = self.filter.pattern.as_deref().and_then(NameMatch::filter);
+        let files = self.filter.files.matcher();
+        if text.is_none() && files.is_none() {
+            self.entries = listed;
+            self.filter.listed = None;
+            return;
         }
+        let shown: Vec<Entry> = match (&files, &text) {
+            (None, Some(text)) => filtered(&listed, text),
+            _ => listed
+                .iter()
+                .filter(|entry| files.as_ref().is_none_or(|files| files.shows(entry)))
+                .filter(|entry| text.as_ref().is_none_or(|text| text.matches(&entry.name)))
+                .cloned()
+                .collect(),
+        };
+        self.entries = shown.into();
+        self.filter.listed = Some(listed);
     }
 
-    /// What this state keeps of `before`'s filter: the last text always, the text in force only
-    /// in the same directory.
+    /// What this state keeps of `before`'s filters: the last text and the file filter always,
+    /// the text in force only in the same directory.
     pub(crate) fn carry_filter(&mut self, before: &PanelState) {
         self.filter.last.clone_from(&before.filter.last);
+        self.filter.files.clone_from(&before.filter.files);
         if self.path == before.path
             && let Some(pattern) = &before.filter.pattern
         {
             self.filter.pattern = Some(pattern.clone());
-            let listed = Arc::clone(&self.entries);
-            self.relist(listed);
         }
+        let listed = Arc::clone(&self.entries);
+        self.relist(listed);
     }
 }
 

@@ -6,13 +6,21 @@
 //! file - and files that small are read once, whole, for both comparisons; larger files are
 //! answered with the first differing byte alone. Both work on any
 //! [`Vfs`], so local, remote and archive files compare alike.
+//!
+//! The edit mode (RC-100-94) changes two text files line by line ([`edit`]), reads and writes
+//! them back ([`save`]); the external compare tool's arguments are [`external`]. A compare plugin
+//! compares two files by structure beside the line diff ([`structure`], RC-100-41).
 
 pub mod binary;
+pub mod edit;
+pub mod external;
+pub mod save;
+pub mod structure;
 pub mod text;
 
 use std::path::Path;
 
-use rc_vfs::{Vfs, VfsError, VfsPath};
+use rc_vfs::{Entry, Vfs, VfsError, VfsPath, unix_seconds};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt as _;
 use tokio_util::sync::CancellationToken;
@@ -20,9 +28,11 @@ use tokio_util::sync::CancellationToken;
 use crate::EngineError;
 use crate::recover::LogPanic as _;
 pub use binary::BinaryDifference;
+pub use edit::{CompareSide, Direction, EditSession, Origin, ReadOnly};
+pub use structure::StructureOutcome;
 pub use text::{
     DiffRow, Encoding, Line, LineEnding, LinePosition, RowKind, TextDiff, TextFile, TextOptions,
-    Unified,
+    Unified, Unmappable,
 };
 
 /// The largest file, in bytes, that is compared line by line.
@@ -54,6 +64,44 @@ pub struct FileCompareRequest {
     pub options: TextOptions,
     /// Bytes of unified diff to include, at most [`UNIFIED_LIMIT_MAX`]; none when 0.
     pub unified_limit: usize,
+    /// Compare by structure as well, when a compare plugin claims both files (RC-100-41).
+    pub structure: bool,
+}
+
+/// The parameters of `compare.by_content` (RC-100-94): the external compare tool when one is
+/// set, else the diff window.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ByContentRequest {
+    /// The two files; both `None` picks them as `compare.files` does.
+    pub left: Option<VfsPath>,
+    pub right: Option<VfsPath>,
+}
+
+/// How a file is expected to be: its size and time as a `compare.files` answer reported them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FileStamp {
+    pub size: u64,
+    pub modified_unix: Option<u64>,
+}
+
+/// The parameters of `compare.apply_blocks` (RC-100-94).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ApplyBlocksRequest {
+    /// The left file: absolute, or relative to the left panel's directory.
+    pub left: String,
+    /// The right file: absolute, or relative to the right panel's directory.
+    pub right: String,
+    /// The options the blocks were counted under.
+    pub options: TextOptions,
+    /// The blocks of differing lines to copy, from 0 in the order of the comparison.
+    pub blocks: Vec<usize>,
+    pub direction: Direction,
+    /// Both files as the comparison found them; either changed since, nothing is written.
+    pub expect_left: FileStamp,
+    pub expect_right: FileStamp,
 }
 
 /// What a comparison of two files found.
@@ -63,6 +111,12 @@ pub struct FileComparison {
     pub right: VfsPath,
     pub left_size: u64,
     pub right_size: u64,
+    /// When each was last changed, in Unix seconds, where the file system tells: with the sizes
+    /// what `compare.apply_blocks` expects to find (RC-100-94).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub left_modified_unix: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub right_modified_unix: Option<u64>,
     /// The two hold the same bytes.
     pub identical: bool,
     /// The first byte that differs; `None` when identical.
@@ -70,6 +124,9 @@ pub struct FileComparison {
     /// The line comparison, when the bytes differ and both files are text within
     /// [`TEXT_DIFF_LIMIT`] and [`text::MAX_LINES`].
     pub text: Option<TextComparison>,
+    /// The structural comparison, when the request asked for one (RC-100-41).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structure: Option<StructureOutcome>,
 }
 
 /// The line comparison of two differing text files.
@@ -101,8 +158,9 @@ pub async fn compare_files(
     unified_limit: usize,
     cancel: &CancellationToken,
 ) -> Result<FileComparison, EngineError> {
-    let left_size = file_size(left).await?;
-    let right_size = file_size(right).await?;
+    let left_entry = file_entry(left).await?;
+    let right_entry = file_entry(right).await?;
+    let (left_size, right_size) = (left_entry.size, right_entry.size);
     let whole = if left_size <= TEXT_DIFF_LIMIT && right_size <= TEXT_DIFF_LIMIT {
         match (
             read_bounded(left, cancel).await?,
@@ -140,9 +198,12 @@ pub async fn compare_files(
         right: right.path.clone(),
         left_size,
         right_size,
+        left_modified_unix: left_entry.modified.and_then(unix_seconds),
+        right_modified_unix: right_entry.modified.and_then(unix_seconds),
         identical: difference.is_none(),
         first_difference: difference,
         text,
+        structure: None,
     })
 }
 
@@ -179,12 +240,23 @@ async fn diff_bytes(
         return Ok(None);
     };
     drop((left_bytes, right_bytes));
-    // The diff itself is CPU work of up to a few seconds: off the async workers.
+    diff_texts(left_text, right_text, options).await.map(Some)
+}
+
+/// The line diff of two texts, computed off the async workers: CPU work of up to a few seconds.
+///
+/// # Errors
+///
+/// The runtime shut down under it.
+pub async fn diff_texts(
+    left: TextFile,
+    right: TextFile,
+    options: &TextOptions,
+) -> Result<TextDiff, EngineError> {
     let options = *options;
-    tokio::task::spawn_blocking(move || TextDiff::compute(left_text, right_text, &options))
+    tokio::task::spawn_blocking(move || TextDiff::compute(left, right, &options))
         .await
         .log_panic("engine.compare_diff")
-        .map(Some)
         .map_err(|error| {
             if error.is_panic() {
                 std::panic::resume_unwind(error.into_panic());
@@ -204,8 +276,8 @@ fn summarize(diff: &TextDiff, unified_limit: usize) -> TextComparison {
     }
 }
 
-/// The size of a file; a directory is refused.
-async fn file_size(side: Side<'_>) -> Result<u64, EngineError> {
+/// A file's entry; a directory is refused.
+async fn file_entry(side: Side<'_>) -> Result<Entry, EngineError> {
     let entry = side.vfs.stat(&side.path.path).await?;
     if entry.is_dir_like() {
         return Err(VfsError::IsADirectory {
@@ -213,7 +285,7 @@ async fn file_size(side: Side<'_>) -> Result<u64, EngineError> {
         }
         .into());
     }
-    Ok(entry.size)
+    Ok(entry)
 }
 
 /// A whole file, or `None` when it is larger than [`TEXT_DIFF_LIMIT`].

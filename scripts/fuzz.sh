@@ -2,7 +2,7 @@
 #
 # Fuzzes the parsers of data from outside (RC-080-72): the cargo-fuzz targets in fuzz/ - FTP
 # listings, known_hosts, archive listings, Total Commander's INI files, the terminal's OSC
-# sequences and plugin manifests - each for a while with libFuzzer, on the nightly pinned in
+# sequences, plugin manifests and the certificate viewer's files - each for a while with libFuzzer, on the nightly pinned in
 # scripts/lib/tool-versions.sh (fuzz/ is a workspace of its own; the main one stays on stable).
 #
 # Usage:
@@ -115,7 +115,7 @@ LOG="${RC_FUZZ_LOGS:-/tmp/claude-$(id -u)/fuzz-$(basename "$ROOT")}/$(date +%Y%m
 mkdir -p "$LOG" "$FUZZ_DIR/build" || exit 1
 
 # The files whose bytes start a target's corpus: the test data of its parser. The OSC target has
-# none on disk; osc_seeds writes its seeds.
+# none on disk; osc_seeds writes its seeds, everything_seeds those of Everything's answers.
 seeds() {
     case "$1" in
         archive_listing) find crates/rc-vfs/tests/fixtures/archives -type f ! -name '*.py' ;;
@@ -123,6 +123,8 @@ seeds() {
         known_hosts) find crates/rc-remote/tests/fixtures/known_hosts -type f ;;
         plugin_manifest) find plugins -mindepth 2 -maxdepth 2 -name manifest.toml ;;
         tc_ini) find crates/rc-engine/tests/fixtures/total_commander -type f -iname '*.ini' ;;
+        git_porcelain) find crates/rc-engine/tests/fixtures/git_porcelain -type f ;;
+        cert_viewer) find crates/rc-cert/tests/fixtures -type f ;;
     esac 2> /dev/null | sort
 }
 
@@ -134,11 +136,23 @@ osc_seeds() {
     printf '\033]133;A\007$ \033]133;B\007ls\033]133;C\007a b\n\033]133;D;0\007' > "$1/seed-osc133"
 }
 
+# Everything's answer to a search (`EVERYTHING_IPC_LIST2`) with the one path `C:\a`, as it
+# arrives: five header words, one item (its flags and the offset 28), the length 4, the UTF-16
+# text and its NUL (RC-100-93).
+everything_seeds() {
+    printf '\001\000\000\000\001\000\000\000\000\000\000\000\004\000\000\000\001\000\000\000' > "$1/seed-everything-one"
+    printf '\000\000\000\000\034\000\000\000\004\000\000\000C\000:\000\134\000a\000\000\000' >> "$1/seed-everything-one"
+}
+
 # Copies the seeds into `corpus` once; a seed already there (by its path) is left alone.
 seed() {
     local target="$1" corpus="$2" file name count=0
     if [[ "$target" == osc ]]; then
         [[ -e "$corpus/seed-osc7" ]] || osc_seeds "$corpus"
+        return 0
+    fi
+    if [[ "$target" == everything_reply ]]; then
+        [[ -e "$corpus/seed-everything-one" ]] || everything_seeds "$corpus"
         return 0
     fi
     while IFS= read -r file; do

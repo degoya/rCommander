@@ -7,8 +7,10 @@
 //! recorded refusal instead. When the connection ends - a disconnect, unanswered keepalives, or
 //! the task simply finishing - the handler is dropped and flips the `closed` signal.
 //!
-//! No forwarding: the session never asks for agent, X11 or port forwarding (nothing calls
-//! russh's `agent_forward`, `request_x11` or `tcpip_forward`), and every channel the server
+//! No forwarding towards this computer: the session never asks for agent, X11 or remote port
+//! forwarding (nothing calls russh's `agent_forward`, `request_x11` or `tcpip_forward`); the
+//! `direct-tcpip` channels a jump or a local forward opens go from here to the server
+//! (RC-110-03). Every channel the server
 //! tries to open towards the client - agent, X11, forwarded or direct TCP/IP, Unix sockets, a
 //! session - is refused here. russh would accept them by default.
 

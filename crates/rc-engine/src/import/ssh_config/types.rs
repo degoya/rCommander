@@ -61,8 +61,11 @@ pub struct ImportedHost {
     pub port: Option<u16>,
     /// Key files, by path only, in the order given.
     pub identity_files: Vec<PathBuf>,
-    /// The jump host(s) as written; rCommander does not connect through them yet.
+    /// The jump host(s) as written; one alias of the same import becomes the connection's jump
+    /// host (RC-110-03), a list or `user@host:port` stays a note.
     pub proxy_jump: Option<String>,
+    /// The `LocalForward` lines, bind addresses lowered to loopback (RC-110-03).
+    pub local_forwards: Vec<super::LocalForwardSpec>,
     /// Keywords set for this host that the import does not take, as first written.
     pub ignored_options: Vec<String>,
     /// The `Host` line that first names the alias.
@@ -153,6 +156,10 @@ pub enum WarningKind {
     /// More than [`MAX_HOSTS`](super::MAX_HOSTS) hosts or pattern names; this one and every
     /// later new one are not taken.
     TooManyHosts,
+    /// A `LocalForward` that is no TCP forward rCommander keeps (a socket, a bad port); skipped.
+    InvalidForward,
+    /// A `LocalForward` on an address other than loopback, taken on `127.0.0.1` (RC-110-03).
+    ForwardBindLowered,
 }
 
 impl WarningKind {
@@ -174,6 +181,8 @@ impl WarningKind {
         "include_repeated",
         "too_many_includes",
         "too_many_hosts",
+        "invalid_forward",
+        "forward_bind_lowered",
     ];
 
     /// The stable code, for the GUI's i18n key and the MCP answer.
@@ -196,6 +205,8 @@ impl WarningKind {
             Self::IncludeRepeated { .. } => "include_repeated",
             Self::TooManyIncludes => "too_many_includes",
             Self::TooManyHosts => "too_many_hosts",
+            Self::InvalidForward => "invalid_forward",
+            Self::ForwardBindLowered => "forward_bind_lowered",
         }
     }
 }

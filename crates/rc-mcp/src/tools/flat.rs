@@ -39,6 +39,11 @@ pub(crate) struct FeedPathsParams {
     /// `left` or `right`; the active panel when omitted.
     #[serde(default)]
     pub panel: Option<PanelArg>,
+    /// The duplicate group of each path, in the order of paths (the groups of
+    /// files_find_duplicates numbered from 0): the panel then shows a duplicate result that
+    /// panel_select_duplicates selects in. Omitted for plain paths.
+    #[serde(default)]
+    pub groups: Vec<u32>,
 }
 
 #[tool_router(router = flat_router, vis = "pub(crate)")]
@@ -59,7 +64,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Show given files and folders flat in a panel, as the find-files dialog's Feed to listbox does: the panel shows root (its own folder when omitted) and lists each path once, named relative to root (absolute when outside it); paths missing are left out and counted in flat.skipped. At most 100000 paths (invalid_search beyond). Errors: not_found, not_a_directory for root. Answers the panel's state."
+        description = "Show given files and folders flat in a panel, as the find-files dialog's Feed to listbox does: the panel shows root (its own folder when omitted) and lists each path once, named relative to root (absolute when outside it); paths missing are left out and counted in flat.skipped. At most 100000 paths (invalid_search beyond). With groups, one per path, the panel shows a duplicate result (flat.source duplicates) for panel_select_duplicates. Errors: not_found, not_a_directory for root. Answers the panel's state."
     )]
     pub(crate) async fn panel_feed_paths(
         &self,
@@ -69,6 +74,7 @@ impl RcMcpServer {
             panel: params.panel.map(Into::into),
             root: params.root,
             paths: params.paths,
+            groups: params.groups,
         })
         .await
     }

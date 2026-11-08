@@ -4,5 +4,10 @@ use super::Coverage;
 
 pub(super) const ROWS: &[(&str, Coverage)] = &[
     ("app.about", Coverage::Covered("app_about")),
+    // Copies the encrypted secrets to another drive (RC-100-95).
+    (
+        "app.make_portable",
+        Coverage::Omitted("GUI only: human decision"),
+    ),
     ("app.quit", Coverage::Omitted("GUI only: human decision")),
 ];

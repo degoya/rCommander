@@ -1,12 +1,16 @@
 //! Test material for SSH sessions: this crate's tests use it, and the engine's with the feature
 //! `testkit`. An in-process server ([`server`], its commands [`exec`]) with an SFTP subsystem on
 //! a directory ([`SftpServe`]), one with a pretend shell for the terminal ([`shell`]), the
-//! throw-away keys of `tests/fixtures`, a gate and credentials that answer from memory, and on
-//! Unix an SSH agent on a socket.
+//! throw-away keys of `tests/fixtures` with the user certificates a test CA signed for them
+//! (`tests/fixtures/certs`, RC-060-09), a gate and credentials that answer from memory, and on
+//! Unix an SSH agent on a socket - russh's, or one that also holds certificates
+//! ([`cert_agent`]).
 //!
 //! Nothing here belongs in a release build: the keys are public fixtures and the gate trusts what
 //! it is told to.
 
+#[cfg(unix)]
+pub mod cert_agent;
 pub mod exec;
 pub mod server;
 mod sftp;
@@ -18,11 +22,11 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use russh::keys::{HashAlg, PrivateKey, PublicKey, decode_secret_key};
+use russh::keys::{Certificate, HashAlg, PrivateKey, PublicKey, decode_secret_key};
 use secrecy::{ExposeSecret as _, SecretString};
 
 pub use exec::ExecRuns;
-pub use server::{SecondFactor, ServerOptions, TestServer, silent_server};
+pub use server::{SecondFactor, ServerOptions, TestServer, echo_server, silent_server};
 pub use sftp::SftpServe;
 pub use shell::{PtyRequest, SUDO_PROMPT, ShellServer, shell_word};
 
@@ -39,6 +43,26 @@ pub const CLIENT_ED25519: &str = include_str!("../tests/fixtures/client_key_ed25
 pub const CLIENT_RSA_ENCRYPTED: &str = include_str!("../tests/fixtures/client_key_rsapem");
 /// The passphrase of [`CLIENT_RSA_ENCRYPTED`].
 pub const CLIENT_RSA_PASSPHRASE: &str = "fixture-passphrase";
+
+/// The test CA's public key; its private half was thrown away once it signed the certificates
+/// below (`ssh-keygen -s`).
+pub const USER_CA: &str = include_str!("../tests/fixtures/certs/user_ca.pub");
+/// A user certificate of [`CLIENT_ED25519`] for the principal `tester`, valid forever, key id
+/// `rc-test-valid`.
+pub const CLIENT_ED25519_CERT: &str =
+    include_str!("../tests/fixtures/certs/client_ed25519-cert.pub");
+/// As [`CLIENT_ED25519_CERT`], valid only on 2020-01-01, key id `rc-test-expired`.
+pub const CLIENT_ED25519_CERT_EXPIRED: &str =
+    include_str!("../tests/fixtures/certs/client_ed25519-expired-cert.pub");
+/// As [`CLIENT_ED25519_CERT`], for the principal `someone-else`, key id
+/// `rc-test-other-principal`.
+pub const CLIENT_ED25519_CERT_OTHER_PRINCIPAL: &str =
+    include_str!("../tests/fixtures/certs/client_ed25519-other-principal-cert.pub");
+/// A user certificate of [`CLIENT_RSA_ENCRYPTED`] for `tester`, valid forever, key id
+/// `rc-test-rsa`.
+pub const CLIENT_RSA_CERT: &str = include_str!("../tests/fixtures/certs/client_rsa-cert.pub");
+/// A user certificate of [`host_key_b`]'s key for `tester`: another key's.
+pub const HOST_KEY_B_CERT: &str = include_str!("../tests/fixtures/certs/host_key_b-cert.pub");
 
 const HOST_KEY_A: &str = include_str!("../tests/fixtures/host_key_a");
 const HOST_KEY_B: &str = include_str!("../tests/fixtures/host_key_b");
@@ -71,6 +95,26 @@ pub fn host_key_b() -> PrivateKey {
 #[must_use]
 pub fn client_ed25519() -> PrivateKey {
     decode_secret_key(CLIENT_ED25519, None).expect("fixture client key")
+}
+
+/// The test CA's public key, what a server with `TrustedUserCAKeys` trusts.
+///
+/// # Panics
+///
+/// The fixture does not parse.
+#[must_use]
+pub fn user_ca() -> PublicKey {
+    PublicKey::from_openssh(USER_CA).expect("fixture user CA")
+}
+
+/// The certificate of the fixture `text`.
+///
+/// # Panics
+///
+/// The fixture does not parse.
+#[must_use]
+pub fn certificate(text: &str) -> Certificate {
+    Certificate::from_openssh(text.trim()).expect("fixture certificate")
 }
 
 /// The public halves of both client keys, what the test server accepts.
@@ -154,6 +198,8 @@ pub struct MemoryCredentials {
     pub password: Option<String>,
     pub key: Option<String>,
     pub passphrase: Option<String>,
+    /// The key's certificate (RC-060-09), its `-cert.pub` line.
+    pub certificate: Option<String>,
     /// A one-time code seed (RC-060-08): Base32 or an `otpauth://` URI.
     pub totp_seed: Option<String>,
     pub locked: bool,
@@ -188,7 +234,11 @@ impl Credentials for MemoryCredentials {
             return Ok(None);
         };
         let passphrase = self.passphrase.as_deref().map(SecretString::from);
-        Ok(Some(KeyMaterial { key, passphrase }))
+        Ok(Some(KeyMaterial {
+            key,
+            passphrase,
+            certificate: self.certificate.clone(),
+        }))
     }
 
     async fn totp_code(&self) -> Result<Option<SecretString>, CredentialError> {

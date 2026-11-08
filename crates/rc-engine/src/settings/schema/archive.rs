@@ -4,6 +4,9 @@
 //! reserved, so a crafted archive of a few bytes cannot take gigabytes when it is opened; 16 MiB
 //! to 4 GiB, 256 MiB by default, more than any preset of xz and 7-Zip uses. Neither is protected:
 //! the limit only decides whether an archive opens, never what it may write.
+//!
+//! Whether a changed archive is read back before it replaces the old one (RC-110-05, Total
+//! Commander's `VerifyZIP=1`): on by default; off saves the second read of a large archive.
 
 use super::{SettingKind, SettingPage, SettingSpec};
 
@@ -11,6 +14,8 @@ use super::{SettingKind, SettingPage, SettingSpec};
 pub const ARCHIVE_ENTER_KEY: &str = "archive.enter_opens";
 /// The memory a decoder may set aside for its dictionary, in MiB (RC-080-35).
 pub const DECODER_MEMORY_KEY: &str = "archive.decoder_memory_mib";
+/// Whether a changed archive is read back before it replaces the old one (RC-110-05).
+pub const VERIFY_UPDATE_KEY: &str = "archive.verify_after_update";
 
 pub(super) const ENTER_OPENS: SettingSpec = SettingSpec {
     key: ARCHIVE_ENTER_KEY,
@@ -32,6 +37,16 @@ pub(super) const DECODER_MEMORY: SettingSpec = SettingSpec {
     },
     label: "setting.archive.decoder_memory_mib",
     help: "setting.archive.decoder_memory_mib.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const VERIFY_UPDATE: SettingSpec = SettingSpec {
+    key: VERIFY_UPDATE_KEY,
+    page: SettingPage::Folders,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.archive.verify_after_update",
+    help: "setting.archive.verify_after_update.help",
     protected: false,
     restart: false,
 };

@@ -82,6 +82,8 @@ fn row(position: i64, active: bool, path: &VfsPath) -> StoredTab {
         location: serde_json::to_string(path).expect("encodes"),
         sort: String::new(),
         mode: String::new(),
+        title: None,
+        file_filter: "null".to_owned(),
         history: Vec::new(),
     }
 }

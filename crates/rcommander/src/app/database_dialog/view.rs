@@ -7,7 +7,7 @@ use iced::{
     widget::{column, container, mouse_area, row, text_input},
 };
 
-use super::{DatabaseDialog, DatabaseMsg, DialogMode, ExchangeMsg, Phase, exchange_view};
+use super::{DatabaseDialog, DatabaseMsg, DialogMode, ExchangeMsg, Phase, exchange_view, portable};
 use crate::{
     app::{
         Message,
@@ -53,6 +53,10 @@ pub fn title(dialog: &DatabaseDialog) -> &'static str {
 
 /// The dialog's fields and buttons: on its card, or filling a window of its own (RC-080-23).
 pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<'a, Message> {
+    // The portable question or the restart offer in place of the fields (RC-100-95).
+    if let Some(portable) = portable::body(dialog, tokens) {
+        return portable;
+    }
     let running = dialog.phase == Phase::Running;
     let (label, confirm, browsed) = match dialog.mode {
         DialogMode::Backup => (
@@ -186,7 +190,9 @@ pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<
             t!("db.close"),
             Some(Message::Database(DatabaseMsg::Close)),
         )],
-        exchange_view::choose_all(dialog),
+        exchange_view::choose_all(dialog)
+            .into_iter()
+            .chain(portable::offer(dialog)),
     );
     if dialog.mode == DialogMode::Import {
         // The table takes the room the window has.

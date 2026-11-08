@@ -14,8 +14,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use zeroize::Zeroize as _;
 
-use super::{ExchangeError, sources::ExportedSource};
-use crate::{ConnectionDraft, PanelId, Step};
+use super::ExchangeError;
+use super::connections_part::check_connection;
+pub use super::connections_part::{
+    ConnectionsPart, ExportedConnection, ExportedForward, ExportedMark, ExportedScript,
+    ExportedScriptSecret,
+};
+use crate::PanelId;
 
 /// The format name every file carries.
 pub const FORMAT: &str = "rcommander-export";
@@ -120,68 +125,6 @@ pub struct Content {
 pub struct ExportedSetting {
     pub setting: String,
     pub value: Value,
-}
-
-/// The connections and the login scripts they run.
-#[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ConnectionsPart {
-    pub connections: Vec<ExportedConnection>,
-    pub login_scripts: Vec<ExportedScript>,
-}
-
-/// One connection: its mark (`source`, `key`), the folders it sits in from the root down, its
-/// fields, its login script by name and, only with secrets, its secrets.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ExportedConnection {
-    pub source: String,
-    pub key: String,
-    #[serde(default)]
-    pub folders: Vec<String>,
-    pub connection: ConnectionDraft,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub login_script: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub password: Option<ExportSecret>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub private_key: Option<ExportSecret>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub passphrase: Option<ExportSecret>,
-    /// Secrets taken from a source instead (RC-100-34): references, never values.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub sources: Vec<ExportedSource>,
-}
-
-impl ExportedConnection {
-    /// Whether it carries a secret.
-    #[must_use]
-    pub fn has_secrets(&self) -> bool {
-        self.password.is_some() || self.private_key.is_some() || self.passphrase.is_some()
-    }
-}
-
-/// A login script; its steps name its secrets by the ids of the machine it came from, which
-/// `secrets` tells by label.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ExportedScript {
-    pub name: String,
-    pub steps: Vec<Step>,
-    pub step_timeout_ms: u64,
-    pub total_timeout_ms: u64,
-    #[serde(default)]
-    pub secrets: Vec<ExportedScriptSecret>,
-}
-
-/// A script's secret: its id there and its label, its value only with secrets.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ExportedScriptSecret {
-    pub id: i64,
-    pub label: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub value: Option<ExportSecret>,
 }
 
 /// The trusted SSH host keys and FTPS certificates.
@@ -399,44 +342,14 @@ impl Content {
     }
 }
 
-fn check_connection(connection: &ExportedConnection) -> Result<(), ExchangeError> {
-    items(connection.folders.len(), "a connection's folders")?;
-    let draft = &connection.connection;
-    let fields = [
-        Some(&connection.source),
-        Some(&connection.key),
-        Some(&draft.name),
-        Some(&draft.host),
-        draft.username.as_ref(),
-        draft.key_path.as_ref(),
-        draft.start_directory.as_ref(),
-        draft.notes.as_ref(),
-        connection.login_script.as_ref(),
-    ];
-    for field in fields.into_iter().flatten().chain(&connection.folders) {
-        text(field, "a connection")?;
-    }
-    for secret in [
-        &connection.password,
-        &connection.private_key,
-        &connection.passphrase,
-    ]
-    .into_iter()
-    .flatten()
-    {
-        text(secret.expose(), "a secret")?;
-    }
-    Ok(())
-}
-
-fn items(len: usize, what: &str) -> Result<(), ExchangeError> {
+pub(super) fn items(len: usize, what: &str) -> Result<(), ExchangeError> {
     if len > MAX_ITEMS {
         return Err(invalid(&format!("{what}: more than {MAX_ITEMS} entries")));
     }
     Ok(())
 }
 
-fn text(value: &str, what: &str) -> Result<(), ExchangeError> {
+pub(super) fn text(value: &str, what: &str) -> Result<(), ExchangeError> {
     if value.chars().count() > MAX_TEXT || value.contains('\0') {
         return Err(invalid(&format!("{what}: too long or not text")));
     }

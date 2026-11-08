@@ -180,6 +180,9 @@ impl Harness {
                     Effect::Plugins(call) => {
                         queue.push_back(call.run(self.app.engine().clone()).await);
                     }
+                    Effect::Tree(call) => {
+                        queue.push_back(call.run(self.app.engine().clone()).await);
+                    }
                     Effect::FocusTerminal(_) | Effect::Task(_) => {}
                 }
             }

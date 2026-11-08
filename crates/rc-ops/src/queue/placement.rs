@@ -8,7 +8,7 @@ use rc_vfs::{BackendId, VfsPath};
 use crate::OpsError;
 
 /// The one backend every source lies on.
-pub(super) fn one_backend(sources: &[VfsPath]) -> Result<BackendId, OpsError> {
+pub(crate) fn one_backend(sources: &[VfsPath]) -> Result<BackendId, OpsError> {
     let first = sources.first().ok_or(OpsError::NoSources)?;
     if sources.iter().any(|source| source.backend != first.backend) {
         return Err(OpsError::MixedSources);

@@ -33,7 +33,7 @@ const ED25519: &str = include_str!("../../../../rc-remote/tests/fixtures/known_h
 const NAS: &[u8] = include_bytes!("../../../../rc-remote/tests/fixtures/tls/nas.der");
 
 /// The questions these tests ask; the large fetch is `drag_tests.rs`'s.
-const ASKED: [Question; 8] = [
+const ASKED: [Question; 9] = [
     Question::Mcp,
     Question::HostKey,
     Question::Certificate,
@@ -42,6 +42,7 @@ const ASKED: [Question; 8] = [
     Question::Unlock,
     Question::ArchivePassword,
     Question::SyncConfirm,
+    Question::AskParams,
 ];
 
 /// The app beside a file `a.txt`, with a database, the window attached for the MCP questions,
@@ -118,6 +119,19 @@ async fn ask(harness: &mut Harness, question: Question) -> Option<JoinHandle<Mcp
                 .send(Message::Engine(EngineEvent::Quit { unfinished: 2 }))
                 .await;
         }
+        Question::RemoteEdit => {
+            harness.app.quit.remote.edits = vec![rc_engine::RemoteEditInfo {
+                id: rc_engine::RemoteEditId(1),
+                name: "app.conf".to_owned(),
+                server: "web".to_owned(),
+                path: rc_engine::VfsPath {
+                    backend: rc_engine::BackendId::Sftp { connection_id: 1 },
+                    path: "/etc/app.conf".into(),
+                },
+                state: rc_engine::RemoteEditState::Changed,
+                question: Some(rc_engine::RemoteEditQuestion::Upload),
+            }];
+        }
         Question::Unlock => {
             let refused = vec![Command::ListDrives { refresh: false }];
             harness
@@ -144,6 +158,18 @@ async fn ask(harness: &mut Harness, question: Question) -> Option<JoinHandle<Mcp
                 ask_overwrite: true,
             });
             harness.app.compare.sync = Some(dialog);
+        }
+        Question::AskParams => {
+            let request = rc_engine::AskRequest {
+                source: rc_engine::AskSource::Own {
+                    name: "em_np".to_owned(),
+                },
+                panel: PanelId::Left,
+                params: "%N".to_owned(),
+                title: "Notepad".to_owned(),
+            };
+            let asked = EngineEvent::UserCommandAsk(Box::new(request));
+            harness.send(Message::Engine(asked)).await;
         }
     }
     None
@@ -425,7 +451,7 @@ async fn the_sync_confirmation_takes_only_the_compare_windows_keys() {
 }
 
 /// Every question keeps a place of its own beside the dialogs', fits its first size and names the
-/// control its window starts on: Deny, and the password fields.
+/// control its window starts on: Deny, the password fields and a program's parameters.
 #[test]
 fn every_question_has_a_place_and_a_first_control() {
     for question in Question::ALL {
@@ -435,7 +461,7 @@ fn every_question_has_a_place_and_a_first_control() {
         assert_eq!(kind.modal(), question != Question::SyncConfirm);
         let expected = matches!(
             question,
-            Question::Mcp | Question::Unlock | Question::ArchivePassword
+            Question::Mcp | Question::Unlock | Question::ArchivePassword | Question::AskParams
         );
         assert_eq!(first_field(kind).is_some(), expected, "{question:?}");
     }

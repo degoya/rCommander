@@ -82,8 +82,14 @@ pub(crate) fn from_wit_failure(failure: types::Failure) -> Failure {
     };
     let mut native = Failure::new(kind);
     native.code = failure.code.filter(|code| plugin_code(code));
-    native.params = failure
-        .params
+    native.params = plugin_params(failure.params);
+    native
+}
+
+/// A plugin's parameters held to the failure's rules: a plain key, a value cut and spelled out,
+/// at most [`MAX_PARAMS`]; a compare plugin's notices take the same (RC-100-41).
+pub(crate) fn plugin_params<T: FromIterator<(String, String)>>(params: Vec<(String, String)>) -> T {
+    params
         .into_iter()
         .filter(|(key, _)| {
             !key.is_empty()
@@ -94,11 +100,11 @@ pub(crate) fn from_wit_failure(failure: types::Failure) -> Failure {
         })
         .take(MAX_PARAMS)
         .map(|(key, value)| (key, readable(&value, MAX_PARAM_VALUE_CHARS)))
-        .collect();
-    native
+        .collect()
 }
 
-fn plugin_code(code: &str) -> bool {
+/// Whether `code` is in a plugin's own namespace (`<slug>.<condition>`).
+pub(crate) fn plugin_code(code: &str) -> bool {
     code.len() <= MAX_CODE_CHARS
         && code.contains('.')
         && code.bytes().all(|byte| {

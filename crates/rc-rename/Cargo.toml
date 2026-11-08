@@ -10,6 +10,8 @@ publish = false
 [dependencies]
 # `serde` for the modification time of a `RenameSource` an MCP call sends.
 chrono = { workspace = true, features = ["serde"] }
+# The encodings of a name list read from a file (RC-100-96): BOM, UTF-8, UTF-16, ANSI.
+rc-plugin-text.workspace = true
 regex.workspace = true
 serde.workspace = true
 thiserror.workspace = true

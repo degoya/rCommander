@@ -375,6 +375,7 @@ async fn host_key_questions_go_through_the_shared_desk() {
         offered: key(ED25519),
         kind: HostKeyQuestionKind::Unknown,
         stored_types: Vec::new(),
+        hop: None,
     };
     let later = HostKeyQuestion {
         id: 0,

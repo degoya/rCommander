@@ -14,16 +14,16 @@ use serde_json::Value;
 use super::{
     BackupToRequest, ChecksumDialog, ChecksumFilesRequest, ChecksumJob, ChecksumRequest,
     CombineRequest, ConfigExportRequest, ConfigImportRequest, CursorStep, CursorTarget,
-    DeleteRequest, ErrorLogRequest, ImportKeyRequest, MaskRequest, MoveConnectionRequest,
-    MoveFolderRequest, QuickConnectRequest, RdmImportRequest, RetentionRequest,
-    SaveConnectionRequest, SaveCredentialRequest, SearchRequest, SplitRequest,
+    DeleteRequest, DuplicatesRequest, ErrorLogRequest, ImportKeyRequest, MaskRequest,
+    MoveConnectionRequest, MoveFolderRequest, QuickConnectRequest, RdmImportRequest,
+    RetentionRequest, SaveConnectionRequest, SaveCredentialRequest, SearchRequest, SplitRequest,
     SshConfigImportRequest, SshExecRequest, TcImportRequest, TcPasswordsRequest, TransferRequest,
 };
 use crate::{
     ConnectionDraft, ConnectionId, ConnectionPatch, CredentialId, FolderId, HostKeyAnswer,
     ListMode, LoginScriptDraft, LoginScriptId, LoginScriptPatch, MultiRenameRequest, NameFormat,
     PanelId, SecretKind, SecretParam, SecretSourceRef, SessionPrefs, SortKey, TermId, TermSize,
-    compare::FileCompareRequest,
+    compare::{ApplyBlocksRequest, ByContentRequest, FileCompareRequest},
     sync::{DirCompareRequest, SyncApplyRequest},
     viewer::{ReadHexRequest, ReadTextRequest},
 };
@@ -41,8 +41,20 @@ use crate::settings::themes::{ThemeDraft, ThemeMode};
 // The workspaces (RC-100-68).
 use super::{CreateWorkspaceRequest, UpdateWorkspaceRequest};
 use crate::workspaces::WorkspaceId;
+// The own commands and the Start menu (RC-100-86).
+use crate::user_commands::{StartItemDraft, StartItemId, UserCommandDraft, UserCommandId};
 // The inventory group's parameters (RC-100-39).
 use crate::inventory::{InventorySourceId, InventorySourceRequest};
+// The port forwards (RC-110-03).
+use super::SaveForwardRequest;
+// The column sets (RC-100-90).
+use crate::columns::{ColumnSetId, ColumnSetSpec};
+// The server files edited through copies (RC-110-01).
+use crate::{RemoteEditId, UploadChoice};
+// "Select duplicate files" (RC-100-98).
+use crate::search::DuplicateSelection;
+// The button bars (RC-100-87).
+use crate::button_bars::{BarKind, BarPlace, BarSpec, ButtonBarId};
 
 /// Builds [`Command`] and [`Command::id`]: hands the variants gathered so far to the next group's
 /// list, and with the last group writes the enum.

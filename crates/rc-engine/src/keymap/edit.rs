@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     Binding, Chord, KeyContext, Keymap, Override, Overrides, theme_keys::theme_binding,
-    workspace_keys::workspace_binding,
+    user_command_keys::user_command_binding, workspace_keys::workspace_binding,
 };
 use crate::Command;
 
@@ -133,8 +133,9 @@ impl Keymap {
             })
     }
 
-    /// `chord` runs the standard binding `name` from now on - or the theme key (RC-100-55) or
-    /// the workspace key (RC-100-68) `name` names -, beside its other keys; whatever ran on it before no longer does, and a
+    /// `chord` runs the standard binding `name` from now on - or the theme key (RC-100-55), the
+    /// workspace key (RC-100-68), the own command or the Start menu entry (RC-100-86) `name`
+    /// names -, beside its other keys; whatever ran on it before no longer does, and a
     /// reservation of it ends.
     ///
     /// # Errors
@@ -155,7 +156,8 @@ impl Keymap {
                 ..template.clone()
             },
             None => theme_binding(chord.clone(), name)
-                .or_else(|| workspace_binding(chord, name))
+                .or_else(|| workspace_binding(chord.clone(), name))
+                .or_else(|| user_command_binding(chord, name))
                 .ok_or(Refusal::UnknownName)?,
         };
         self.place(binding);

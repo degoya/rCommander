@@ -23,33 +23,64 @@ use serde_json::Value;
 
 pub use schema::AGENT_MAX_KEYS_KEY;
 pub use schema::LANGUAGE_KEY;
-pub use schema::archive::DECODER_MEMORY_KEY;
+pub use schema::archive::{DECODER_MEMORY_KEY, VERIFY_UPDATE_KEY};
+pub use schema::associations::{
+    ASSOCIATIONS_ALL_MATCHES_KEY, ASSOCIATIONS_ENABLED_KEY, FILE_ASSOCIATIONS_KEY,
+};
 pub use schema::backup::BACKUP_KEEP_KEY;
+pub use schema::button_bar::{
+    BUTTON_BAR_KEY, COMMAND_LINE_KEY, DRIVE_BAR_KEY, HORIZONTAL_BAR_KEY, ICON_SIZE_KEY,
+    STATUS_BAR_KEY, VERTICAL_BAR_KEY, VERTICAL_BUTTON_BAR_KEY,
+};
 pub use schema::checksum::CHECKSUM_ENTER_KEY;
+pub use schema::disk_usage::{DISK_USAGE_LARGEST_KEY, DISK_USAGE_SIZE_KEY};
 pub use schema::drives::{
     FOLLOW_ON_OWN_DRIVE_KEY, FOLLOW_OTHER_PANEL_KEY, PORTABLE_DEVICES_KEY, REFRESH_ON_FOCUS_KEY,
     REFRESH_ON_FOCUS_NETWORK_KEY,
 };
 pub use schema::ftp::{FTP_ASK_PLAINTEXT_KEY, FTP_RESOLVE_LINKS_KEY};
+pub use schema::git::{GIT_BRANCH_KEY, GIT_IGNORED_KEY, GIT_PROGRAM_KEY, GIT_STATUS_KEY};
 pub use schema::inventory::INVENTORY_REFRESH_MINUTES_KEY;
 pub use schema::layout::{
     DATE_WIDTH_KEY, EXT_WIDTH_KEY, MENU_BAR_KEY, MENU_BAR_STYLE_KEY, OWNER_COLUMN_KEY,
     OWNER_WIDTH_KEY, PACKED_WIDTH_KEY, PANEL_SPLIT_KEY, RIGHTS_WIDTH_KEY, SIZE_WIDTH_KEY,
 };
 pub use schema::login_scripts::WARN_SECRET_PROMPT_KEY;
+pub use schema::remote_edit::{
+    REMOTE_EDIT_CHECK_KEY, REMOTE_EDIT_PROGRAMS_KEY, REMOTE_EDIT_UPLOAD_KEY,
+};
+pub use schema::search::{SEARCH_ARCHIVES_DEFAULT_KEY, SEARCH_EVERYTHING_KEY};
 pub use schema::sftp::{SFTP_CASE_KEY, SFTP_UPLOAD_RIGHTS_KEY};
 pub use schema::sort::{SORT_NAMES_KEY, SORT_NUMBERS_KEY};
+pub use schema::ssh_certificates::SSH_CERTIFICATES_KEY;
+pub use schema::ssh_forwards::{
+    FORWARD_RECONNECT_KEY, FORWARDS_IN_STATUS_BAR_KEY, FORWARDS_LAN_KEY,
+};
 pub use schema::terminal::{
     COPY_CTRL_C_KEY, COPY_ON_SELECT_KEY, COPY_RIGHT_CLICK_KEY, END_PROGRAMS_KEY, OSC52_COPY_KEY,
     OSC52_REMOTE_KEY, PASTE_CTRL_V_KEY, PASTE_IMAGE_KEY, SHIFT_SELECTS_KEY,
 };
+pub use schema::thumbnails::{
+    DEFAULT_THUMBNAIL_SIZE, MAX_THUMBNAIL_SIZE, MIN_THUMBNAIL_SIZE, THUMBNAIL_CACHE_MB_KEY,
+    THUMBNAIL_DISK_CACHE_KEY, THUMBNAIL_EXPLORER_KEY, THUMBNAIL_REMOTE_KEY, THUMBNAIL_SIZE_KEY,
+};
 pub use schema::totp::TOTP_AUTOFILL_KEY;
+pub use schema::tree::{SEPARATE_TREE_KEY, TREE_OPEN_ON_ENTER_KEY, TREE_WIDTH_KEY};
+pub use schema::viewer::EXIF_KEY as VIEWER_EXIF_KEY;
+pub use schema::viewer::STEP_THROUGH_SELECTION_KEY;
 pub use schema::viewer::{
-    DOS_EXTENSIONS_DEFAULT, DOS_EXTENSIONS_KEY, DOS_TIGHT_LINES_KEY, MARKDOWN_PREVIEW_KEY,
-    MARKDOWN_SELECT_KEY, PICTURE_MEGAPIXELS_KEY,
+    CERT_EXPIRY_WARNING_DAYS_KEY, CERTIFICATES_KEY as VIEWER_CERTIFICATES_KEY,
+};
+pub use schema::viewer::{
+    DOS_EXTENSIONS_DEFAULT, DOS_EXTENSIONS_KEY, DOS_TIGHT_LINES_KEY, MARKDOWN_HIGHLIGHT_KEY,
+    MARKDOWN_PREVIEW_KEY, MARKDOWN_SELECT_KEY, PICTURE_MEGAPIXELS_KEY,
 };
 pub use schema::viewer::{
     TEXT_ZOOM_KEEP_KEY, TEXT_ZOOM_KEY, VIEWER_MAX_FONT_SIZE, VIEWER_MIN_FONT_SIZE,
+};
+pub use schema::watch::{
+    REFRESH_ON_PROMPT_KEY, WATCH_BACKGROUND_KEY, WATCH_CHANGES_KEY, WATCH_EXCLUDE_KEY, WATCH_KEY,
+    WATCH_NETWORK_KEY,
 };
 pub use schema::wsl_themes::{
     MAX_WSL_THEMES, WSL_THEMES_KEY, WslTheme, parse_wsl_themes, write_wsl_themes, wsl_theme,
@@ -64,22 +95,23 @@ pub use schema::{
     SPACE_MOVES_DOWN_KEY, SettingKind, SettingPage, SettingSpec, THEME_KEY, is_protected, setting,
 };
 pub use schema::{
-    ASSOCIATIONS_KEY, CRASH_LIMIT_KEY, DEFAULT_RECENT_CALLS_SHOWN, DEVELOPMENT_MODE_KEY,
-    ENABLED_KEY as PLUGINS_ENABLED_KEY, OUTPUT_LIMIT_KEY, RECENT_CALLS_SHOWN_KEY,
-    parse_associations,
+    ASSOCIATIONS_KEY, COMPARE_LIMIT_KEY, CRASH_LIMIT_KEY, DEFAULT_COMPARE_LIMIT_MIB,
+    DEFAULT_RECENT_CALLS_SHOWN, DEVELOPMENT_MODE_KEY, ENABLED_KEY as PLUGINS_ENABLED_KEY,
+    OUTPUT_LIMIT_KEY, RECENT_CALLS_SHOWN_KEY, parse_associations,
 };
 pub use schema::{CLICK_CLEARS_MARKS_KEY, TAB_DRAG_KEY, VIEWER_TOKEN_COLORS_KEY};
 pub use schema::{
     COLOUR_KEYS, COLOUR_RULES_KEY, COLOUR_TOKENS, ColourRule, MAX_COLOUR_RULES, colour_key,
     colour_value, parse_colour_rules, write_colour_rules,
 };
+pub use schema::{COMPARE_ARGS_KEY, COMPARE_TOOL_KEY};
 pub use schema::{
     CONFIRM_QUIT_KEY, CONNECTIONS_FOCUS_LIST_KEY, CONTEXT_MENU_KEYS_KEY, DIALOG_WINDOWS_KEY,
     F10_KEY, GPU_LOSS_NOTICE_KEY, KEYMAP_KEY, ONE_JOB_PER_ITEM_KEY, PERMANENT_WITHOUT_TRASH_KEY,
     QUEUE_WINDOW_OWN_KEY, STRIP_ROWS_KEY, UNDERLINE_ACCESS_KEYS_KEY,
 };
 pub use schema::{CONNECTION_THEMES_KEY, THEME_DARK_KEY, THEME_LIGHT_KEY};
-pub use schema::{COPY_LINKS_KEY, RENAME_UNDO_ON_FAILURE_KEY};
+pub use schema::{COPY_LINKS_KEY, RENAME_SELECTION_DIALOG_KEY, RENAME_UNDO_ON_FAILURE_KEY};
 pub use schema::{
     DEFAULT_FONT_SIZE, LIST_FONT_KEY, LIST_FONT_SIZE_KEY, MARK_HIDDEN_KEY, MAX_FONT_SIZE,
     MIN_FONT_SIZE, NAME_CUT_KEY, NAME_TIP_DELAY_KEY, TERMINAL_FONT_KEY, TERMINAL_FONT_SIZE_KEY,
@@ -333,6 +365,22 @@ impl Engine {
         // The switch, development mode and the crash limit reach the installed plugins at once.
         if spec.key.starts_with("plugins.") {
             self.plugin_settings_changed().await;
+        }
+        // The ignore list and the programs of the file filters hold at once (RC-100-92): both
+        // panels are read again.
+        if spec.key.starts_with("ignore_list.") || spec.key == crate::file_filter::PROGRAMS_KEY {
+            self.panel_lists_changed().await;
+        }
+        // The status bar's count of running forwards follows at once (RC-110-03).
+        if spec.key == FORWARDS_IN_STATUS_BAR_KEY {
+            self.inner
+                .sessions
+                .forwards
+                .show(value.as_bool().unwrap_or(true));
+        }
+        // The panels' git marks follow a changed `panels.git_*` switch at once (RC-100-97).
+        if spec.key.starts_with("panels.git_") {
+            self.git_follow_both();
         }
         self.publish(EngineEvent::SettingChanged {
             key: spec.key.to_owned(),

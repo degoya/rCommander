@@ -199,3 +199,7 @@ mod follow_tests;
 #[cfg(test)]
 #[path = "ssh_terminal_fault_tests.rs"]
 mod fault_tests;
+
+#[cfg(test)]
+#[path = "ssh_terminal_prompt_tests.rs"]
+mod prompt_tests;

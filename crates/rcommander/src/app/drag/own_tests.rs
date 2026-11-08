@@ -69,6 +69,7 @@ async fn drop_at(harness: &mut Harness, file: PathBuf, across: f32, shift: bool)
     harness
         .send(Message::Drag(DragMsg::Settled(Some(Pointer {
             across,
+            down: 0.5,
             shift,
         }))))
         .await;

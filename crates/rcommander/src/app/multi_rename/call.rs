@@ -1,9 +1,11 @@
 //! The dialog's work for the engine, each off the window's thread: a preview (debounced - the
-//! last input wins), a preset command, a run or its undo, and the log of a run.
+//! last input wins), a preset command, a run or its undo, the log of a run; and the name lists
+//! (RC-100-96): a names file read, the editor's file written and the editor started, the next
+//! step's names.
 
 use std::{
     collections::HashSet,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -13,8 +15,8 @@ use std::{
 
 use rc_db::{Db, LoggedStep};
 use rc_engine::{
-    Command, Engine, EngineError, JobSnapshot, MaskField, MultiRenameRequest, Outcome, RenameError,
-    RenamePlan, RenamePreset, RenameRule, VfsPath,
+    Command, Engine, EngineError, ExternalProgram, JobSnapshot, MAX_NAMES_BYTES, MaskField,
+    MultiRenameRequest, Outcome, RenameError, RenamePlan, RenamePreset, RenameRule, VfsPath,
 };
 use tokio::io::AsyncWriteExt;
 
@@ -71,6 +73,12 @@ pub enum Answer {
     },
     /// The log of a run written, or why not.
     Logged(Result<usize, String>),
+    /// A name list read from a file, or why not.
+    Names(Result<Vec<String>, String>),
+    /// The names written for the editor, which was started on them; or why not.
+    Editing(Result<PathBuf, String>),
+    /// The names of the entries after the latest run, or the error code.
+    NextStep(Result<Vec<String>, &'static str>),
 }
 
 /// Work of the dialog for the engine.
@@ -95,6 +103,20 @@ pub enum Call {
         pairs: Vec<(String, String)>,
         path: String,
     },
+    /// Reads the names file `path`, removed afterwards with `remove` (the editor's).
+    ReadNames {
+        path: PathBuf,
+        remove: bool,
+    },
+    /// Writes `names` to the new file `path` and starts the editor on it.
+    EditNames {
+        path: PathBuf,
+        names: Vec<String>,
+    },
+    /// Removes the editor's file of a list not taken.
+    Discard(PathBuf),
+    /// The names of `names` after the latest run.
+    NextStep(Vec<String>),
 }
 
 impl Call {
@@ -147,7 +169,90 @@ impl Call {
                 pairs,
                 path,
             } => Answer::Logged(write_log(db, &run, &dir, &pairs, &path).await),
+            Self::ReadNames { path, remove } => Answer::Names(read_names(&path, remove).await),
+            Self::EditNames { path, names } => {
+                Answer::Editing(edit_names(&engine, path, &names).await)
+            }
+            Self::Discard(path) => {
+                remove_names_file(&path).await;
+                Answer::Stale
+            }
+            Self::NextStep(names) => Answer::NextStep(
+                match engine
+                    .dispatch(Command::MultiRenameNextStep { names })
+                    .await
+                {
+                    Ok(Outcome::RenameNextStep { names }) => Ok(names),
+                    Ok(_) => Err("io"),
+                    Err(error) => Err(error.code()),
+                },
+            ),
         })
+    }
+}
+
+/// The names of the file `path` (BOM, UTF-8, UTF-16 or ANSI; one per line), the file removed
+/// after with `remove`.
+pub async fn read_names(path: &Path, remove: bool) -> Result<Vec<String>, String> {
+    let read = async {
+        let size = tokio::fs::metadata(path)
+            .await
+            .map_err(|error| error.to_string())?
+            .len();
+        if !usize::try_from(size).is_ok_and(|size| size <= MAX_NAMES_BYTES) {
+            return Err(error_text("rename_names_too_large"));
+        }
+        let bytes = tokio::fs::read(path)
+            .await
+            .map_err(|error| error.to_string())?;
+        rc_engine::names_from_bytes(&bytes).map_err(|error| error_text(error.code()))
+    };
+    let names = read.await;
+    if remove {
+        remove_names_file(path).await;
+    }
+    names
+}
+
+/// Writes `names` for the editor to the new file `path` - UTF-8 with a byte-order mark, CRLF on
+/// Windows - and starts `files.editor` on it (`file.open_external`). A file there already is
+/// not overwritten.
+async fn edit_names(engine: &Engine, path: PathBuf, names: &[String]) -> Result<PathBuf, String> {
+    let bytes = rc_engine::names_to_bytes(names, cfg!(windows));
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .await
+        .map_err(|error| error.to_string())?;
+    let written = async {
+        file.write_all(&bytes).await?;
+        file.flush().await
+    };
+    if let Err(error) = written.await {
+        remove_names_file(&path).await;
+        return Err(error.to_string());
+    }
+    let open = Command::OpenExternal {
+        panel: None,
+        path: Some(path.display().to_string()),
+        program: ExternalProgram::Editor,
+        create: false,
+        cursor_only: false,
+    };
+    match engine.dispatch(open).await {
+        Ok(_) => Ok(path),
+        Err(error) => {
+            remove_names_file(&path).await;
+            Err(error_text(error.code()))
+        }
+    }
+}
+
+/// Removes the editor's file; one that cannot be removed is left in the temporary folder.
+async fn remove_names_file(path: &Path) {
+    if let Err(error) = tokio::fs::remove_file(path).await {
+        tracing::warn!(%error, "the multi-rename names file was not removed");
     }
 }
 

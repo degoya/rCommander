@@ -135,6 +135,9 @@ pub(crate) struct CreateParams {
     /// The same for the dark mode: a dark theme's id.
     #[serde(default)]
     pub theme_dark: Option<String>,
+    /// SSH: the id of the saved SSH connection to connect through (a jump host); omitted, direct.
+    #[serde(default)]
+    pub jump_id: Option<i64>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -177,6 +180,9 @@ pub(crate) struct UpdateParams {
     /// The same for the dark mode: a dark theme's id; an empty string clears it.
     #[serde(default)]
     pub theme_dark: Option<String>,
+    /// SSH: the jump host's connection id; 0 connects directly again.
+    #[serde(default)]
+    pub jump_id: Option<i64>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -286,7 +292,7 @@ impl RcMcpServer {
 #[tool_router(router = connections_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase, has_totp_seed: whether a secret of that kind is stored (has_totp_seed: a one-time code seed for the SSH login), key: a private key stored in the vault as {type, fingerprint, comment, stored: true}, or null, and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, has_totp_seed, key and connections (how many use it). bar_folders: the ids of the folders the drive bar shows as buttons (connections_set_folder_favourite). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key, passphrase or one-time code seed itself."
+        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase, has_totp_seed: whether a secret of that kind is stored (has_totp_seed: a one-time code seed for the SSH login), key: a private key stored in the vault as {type, fingerprint, comment, stored: true, certificate}, or null (certificate: the OpenSSH user certificate stored with it as {type, key_id, serial, principals, valid_after, valid_before (Unix seconds; null is forever), ca_fingerprint}, absent without one), and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null, and jump_id: the saved SSH connection its sessions go through (a jump host), or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, has_totp_seed, key and connections (how many use it). bar_folders: the ids of the folders the drive bar shows as buttons (connections_set_folder_favourite). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key, passphrase or one-time code seed itself."
     )]
     pub(crate) async fn connections_list(&self) -> ToolResult {
         let engine = &self.context.engine;
@@ -305,7 +311,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "One connection by id, with has_password, has_key, has_passphrase and has_totp_seed saying which secrets are stored and key describing a stored private key by type, fingerprint and comment (never key material). Errors: connection_not_found."
+        description = "One connection by id, with has_password, has_key, has_passphrase and has_totp_seed saying which secrets are stored and key describing a stored private key by type, fingerprint and comment, with certificate: its OpenSSH user certificate (type, key_id, serial, principals, valid_after and valid_before in Unix seconds - null is forever - and ca_fingerprint), absent without one (never key material). Errors: connection_not_found."
     )]
     pub(crate) async fn connections_get(
         &self,
@@ -318,7 +324,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Add an SSH, FTP or FTPS connection to the tree, in a folder or at the root. Takes no secrets: a password, key or passphrase among the arguments is refused (secret_not_accepted); the person enters them in rCommander. Answers the new connection. Errors: name_empty, name_taken, host_empty, host_invalid, port_invalid, folder_not_found, auth_unsupported (FTP logs in with password or anonymous, SSH never anonymous), username_empty (FTP with a password), view_unsupported (FTP has no terminal view), control_character (a line break or other control character in the name, username or start_directory), text_too_long (a name, host or user over 255 characters), path_too_long (a key path or start directory over 4096 characters), theme_unknown, theme_wrong_mode (theme_light names a dark theme or theme_dark a light one)."
+        description = "Add an SSH, FTP or FTPS connection to the tree, in a folder or at the root. Takes no secrets: a password, key or passphrase among the arguments is refused (secret_not_accepted); the person enters them in rCommander. Answers the new connection. Errors: name_empty, name_taken, host_empty, host_invalid, port_invalid, folder_not_found, auth_unsupported (FTP logs in with password or anonymous, SSH never anonymous), username_empty (FTP with a password), view_unsupported (FTP has no terminal view), control_character (a line break or other control character in the name, username or start_directory), text_too_long (a name, host or user over 255 characters), path_too_long (a key path or start directory over 4096 characters), theme_unknown, theme_wrong_mode (theme_light names a dark theme or theme_dark a light one), jump_cycle, jump_chain_too_long (more than 4 jump hosts), jump_needs_ssh (jump_id names no SSH connection, or the new one is not SSH)."
     )]
     pub(crate) async fn connections_create(
         &self,
@@ -344,6 +350,7 @@ impl RcMcpServer {
             ftp_encoding: params.ftp_encoding.map(Into::into),
             theme_light: params.theme_light,
             theme_dark: params.theme_dark,
+            jump_id: params.jump_id.map(ConnectionId),
         };
         self.run_connections(Command::CreateConnection {
             folder_id: params.folder_id.map(FolderId),
@@ -353,7 +360,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Change fields of a connection; omitted fields stay, an empty string clears username, key_path, start_directory, notes, theme_light or theme_dark. A change of the themes alone keeps an open session. Takes no secrets (secret_not_accepted). The host, port, kind and username of a connection with a stored password, key or passphrase are changed only in rCommander's window (endpoint_change_needs_gui): the secret would go to the new endpoint. Answers the changed connection. Errors: connection_not_found, name_empty, name_taken, host_empty, host_invalid, port_invalid, auth_unsupported, username_empty, view_unsupported, control_character, text_too_long, path_too_long, theme_unknown, theme_wrong_mode, endpoint_change_needs_gui."
+        description = "Change fields of a connection; omitted fields stay, an empty string clears username, key_path, start_directory, notes, theme_light or theme_dark, jump_id 0 the jump host. A change of the themes alone keeps an open session. Takes no secrets (secret_not_accepted). The host, port, kind and username of a connection with a stored password, key or passphrase are changed only in rCommander's window (endpoint_change_needs_gui): the secret would go to the new endpoint. Answers the changed connection. Errors: connection_not_found, name_empty, name_taken, host_empty, host_invalid, port_invalid, auth_unsupported, username_empty, view_unsupported, control_character, text_too_long, path_too_long, theme_unknown, theme_wrong_mode, endpoint_change_needs_gui (also for a new jump_id: the route decides which server answers under the name), jump_cycle, jump_chain_too_long, jump_needs_ssh."
     )]
     pub(crate) async fn connections_update(
         &self,
@@ -374,6 +381,7 @@ impl RcMcpServer {
             ftp_encoding: params.ftp_encoding.map(Into::into),
             theme_light: params.theme_light,
             theme_dark: params.theme_dark,
+            jump_id: params.jump_id,
         };
         self.run_connections(Command::UpdateConnection {
             id: ConnectionId(params.id),
@@ -398,7 +406,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Delete a connection. Destructive: the first call answers with a question and a confirmation code; ask the person, and only if they agree call again with confirmation set to the code. Errors: connection_not_found."
+        description = "Delete a connection. Destructive: the first call answers with a question and a confirmation code; ask the person, and only if they agree call again with confirmation set to the code. Errors: connection_not_found, connection_is_jump_host (other connections go through it; change those first)."
     )]
     pub(crate) async fn connections_delete(
         &self,
@@ -454,7 +462,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Delete a connection folder: an empty one, or with recursive=true everything inside it. Destructive: needs a confirmation code like connections_delete. Answers how many folders and connections went. Errors: folder_not_found, folder_not_empty."
+        description = "Delete a connection folder: an empty one, or with recursive=true everything inside it. Destructive: needs a confirmation code like connections_delete. Answers how many folders and connections went. Errors: folder_not_found, folder_not_empty, connection_is_jump_host (a connection outside goes through one inside)."
     )]
     pub(crate) async fn connections_folder_delete(
         &self,

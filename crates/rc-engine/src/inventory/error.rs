@@ -14,7 +14,8 @@ pub enum InventorySourceError {
     #[error("the inventory plugin of {name} is not installed or is switched off")]
     PluginMissing { name: String },
     /// The plugin failed or answered against the rules; `code` is the host's
-    /// (`plugin_inventory_too_large`, `plugin_http_denied`, ...) or `plugin_failed`.
+    /// (`plugin_inventory_too_large`, `plugin_http_denied`, ...), `inventory_unlicensed` for a
+    /// paid plugin without a valid licence key (RC-100-40), or `plugin_failed`.
     #[error("the inventory {name} failed ({code})")]
     Failed { name: String, code: &'static str },
 }
@@ -22,7 +23,10 @@ pub enum InventorySourceError {
 impl InventorySourceError {
     /// Every code of this enum's own variants; [`Self::Store`] carries one of
     /// [`InventoryError::ALL_CODES`], [`Self::Failed`] one of [`crate::plugins::ALL_CODES`].
-    pub const ALL_CODES: &[&str] = &["inventory_plugin_missing"];
+    pub const ALL_CODES: &[&str] = &[
+        "inventory_plugin_missing",
+        super::commands::INVENTORY_UNLICENSED,
+    ];
 
     /// The stable code.
     #[must_use]

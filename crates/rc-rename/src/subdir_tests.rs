@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::{SUBFOLDER_SEPARATOR, check_path, nested_path, normalized};
 use crate::names::{FsRules, InvalidName};
-use crate::plan::{Change, Conflict, PlanInput, RenameRule, RenameSource, plan};
+use crate::plan::{Change, Conflict, PlanInput, RenameContext, RenameRule, RenameSource, plan};
 use crate::schedule::schedule;
 
 const DIR: &str = r"C:\photos";
@@ -10,10 +10,7 @@ const DIR: &str = r"C:\photos";
 fn sources(names: &[&str]) -> Vec<RenameSource> {
     names
         .iter()
-        .map(|name| RenameSource {
-            name: (*name).to_owned(),
-            modified: None,
-        })
+        .map(|name| RenameSource::named(*name))
         .collect()
 }
 
@@ -32,6 +29,7 @@ fn planned(names: &[&str], existing: &[&str], mask: &str) -> crate::plan::Rename
         sources: &sources,
         existing: &existing,
         fs: FsRules::WINDOWS,
+        context: &RenameContext::default(),
     };
     plan(&input, &rule(mask)).expect("the rule plans")
 }

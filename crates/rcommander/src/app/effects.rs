@@ -1,5 +1,6 @@
 //! What the window does with an [`Effect`]: commands queued for the engine, tasks, the dialogs'
-//! jobs; a click's commands; storing the tabs and the geometry before the app ends.
+//! jobs; a click's commands; storing the tabs and the geometry, and giving back what PAM systems
+//! lent, before the app ends.
 
 use iced::Task;
 use rc_engine::{Command, CursorTarget, Engine, PanelId};
@@ -14,6 +15,8 @@ impl App {
     /// cursor goes to the row, and a double-click opens it as Enter does - in this order, as one
     /// job. A double-click on `..` goes up.
     pub(super) fn pointing(&mut self, panel: PanelId, row: usize, open: bool) -> Effect {
+        // The list takes the keyboard from its separate tree (RC-100-88).
+        self.tree.focus = false;
         let mut commands = Vec::with_capacity(3);
         if panel != self.active {
             commands.push(Command::SwitchActivePanel { panel: Some(panel) });
@@ -83,6 +86,9 @@ impl App {
             Effect::Plugins(call) => {
                 Task::perform(call.run(self.engine.clone()), std::convert::identity)
             }
+            Effect::Tree(call) => {
+                Task::perform(call.run(self.engine.clone()), std::convert::identity)
+            }
         }
     }
 
@@ -97,6 +103,8 @@ impl App {
         let engine = self.engine.clone();
         Task::perform(
             async move {
+                // What PAM systems lent the sessions goes back before the app ends (RC-100-38).
+                engine.return_all_leases().await;
                 // Tabs and places that cannot be stored are only missing at the next start.
                 if let Err(error) = engine.save_tabs().await {
                     tracing::warn!(%error, "the panels' tabs were not stored");

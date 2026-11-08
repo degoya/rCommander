@@ -119,6 +119,7 @@ async fn an_mcp_job_is_guarded_while_it_runs() {
             sources: vec![root.join("src").display().to_string()],
             target: Some(root.join(target).display().to_string()),
             options,
+            rename_mask: None,
         })
     };
     let wait = |id| {

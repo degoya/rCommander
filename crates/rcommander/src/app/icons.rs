@@ -16,6 +16,18 @@ mod pixels;
 #[cfg(windows)]
 mod windows;
 
+pub(super) use self::pixels::Rgba;
+
+/// The pixels of a button's symbol (RC-100-87) on Windows: the icon at `index` of an `.exe`, a
+/// `.dll` or an `.ico` (the large one with `large`), else the file's own icon as Explorer shows
+/// it; read on the caller's thread with COM set up for it. `None` where there is none.
+#[cfg(windows)]
+pub(super) fn symbol(path: &std::path::Path, index: i64, large: bool) -> Option<Rgba> {
+    let _shell = windows::ShellIcons::start();
+    let index = i32::try_from(index).ok()?;
+    windows::extracted(path, index, large).or_else(|| windows::file_icon(path))
+}
+
 use std::{iter, ops::Range, sync::Arc};
 
 use iced::{

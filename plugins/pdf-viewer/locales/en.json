@@ -1,0 +1,10 @@
+{
+  "name": "PDF viewer",
+  "description": "Shows the text of a PDF page by page, and its title, author, dates, pages and version as a tree.",
+  "codes": {
+    "01a1b720-fdd6-75dd-a577-079e819e4742.too_large": "The PDF is larger than 64 MiB and is not read.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.damaged": "The file is not a readable PDF.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.password_required": "The PDF is protected by a password; rCommander cannot show it.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.encryption": "The PDF is encrypted in a way this viewer cannot read."
+  }
+}

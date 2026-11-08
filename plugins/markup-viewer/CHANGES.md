@@ -1,5 +1,20 @@
 # Changes
 
+## 0.2.0
+
+To-do lists in TaskPaper's and PlainTasks' plain text (`.todo`, `.taskpaper`): projects (a line
+ending in `:`), tasks by their mark - open (`-`, `*`, `☐`, `□`, `❍`, `❑`, `[ ]`), done (`✔`,
+`✓`, `☑`, `+`, `[x]`) or cancelled (`✘`, `✗`) - and tags `@name` and `@name(value)`. The date
+tags (`@done`, `@started`, `@due`, `@created`, `@cancelled`, `@lasted`, `@wasted`,
+`@estimated`, `@today`) have a colour of their own, and a value that starts with a digit - the
+date and time of `@done(26-05-10 14:15)` - another than a word. A task done or cancelled, by its
+mark or by `@done` or `@cancelled`, shows dimmed with its tags still coloured; PlainTasks'
+archive rule is a comment.
+
+## 0.1.1
+
+Rebuilt against plugin contract 0.6.0; no other change.
+
 ## 0.1.0
 
 The first release: reStructuredText (`.rst`), LaTeX (`.tex`, `.sty`) and BibTeX (`.bib`),

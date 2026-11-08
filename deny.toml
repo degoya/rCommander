@@ -62,6 +62,18 @@ multiple-versions = "warn"
 # which is allowed because none of them is published (`publish = false` in every crate).
 wildcards = "deny"
 allow-wildcard-paths = true
+# RAR is not read (RC-110-05, owner 2026-11-07): the crates that bundle or port RARLAB's UnRAR
+# carry the UnRAR licence, which forbids using the code to recreate a RAR packer - a further
+# restriction GPL-3.0-or-later does not allow - while their metadata says MIT or Apache-2.0, so
+# the licence check above would let them through. A later job reads RAR only with a pure-Rust
+# decoder of proven origin; RAR is never written.
+deny = [
+    { crate = "unrar", reason = "bundles RARLAB's UnRAR, under the UnRAR licence (RC-110-05)" },
+    { crate = "unrar_sys", reason = "bundles RARLAB's UnRAR, under the UnRAR licence (RC-110-05)" },
+    { crate = "unrar-ng", reason = "bundles RARLAB's UnRAR, under the UnRAR licence (RC-110-05)" },
+    { crate = "unrar-ng-sys", reason = "bundles RARLAB's UnRAR, under the UnRAR licence (RC-110-05)" },
+    { crate = "unrar-rs", reason = "a port of RARLAB's UnRAR, under the UnRAR licence (RC-110-05)" },
+]
 
 [sources]
 unknown-registry = "deny"

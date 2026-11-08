@@ -106,6 +106,8 @@ pub enum TermEvent {
     /// The prompt state or the follow status changed ([`TermSession::prompt_state`],
     /// [`TermSession::follow_status`]).
     Prompt,
+    /// Back at the prompt after a line the person entered, never an app's `cd` (RC-110-02).
+    Returned,
 }
 
 /// How a session starts.
@@ -421,6 +423,9 @@ impl Shared {
         }
         if changes.prompt {
             self.notify(TermEvent::Prompt);
+        }
+        if changes.returned {
+            self.notify(TermEvent::Returned);
         }
         forward
     }

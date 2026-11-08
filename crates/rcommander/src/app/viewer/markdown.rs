@@ -11,7 +11,9 @@
 //! (`markdown_view.rs`), and a link opens only on a click through `links.rs`.
 //!
 //! While `viewer.markdown_select` is on, the text of the preview's blocks is collected with the
-//! parse, and the mouse, Ctrl+A and Ctrl+C select and copy it (`select.rs`, RC-020-14).
+//! parse, and the mouse, Ctrl+A and Ctrl+C select and copy it (`select.rs`, RC-020-14). While
+//! `viewer.markdown_code_highlight` is on, the code blocks are coloured with the parse
+//! (`code_lexer.rs`, RC-110-06).
 
 use std::{borrow::Cow, sync::Arc};
 
@@ -27,12 +29,13 @@ use pulldown_cmark::{Event, Options, Parser};
 use rc_db::Db;
 use rc_engine::{
     VfsPath,
-    settings::{MARKDOWN_PREVIEW_KEY, MARKDOWN_SELECT_KEY, stored_bool},
+    settings::{MARKDOWN_HIGHLIGHT_KEY, MARKDOWN_PREVIEW_KEY, MARKDOWN_SELECT_KEY, stored_bool},
     viewer::{Detected, FileWindow, ViewMode, encoding},
 };
 
 use super::{
     ViewerMessage,
+    code_lexer::{self, BlockTokens},
     keys::{ListerKey, Scroll},
     links,
     lister::{Lister, Request},
@@ -81,6 +84,8 @@ pub struct Preview {
     pub items: Vec<Item>,
     /// The text of each block, while selecting is on (`select::blocks`).
     pub blocks: Option<Vec<String>>,
+    /// The tokens of each code block, while highlighting is on (`code_lexer::colours`).
+    pub code: Option<Vec<BlockTokens>>,
 }
 
 /// A message of the preview.
@@ -148,6 +153,7 @@ pub fn parse(bytes: &[u8], detected: Detected) -> Result<Preview, &'static str> 
     Ok(Preview {
         items: markdown::parse(&text).collect(),
         blocks: None,
+        code: None,
     })
 }
 
@@ -162,7 +168,8 @@ pub async fn render(
     if !forced && !setting_on(db.clone(), MARKDOWN_PREVIEW_KEY).await {
         return Ok(None);
     }
-    let selecting = setting_on(db, MARKDOWN_SELECT_KEY).await;
+    let selecting = setting_on(db.clone(), MARKDOWN_SELECT_KEY).await;
+    let highlighting = setting_on(db, MARKDOWN_HIGHLIGHT_KEY).await;
     if file.size() > PREVIEW_LIMIT {
         return Err("markdown_too_large");
     }
@@ -172,6 +179,9 @@ pub async fn render(
         let mut preview = parse(&bytes, detected)?;
         if selecting {
             preview.blocks = Some(select::blocks(&preview.items));
+        }
+        if highlighting {
+            preview.code = Some(code_lexer::colours(&preview.items));
         }
         Ok(preview)
     })
@@ -216,6 +226,14 @@ impl Lister {
                 shown: true,
                 selection,
             }) if self.mode == ViewMode::Text => Some(selection),
+            _ => None,
+        }
+    }
+
+    /// The tokens of the shown preview's code blocks, while highlighting is on.
+    pub fn code_tokens(&self) -> Option<&[BlockTokens]> {
+        match &self.markdown {
+            Some(Markdown::Ready { preview, .. }) => preview.code.as_deref(),
             _ => None,
         }
     }

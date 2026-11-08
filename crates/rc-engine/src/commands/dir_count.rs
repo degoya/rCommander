@@ -96,12 +96,20 @@ impl Engine {
             return;
         };
         let engine = self.clone();
+        // What the ignore list hides is not counted (RC-100-92).
+        let skip = crate::ignore_list::skip_on(dir.backend.clone());
         tokio::spawn(async move {
             for name in names {
                 let path = dir.path.join(&name);
+                let counting = async {
+                    match &skip {
+                        Some(skip) => rc_ops::dir_size_without(&*vfs, &path, skip).await,
+                        None => rc_ops::dir_size(&*vfs, &path).await,
+                    }
+                };
                 let counted = tokio::select! {
                     () = token.cancelled() => return,
-                    counted = rc_ops::dir_size(&*vfs, &path) => counted,
+                    counted = counting => counted,
                 };
                 {
                     let mut state = engine.state();

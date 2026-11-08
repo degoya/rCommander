@@ -237,3 +237,51 @@ mod drawn {
         assert_eq!(harness.app.dialog_windows.menu_bar.open, None);
     }
 }
+
+/// RC-100-86: the drawn menu lays a submenu out in place - its title a heading, its entries
+/// indented under it -, and the keys walk past the heading to the entries.
+#[test]
+fn a_submenu_is_laid_out_in_place_under_its_heading() {
+    let menus = flatten(vec![BarMenu {
+        title: "&Start".into(),
+        items: vec![
+            BarItem::Entry {
+                id: "start_menu.manager",
+                text: "&Change Start menu...".into(),
+            },
+            BarItem::Separator,
+            BarItem::Submenu {
+                text: "&Tools".into(),
+                items: vec![BarItem::Entry {
+                    id: "start:4",
+                    text: "&Putty".into(),
+                }],
+            },
+        ],
+    }]);
+    assert_eq!(
+        menus[0].items,
+        [
+            BarItem::Entry {
+                id: "start_menu.manager",
+                text: "&Change Start menu...".into(),
+            },
+            BarItem::Separator,
+            BarItem::Submenu {
+                text: "&Tools".into(),
+                items: Vec::new(),
+            },
+            BarItem::Entry {
+                id: "start:4",
+                text: "\u{2003}&Putty".into(),
+            },
+        ]
+    );
+    let mut open = OpenMenu {
+        menu: 0,
+        cursor: Some(0),
+    };
+    assert_eq!(key(&menus, &mut open, &chord("ArrowDown")), Step::Stay);
+    assert_eq!(open.cursor, Some(3), "past the separator and the heading");
+    assert_eq!(key(&menus, &mut open, &chord("p")), Step::Choose("start:4"));
+}

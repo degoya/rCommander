@@ -10,7 +10,15 @@
 //! The app removes its own at exit ([`remove_own`]) and, at start, those of processes that have
 //! ended ([`remove_stale`]) - a copy a program still holds open stays until a later start. Only
 //! real folders named exactly `open-<digits>-<letters and digits>` are touched: no file, link or
-//! junction, and nothing else under the root.
+//! junction, and nothing else under the root. The copies of server files being edited live under
+//! the same root as `edit-<pid>-<random>` (RC-110-01, `remote_edit/folder.rs`): their own module
+//! removes them, and the sweep at start only those of ended processes without a session file -
+//! a folder with one holds a change kept at quit, which the next start offers.
+//!
+//! The list files of an own command's `%L`, `%UL`, ... (RC-100-86) live beside them in folders
+//! `list-<pid>-<random>` ([`new_list_folder`]) and go the same way: a program that hands its list
+//! to a running instance and returns at once must still find it, so it stays until rCommander
+//! ends or starts again.
 
 use std::{
     fs, io,
@@ -24,13 +32,13 @@ mod windows;
 
 /// The folder all unpacked copies live under; `None` without a folder of the user's own.
 #[cfg(windows)]
-fn root() -> Option<PathBuf> {
+pub(crate) fn root() -> Option<PathBuf> {
     Some(std::env::temp_dir().join("rcommander"))
 }
 
 /// The folder all unpacked copies live under; `None` without a folder of the user's own.
 #[cfg(not(windows))]
-fn root() -> Option<PathBuf> {
+pub(crate) fn root() -> Option<PathBuf> {
     let dirs = directories::BaseDirs::new()?;
     let base = dirs.runtime_dir().unwrap_or_else(|| dirs.cache_dir());
     Some(base.join("rcommander").join("unpacked"))
@@ -38,14 +46,14 @@ fn root() -> Option<PathBuf> {
 
 /// Creates `root` when it is missing, as a folder of this user's alone.
 #[cfg(windows)]
-fn own_root(root: &Path) -> io::Result<()> {
+pub(crate) fn own_root(root: &Path) -> io::Result<()> {
     fs::create_dir_all(root)
 }
 
 /// Creates `root` when it is missing, as a folder of this user's alone: mode 0700, and a real
 /// folder, not a link to one elsewhere.
 #[cfg(not(windows))]
-fn own_root(root: &Path) -> io::Result<()> {
+pub(crate) fn own_root(root: &Path) -> io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
 
     fs::DirBuilder::new()
@@ -69,18 +77,31 @@ fn own_root(root: &Path) -> io::Result<()> {
 ///
 /// No folder of the user's own to unpack into, or creating it fails.
 pub(crate) async fn new_folder() -> io::Result<PathBuf> {
-    tokio::task::spawn_blocking(create_folder)
+    tokio::task::spawn_blocking(|| create_folder("open"))
         .await
         .log_panic("engine.unpack_folder")
         .map_err(io::Error::other)?
 }
 
-/// [`new_folder`], blocking.
-fn create_folder() -> io::Result<PathBuf> {
+/// Creates the folder for the list files of one start of an own command (RC-100-86), as
+/// [`new_folder`] does for an unpacked file. Off the async threads.
+///
+/// # Errors
+///
+/// No folder of the user's own, or creating it fails.
+pub(crate) async fn new_list_folder() -> io::Result<PathBuf> {
+    tokio::task::spawn_blocking(|| create_folder("list"))
+        .await
+        .log_panic("engine.list_folder")
+        .map_err(io::Error::other)?
+}
+
+/// [`new_folder`] or [`new_list_folder`], blocking: a folder `<kind>-<pid>-<random>`.
+fn create_folder(kind: &str) -> io::Result<PathBuf> {
     let root =
         root().ok_or_else(|| io::Error::other("no folder of the user's own to unpack into"))?;
     own_root(&root)?;
-    let prefix = format!("open-{}-", std::process::id());
+    let prefix = format!("{kind}-{}-", std::process::id());
     let mut builder = tempfile::Builder::new();
     builder.prefix(&prefix);
     // The folder is the user's alone, as its root (the umask would leave it 0755).
@@ -100,11 +121,24 @@ pub fn remove_own() -> usize {
     root().map_or(0, |root| sweep(&root, |pid| pid == own))
 }
 
-/// Removes the unpacked copies of processes that are no longer running; how many folders went.
-/// Blocking: run it off the UI thread.
+/// Removes the unpacked copies of processes that are no longer running, and their edit folders
+/// that hold no kept change; how many folders went. Blocking: run it off the UI thread.
 pub fn remove_stale() -> usize {
     let own = std::process::id();
-    root().map_or(0, |root| sweep(&root, |pid| pid != own && !alive(pid)))
+    let stale = |pid| pid != own && !alive(pid);
+    root().map_or(0, |root| sweep(&root, stale) + sweep_edits(&root, stale))
+}
+
+/// Removes the edit folders under `root` whose owner `stale` picks and which have no session
+/// file beside them; how many went.
+fn sweep_edits(root: &Path, stale: impl Fn(u32) -> bool) -> usize {
+    use crate::remote_edit::folder;
+
+    folder::folders(root, stale)
+        .into_iter()
+        .filter(|dir| !folder::session_path(dir).exists())
+        .filter(|dir| remove(dir).is_ok())
+        .count()
 }
 
 /// Removes the folders under `root` whose owner `stale` picks; how many went. A folder that
@@ -135,9 +169,13 @@ fn remove(dir: &Path) -> io::Result<()> {
     fs::remove_dir_all(dir)
 }
 
-/// The process id in a folder name `open-<pid>-<random>`; `None` for any other name.
+/// The process id in a folder name `open-<pid>-<random>` or `list-<pid>-<random>`; `None` for
+/// any other name.
 fn owner(name: &str) -> Option<u32> {
-    let (pid, random) = name.strip_prefix("open-")?.split_once('-')?;
+    let rest = name
+        .strip_prefix("open-")
+        .or_else(|| name.strip_prefix("list-"))?;
+    let (pid, random) = rest.split_once('-')?;
     let digits = !pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit());
     let letters = !random.is_empty() && random.bytes().all(|b| b.is_ascii_alphanumeric());
     if !digits || !letters {
@@ -148,16 +186,21 @@ fn owner(name: &str) -> Option<u32> {
 
 /// Whether the process `pid` is running.
 #[cfg(windows)]
-fn alive(pid: u32) -> bool {
+pub(crate) fn alive(pid: u32) -> bool {
     windows::alive(pid)
 }
 
-/// Whether the process `pid` is running, read from `/proc`. Without one (macOS) nothing tells,
-/// and a folder is kept rather than taken from a running app.
+/// Whether the process `pid` is running: signal 0 to it, which macOS answers as Linux does (no
+/// `/proc` there). Only "no such process" says it ended; a process of another user counts as
+/// running. A pid no process can have (0, beyond `i32`) is not one.
 #[cfg(not(windows))]
-fn alive(pid: u32) -> bool {
-    let proc = Path::new("/proc");
-    !proc.is_dir() || proc.join(pid.to_string()).exists()
+pub(crate) fn alive(pid: u32) -> bool {
+    use nix::{errno::Errno, sys::signal::kill, unistd::Pid};
+
+    match i32::try_from(pid) {
+        Ok(pid) if pid > 0 => !matches!(kill(Pid::from_raw(pid), None), Err(Errno::ESRCH)),
+        _ => false,
+    }
 }
 
 #[cfg(test)]

@@ -8,6 +8,9 @@ macro_rules! arms {
             Command::HistoryForward(request) => $self.history_step(request.panel, 1).await,
             Command::HistoryList(request) => Ok($self.history_list(request.panel)),
             Command::HistoryJump(request) => $self.history_jump(request).await,
+            Command::HistoryOpenFrequent { panel, index } => {
+                $self.history_open_frequent(panel, index).await
+            }
         } }
     };
 }

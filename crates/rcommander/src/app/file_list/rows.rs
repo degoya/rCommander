@@ -4,16 +4,22 @@
 //! after `appearance.name_tip_delay`; the fixed columns keep their widths.
 //! Every other row is striped while `appearance.alternate_rows` is on. The rows are in the
 //! list's chosen font (RC-010-17): its size sets the row's height and the fixed columns' widths.
-//! The widths come in from the list (`columns::split`), worked out once for all its rows.
+//! The widths come in from the list (`columns::split_shown`), worked out once for all its rows;
+//! a column set's columns (RC-100-90) are formatted only for the rows drawn, as the full view's.
+//! A name cell ends in its entry's git mark, an ignored entry is dimmed (`git_marks.rs`).
 
 use iced::{
     Alignment, Color, Element, Font, Length,
     alignment::Horizontal,
     widget::{Space, container, image::Handle, row, text},
 };
-use rc_engine::{ArchiveInfo, DirSize, Entry};
+use rc_engine::{ArchiveInfo, DirSize, Entry, git::GitMark};
 
-use super::columns::{Column, ICON_GAP, SPACING, name_room};
+use super::{
+    columns::{Column, ICON_GAP, SPACING, name_room},
+    git_marks,
+    shown::Shown,
+};
 use crate::{
     app::{Message, archive_view, panel},
     i18n::t,
@@ -36,12 +42,15 @@ pub(super) struct RowState {
     pub names: Names,
 }
 
-/// The list's columns and the width of each (`columns::split`), the same for all its rows.
+/// The list's columns and the width of each (`columns::split_shown`), the same for all its rows.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Layout<'a> {
-    pub columns: &'a [Column],
+    pub columns: &'a [Shown],
     pub sizes: &'a [f32],
 }
+
+/// A fixed column's text in a row, its width, whether it stands right, and its column.
+type Value = (String, f32, bool, Column);
 
 impl Layout<'_> {
     /// The name's own width, after the icon when `icon`; nothing before the list is measured.
@@ -50,33 +59,54 @@ impl Layout<'_> {
             .columns
             .iter()
             .zip(self.sizes)
-            .find(|(column, _)| **column == Column::Name)
+            .find(|(shown, _)| shown.column == Column::Name)
             .map_or(0.0, |(_, size)| *size);
         name_room(cell, icon)
     }
 
+    /// Whether one of the columns is `column`.
+    fn shows(self, column: Column) -> bool {
+        self.columns.iter().any(|shown| shown.column == column)
+    }
+
     /// The fixed columns with their widths and the text `value` gives each at its width.
-    fn values(self, mut value: impl FnMut(Column, f32) -> String) -> Vec<(String, f32, Column)> {
+    fn values(self, mut value: impl FnMut(Column, f32) -> String) -> Vec<Value> {
         self.columns
             .iter()
             .zip(self.sizes)
-            .filter(|(column, _)| **column != Column::Name)
-            .map(|(column, size)| (value(*column, *size), *size, *column))
+            .filter(|(shown, _)| shown.column != Column::Name)
+            .map(|(shown, size)| (value(shown.column, *size), *size, shown.right, shown.column))
             .collect()
     }
 }
 
-/// One entry's row; inside an archive (`archive`) with its packed size and its marks, and a
-/// folder with its counted size (Space, Alt+Shift+Enter) when it has one.
+/// What a row shows of an entry beyond the entry itself: inside an archive what it says about
+/// it, a folder's counted size, the entry's comment where the panel read them (RC-100-90), its
+/// git mark (RC-100-97).
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct About<'a> {
+    pub archive: Option<&'a ArchiveInfo>,
+    pub counted: Option<&'a DirSize>,
+    pub comment: Option<&'a str>,
+    pub git: Option<GitMark>,
+}
+
+/// One entry's row; inside an archive with its packed size and its marks, a folder with its
+/// counted size (Space, Alt+Shift+Enter) when it has one, and its comment ([`About`]).
 pub(super) fn entry_row<'a>(
     entry: &'a Entry,
     icon: Option<Handle>,
-    archive: Option<&ArchiveInfo>,
-    counted: Option<&DirSize>,
+    about: About<'_>,
     state: RowState,
     layout: Layout<'_>,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
+    let About {
+        archive,
+        counted,
+        comment,
+        git,
+    } = about;
     let info = archive.and_then(|archive| archive.get(&entry.name));
     let (mark, warn) = archive_view::marks(info);
     let values = layout.values(|column, width| match column {
@@ -92,16 +122,33 @@ pub(super) fn entry_row<'a>(
         Column::Date => crate::format::date(entry.modified),
         Column::Rights => crate::format::rights(&entry.kind, entry.attributes.mode),
         Column::Owner => owner(entry, width, state),
+        Column::Created => crate::format::date(entry.created),
+        Column::Accessed => crate::format::date(entry.accessed),
+        Column::Attributes => crate::format::attributes(entry),
+        Column::User => owned(entry, width, state, |owner| &owner.user),
+        Column::Group => owned(entry, width, state, |owner| &owner.group),
+        Column::Comment => comment
+            .map(|comment| comment.replace('\n', " "))
+            .unwrap_or_default(),
+        Column::Git => git_marks::word(git).to_owned(),
     });
     let cells = Cells {
         name_width: layout.name_width(icon.is_some()),
         icon,
         hidden: state.names.mark_hidden && is_hidden(entry),
-        name: panel::stem(entry),
+        // The name without its extension where an extension column follows, else whole
+        // (a column set without one, RC-100-90).
+        name: if layout.shows(Column::Ext) {
+            panel::stem(entry)
+        } else {
+            &entry.name
+        },
         full: &entry.name,
         mark,
         warn,
         rule: theme::colour_rules::name_colour(&entry.name, entry.is_dir_like(), tokens.dark),
+        badge: git_marks::badge(git, entry.is_dir_like(), tokens),
+        dim: git_marks::dimmed(git),
         values,
     };
     list_row(cells, state, tokens)
@@ -127,6 +174,8 @@ pub(super) fn parent_row<'a>(
         mark: String::new(),
         warn: false,
         rule: None,
+        badge: None,
+        dim: false,
         values,
     };
     list_row(cells, state, tokens)
@@ -140,6 +189,19 @@ fn owner(entry: &Entry, width: f32, state: RowState) -> String {
     };
     let text = format!("{}:{}", owner.user, owner.group);
     state.font.shorten(&text, width).into_owned()
+}
+
+/// A part of the owner - the user or the group - shortened in the middle to the column `width`;
+/// empty where the backend names no owner.
+fn owned(
+    entry: &Entry,
+    width: f32,
+    state: RowState,
+    part: impl Fn(&rc_vfs::Owner) -> &String,
+) -> String {
+    entry.owner.as_ref().map_or_else(String::new, |owner| {
+        state.font.shorten(part(owner), width).into_owned()
+    })
 }
 
 /// The icon and the texts of a row's columns.
@@ -158,8 +220,12 @@ struct Cells<'a> {
     warn: bool,
     /// The colour a rule by file type gives the name (RC-100-43).
     rule: Option<Color>,
-    /// The fixed columns' texts in their order, each with its width and its column.
-    values: Vec<(String, f32, Column)>,
+    /// The git mark at the name cell's right edge and its colour (RC-100-97).
+    badge: Option<(&'static str, Color)>,
+    /// An entry git ignores: its name dimmed.
+    dim: bool,
+    /// The fixed columns' texts in their order, each with its width, its side and its column.
+    values: Vec<Value>,
 }
 
 /// The accent pill left of the cursor's row in the active panel.
@@ -209,13 +275,13 @@ fn list_row<'a>(
     } else {
         tokens.list_text_secondary
     };
-    let room = cells.name_width - state.font.width(&cells.mark);
+    let room = cells.name_width - state.font.width(&cells.mark) - badge_width(cells.badge, state);
     let rule = cells.rule;
     let name = shortened_name(
         cells.name,
         cells.full,
         room,
-        (state, rule),
+        (state, rule, cells.dim),
         tokens,
         |name| {
             let mark = sized(cells.mark.clone(), font, size);
@@ -226,12 +292,13 @@ fn list_row<'a>(
             }
         },
     );
+    let name = with_badge(name, cells.badge, state);
     let mut columns: Vec<Element<'a, Message>> =
         vec![pill(state, tokens), named(cells.icon, cells.hidden, name)];
-    for (value, width, column) in cells.values {
+    for (value, width, right, column) in cells.values {
         let colour = value_colour(column, cells.rule, state.selected, secondary);
         let value = sized(value, font, size).color(colour);
-        columns.push(fixed(value, width, column.right()));
+        columns.push(fixed(value, width, right));
     }
     let columns = row(columns)
         .spacing(SPACING)
@@ -251,11 +318,12 @@ fn value_colour(column: Column, rule: Option<Color>, selected: bool, secondary: 
 }
 
 /// A name in the brief view: a directory in brackets, as in Total Commander; `None` is `..`.
-/// `room` is the name's width in its column.
+/// `room` is the name's width in its column; `git` the entry's git mark.
 pub(super) fn brief_cell<'a>(
     entry: Option<&'a Entry>,
     icon: Option<Handle>,
     state: RowState,
+    git: Option<GitMark>,
     room: f32,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
@@ -267,9 +335,14 @@ pub(super) fn brief_cell<'a>(
     let rule = entry.and_then(|entry| {
         theme::colour_rules::name_colour(&entry.name, entry.is_dir_like(), tokens.dark)
     });
-    let name = shortened_name(&label, &label, room, (state, rule), tokens, |name| {
+    let folder = entry.is_none_or(Entry::is_dir_like);
+    let badge = git_marks::badge(git, folder, tokens);
+    let room = room - badge_width(badge, state);
+    let dim = git_marks::dimmed(git);
+    let name = shortened_name(&label, &label, room, (state, rule, dim), tokens, |name| {
         row![name]
     });
+    let name = with_badge(name, badge, state);
     let hidden = state.names.mark_hidden && entry.is_some_and(is_hidden);
     let content = row![pill(state, tokens), named(icon, hidden, name)]
         .spacing(6)
@@ -287,7 +360,7 @@ fn shortened_name<'a>(
     name: &str,
     full: &str,
     room: f32,
-    (state, rule): (RowState, Option<Color>),
+    (state, rule, dim): (RowState, Option<Color>, bool),
     tokens: &'static Tokens,
     parts: impl FnOnce(text::Text<'a>) -> iced::widget::Row<'a, Message>,
 ) -> Element<'a, Message> {
@@ -301,10 +374,16 @@ fn shortened_name<'a>(
     // A marked name changes its colour only, as in Total Commander: a heavier weight the chosen
     // font lacks would be drawn in another font, and the row would jump.
     let text = sized(shown.into_owned(), state.font.font, state.font.size);
-    let text = match (state.selected, rule) {
-        (true, _) => text.color(tokens.marked),
-        (false, Some(rule)) => text.color(rule),
-        (false, None) => text,
+    let colour = match (state.selected, rule) {
+        (true, _) => Some(tokens.marked),
+        (false, Some(rule)) => Some(rule),
+        (false, None) => None,
+    };
+    // An ignored entry's name is dimmed in whatever colour it has (RC-100-97).
+    let text = match (colour, dim) {
+        (colour, true) => text.color(git_marks::dim(colour.unwrap_or(tokens.list_text))),
+        (Some(colour), false) => text.color(colour),
+        (None, false) => text,
     };
     let clipped = container(parts(text)).width(Length::Fill).clip(true);
     if shortened {
@@ -313,6 +392,32 @@ fn shortened_name<'a>(
         clipped.into()
     }
 }
+
+/// The room a git mark takes at the name cell's right edge.
+fn badge_width(badge: Option<(&str, Color)>, state: RowState) -> f32 {
+    badge.map_or(0.0, |(symbol, _)| state.font.width(symbol) + BADGE_GAP)
+}
+
+/// `name` with the git mark at its cell's right edge, when it has one.
+fn with_badge<'a>(
+    name: Element<'a, Message>,
+    badge: Option<(&'static str, Color)>,
+    state: RowState,
+) -> Element<'a, Message> {
+    match badge {
+        Some((symbol, colour)) => row![
+            name,
+            sized(symbol, state.font.font, state.font.size).color(colour)
+        ]
+        .spacing(BADGE_GAP)
+        .align_y(Alignment::Center)
+        .into(),
+        None => name,
+    }
+}
+
+/// The gap between a name and its git mark.
+const BADGE_GAP: f32 = 4.0;
 
 /// A fixed column's cell: `width` wide, clipped, right-aligned when `right`.
 fn fixed<'a>(content: text::Text<'a>, width: f32, right: bool) -> Element<'a, Message> {

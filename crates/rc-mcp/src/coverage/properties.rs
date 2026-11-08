@@ -17,6 +17,11 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         Coverage::Covered("files_set_attributes"),
     ),
     ("file.set_comment", Coverage::Covered("files_set_comment")),
+    ("files.disk_usage", Coverage::Covered("files_disk_usage")),
+    (
+        "files.disk_usage_dialog",
+        Coverage::Omitted("opens a window; files_disk_usage reports the sizes"),
+    ),
     (
         "panel.cancel_dir_sizes",
         Coverage::Omitted(

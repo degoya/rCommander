@@ -5,6 +5,489 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-08
+
+### Added
+
+- **A symbol for an own command** (RC-100-86): the own commands' form takes a symbol as a button
+  of the button bar does - the file (`.png`, `.ico`, on Windows also an `.exe` or `.dll`), the
+  icon's index, *Browse...* and a preview at the bars' size, read and kept by the button bar's
+  `button_bar::symbols`; stored in `icon_path` and `icon_index` (migration 0027), which a button
+  that runs the command shows.
+- **Git status in the file lists** (RC-100-97): with `panels.git_status` (`off` by default,
+  protected: only the person switches it on) set to `local` or `local_network`, a folder inside a
+  git repository shows a letter at the right of each changed file's name (M, A, U, R, C), a dot on
+  a folder with changes below it in the colour of its most important one, ignored entries dimmed
+  (`panels.git_ignored`), and the branch with commits ahead and behind plus the files deleted in
+  the panel's status line (`panels.git_branch`, the whole name in a tooltip); the column set field
+  `git` says it as a word. rCommander looks for `.git` itself (`stat` only: outside a repository
+  no process starts), never on servers, archives or devices; a WSL share runs the distribution's
+  own `/usr/bin/git`, only while it runs (`rc_vfs::wsl::running_distros`). git (the `PATH`'s, or
+  `panels.git_program`, protected) runs from 2.36 on, hardened against the repository's
+  configuration: `--no-optional-locks`, `core.fsmonitor=false`, `core.untrackedCache=false`, every
+  filter driver emptied through `GIT_CONFIG_COUNT`, 5 s and 16 MiB at most; after 300 ms of rest,
+  one run per folder shared by both panels (`rc_engine::git`). `panel.git_status` (Read, MCP
+  `panel_git_status`) reports what a panel knows and starts nothing; the fuzz target
+  `git_porcelain` reads the answer.
+- **Coloured code blocks in the Markdown preview** (RC-110-06): a fenced block whose tag names
+  rust, json, yaml, toml, ini, sh/bash, python, js/ts, sql, c/cpp, PowerShell, xml/html or diff
+  shows keywords, strings, numbers, comments, keys, tags and diff lines in the theme's `syntax.*`
+  colours, live in light and dark; no tag or an unknown one stays plain. One table-driven lexer of
+  rCommander's own (`viewer/code_lexer.rs`, no dependency) colours the blocks once with the parse,
+  off the UI thread; a block over 64 KiB or a line over 4 KiB stays plain. The setting
+  `viewer.markdown_code_highlight` (on) turns it off for files opened afterwards.
+- **File watcher: panels read again when their folder changes** (RC-110-02): `panels.watch` (off
+  by default, as Total Commander's `WatchDirs`) watches the folders of the two shown panels while
+  they list a plain local folder, each alone - `notify` 8.2.1 (CC0-1.0; ReadDirectoryChangesW,
+  inotify, FSEvents), a WSL share or a folder the system refuses polled by its time once a
+  second. A panel is read with `panel.refresh` (cursor and selection kept) 200 ms after the last
+  change, a flood at most once per max(1 s, twice the last reading); a full channel or a lost
+  notice is one full reading, a listing still arriving is not cut short, a deleted folder is left
+  for the nearest parent. Size, date and attributes only with `panels.watch_changes`, network
+  drives only with `panels.watch_network`, `panels.watch_exclude` in TC's syntax (a new setting
+  kind `drives`), `panels.watch_background`. `panel.toggle_watch` (`cm_SwitchWatchDirs`) in the
+  palette, MCP `omitted`. A local or WSL shell back at its prompt after an entered line
+  (`rc-term`'s `TermEvent::Returned`) reads the shown local lists too, also with the watcher off
+  (`terminal.refresh_panels_on_prompt`, on; never for SSH). Coming back to the window skips a
+  panel whose system watcher stayed quiet (RC-100-69).
+- **Edit files on SFTP, FTP and FTPS servers** (RC-110-01): F4, Shift+F4, Enter and F3 with an
+  external viewer on a server file fetch it as a job of the queue into `edit-<pid>-<random>` under
+  the unpacked copies' root (0700) and open a watched copy; a save (seen within two seconds, two
+  equal reads) is asked about - Upload / Not now, with the box "Upload changes without asking" -
+  or uploaded at once (`remote_edit.upload`), the server's file checked against its baseline
+  first (`remote_edit.check_server_changes`: Overwrite, Upload as copy, Not now; Upload anyway
+  when gone), through a part file and a rename with its Unix mode given back; a link is followed
+  to its file, several hard links or another owner write in place after a question; one upload of
+  a file at a time. Enter refuses a file that would run as a program unless
+  `remote_edit.open_programs`; Windows marks every copy with `Zone.Identifier`. At most 32 copies,
+  the status bar's count opens the list "Server files being edited" (Upload now, Done). Quitting
+  names the changed copies and keeps them ("Quit and keep changes"), the next start offers Upload /
+  Discard / Later. MCP `remote_edits_list`; `file_open` on a server file is a read-only copy
+  nobody watches; `remote_edit.upload`, `.skip`, `.close`, `.window` are the window's.
+- **Total Commander's smaller panel functions** (RC-100-92): file filters - Ctrl+F10 all files
+  (also lifts the quick filter), Ctrl+F11 programs (`filters.programs`; off Windows also files
+  with an execute bit), Ctrl+F12 a mask - for files only, kept across folders and per tab
+  (`tabs.filter_per_tab`), shown in the path bar, saved filters `filters.*`; the ignore list
+  (`ignore_list.enabled`, `ignore_list.entries`, a new `SettingKind::MaskLines`) hides names,
+  masks and paths in the lists, flat views, the search and the folder sizes, copies and moves leave
+  them (`rc_ops::IgnoreRule`, `Queue::set_ignore`, `rc_ops::dir_size_without`), and
+  `Engine::ignored_below` counts them for the delete question; the selection saved
+  (`panel.save_selection`, Num / brings it back), written to and read from a file (UTF-8, UTF-16,
+  ANSI) or the clipboard's text, missing names counted; `tabs.rename` (kept in every folder,
+  stored, in workspaces) and `tabs.close_all` (asks first, `tabs.confirm_close_all`); the
+  history list's quick search and the most visited folders (`dir_frequent`, migration 0031,
+  `history.frequent_shown`, `history.open_frequent`); `panel.load_list` (a list file as a flat
+  view). Every command has its MCP tool (group `panel_lists`, `tab_rename`, `tab_close_all`,
+  `history_open_frequent`).
+- **Compare by structure** (RC-100-41): plugin contract 0.6.0 adds the `compare-plugin` world -
+  `status` (`ready`, `unlicensed`) and `compare(a, b)` answering a change list (path, column,
+  added/removed/changed/moved, old and new value, lines) with a summary and notices. The host
+  (`ComparePlugin`) links `host`, `source` and `settings`, refuses more than 10 000 changes
+  (`plugin_compare_too_large`), cuts every text at 1024 characters, refuses counts below the list;
+  conformance asks `compare_identical`. The engine (`Engine::structure_paths`) hands both files to
+  the first enabled compare plugin claiming them, read whole up to the new setting
+  `plugins.compare_limit_mib` (16 MiB), never a key file; the diff window adds the Structure view
+  (changes filtered by kind, a click or Enter opening one at its line), not offered without a
+  plugin or a licence, a note when over the limit or after a failure. MCP `files_compare` takes
+  `mode = "structure"`. SDK template `plugin new --type compare`; the templates move to contract
+  0.6.0. The paid plugin *Data compare* (JSON, JSON Lines, CSV/TSV) lives in its own private
+  repository.
+- **Thumbnails view** (RC-100-89): Ctrl+Shift+F1 (`panel.set_view` `thumbnails`, Total
+  Commander's `cm_SrcThumbs`, View menu, palette) shows a panel as a grid of tiles, a picture's
+  thumbnail or the entry's icon over each name; the arrows go a tile or a line (`..` the first
+  tile), a page its lines less one (`Engine::set_page_tiles`). Tiles of the pictures on screen
+  and one line below are decoded off the UI thread with the Lister's limits (PNG, JPEG, GIF, WebP,
+  BMP, ICO), two at a time, a tile scrolled away before its turn skipped; 64 MiB of them stay in
+  memory, local ones on disk in the user's cache folder (`thumbnails.disk_cache`,
+  `thumbnails.cache_mb`: PNGs named by a BLAKE3 hash, checked when read back, trimmed by age at the
+  start, "Clear cache" on the settings' new Thumbnails tab). `thumbnails.size` (32 to 512, 96)
+  is changed by Ctrl+wheel in steps (`panel.thumbnail_zoom`, MCP `omitted`). Files on servers,
+  devices and in archives get tiles only with `thumbnails.remote` (up to 32 MiB, memory only);
+  Explorer's thumbnails for other files on Windows only with `thumbnails.explorer` (off,
+  owner 2026-11-07). MCP `panel_set_view` takes `thumbnails`.
+- **Button bars** (RC-100-87): Total Commander's button bar under the menu bar - on at the first
+  start with the bar "Default" (migration 0033, `button_bars`) - and the vertical one between the
+  panels (off). A button runs a program with Total Commander's placeholders, internal rows or an
+  own command `em_` (the own commands' model, `button_bar.run`), or opens a sub-bar as a menu;
+  symbols from `.png`/`.ico`, on Windows `.exe`/`.dll` by index (`ExtractIconExW`); without
+  one, an own command's button shows the own command's symbol and a button of rCommander's
+  commands a Fluent glyph of the app's icon font (Reread, the views, Pack, Unpack, Find files,
+  Quick View, Synchronize and others); text only where no icon exists, the tooltip always; `»`
+  for what does not fit. Alt+Shift+F11 and Alt+Shift+F12 give a bar the keyboard; a right click
+  or Shift+F10 opens a button's menu (Change, Delete, Insert button, Edit bar). Files dropped on
+  a program's button follow its parameters (quoted, the batch-file check); Shift and a drop on a
+  bar make a new button. Configuration > Button bar... edits the bars and
+  imports a `.bar` file with its sub-bars after a preview. Sub-bars must exist, open no bar above
+  them and nest at most 4 deep; at most 64 bars of 128 buttons. MCP: `button_bars_list`,
+  `button_bars_get`, `button_bars_run` (files, parameters or a command that starts as
+  administrator or asks are the person's); the rest is the window's. The drive buttons, the
+  command line and the status bar can be hidden too (`appearance.drive_bar`,
+  `appearance.command_line`, `appearance.status_bar`, the View menu's `view.toggle_bar`).
+- **Portable mode** (RC-100-95): a marker file `rcommander.portable` beside the program makes
+  `data/` beside it the data folder - database, plugins, backups, MCP instance file, the update's
+  journal and copies, zsh's integration (`rc_db::location`, set once in `main` before the
+  update's recovery). The marker is passed over, with a notice in the status line, for a package
+  manager's installation, a folder the process cannot write, a network drive (UNC or a remote
+  letter), a `data` that is a link or junction, and on macOS. The database dialog's "Make this
+  copy portable..." (`app.make_portable`, `GuiOnly`, MCP `omitted`) asks first, writes a checked
+  copy of the database and the installed plugins into `data/`, never over a database there, and
+  the marker last, then offers the restart. The About page and `app.about` name `data_dir` and
+  `portable`. In a portable folder Unix modes are tried, a file system without them is a warning
+  in the error log. The update's switch keeps `data/` and the marker; `scripts/lib/package.sh`
+  (`rc_package_unportable`) refuses a package that carries either.
+- **Internal file associations, Alt+F3 and Shift+F3** (RC-100-91), as Total Commander has
+  them: rules by file type (a mask, `|` excludes), each with a description, a symbol, `open` -
+  what Enter and a double click run before the system's association - and up to 16 named commands
+  that head the context menu marked "(internal)", every one a command of RC-100-86's model. The
+  first matching rule counts, an archive only by a mask naming its extension, folders never;
+  "Load extra commands from all matching types" adds the others' commands to the menu. A program
+  needs a file parameter (`%1` the file, `%2` every marked file, or `%N`, `%S`, `%L` ...;
+  `association_needs_file_parameter`). The protected settings `files.associations` (JSON, at most
+  256 rules, 64 KiB), `files.associations_enabled` and `files.associations_all_matches` on the
+  Programs page; the window "Internal associations..." (File menu, the Programs page, the
+  palette: `file.associations`, `GuiOnly`) edits the rules in their order (Ctrl+Up, Ctrl+Down).
+  `file.run_association` runs a named command (`Exec`, MCP `omitted`); MCP's `file_open` follows
+  the rules and is `GuiOnly` where the file's rule starts as administrator, asks for its
+  parameters or runs a row stricter than `exec`. F3 and F4 do not use them, as in Total
+  Commander. Alt+F3 opens the other viewer (Lister while `files.viewer` is set, else the system's
+  program), F3 with marked files lets N and P step through them only
+  (`viewer.step_through_selection`, on), Shift+F3 shows the file under the cursor alone.
+- **Copy and move with a rename mask** (RC-110-04): a wildcard in the last part of the F5 or F6
+  target renames every entry by Total Commander's copy mask (`rc_rename::apply_target_mask`) -
+  `target\*.bak` changes the extension, `?` takes the old name's character at its place, `*`
+  its rest, `**` all of it, `*?` starts it again; name and extension apart at the last dot.
+  F5 and F6 offer `<other folder>\*.*` with the cursor before the mask; Shift+F5 on several
+  selected entries opens with `*.*`, and Shift+F6 on two or more opens the rename dialog with
+  `*.*` (`rename.selection_dialog`, on; off keeps the editor in the list). Every name is worked
+  out first and the entries go as one batch of `CopyAs`/`MoveAs`, so "for all" holds for every
+  one; refused before anything runs: two entries on one name (`mask_collision`, both named), a
+  name a file system refuses (`invalid_name`), a copy beside itself that keeps its name or a
+  rename that changes none (`mask_unchanged`), a rename onto another entry's old name
+  (`mask_chain`, Ctrl+M orders such chains), a mask into an archive (`mask_into_archive`) and a
+  wildcard in the folder (`invalid_name`). MCP `ops_copy`/`ops_move` take `rename_mask`; the
+  write guard judges the masked names.
+- **Find duplicate files and disk usage** (RC-100-98). Find files' Advanced tab has "Find
+  duplicate files" with same name, size and contents (`SearchQuery.duplicates`,
+  `search/duplicates.rs`: BLAKE3 over the first 64 KiB, then the whole file, only among files of
+  one size; a hard link is no copy; the MCP read guard's files are never read); the hits show a
+  line before each group, and "Feed to listbox" hands the panel each file's group
+  (`panel.feed_paths` `groups`, `FlatSource::Duplicates`). Num+ over such a result opens "Select
+  duplicate files" as Total Commander has it (`panel.select_duplicates`: by mask, date, size or
+  folder, leave one per group by three criteria; OK, Apply, Cancel). Ctrl+Shift+L opens the
+  disk-usage window (`files.disk_usage_dialog`): the folder's subfolders by size with share, files
+  and folders, filled every 200 ms while `Engine::start_disk_usage` walks (`disk_usage.rs` over
+  `rc_ops::walk_usage`, the size count's walk with a visitor), Enter, Backspace, Ctrl+Enter into
+  the panel, Ctrl+R, Escape stops; the largest files go to the panel with "Feed to listbox".
+  Settings `disk_usage.size` and `disk_usage.largest_files`. MCP `files_find_duplicates`,
+  `panel_select_duplicates`, `files_disk_usage`; `files.disk_usage_dialog` omitted.
+- **Certificates and keys in Lister and Quick View** (RC-110-08): built into the viewer, not a
+  plugin (owner 2026-11-08: decision 8, `rc_mcp::sensitive_path`, hands `.pem`, `.key`, `.p12`,
+  `.pfx` and `.ssh/` to no plugin, and stays). The new crate `rc-cert` (x509-parser 0.18, no new
+  crate in the lock) takes apart PEM (bundles of several blocks), DER and OpenSSH certificates,
+  requests and keys and `authorized_keys` lines with their options; `rc_engine::viewer::cert`
+  reads a file the built-in viewer opens by extension, OpenSSH's names or a `-----BEGIN` start,
+  and the window (`app/viewer/cert.rs`, `cert_words.rs`) shows the report in the interface's
+  language as text - held in memory and read by the Lister through
+  `rc_engine::viewer::memory_text`, a read-only one-file backend, nothing written to a disk - and
+  on 7 as a tree: subject,
+  issuer, serial, validity, SAN, key usage, EKU, basic constraints, key, signature algorithm,
+  SHA-1/SHA-256 fingerprints, SKI/AKI. Checks as OK/INFO/WARN/ERROR lines: validity at the
+  system clock with `viewer.cert_expiry_warning_days` (default 30), the chain inside the file by
+  names and key identifiers (order, self-signed root, CA flag, missing issuer), a private key
+  against the certificates and requests (canonical SubjectPublicKeyInfo compared), weak keys
+  (RSA < 2048, DSA, small curves) and signatures (SHA-1, MD5). Private key material is never
+  shown and an encrypted key never decrypted; signatures are not verified and PKCS#12 is named as
+  not supported. At most 4 MiB and 2000 objects; `viewer.certificates` (on) switches it off; the
+  fuzz target `cert_viewer`.
+
+- **To-do lists coloured in the Lister and Quick View** (RC-110-07): the bundled markup viewer
+  0.2.0 reads TaskPaper's and PlainTasks' plain text (`.todo`, `.taskpaper`): projects, tasks by
+  their open, done or cancelled mark, tags `@name(value)`, the date tags (`@done(26-05-10
+  14:15)`, `@due`, `@started`, `@created` and their kin) with the date apart from the tag, and a
+  task done or cancelled dimmed (`plugins/markup-viewer/src/lexer/todo.rs`).
+- **Themes tab: a theme's context menu and where it is used** (RC-110-09): a right click on a row
+  of the theme list, or Shift+F10 and the context-menu key while the list has the focus ring (or
+  no control has it), opens a menu for that theme - "Use for the light mode" or "... dark mode"
+  (its own mode) and on Windows "Use for <distribution> (WSL)" for each WSL distribution found,
+  checked where it is used already, then Edit..., Duplicate, Rename and Delete under the buttons'
+  rules. A "Use for" edits the draft as that environment's pick list does (OK or Apply stores it);
+  the pick lists stay. Each row shows tags of the environments that use the theme (three, then
+  "+n" with the whole list in a tooltip). The menu is the file list's own (`MENU_WIDTH`, card,
+  keys, `menu_letter`), measured under its row in the scrolled tab. No new command or setting.
+- **A symbol collection for own commands and bar buttons** (RC-110-10), as Total Commander
+  brings `WCMICONS.DLL`: 467 Fluent UI System Icons (MIT, same pinned upstream as the app's icon
+  font) in nine categories as a second font, `rcommander-symbols.ttf` (102 KiB), written by
+  `scripts/icon-font.sh --symbols` with its table (`rc_engine::user_commands::symbols`);
+  `--check` in `check.sh --preflight`. An own command's `icon_path` or a button's symbol names
+  one as `rc-symbol:<name>` (no migration), drawn in the theme's text colour at the bars' size;
+  a name the collection does not have shows the button's text, and `usercmd.save` and
+  `button_bar.save` refuse it. "Choose symbol..." beside Browse... in both forms opens the picker:
+  search over names and English keywords, recently used (from the stored commands and bars),
+  all and the categories, a grid at the bars' size, a preview with the tooltip, keyboard only.
+  The MCP list tools name the form; no new command.
+
+### Changed
+
+- **Dependencies current for 0.21.0**: zip 9.4.2 and notify 8.2.2 (the semver-compatible updates); `cargo deny`
+  clean.
+
+### Fixed
+
+- **`%VAR%` in the path bar and `cd`, compatibility junctions followed** (RC-100-92), as in
+  Total Commander: `%LOCALAPPDATA%\x` typed into the path bar or after the command line's `cd`
+  goes there (the known folder variables of the Total Commander import, any other `%NAME%` stays
+  as typed); entering a junction or link whose listing is refused (`Anwendungsdaten`,
+  `Application Data`) shows its target instead of "access denied" (`commands/denied_link.rs`,
+  one step, Windows only).
+- **Bundled plugins built against contract 0.5.0** (RC-100-38, RC-100-99): plugin contract 0.5.0
+  left the bundled viewers' manifests at 0.4.0, so their components imported
+  `rcommander:plugin@0.5.0` under a 0.4.0 manifest and packaging refused them
+  (`plugin_denied`); every bundled viewer now names 0.5.0, each released one a patch version up.
+  Contract 0.6.0 (RC-100-41, the compare world) followed in the same release, so they name 0.6.0.
+- **The certificate question no longer says FTPS for an inventory source** (RC-100-40): its
+  title and the changed/expired errors name a TLS certificate of the server, as the NetBox
+  and Proxmox inventories over HTTPS ask the same question.
+- **SVG viewer: a refused file shows its reason again**: the plugin's failure codes carry its
+  id, as the texts in `locales/en.json` do; it reports them as 0.1.6.
+- **winget: older `New package:` pull requests are closed too** (RC-100-85):
+  `scripts/winget-supersede.sh` also reads komac's title `New package: degoya.rCommander version
+  X`, which it gives every pull request while the package is not yet in `microsoft/winget-pkgs`;
+  so the new pull request is found without komac's log and the older ones are closed with
+  "Superseded by #<new>" (at 0.20.0 none was).
+- **File watcher on macOS: a growing file no longer reads the panel without
+  `panels.watch_changes`** (RC-110-02): FSEvents keeps a path's flags together, so a write to a
+  file created a while ago still arrives as a creation; a creation notice for a name the panel
+  already lists now counts as a change of content (the listing is searched only while no
+  reading waits).
+- **Code in the Markdown preview is monospaced, Ctrl+A takes the whole text** (RC-110-06): iced's
+  `markdown` gives each span of a fenced code line the prose font, which beat the code font of
+  the `rich_text` around it, so code blocks drew in the interface font; their lines now draw in a
+  style whose font is the code font (`markdown_view::code_style`), and code - blocks and inline -
+  takes the viewer's font only when it is monospaced, else the theme's (`code_font`). The text
+  view's read-only editor holds one page, so its Ctrl+A selected that page and Ctrl+C copied it:
+  Ctrl+A now selects the whole text (kept while scrolling, ended by a click or a search hit) and
+  Ctrl+C reads and decodes the file off the UI thread, up to 4 MiB
+  (`error.viewer_copy_too_large` above); the focused editor hands both keys to its Lister
+  (`viewer/copy.rs`). The binary and hex views keep copying their page; the preview's Ctrl+A
+  already took every block (now tested end to end).
+- **Find files searches archives and asks Everything** (RC-100-93). "Search archives" on the
+  General tab (`search.archives_default`) enters zip, 7z and tar files (plain, gzip, xz, bzip2,
+  zstd) on the machine's own drives like folders - one level below their folder, each opened as
+  an archive backend of the search's own within the archive limits and
+  `archive.decoder_memory_mib`; never an archive inside one, a password-protected entry or a bomb
+  skipped while the search goes on; off with a tooltip in a panel on a server or in an archive.
+  Hits show as `archive.zip › path`; Go to file opens the archive at the hit, Feed to listbox
+  feeds the hits of one archive into it, else the archives themselves beside the other hits.
+  MCP `files_search` takes `archives`; an archive the read guard keeps is never opened. On
+  Windows the "Everything" box (or `ev:` before the masks; `search.everything`) takes the
+  candidates from Everything 1.4 or later through its IPC window (`WM_COPYDATA`, a message-only
+  window on a blocking thread, 10 s limit, the answer parsed with every offset checked, fuzz
+  target `everything_reply`); exclusions, filters, depth and text stay rCommander's, a regex or
+  an archive search walks the folders, and Everything is never asked over MCP.
+- **Changing an archive: F5 into it, F8 inside it** (RC-110-05). With the inside of a zip, 7z or
+  plain tar in the target panel, F5 (F6: move to archive) opens the pack dialog in its add mode -
+  the archive's format fixed, the folder the other panel shows as the target - and F8, Delete
+  and their Shift forms inside an archive ask "delete N entries from <archive> for good". Both
+  run the new queue job `JobKind::ArchiveUpdate` (`rc-ops` `update/`): never in place - the new
+  archive is written beside the old one, read back (`archive.verify_after_update`, on), and
+  renamed onto it only when the old one is unchanged (`archive_changed`) and its reading sessions
+  are let go (`archive_in_use`); a cancel, a failure or a crash leaves the old archive byte for
+  byte. Kept zip entries are copied raw (no inflate, CRC and sizes kept, the comment kept), tar
+  entries with their extension headers byte for byte, 7z blocks raw; a 7z block that loses an
+  entry is decoded under `archive.decoder_memory_mib` and encoded again. Entries are removed by
+  the index the archive lists them by, so a cleaned name never stands for another. Refused with
+  codes of their own: compressed tars and single compressed files (`archive_not_modifiable`, as
+  Total Commander), self-extractors and sparse tars, encrypted archives (`archive_encrypted`, no
+  password to write), archives inside archives or on servers (`archive_not_local`), a read-only
+  file (`archive_file_read_only`), too little room (`not_enough_space`). Engine `archive.add`
+  (destructive with `delete_sources` or an overwrite) and `archive.delete` (destructive), MCP
+  `archives_add` and `archives_delete`; `ops.*` inside an archive keep refusing, now naming F5
+  and F8. RAR stays unread: the UnRAR crates are banned in `deny.toml` (their licence forbids
+  what GPL-3.0 must allow).
+- **Compare by content: edit mode and external compare tool** (RC-100-94). The diff window
+  edits by lines, after Total Commander's edit mode: F6 or Alt+M switch it, a cursor marks a
+  row and a side (Ctrl+Left/Ctrl+Right), Enter edits the line in a field, Insert and Delete add
+  and remove lines, Alt+Right/Alt+Left and the buttons Copy ->/Copy <- copy the cursor's block
+  of differences, Ctrl+Z/Alt+Backspace undo (up to 1000 steps), Ctrl+Y redoes, Ctrl+S saves;
+  closing or comparing again with changes asks Save/Discard/Cancel, a file changed on disk
+  Overwrite/Reload/Cancel. The engine's `compare::edit::EditSession` holds the text,
+  `text::encode` writes it back in its encoding, byte order mark and line endings; a side is
+  edited only up to 4 MiB, outside archives and when it writes back byte for byte. A local file
+  is saved through a temporary file beside it (`rc_ops::temp_name::save_path`), a server file
+  in place. `compare.by_content` (Exec; Ctrl+Shift+F3, the menu, the overwrite question's
+  Compare, a sync row) starts the protected setting `compare.external_tool` with
+  `compare.external_args` (`"%1" "%2"`, one argument per word, no shell), files on servers and
+  in archives as read-only temporary copies; without one, and with Shift held at the click, the
+  diff window. `compare.apply_blocks` (Write) and the MCP tool `files_compare_apply` copy blocks
+  of a `files_compare` answer, whose sizes and new `left_modified_unix`/`right_modified_unix`
+  they expect, behind the write guard. New setting kind `Arguments`.
+- Folder trees as in Total Commander (RC-100-88): Ctrl+F8 shows the folder tree of a panel's
+  drive in its place (`panel.show_tree`, MCP `panel_show_tree`), and the other panel follows the
+  tree's cursor after a 300 ms pause or, with `tree.open_on_enter`, after Enter; Ctrl+F1, Ctrl+F2
+  and a drive change show the files again. Ctrl+Shift+F8 turns the separate tree beside the
+  panels off, to one for the active panel and to one beside each (`panel.cycle_separate_tree`,
+  `panels.separate_tree`), its width dragged at its edge (`panels.tree_width`); it follows its
+  panel's folder and leads it, Shift+Tab moves the keyboard between a list and its tree. Alt+F10
+  opens the tree dialog (`DialogWindow::Tree`), Enter sends the active panel to the folder
+  chosen. Every tree is lazy - a folder lists its sub-folders when it unfolds, never a drive
+  scan, no `treeinfo.wc` -, on local drives, shares, WSL, archives, SFTP, FTP and devices; the
+  engine keeps the levels read (`Engine::tree_children`, at most 50 000 folders, a level at most
+  100 000) and reads a folder again after its panel was read again or on F2. Keys: the arrows,
+  Right/Left unfold and fold, typed letters jump among the folders read; no file operation from a
+  tree yet. View menu, palette rows, settings in four languages.
+- **Multi-rename: Total Commander's remaining placeholders, name lists and the next step**
+  (RC-100-96): `[S]`, `[f]`, `[I]`/`[I0]`, `[Caa+1]`/`[CAAA]`, `[C+1/100]`, `[T2]`/`[T3]` with
+  offsets (`[T1+60m]`), `[d]`/`[t]` in the local format, `[X]`/`[X+]`, `[B0]`...`[B9]` and
+  `[B+0]`...`[B+9]`; the wildcards `*` and `?` in the plain search; names from a file or the
+  clipboard and "Edit names" in `files.editor` on the dialog's "More..." row (Alt+M, Shift+F10),
+  the masks locked meanwhile; F5 moves on to the next step, and Undo goes back step by step
+  (`multi_rename.next_step`, MCP omitted). `multi_rename_preview` and `multi_rename_apply` take
+  `clipboard`, `opened_at`, `changed_at`, `date_format`, `time_format`, `new_names` and the case
+  `title`. `[R]` stays unknown: Total Commander has no such placeholder.
+- **SSH jump hosts and local port forwards** (RC-110-03). An SSH connection names a saved SSH
+  connection as its jump host (`connections.jump_id`, migration 0028), which may name its own,
+  at most four hops (`MAX_JUMPS`); the repository refuses a cycle, a longer chain, a jump host
+  that is not SSH and the delete of one in use (`jump_cycle`, `jump_chain_too_long`,
+  `jump_needs_ssh`, `connection_is_jump_host`) inside the write's transaction. A session is set
+  up outermost first over `direct-tcpip` channels (`rc_remote::SshSession::connect_via`); every
+  hop checks its host key under its own name (the question says "hop 1 of 3: bastion", a
+  changed key stops the chain before any secret), logs in with its own secrets and keeps its own
+  keepalive; the jump sessions belong to the target's, a failure is `EngineError::Hop` with the
+  hop's code. Over MCP a new jump host is an endpoint change (`endpoint_change_needs_gui`).
+  Local forwards (`connection_forwards`, at most 32 per connection): listed, saved and started
+  in the connection manager, carried over the pooled session per connection (at most 64 at
+  once), started with the session (`auto_start`, never by an agent's connect), stopped by
+  Ctrl+Shift+F; `ssh.forwards_lan` (off, protected) guards every address but loopback
+  (`forward_bind_refused`), `ssh.forward_reconnect` and `ssh.forwards_in_status_bar` ("Forwards:
+  n"). Commands `forwards.list`, `.stop`, `.stop_all`, `.delete` with MCP tools; `forwards.save`
+  and `forwards.start` are `GuiOnly`. The ssh_config import sets `ProxyJump <alias>` as the jump
+  host and takes `LocalForward` from the window (a LAN bind lowered to loopback); an export
+  carries jump hosts by their marks and the forwards.
+- **A host process for Total Commander's plugin DLLs, as a spike** (RC-100-02, ADR 0004
+  proposed): the new crate `rc-tc-host` with the internal protocol (length-prefixed frames,
+  JSON-RPC 2.0 control, raw data streams under a 1 MiB credit window), the host's request loop
+  over a `TcPlugin` trait, the bridge on rCommander's side that checks every answer as outside
+  data (unsafe entry names left out and counted, sizes and preview bounds held, a violation
+  spends the bridge and kills the host), and the start with a cleared environment and a private
+  staging folder. The binary `rc-tc-host <dll> <staging>` loads one 64-bit WCX (list, extract)
+  or WLX DLL (`ListGetPreviewBitmapW`) on Windows - the crate's only `unsafe` - and is a stub
+  elsewhere; a 32-bit DLL is refused before a start. No crate links it yet, nothing a user sees
+  changes; the measurements with real plugins on Windows are open.
+- **PAM systems lend a connection's secret** (RC-100-38): plugin contract 0.5.0 adds
+  `checkout(id, field, reason) -> lease` and `checkin(lease-id)` to `interface secrets`, asked
+  only of a source whose manifest says `[secrets] checkout = true`; 0.3.0 and 0.4.0 sources run
+  unchanged, the SDK templates move to 0.5.0. The engine checks the secret out at connect,
+  holds the lease in memory for the session (its value on the scrub list) and gives it back when
+  the SSH session ends - closed, idle or lost -, at `connections.disconnect`, after an SSH test or a
+  failed SSH login and when the window ends; an ended lease is lent anew. A system that wants a
+  reason fails the connect with `secret_source_reason_needed`, the connection manager opens on
+  the connection with a reason field, and `secrets.checkout_reason` (`GuiOnly`, MCP omitted)
+  hands it to the next checkout; the setting `vault.checkout_keep_reason` (on) keeps it until
+  rCommander ends. `secrets.sources` says which source lends. The PAM plugins themselves are
+  paid and not part of this change.
+- **NetBox and Proxmox VE inventories, paid plugins** (RC-100-40), the first of the inventory
+  kind, each a private repository of its own like the Bitwarden source. NetBox: devices and virtual machines with their primary IP, page
+  by page, filtered by status, role, site and tag, in folders by site and role or by cluster,
+  port and protocol from `ssh`/`sftp` services, the token as `Token {{secret:token}}`. Proxmox
+  VE: QEMU machines and LXC containers, the address from the guest agent or the container's
+  configuration, folders by node or pool, the whole API token as `PVEAPIToken={{secret:token}}`,
+  an empty list checked against `VM.Audit`. A host without an address is reported as left out,
+  not created. Each checks its offline licence key first: without one it answers `unlicensed`
+  and asks nothing (`inventory_unlicensed` in the window). In the core, an inventory's HTTPS
+  address is checked with the FTPS certificate trust (`rc-remote`'s `HttpsTls`): a self-signed
+  Proxmox node becomes the certificate question, never an unchecked connection.
+- **SSH login with OpenSSH user certificates** (RC-060-09): a key imported into the vault takes
+  the `<key>-cert.pub` beside it along (`rc_remote::certificate`: one line of at most 16 KiB, a
+  user certificate that certifies the key, else `ssh_certificate_invalid` or
+  `ssh_certificate_key_mismatch`), stored in clear beside the key with what the window and MCP
+  show of it - key id, serial, principals, validity, the CA's fingerprint (migration 0030,
+  `rc_db::KeyCertificate`, `StoredKey::certificate`); a key file brings the one beside it to the
+  login. The login offers a key's certificate before the key, from the vault, beside the file or
+  from an SSH agent (agent certificates were skipped until now), through russh's
+  `authenticate_certificate_with` with a signer of its own so an RSA certificate signs with the
+  hash it names; a certificate outside its validity is not sent (`ssh_certificate_expired`,
+  `ssh_certificate_not_yet_valid`), a refused one leaves the key to try alone, and a refusal whose
+  principals leave the user out says so (`ssh_certificate_principal`). `AuthUsed` carries the
+  certificate's key id. The connection form shows key id, principals and validity under the
+  stored key, an expired certificate in red. Setting `ssh.certificates` (on, protected). The
+  test server takes a CA (`ServerOptions::user_ca`), and on Unix a test agent holds certificates
+  (`testkit::cert_agent`); the fixtures' test CA signed the certificates of
+  `tests/fixtures/certs`.
+- **Column sets and the comments view** (RC-100-90), Total Commander's custom columns: a column
+  set is the file list's own columns - 1 to 16, each a field (`name`, `ext`, `size`, `packed`,
+  `modified`, `created`, `accessed`, `attributes`, `rights`, `owner`, `group`, `comment`) with a
+  title, a width of 24 to 640 and an alignment - and 0 to 32 folder masks, at most 64 sets
+  (migration 0029, table `column_sets`, the spec as versioned JSON of at most 16 KiB, checked in
+  the engine and over MCP). `ListMode::Custom { set }` shows a set, `ListMode::Comments`
+  (Ctrl+Shift+F2, `panel.toggle_comments`, `cm_SrcComments`) name, extension and the
+  `descript.ion` comment; the folder's comments are read only while the mode shows a comment
+  column, after the listing and outside the lock, and again on F2 and `file.set_comment`. A
+  panel entering a folder a set's mask matches shows the set (`columns.auto_switch`, on;
+  `panel.toggle_auto_columns`), elsewhere `columns.auto_default` decides (`unchanged`, `full`,
+  `brief`); a view chosen by hand stays until a folder of another set; a deleted set leaves the
+  full view. `SortKey::Created`, `Accessed` and `Comment`; `Entry.accessed` filled locally and
+  over SFTP (`atime`). The window: the set's columns in the header and the rows, the name first,
+  a set's width dragged and kept in the set, a right click on the header for the menu of the
+  views, Settings > Appearance > Columns (sets, editor, masks, the two settings), a palette row
+  per set, View > Comments, Automatic column sets, Column sets.... MCP: `column_sets_list`,
+  `_get`, `_create`, `_update`, `_rename`, `_move`, `_delete`; `panel_set_view` takes `custom`
+  with `set` and `comments`, `panel_sort` the new keys.
+- **Documents, media and photo EXIF in the Lister and Quick View** (RC-100-99, stages 1, 2 and 4;
+  the PDF viewer, stage 3, waits for stage 0). `plugins/office-viewer/` (`rc-plugin-office-viewer`
+- **Documents, media and photo EXIF in the Lister and Quick View** (RC-100-99, stages 1 to 4).
+  `plugins/pdf-viewer/` (`rc-plugin-pdf-viewer` 0.1.0, hayro 0.9) gives a PDF's text page by page
+  and its information, page count, version, encryption and page size as a tree; at most 64 MiB,
+  an empty user password opens, another is the notice `password_required`. `plugins/office-viewer/` (`rc-plugin-office-viewer`
+  0.1.0) shows the text of `docx`, `xlsx`, `pptx` and their macro variants - paragraphs and tables,
+  sheets in workbook order with shared strings and cached formula results up to `sheet_rows`
+  (1000, 10000, 100000), slides in presentation order - and their properties, sheets or slides as
+  a tree; the zip is read through its own bounded reader (10 000 entries, 64 MiB and a ratio of 500
+  per part, counted on the inflated bytes), parts only through their relationships, never a `*.bin`
+  part or an external target. `plugins/media-viewer/` (`rc-plugin-media-viewer` 0.1.0) gives the
+  duration, codecs, tracks and tags of audio (lofty 0.25: mp3, flac, ogg, opus, m4a, wav, aiff,
+  ape, wv, aac) and video (readers of its own for ISO base media and Matroska: mp4, m4v, mov, 3gp,
+  mkv, webm) as a tree and as text, an embedded PNG or JPEG cover as the picture (`cover`), and the
+  EXIF of TIFF, HEIC and camera raw photos (kamadak-exif); no `max_size`, every read and size
+  bounded, a crafted size ends in `bad-data`. JPEG, PNG and WebP keep the built-in image view, which
+  now offers their EXIF as a second view, a tree of groups and fields on **7** (setting
+  `viewer.exif`, on); `file.properties` and MCP `files_properties` name camera, lens, capture time,
+  exposure, size and position (`rc_engine::viewer::exif`: the EXIF block alone, at most 64 KiB and
+  256 fields), and the properties dialog (Alt+Enter) shows them.
+- **Own commands, the Start menu and starting as administrator** (RC-100-86), as Total Commander
+  has them: own commands `em_<name>` (migration 0027, tables `user_commands` and
+  `start_menu_items`, both durable, 512 rows each, 8 levels, 4096 characters a field) are a
+  program with parameters, start folder, window and elevation, keymap rows or `cm_*` names run one
+  after the other (`user_commands/tc_names.rs`), or another own command (at most 8 deep,
+  `user_command_recursion`). TC's placeholders `%P %N %T %M %O %E %S %R %% %Q %Y`, the list
+  files `%L %F %UL %UF %WL %WF` in a folder of the user's own that lives until rCommander ends or
+  starts again (`unpacked.rs`), `?` in front asks for the parameters in a dialog. Programs start
+  without a shell, found on the search path and never in the panel's folder; on Linux and macOS
+  the parameters are split into words before the values go in, on Windows a batch file gets no
+  value with `% ^ & | < > "` (`user_command_unsafe_argument`). `*` in front of a command line,
+  and "Run as administrator" of an own command, start through `ShellExecuteExW` with `runas`
+  (`commands/elevate/`, Windows only; elsewhere `run_as_admin_unsupported`, nothing starts); a
+  folder on a mapped drive goes as its UNC path. New menu "Start" after "Configuration", one
+  window with the tabs "Own commands" and "Start menu", palette rows, keys `em_<name>` and
+  `start:<id>`, the import of `usercmd.ini` and `wincmd.ini [user]`. Commands `usercmd.*` and
+  `start_menu.*`; MCP `user_commands_list`, `start_menu_list`, `user_commands_run`,
+  `start_menu_run`, a run that starts as administrator, asks or gets its parameters from the
+  caller `GuiOnly` (`ESCALATIONS`).
+- **macOS: kept server edits are offered again, stale copies cleaned up** (RC-110-01): whether
+  the process of an edit or unpacked folder still runs was read from `/proc`, which macOS lacks,
+  so every such folder counted as running - a change kept at quit was never offered at the next
+  start and the copies of ended runs stayed. It is now signal 0 to the process, as on Linux; the
+  remote-edit tests run on Windows with Windows program paths and without an `a:b` file on the
+  memory server.
+- **`.env` and the other credential files coloured in the Lister** (RC-110-07): the config
+  viewer claims `.env` and `.env.*` (RC-100-80), but the read guard knows them as credential
+  files and hands them to no plugin (decision 8), so they always showed plain - as did `.npmrc`,
+  `winscp.ini`, `wcx_ftp.ini`, `rclone.conf`, `.cargo/credentials.toml`, `logins.json`,
+  `credentials.tfrc.json`, `.docker/config.json`, `gh/hosts.yml` and FileZilla's site files. The
+  built-in viewer now colours them in process (`app/viewer/credentials.rs`, a document of the
+  view `highlighted` like a photo's EXIF) with the bundled config, JSON, YAML and XML viewers'
+  crates linked natively: their tokens of the file's own lines, no plugin runtime, nothing
+  written. UTF-8 up to 1 MiB; `plugins.viewer_token_colors` switches it off.
+
 ## [0.20.0] - 2026-11-07
 
 ### Added

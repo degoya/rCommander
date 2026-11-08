@@ -1,9 +1,7 @@
 //! The engine's errors, each with a stable code.
 
 use rc_checksum::ChecksumError;
-use rc_db::connections::ConnectionError;
-use rc_db::login_scripts::LoginScriptError;
-use rc_db::{BackupError, DbError};
+use rc_db::{BackupError, DbError, connections::ConnectionError, login_scripts::LoginScriptError};
 use rc_ops::OpsError;
 use rc_remote::login_script::ScriptInvalid;
 use rc_remote::{AgentError, FtpError, SftpError, SshError};
@@ -243,6 +241,16 @@ pub enum EngineError {
     /// active panel nor a file under each panel's cursor.
     #[error("select two files, or put each panel's cursor on a file, to compare them")]
     CompareNeedsFiles,
+    /// A compared file changed since it was read; the edit mode or `compare.apply_blocks` did
+    /// not write over it (RC-100-94).
+    #[error("{name} changed since it was compared; compare again")]
+    CompareChanged { name: String },
+    /// A compared file is not edited: binary, too large, or not written back as it was read.
+    #[error("{name} cannot be changed here: {reason}")]
+    CompareNotEditable { name: String, reason: &'static str },
+    /// `compare.apply_blocks` names a block the comparison does not have.
+    #[error("the comparison has no block {block}")]
+    CompareBlockNotFound { block: usize },
     /// A synchronization would delete and the deletes were not confirmed; nothing was done.
     #[error("the synchronization deletes {count} entries; confirm the deletes to run it")]
     SyncDeletesUnconfirmed { count: usize },
@@ -270,8 +278,7 @@ pub enum EngineError {
          rCommander's window"
     )]
     EndpointChangeNeedsGui { id: i64 },
-    /// Hashing, a checksum file, split or combine failed; keeps the code of its
-    /// [`ChecksumError`].
+    /// Hashing, a checksum file, split or combine failed; keeps the code of its [`ChecksumError`].
     #[error(transparent)]
     Checksum(#[from] ChecksumError),
     /// `file.open`: the system could not start or open the file.
@@ -365,8 +372,7 @@ pub enum EngineError {
     /// "Allow for this session" answers only a question that offered it (RC-010-27).
     #[error("MCP question {question} cannot be allowed for the session; it did not offer that")]
     McpAnswerNotOffered { question: u64 },
-    /// A tab, folder-history or hotlist command was refused; keeps the code of its
-    /// [`crate::TabsError`].
+    /// A tab, folder-history or hotlist command was refused; keeps its error's code.
     #[error(transparent)]
     Tabs(crate::TabsError),
     /// A command line that does not run: blank, too long or with a control character. The line
@@ -385,8 +391,11 @@ pub enum EngineError {
     /// A quick filter that is too long or holds a control character.
     #[error("invalid filter: {reason}")]
     FilterInvalid { reason: &'static str },
-    /// A change inside an archive: archives are read-only in a panel; unpack to change one.
-    #[error("archives are read-only here; unpack the archive to change its contents")]
+    /// A change inside an archive other than adding and removing entries: those are F5 into an
+    /// archive and F8 inside one (`archive.add`, `archive.delete`, RC-110-05).
+    #[error(
+        "an archive is changed only by adding to it (F5, archive.add) or deleting from it (F8, archive.delete)"
+    )]
     ArchiveReadOnly,
     /// The file is no archive rCommander reads.
     #[error("{name} is not an archive rCommander reads")]
@@ -409,8 +418,7 @@ pub enum EngineError {
     /// [`crate::CertificateError`].
     #[error(transparent)]
     Certificate(crate::CertificateError),
-    /// A network drive refused or failed (RC-010-16); keeps the code of its
-    /// [`crate::NetworkDriveError`].
+    /// A network drive refused or failed (RC-010-16); keeps its error's code.
     #[error(transparent)]
     NetworkDrive(crate::NetworkDriveError),
     /// No saved transfer list has this id (RC-010-15).
@@ -458,14 +466,32 @@ pub enum EngineError {
          Call again, and the person is asked about the folder it shows now"
     )]
     PanelChanged { panel: &'static str },
-    /// A workspace or its spec was refused (RC-100-68); keeps the code of its
-    /// [`crate::WorkspaceError`].
+    /// A workspace or its spec was refused (RC-100-68); keeps its error's code.
     #[error(transparent)]
     Workspace(crate::WorkspaceError),
-    /// An inventory source was refused or its sync failed (RC-100-39); keeps the code of its
-    /// [`crate::inventory::InventorySourceError`].
+    /// An inventory source refused or its sync failed (RC-100-39); keeps its error's code.
     #[error(transparent)]
     Inventory(crate::inventory::InventorySourceError),
+    /// A jump host failed (RC-110-03): `hop` its name, `index` of `total` its place; keeps the code.
+    #[error("jump host {hop} (hop {index} of {total}): {source}")]
+    Hop {
+        hop: String,
+        index: usize,
+        total: usize,
+        source: Box<EngineError>,
+    },
+    /// A port forward did not start or failed (RC-110-03); keeps its error's code.
+    #[error(transparent)]
+    Forward(crate::ForwardError),
+    /// A column set or its spec was refused (RC-100-90); keeps its error's code.
+    #[error(transparent)]
+    ColumnSet(crate::ColumnSetError),
+    /// An own command, a Start menu row or a start as administrator refused (RC-100-86).
+    #[error(transparent)]
+    UserCommand(crate::UserCommandError),
+    /// A server file was not opened or uploaded for editing (RC-110-01); keeps its error's code.
+    #[error(transparent)]
+    RemoteEdit(crate::RemoteEditError),
 }
 
 #[cfg(test)]

@@ -5,7 +5,9 @@
 //! claim, a sensitive file (`rc_mcp::sensitive_path`) or the plugins switched off leave the
 //! built-in viewer; a failing plugin leaves it too, with a notice in the status line. Closing
 //! the Lister or Quick View moving on drops the lister, whose flag ends the plugin's running
-//! call and every later one.
+//! call and every later one. A photo the built-in viewer opens brings its EXIF as a document of
+//! the core's own (RC-100-99, `exif.rs`), a credential file its colours (RC-110-07,
+//! `credentials.rs`), a certificate or key file its report (RC-110-08, `cert.rs`).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -17,13 +19,16 @@ use rc_engine::{
         self, OpenRequest, Opening, Output, PictureFormat, PluginDocument, Purpose, Theme,
         ViewerPlugins,
     },
+    viewer::exif::PhotoExif,
     viewer::{DETECT_BYTES, Detected, ViewMode, sniff},
 };
 use tokio::sync::OnceCell;
 
 use super::{
-    ViewerMessage,
+    ViewerMessage, cert,
+    credentials::{self, ColoredLines},
     document::{Answer, DocView, Document, DocumentSource, Token, TokenClass, TreeNode},
+    exif,
     lister::{Lister, Request, Shown},
     load::{self, Opened, Picture},
     markdown::Markdown,
@@ -59,6 +64,22 @@ pub enum PluginOpened {
     Fallback {
         opened: Result<Opened, &'static str>,
         notice: String,
+    },
+    /// No plugin: a photo in the built-in viewer, its EXIF beside the picture (RC-100-99).
+    Exif {
+        opened: Opened,
+        exif: Arc<PhotoExif>,
+    },
+    /// No plugin may see it: a credential file in the built-in viewer, coloured in process
+    /// (RC-110-07).
+    Credential {
+        opened: Opened,
+        lines: Arc<ColoredLines>,
+    },
+    /// No plugin: a certificate or key file as its report, text and tree (RC-110-08).
+    Certificates {
+        opened: Opened,
+        source: Arc<cert::CertSource>,
     },
 }
 
@@ -220,6 +241,36 @@ impl App {
                 lister.note = Some(notice);
                 self.run(id, requests)
             }
+            PluginOpened::Exif {
+                opened,
+                exif: photo,
+            } => {
+                // A photo opened again (F2) is decoded again.
+                lister.picture = Shown::None;
+                let mut requests = lister.opened(opened);
+                if let Some(mut shown) = exif::document(&photo) {
+                    shown.colors = colors;
+                    requests.extend(lister.set_document(shown));
+                }
+                self.run(id, requests)
+            }
+            PluginOpened::Credential { opened, lines } => {
+                let mut requests = lister.opened(opened);
+                if let Some(mut shown) = credentials::document(lines) {
+                    shown.colors = colors;
+                    requests.extend(lister.set_document(shown));
+                }
+                self.run(id, requests)
+            }
+            PluginOpened::Certificates { opened, source } => {
+                lister.picture = Shown::None;
+                let mut requests = lister.opened(opened);
+                if let Some(mut shown) = cert::document(source) {
+                    shown.colors = colors;
+                    requests.extend(lister.set_document(shown));
+                }
+                self.run(id, requests)
+            }
             PluginOpened::Document { opened, document } => {
                 let views = views(document.outputs());
                 if views.contains(&DocView::Markdown) {
@@ -289,7 +340,10 @@ async fn open(
         .open(&engine, &path, rc_mcp::sensitive_path, request)
         .await
     {
-        Opening::BuiltIn => Loaded::BuiltIn(load::open(engine, path, db).await),
+        Opening::BuiltIn => {
+            let opened = load::open(engine, path.clone(), db.clone()).await;
+            built_in(&path, opened, db).await
+        }
         // Only a lister gone stops its plugin: nobody waits for the file.
         Opening::Cancelled => Loaded::BuiltIn(Err(plugins::PLUGIN_CANCELLED)),
         Opening::Failed { plugin, code } => Loaded::Plugin(PluginOpened::Fallback {
@@ -314,6 +368,32 @@ async fn open(
                 document: Arc::from(document),
             })
         }
+    }
+}
+
+/// The built-in viewer's file; a credential file with its colours, a certificate or key file,
+/// `viewer.certificates` on, as its report, a photo with EXIF, `viewer.exif` on, as its EXIF
+/// document.
+async fn built_in(path: &VfsPath, opened: Result<Opened, &'static str>, db: Option<Db>) -> Loaded {
+    let file = match opened {
+        Ok(file) => file,
+        Err(code) => return Loaded::BuiltIn(Err(code)),
+    };
+    if let Some(lines) = credentials::read(&path.path, &file).await {
+        return Loaded::Plugin(PluginOpened::Credential {
+            opened: file,
+            lines,
+        });
+    }
+    if let Some((opened, source)) = cert::open(&path.path, &file, db.as_ref()).await {
+        return Loaded::Plugin(PluginOpened::Certificates { opened, source });
+    }
+    match exif::read(&file, db.as_ref()).await {
+        Some(photo) => Loaded::Plugin(PluginOpened::Exif {
+            opened: file,
+            exif: photo,
+        }),
+        None => Loaded::BuiltIn(Ok(file)),
     }
 }
 

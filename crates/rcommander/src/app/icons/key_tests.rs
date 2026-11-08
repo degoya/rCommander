@@ -12,6 +12,7 @@ fn entry(name: &str, kind: EntryKind) -> Entry {
         size: 0,
         modified: None,
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,

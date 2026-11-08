@@ -1,9 +1,12 @@
-use std::path::Path;
+use std::{
+    ops::ControlFlow,
+    path::{Path, PathBuf},
+};
 
-use rc_vfs::{LinkKind, LocalFs, MemoryFs, Vfs, VfsError, WriteMode};
+use rc_vfs::{Entry, LinkKind, LocalFs, MemoryFs, Vfs, VfsError, WriteMode};
 use tokio::io::AsyncWriteExt;
 
-use super::{DirUsage, dir_size, dir_sizes};
+use super::{Counted, DirUsage, UsageVisitor, dir_size, dir_size_without, dir_sizes, walk_usage};
 
 async fn write(fs: &dyn Vfs, path: &Path, bytes: &[u8]) {
     let mut stream = fs
@@ -109,4 +112,121 @@ async fn links_are_not_followed() {
         (2, 1),
         "the link is an entry, not a folder"
     );
+}
+
+#[tokio::test]
+async fn what_the_ignore_list_hides_is_not_counted() {
+    let fs = tree().await;
+    let usage = dir_size_without(&fs, Path::new("/tree"), &|_, entry| entry.name == "sub")
+        .await
+        .expect("count");
+    assert_eq!((usage.bytes, usage.files, usage.dirs), (7, 2, 0));
+    let usage = dir_size_without(&fs, Path::new("/tree"), &|dir, entry| {
+        dir.ends_with("sub") && entry.name == "deeper"
+    })
+    .await
+    .expect("count");
+    assert_eq!((usage.bytes, usage.files, usage.dirs), (7, 2, 1));
+}
+
+/// A visitor that notes what it is shown, each folder by its path, and stops after `stop_after`
+/// files.
+#[derive(Default)]
+struct Notes {
+    folders: Vec<PathBuf>,
+    files: Vec<(PathBuf, Option<Counted>)>,
+    stop_after: Option<usize>,
+}
+
+impl UsageVisitor for Notes {
+    type Folder = PathBuf;
+
+    fn folder(&mut self, _: &PathBuf, _: &Entry, path: &Path) -> ControlFlow<(), PathBuf> {
+        self.folders.push(path.to_path_buf());
+        ControlFlow::Continue(path.to_path_buf())
+    }
+
+    fn file(
+        &mut self,
+        parent: &PathBuf,
+        entry: &Entry,
+        counted: Option<Counted>,
+    ) -> ControlFlow<()> {
+        self.files.push((parent.join(&entry.name), counted));
+        if self.stop_after.is_some_and(|stop| self.files.len() >= stop) {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+}
+
+#[tokio::test]
+async fn the_visitor_sees_every_folder_and_file_with_its_handle() {
+    let fs = tree().await;
+    let mut notes = Notes::default();
+    let walked = walk_usage(&fs, Path::new("/tree"), PathBuf::from("/tree"), &mut notes)
+        .await
+        .expect("walk");
+    assert!(!walked.stopped);
+    assert_eq!(
+        walked.usage,
+        dir_size(&fs, Path::new("/tree")).await.expect("count")
+    );
+    let mut folders = notes.folders.clone();
+    folders.sort();
+    assert_eq!(
+        folders,
+        [
+            PathBuf::from("/tree/sub"),
+            PathBuf::from("/tree/sub/deeper")
+        ]
+    );
+    let mut files: Vec<(PathBuf, u64)> = notes
+        .files
+        .iter()
+        .map(|(path, counted)| (path.clone(), counted.expect("counted").bytes))
+        .collect();
+    files.sort();
+    assert_eq!(
+        files,
+        [
+            (PathBuf::from("/tree/a"), 3),
+            (PathBuf::from("/tree/b"), 4),
+            (PathBuf::from("/tree/sub/deeper/c"), 5),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn the_visitor_stops_the_walk_with_the_count_so_far() {
+    let fs = tree().await;
+    let mut notes = Notes {
+        stop_after: Some(1),
+        ..Notes::default()
+    };
+    let walked = walk_usage(&fs, Path::new("/tree"), PathBuf::from("/tree"), &mut notes)
+        .await
+        .expect("walk");
+    assert!(walked.stopped);
+    assert_eq!(walked.usage.files, 1);
+    assert_eq!(notes.files.len(), 1);
+}
+
+#[tokio::test]
+async fn a_hard_link_reaches_the_visitor_uncounted() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let fs = LocalFs::new();
+    let file = dir.path().join("big.bin");
+    write(&fs, &file, &[1; 100]).await;
+    fs.create_link(&dir.path().join("again.bin"), &file, LinkKind::Hardlink)
+        .await
+        .expect("hard link");
+    let mut notes = Notes::default();
+    walk_usage(&fs, dir.path(), dir.path().to_path_buf(), &mut notes)
+        .await
+        .expect("walk");
+    let counted = notes.files.iter().filter(|(_, counted)| counted.is_some());
+    assert_eq!(counted.count(), 1);
+    assert_eq!(notes.files.len(), 2);
 }

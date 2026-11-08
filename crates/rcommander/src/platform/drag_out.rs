@@ -36,6 +36,9 @@ pub enum DragOutcome {
 pub struct Pointer {
     /// Where across the window's width, from 0 (left edge) to 1 (right edge).
     pub across: f32,
+    /// Where down the window's height, from 0 (top edge) to 1 (bottom edge): a drop on a button
+    /// of a bar (RC-100-87).
+    pub down: f32,
     /// Whether Shift is held: a move instead of a copy.
     pub shift: bool,
 }

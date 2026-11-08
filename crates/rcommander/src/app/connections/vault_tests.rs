@@ -257,6 +257,7 @@ async fn copy_while_locked(harness: &mut Harness) -> Submit {
             sources: vec!["a.txt".into()],
             target: Some("ftp://nas/upload".into()),
             options: JobOptions::default(),
+            rename_mask: None,
         }),
         follow: FollowUp::Transfer { deselect: true },
         background: false,

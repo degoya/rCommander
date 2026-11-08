@@ -30,8 +30,9 @@ macro_rules! arms {
                 path,
                 program,
                 create,
+                cursor_only,
             } => {
-                $self.open_external(panel, path.as_deref(), program, create)
+                $self.open_external(panel, path.as_deref(), program, (create, cursor_only))
                     .await
             }
         } }

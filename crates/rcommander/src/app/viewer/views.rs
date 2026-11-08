@@ -52,7 +52,7 @@ impl Lister {
     pub fn tree_shown(&self) -> bool {
         self.document
             .as_ref()
-            .is_some_and(|document| document.view() == DocView::Tree)
+            .is_some_and(|document| document.view().is_tree())
     }
 
     /// A key while a document is shown: `7` steps to its next view, the tree takes its keys.
@@ -63,7 +63,7 @@ impl Lister {
             let view = document.next_view();
             return Some(self.apply_view(view));
         }
-        if document.view() != DocView::Tree {
+        if !document.view().is_tree() {
             return None;
         }
         let step = match key {
@@ -102,7 +102,7 @@ impl Lister {
         match view {
             // The text is written first (RC-100-29); `output.rs` shows it when it is there.
             view if view.is_text() && self.text_waits() => requests.extend(self.ask_text()),
-            DocView::Tree => {
+            DocView::Tree | DocView::Exif => {
                 self.hide_preview();
                 if let Some(asked) = self.document.as_mut().and_then(|d| d.tree.start()) {
                     requests.push(Request::Children(asked));

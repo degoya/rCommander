@@ -229,6 +229,10 @@ pub struct Connection {
     /// The shared credential it takes its secrets from, and its user when it names none
     /// (RC-050-12); `None` uses its own.
     pub credential_id: Option<CredentialId>,
+    /// The saved SSH connection its sessions are set up through (RC-110-03, OpenSSH's
+    /// ProxyJump); `None` connects directly.
+    #[serde(default)]
+    pub jump_id: Option<ConnectionId>,
 }
 
 /// One folder of the tree.
@@ -278,6 +282,10 @@ pub struct ConnectionDraft {
     pub theme_light: Option<String>,
     #[serde(default)]
     pub theme_dark: Option<String>,
+    /// The saved SSH connection to connect through (RC-110-03); `None` connects directly. An
+    /// export leaves it out (an id means nothing on another installation).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jump_id: Option<ConnectionId>,
 }
 
 impl ConnectionDraft {
@@ -299,13 +307,14 @@ impl ConnectionDraft {
             ftp_encoding: None,
             theme_light: None,
             theme_dark: None,
+            jump_id: None,
         }
     }
 }
 
 /// A change to a connection: `None` keeps a field. For the optional text fields (`username`,
 /// `key_path`, `start_directory`, `notes`, `theme_light`, `theme_dark`) an empty string clears
-/// the value.
+/// the value; for `jump_id` 0 does.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectionPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -336,9 +345,18 @@ pub struct ConnectionPatch {
     pub theme_light: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme_dark: Option<String>,
+    /// The jump host's connection id (RC-110-03); 0 connects directly again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jump_id: Option<i64>,
 }
 
 impl ConnectionPatch {
+    /// The jump host the patch sets: `Some(None)` clears it, `None` keeps it.
+    #[must_use]
+    pub fn jump(&self) -> Option<Option<ConnectionId>> {
+        self.jump_id.map(|id| (id != 0).then_some(ConnectionId(id)))
+    }
+
     /// Whether the patch changes nothing but the themes (RC-100-51): an open session stays.
     #[must_use]
     pub fn only_themes(&self) -> bool {

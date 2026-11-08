@@ -127,6 +127,8 @@ progress window sends the running job to the background, where the queue window 
 | Ctrl+Up / Ctrl+Down, Alt+O | Move a file in the list / sort by the old name |
 | Tab / Shift+Tab | Through the fields |
 | Enter / Alt+U / Esc | Start / undo the last multi-rename / close |
+| F5 | Next step: the new names become the old ones, the rule goes back to <Default> |
+| Alt+M, Shift+F10 | More...: names from a file or the clipboard, edit names, next step (*rC*: F10 closes the dialog) |
 
 ### Compare by content (Ctrl+Shift+F3) and synchronize (Alt+Shift+F2)
 

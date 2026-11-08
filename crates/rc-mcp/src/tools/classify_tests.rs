@@ -12,6 +12,9 @@ fn least(tool: &str) -> Value {
         "diagnostics_set_retention" => json!({ "table": "error_log" }),
         "queue_load" => json!({ "saved": 1 }),
         "files_set_attributes" => json!({ "paths": [] }),
+        "user_commands_run" => json!({ "name": "em_x" }),
+        "start_menu_run" => json!({ "id": 1 }),
+        "button_bars_run" => json!({ "bar": 1, "button": 0 }),
         _ => json!({}),
     }
 }

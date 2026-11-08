@@ -4,7 +4,8 @@
 //! a [`Request`] for the window to run ([`super::load`]) and its answer comes back as a page.
 //! A page is only what fits, read through the engine's block cache, so a 5 GB log scrolls as a
 //! 5 KB one does. The page's text sits in a read-only `text_editor`, which gives selecting with
-//! the mouse, Ctrl+A and Ctrl+C for free; it never edits, and its scrolling is the viewer's.
+//! the mouse for free; it never edits, and its scrolling is the viewer's. Ctrl+A and Ctrl+C take
+//! the whole text, not the page (`copy.rs`, RC-110-06).
 //! The search and "go to offset" bar is `find.rs`; a Markdown file's preview `markdown.rs`; a
 //! plugin's document with its views `document.rs` (RC-100-10).
 
@@ -13,7 +14,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use iced::widget::text_editor::{Action, Content, Cursor, Position};
+use iced::widget::text_editor::{Content, Cursor, Position};
 use rc_engine::{
     PanelId, VfsPath,
     viewer::{Detected, Direction, Match, Needle, TextEncoding, ViewMode},
@@ -60,8 +61,10 @@ pub enum Request {
     Render { forced: bool },
     /// The preview scrolled.
     PreviewScroll(Scroll),
-    /// The preview's selection copied.
+    /// The preview's selection, or the page's, copied.
     Copy(String),
+    /// The whole text read and copied (Ctrl+A, then Ctrl+C; `copy.rs`).
+    CopyAll,
     /// A document's tokens for the lines starting at these offsets (RC-100-10).
     Tokens(Vec<u64>),
     /// A document's tree nodes: the children of a node, the top level for `None`.
@@ -129,6 +132,8 @@ pub struct Lister {
     pub preview_at: f32,
     /// A plugin's document with several views; `None` for a file the Lister shows itself.
     pub document: Option<Document>,
+    /// Ctrl+A took the whole text, not just the page (`copy.rs`).
+    pub(super) whole: bool,
     /// Raised when the lister goes: its plugin's running call and every later one end
     /// (RC-100-13).
     plugin_stop: Arc<AtomicBool>,
@@ -171,6 +176,7 @@ impl Lister {
             text_size: None,
             preview_at: 0.0,
             document: None,
+            whole: false,
             plugin_stop: Arc::new(AtomicBool::new(false)),
             path,
             generation: 0,
@@ -274,6 +280,7 @@ impl Lister {
                 self.end = page.end;
                 self.content = Content::with_text(&page.lines.join("\n"));
                 if let Some(span) = page.mark {
+                    self.whole = false;
                     self.content.move_to(Cursor {
                         position: Position {
                             line: span.to.0,
@@ -285,6 +292,7 @@ impl Lister {
                         }),
                     });
                 }
+                self.keep_whole();
                 if let Some(document) = &mut self.document {
                     document.spans.set_page(page.raw);
                 }
@@ -332,24 +340,6 @@ impl Lister {
         match self.size() {
             0 => 0.0,
             size => (self.top as f64 / size as f64) as f32,
-        }
-    }
-
-    /// The text editor's action: selecting and copying happen there, scrolling here, and an
-    /// edit never.
-    pub fn editor(&mut self, action: Action) -> Vec<Request> {
-        match action {
-            Action::Scroll { lines } if lines > 0 => {
-                self.show(Seek::Down(lines.unsigned_abs() as usize), None)
-            }
-            Action::Scroll { lines } if lines < 0 => {
-                self.show(Seek::Up(lines.unsigned_abs() as usize), None)
-            }
-            Action::Scroll { .. } | Action::Edit(_) => Vec::new(),
-            other => {
-                self.content.perform(other);
-                Vec::new()
-            }
         }
     }
 
@@ -404,6 +394,8 @@ impl Lister {
                 self.zoom.turns = (self.zoom.turns + 3) % 4;
                 Vec::new()
             }
+            ListerKey::SelectAll => self.select_all(),
+            ListerKey::Copy => self.copy(),
             // The text size keys are the window's (`text_size.rs`); with the setting off they
             // do nothing.
             ListerKey::Close
@@ -411,8 +403,6 @@ impl Lister {
             | ListerKey::PreviousFile
             | ListerKey::NextView
             | ListerKey::Preview
-            | ListerKey::SelectAll
-            | ListerKey::Copy
             | ListerKey::TextLarger
             | ListerKey::TextSmaller
             | ListerKey::TextReset => Vec::new(),

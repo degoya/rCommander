@@ -156,7 +156,28 @@ impl Db {
         transaction.commit().await?;
         Ok(u64::try_from(entries.len()).unwrap_or(u64::MAX))
     }
+
+    /// A portable copy's file system keeps no Unix modes (RC-100-95): a warning, into the error
+    /// log at once - the database opens before the diagnostics are installed - and to the
+    /// console. The path stays out of it; the About page names the folder.
+    pub(crate) async fn warn_modes_not_kept(&self) {
+        let message = "the portable data folder's file system keeps no Unix permissions; \
+                       the database is not owner-only";
+        tracing::warn!(target: layer::UNSTORED_TARGET, code = MODES_NOT_KEPT, "{message}");
+        let line = NewErrorLogEntry {
+            level: LogLevel::Warn,
+            target: "rc_db".to_owned(),
+            message: message.to_owned(),
+            code: Some(MODES_NOT_KEPT.to_owned()),
+        };
+        if let Err(error) = self.append_error_log(&[line]).await {
+            tracing::warn!(target: layer::UNSTORED_TARGET, %error, "the warning was not stored");
+        }
+    }
 }
+
+/// The code of [`Db::warn_modes_not_kept`]'s line.
+pub(crate) const MODES_NOT_KEPT: &str = "db_modes_not_kept";
 
 #[cfg(test)]
 #[path = "error_log_tests.rs"]

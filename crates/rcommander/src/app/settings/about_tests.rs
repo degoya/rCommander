@@ -1,6 +1,8 @@
 use rc_engine::{Command, Outcome};
 
-use super::{AboutMsg, AboutTab, facts, link_messages, shown, version_line, window_title};
+use super::{
+    AboutMsg, AboutTab, data_fact, facts, link_messages, shown, version_line, window_title,
+};
 use crate::{
     app::{
         Effect, Message,
@@ -184,4 +186,19 @@ async fn an_address_that_does_not_open_is_copied_with_a_note() {
         assert!(error);
         assert_eq!(note, t!("settings.about.link_not_opened"));
     }
+}
+
+/// RC-100-95: the page names the data folder, marked when the copy is portable; the version
+/// line for a bug report does not.
+#[test]
+fn the_page_names_the_data_folder() {
+    let mut answer = shown();
+    answer.data_dir = Some("D:\\rCommander\\data".to_owned());
+    answer.portable = false;
+    assert_eq!(data_fact(&answer).1, "D:\\rCommander\\data");
+    assert!(!version_line(&answer).contains("rCommander\\data"));
+    answer.portable = true;
+    let portable = data_fact(&answer).1;
+    assert!(portable.contains("D:\\rCommander\\data"), "{portable}");
+    assert_ne!(portable, "D:\\rCommander\\data", "marked as portable");
 }

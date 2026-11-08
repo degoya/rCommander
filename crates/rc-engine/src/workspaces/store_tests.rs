@@ -202,6 +202,7 @@ async fn connections_must_exist_when_saved() {
         sort: None,
         mode: None,
         locked: false,
+        title: None,
     });
     outcome(engine.dispatch(create("Nas", spec.clone())).await);
     let mut unknown = spec.clone();

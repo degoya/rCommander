@@ -39,6 +39,11 @@ pub(crate) struct ImportTotalCommanderParams {
     /// colours by file type (appended) and the file lists' font into the settings (default true).
     #[serde(default)]
     pub look: Option<bool>,
+    /// Preview the own commands of usercmd.ini (beside wincmd.ini) and the Start menu of
+    /// wincmd.ini [user] (default true). Only the person imports them, in rCommander: here they
+    /// are skipped with needs_gui.
+    #[serde(default)]
+    pub commands: Option<bool>,
     /// true (the default): only the preview, nothing changes. false imports.
     #[serde(default)]
     pub dry_run: Option<bool>,
@@ -64,7 +69,7 @@ enum View {
 #[tool_router(router = tc_import_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Import Total Commander's directory hotlist, folder tabs and FTP connections (wincmd.ini, wcx_ftp.ini) into rCommander's hotlist, panels and connection tree, and its list colours, colours by file type and list font into the settings. dry_run defaults to true: the answer is the preview and nothing changes; call again with dry_run=false to import. A write tool, the preview included. Answers dry_run, wincmd_ini, ftp_ini, tabs_mode, hotlist (key, name, folders, folder, path, target, selected, status), tabs (key, panel, path, caption, locked, active, selected, status), connections (key, name, folders, kind, host, port, user, directory, password_state: none, present, master_password or unreadable, selected, status), look (key, source, value, selected, status) and warnings. Statuses: new, created, exists, update, updated, missing (a tab's folder is gone; imported only when only names it), skipped with a reason (program, internal_command, server_path, plugin_path, no_command, relative_path, unknown_variable, invalid_path, too_deep, name_invalid, inverse, colour_invalid, search_filter, too_many), and for connections new, created, update, updated, unchanged or refused with a code. A second import adds nothing twice. Everything goes into folders named Imported from Total Commander. Passwords are never read or returned; connections come without one, and only the person can take them into the vault in the window. Errors: tc_ini_path_refused, tc_ini_unreadable, tc_ini_too_large, tc_ini_not_found."
+        description = "Import Total Commander's directory hotlist, folder tabs and FTP connections (wincmd.ini, wcx_ftp.ini) into rCommander's hotlist, panels and connection tree, and its list colours, colours by file type and list font into the settings. dry_run defaults to true: the answer is the preview and nothing changes; call again with dry_run=false to import. A write tool, the preview included. Answers dry_run, wincmd_ini, ftp_ini, tabs_mode, hotlist (key, name, folders, folder, path, target, selected, status), tabs (key, panel, path, caption, locked, active, selected, status), connections (key, name, folders, kind, host, port, user, directory, password_state: none, present, master_password or unreadable, selected, status), look (key, source, value, selected, status), usercmd_ini, commands (key em_<name>, name, action, tooltip, icon_path, icon_index, unknown_rows, selected, status) and start_menu (key start<N>, title, folders, kind item, submenu or separator, action, unknown_rows, selected, status) - own commands and the Start menu only the person imports, in rCommander, so every one that would change something is skipped with needs_gui - and warnings. Statuses: new, created, exists, update, updated, missing (a tab's folder is gone; imported only when only names it), skipped with a reason (program, internal_command, server_path, plugin_path, no_command, relative_path, unknown_variable, invalid_path, too_deep, name_invalid, inverse, colour_invalid, search_filter, too_many, change_dir, command_invalid, needs_gui), and for connections new, created, update, updated, unchanged or refused with a code. A second import adds nothing twice. Everything goes into folders named Imported from Total Commander. Passwords are never read or returned; connections come without one, and only the person can take them into the vault in the window. Errors: tc_ini_path_refused, tc_ini_unreadable, tc_ini_too_large, tc_ini_not_found."
     )]
     pub(crate) async fn import_total_commander(
         &self,
@@ -79,6 +84,7 @@ impl RcMcpServer {
                 tabs: params.tabs.unwrap_or(defaults.tabs),
                 connections: params.connections.unwrap_or(defaults.connections),
                 look: params.look.unwrap_or(defaults.look),
+                commands: params.commands.unwrap_or(defaults.commands),
             },
             dry_run: params.dry_run.unwrap_or(true),
             tabs_mode: if params.replace_tabs.unwrap_or(false) {

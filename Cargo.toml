@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer", "plugins/hcl-viewer", "plugins/schema-viewer", "plugins/script-viewer", "plugins/markup-viewer"]
+members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer", "plugins/hcl-viewer", "plugins/schema-viewer", "plugins/script-viewer", "plugins/markup-viewer", "plugins/office-viewer", "plugins/media-viewer", "plugins/pdf-viewer"]
 
 [workspace.package]
-version = "0.20.0"
+version = "0.21.0"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.99"
@@ -54,6 +54,9 @@ image = { version = "0.25", default-features = false, features = ["bmp", "gif", 
 # later; MIT or Apache-2.0, from Tauri. No default features: GTK stays out, so on Linux the crate
 # builds its no-op backend and the menu code is linted there too. Locked at 0.21.0.
 muda = { version = "0.21.0", default-features = false }
+# The panels' file watcher (rc-engine, RC-110-02): ReadDirectoryChangesW, inotify and FSEvents
+# behind one API; CC0-1.0. No default features but FSEvents, so macOS needs no kqueue.
+notify = { version = "8.2.1", default-features = false, features = ["macos_fsevent"] }
 # The owner column of a local listing on Unix (rc-vfs, RC-060-02): user and group names through
 # safe `getpwuid_r`/`getgrgid_r` wrappers; the space of a file system (`statvfs`, RC-080-31).
 # The version russh already brings.
@@ -178,6 +181,10 @@ uuid = { version = "1", features = ["v7"] }
 # A dialog's window marked transient for its owner under X11 (rcommander, Linux and BSD only,
 # RC-080-73): the pure-Rust connection, no features; the version winit already brings.
 x11rb = { version = "0.13", default-features = false }
+# EXIF of photos (RC-100-99): the image view's EXIF tree and `file.properties` in the core, and
+# TIFF, HEIC and camera raw files in the media viewer plugin; pure Rust, BSD-2-Clause, the version
+# iced_graphics already brings into the tree.
+kamadak-exif = "0.6"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

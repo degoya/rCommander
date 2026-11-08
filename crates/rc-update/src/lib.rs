@@ -17,6 +17,8 @@
 //! * [`install`] - the journalled switch, the updater's run, the roll-back and the recovery at
 //!   start (RC-100-06).
 //! * [`auto_install`] - when an offer installs by itself (RC-100-07).
+//! * [`portable_mode`] - the marker that keeps the data beside a portable program, and where it
+//!   is refused (RC-100-95).
 //! * [`retention`] - what stays of the copies after a proven update (RC-100-07).
 //!
 //! No database, no engine, no iced: the updater runs this before the new version is known to
@@ -34,6 +36,7 @@ pub mod install;
 pub mod install_kind;
 pub mod manifest;
 pub mod offer;
+pub mod portable_mode;
 pub mod retention;
 pub mod sign;
 pub mod state;

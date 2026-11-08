@@ -14,7 +14,9 @@ pub fn concerns(event: &EngineEvent) -> bool {
             | EngineEvent::VaultRemoved
             | EngineEvent::LoginScript { .. }
             | EngineEvent::SecretNeeded { .. }
+            | EngineEvent::CheckoutReasonNeeded { .. }
             | EngineEvent::Session { .. }
             | EngineEvent::TrustedCertificatesChanged
+            | EngineEvent::Forward { .. }
     ) || matches!(event, EngineEvent::SettingChanged { key } if key == SHARED_CREDENTIALS_KEY)
 }

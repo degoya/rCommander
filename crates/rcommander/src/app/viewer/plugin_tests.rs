@@ -108,6 +108,42 @@ async fn without_plugins_the_built_in_viewer_opens_the_file() {
     assert_eq!(opened.file.size(), 9);
 }
 
+/// RC-110-07: a `.env` file never reaches a plugin (the read guard), so the core colours it - the
+/// built-in viewer opens the file with a document of the one view `highlighted`, and the
+/// lister shows it coloured.
+#[tokio::test]
+async fn a_dotenv_file_is_coloured_by_the_core() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let file = root.path().join(".env");
+    fs::write(&file, b"# local\nexport TOKEN=abc\n").expect("write");
+    let mut harness = Harness::headless(root.path()).await;
+    let lister = Lister::new(7, PanelId::Left, VfsPath::local(file));
+    let request = OpenRequest {
+        purpose: Purpose::Lister,
+        theme: plugin_theme(false),
+        cancel: lister.plugin_stop(),
+    };
+    let path = lister.path.clone();
+    let loaded = open(
+        harness.app.engine().clone(),
+        path,
+        None,
+        Plugins::default(),
+        request,
+    )
+    .await;
+    let Loaded::Plugin(opened @ PluginOpened::Credential { .. }) = loaded else {
+        panic!("the built-in viewer with the core's colours");
+    };
+    harness.app.viewers.open.push(lister);
+    let effects = harness.app.on_viewer(ViewerMessage::Plugin(7, opened));
+    assert!(!effects.is_empty(), "the first page is read");
+    let lister = harness.app.viewers.lister(7).expect("open");
+    assert!(lister.file.is_some(), "the built-in viewer has the file");
+    let document = lister.document.as_ref().expect("the coloured text");
+    assert_eq!(document.views(), [DocView::Highlighted]);
+}
+
 /// *Crash*: the plugin failed, the built-in viewer shows the file with the notice, and the
 /// lister goes on as for any file.
 #[tokio::test]

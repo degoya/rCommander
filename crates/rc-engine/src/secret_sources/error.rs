@@ -26,9 +26,13 @@ pub enum SecretSourceError {
     #[error("the secret source {name} is not installed or is switched off")]
     Missing { name: String },
     /// A reference that cannot be stored: an empty or overlong entry id or label, a control
-    /// character.
+    /// character; or a checkout reason that cannot be handed over.
     #[error("the secret source reference is refused: {reason}")]
     Invalid { reason: &'static str },
+    /// A PAM system lends the secret only with a reason, and none is held for the connection
+    /// (RC-100-38).
+    #[error("the secret source {name} lends only with a reason; give one and connect again")]
+    ReasonNeeded { name: String },
 }
 
 impl SecretSourceError {
@@ -41,6 +45,7 @@ impl SecretSourceError {
         "secret_source_entry_missing",
         "secret_source_missing",
         "secret_source_invalid",
+        "secret_source_reason_needed",
     ];
 
     /// The stable code.
@@ -54,6 +59,7 @@ impl SecretSourceError {
             Self::EntryMissing { .. } => "secret_source_entry_missing",
             Self::Missing { .. } => "secret_source_missing",
             Self::Invalid { .. } => "secret_source_invalid",
+            Self::ReasonNeeded { .. } => "secret_source_reason_needed",
         }
     }
 }

@@ -41,13 +41,15 @@ impl Hooks {
 }
 
 impl Engine {
-    /// Gives the operations queue its store and its reconnect hook.
+    /// Gives the operations queue its store and its reconnect hook - and the hook that lets go of
+    /// an archive before an update replaces it (`archives.rs`).
     pub(crate) fn install_transfer_hooks(&self) {
         let hooks = Arc::new(Hooks(Arc::downgrade(&self.inner)));
         self.inner
             .ops
             .set_store(Arc::clone(&hooks) as Arc<dyn TransferStore>);
         self.inner.ops.set_reconnect(hooks as Arc<dyn Reconnect>);
+        self.install_archive_release();
     }
 
     /// Puts the transfer jobs the last run left in the middle back into the queue, paused and

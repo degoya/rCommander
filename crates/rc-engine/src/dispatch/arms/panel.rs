@@ -5,6 +5,7 @@ macro_rules! arms {
     ($next:ident, $state:tt, $self:ident, { $($done:tt)* }) => {
         $next! { $state, $self, { $($done)*
             Command::GetPanelState { panel } => Ok(Outcome::Panel($self.panel_state(panel))),
+            Command::GitStatus { panel } => Ok($self.git_status(panel)),
             Command::ListDir { panel, path } => $self.list_dir(panel, path.as_deref()).await,
             Command::Navigate { panel, path } => $self.navigate(panel, &path).await,
             Command::SetCursor { panel, target } => $self.set_cursor(panel, target),
@@ -23,7 +24,10 @@ macro_rules! arms {
                 key,
                 descending,
             } => Ok($self.sort(panel, key, descending)),
-            Command::SetListMode { panel, mode } => Ok($self.set_list_mode(panel, mode)),
+            Command::SetListMode { panel, mode } => $self.set_list_mode(panel, mode).await,
+            Command::ToggleComments { panel } => $self.toggle_comments(panel).await,
+            Command::ToggleAutoColumns {} => $self.toggle_auto_columns().await,
+            Command::ToggleWatch {} => $self.toggle_watch().await,
             Command::ToggleHidden { show } => $self.toggle_hidden(show).await,
             Command::SelectByMask(crate::MaskRequest { panel, mask }) => {
                 Ok($self.select_by_mask(panel, mask.as_deref(), true).await)
@@ -42,6 +46,9 @@ macro_rules! arms {
                 $self.open_terminal_here(panel, other).await
             }
             Command::ContextMenu { panel } => Ok($self.context_menu(panel)),
+            Command::ShowTree { panel, show } => Ok($self.show_tree(panel, show)),
+            Command::CycleSeparateTree {} => $self.cycle_separate_tree().await,
+            Command::ThumbnailZoom { step } => $self.thumbnail_zoom(step).await,
         } }
     };
 }

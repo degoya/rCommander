@@ -28,7 +28,9 @@ use iced::{
 use rc_engine::{Algorithm, Chord, Command, CursorTarget, PanelId, PanelView, VfsPath};
 
 pub use self::menu::ContextMenu;
+// The menus drawn in a dialog take the file list's measures (the Themes tab's, RC-110-09).
 use self::menu::{Choice, MenuAction, Target};
+pub(super) use self::menu::{MENU_PADDING, MENU_WIDTH};
 pub(super) use self::view::with_menu;
 use super::{App, Effect, Message, checksum::is_checksum_file, panel::Pane};
 use crate::platform::shell_menu::{self, Anchor, ShellOutcome, ShellRequest};
@@ -164,13 +166,40 @@ impl App {
         effects
     }
 
-    /// rCommander's entries for `target` of `panel` whose commands have a key, each with the key
-    /// it has now.
+    /// rCommander's entries for `target` of `panel`: the commands of the internal association
+    /// first, then those whose commands have a key, each with the key it has now.
     fn items(&self, panel: PanelId, target: &Target, over_shell: bool) -> Vec<menu::Item> {
         let checksums = checksum_files(self.pane(panel), target);
-        menu::items(target, over_shell, checksums, |chord| {
+        let mut items = self.association_items(panel, target);
+        items.extend(menu::items(target, over_shell, checksums, |chord| {
             self.keymap.moved_key(chord).cloned()
-        })
+        }));
+        items
+    }
+
+    /// The commands of the internal association of the first of `target`'s entries, a file in a
+    /// local folder or an archive (RC-100-91); none while they are switched off.
+    fn association_items(&self, panel: PanelId, target: &Target) -> Vec<menu::Item> {
+        let Target::Entries(names) = target else {
+            return Vec::new();
+        };
+        let pane = self.pane(panel);
+        let reachable = matches!(
+            pane.state.path.backend,
+            rc_vfs::BackendId::Local | rc_vfs::BackendId::Archive { .. }
+        );
+        let Some(name) = names.first().filter(|_| reachable) else {
+            return Vec::new();
+        };
+        let file = pane
+            .entries()
+            .iter()
+            .any(|entry| entry.name == *name && !entry.is_dir_like());
+        if !file {
+            return Vec::new();
+        }
+        let verbs = super::associations::known::get().commands_for(name);
+        menu::association_items(name, &verbs)
     }
 
     /// The list is measured: rCommander's menu shows, or the Explorer's opens.
@@ -282,6 +311,15 @@ impl App {
                     format,
                 };
                 self.properties_command(panel, &copy).unwrap_or_default()
+            }
+            Choice::Association { name, verb } => {
+                let run = Command::RunAssociation {
+                    panel: Some(panel),
+                    path: Some(name),
+                    verb,
+                    params: None,
+                };
+                vec![Effect::Dispatch(panel, vec![run])]
             }
         }
     }

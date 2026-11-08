@@ -16,6 +16,7 @@ Each kind of the contract has a scaffold, one per `--type`:
 | `viewer` | Shows a file in the Lister (F3) and Quick View as text, coloured text, Markdown, a picture, a tree or pages | CSV and TSV as a Markdown table, any other file as text |
 | `secrets` | A password manager as the source of a connection's password, key or passphrase | three plain-text requests to a local bridge on one loopback port |
 | `inventory` | The hosts of a server inventory (NetBox, Proxmox, a CMDB), kept as a folder of connections | one plain-text request to the address the person entered, the API token sent as a `{{secret:api_token}}` marker the host fills in |
+| `compare` | Two files compared by what they hold (JSON, CSV, your format) as the compare window's Structure view, beside the line diff | two `key=value` files compared by key; a key found twice is a notice |
 
 The packer, file system, connection, content, command and compare kinds follow with their
 stages, each with its scaffold.
@@ -93,6 +94,7 @@ its kind declares (`world`), and asks it one question of its kind without a netw
 | Check | Kind | The question |
 | --- | --- | --- |
 | `viewer_empty_source` | viewer | `probe`, `open` and the first output the document names, on an empty file named like one `[match]` claims, end in an answer or a refusal - never a trap, an exhausted budget or an answer against the rules |
+| `compare_identical` | compare | `status`, then `compare` of two identical empty files named like one `[match]` claims, ends in an answer without a change or a refusal - never a trap, an exhausted budget or an answer against the rules |
 
 It does **not** check that your viewer shows a real file correctly. A package that passes every
 check can still be wrong about its format; the report says what was verified, not that the plugin

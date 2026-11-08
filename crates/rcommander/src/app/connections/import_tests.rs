@@ -140,6 +140,9 @@ fn host(alias: &str, key: &str, status: ImportStatus) -> SshConfigHost {
         line: 1,
         selected: true,
         status,
+        jump_id: None,
+        local_forwards: Vec::new(),
+        forwards_gui_only: false,
     }
 }
 

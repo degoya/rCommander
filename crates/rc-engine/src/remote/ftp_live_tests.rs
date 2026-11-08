@@ -215,6 +215,7 @@ impl Live {
                 on_conflict: Some(ConflictChoice::Overwrite),
                 ..JobOptions::default()
             },
+            rename_mask: None,
         };
         let command = if moving {
             Command::OpsMove(request)

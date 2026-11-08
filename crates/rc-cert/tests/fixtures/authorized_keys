@@ -1,0 +1,6 @@
+# keys allowed on the test host
+
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICn7ROXd/OlZni+hgJEiJtYUxuYRvxKMhDuOEoh4RBbz test@example
+command="/usr/bin/true",no-pty,from="192.0.2.0/24" ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBDf5TqhWZWJaD7ByGzCjQ/M+zf/Kb1zjUTrO2f4ZubYOblRMLKB4mDyDnuVrRh46hdQgL6GHcjgPYyL00SU10+8= ecdsa@example
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfAK6orpMgAJ+JG+LNhXGgrQdYzn4UHk06xtVyJ1h/BYQwpevtBapV6qwfDvK1A6w9ZfbvUfEf/VhrvxSa1P3ZuQGyyRPjKF06a25r9QOvA6fisfZYABMln/P9GVG2wjM0qNQiByuZJH0ngJZ13qZaw4o4FGFudGW+xFEcP93zOquzhKXP2EUmiARhfEnNmKvKcBS8kN2iLIbbDuZfJHk9qN7aAVqAxq43D6YV37PoTRjVuCFB8qdwi7IYQtEMzb2ohs5YRztu8/R7XnCLDmCS3BtPfioH+hNzsFIcC0p+GGN2sbdF0XYNgAJq20cAZKLlZzlCrmv8gWPODHizkugF enc@example
+ssh-ed25519 not-base64!! broken@example

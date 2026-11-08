@@ -261,6 +261,7 @@ fn warning(code: &str) -> &'static str {
         "network_location" => t!("exchange.warning.network_location"),
         "secret_sources" => t!("exchange.warning.secret_sources"),
         "theme_missing" => t!("exchange.warning.theme_missing"),
+        "jump_missing" => t!("exchange.warning.jump_missing"),
         _ => t!("exchange.warning.other"),
     }
 }

@@ -111,11 +111,17 @@ pub enum Found {
 /// file `viewer.dos_extensions` names (read from `db`) is DOS text.
 pub async fn open(engine: Engine, path: VfsPath, db: Option<Db>) -> Result<Opened, &'static str> {
     let file = engine.open_for_view(&path).await.map_err(|e| e.code())?;
+    from_window(file, db).await
+}
+
+/// A file already opened for viewing - such as a text shown from memory (RC-110-08,
+/// `rc_engine::viewer::memory_text`) - read as [`open`] reads one.
+pub async fn from_window(file: FileWindow, db: Option<Db>) -> Result<Opened, &'static str> {
     let head = file
         .read_uncached(0, DETECT_BYTES)
         .await
         .map_err(|e| e.code())?;
-    let dos = viewer::is_dos_file(&path.path, &viewer::dos_extensions(db.as_ref()).await);
+    let dos = viewer::is_dos_file(file.path(), &viewer::dos_extensions(db.as_ref()).await);
     let detected = if dos {
         viewer::detect_dos(&head)
     } else {

@@ -358,7 +358,7 @@ fn marker(path: &Path) -> Option<String> {
 }
 
 /// Whether this process may create a file in `folder`.
-fn writable(folder: &Path) -> bool {
+pub(crate) fn writable(folder: &Path) -> bool {
     let probe = folder.join(".update-kind-probe");
     let written = fs::write(&probe, b"probe").is_ok();
     let _ = fs::remove_file(&probe);

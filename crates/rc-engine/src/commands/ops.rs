@@ -7,6 +7,7 @@ use rc_ops::{
 };
 use rc_vfs::{BackendId, EntryKind, VfsPath};
 
+use super::file_ops_mask::{check_rename_mask, refuse_mask_into_archive};
 use super::{archive::refuse_archive_change, panel::resolve_path};
 use crate::{
     Engine, EngineError, Outcome, PanelId, PanelState,
@@ -50,15 +51,20 @@ impl Engine {
     /// location (`sftp://<connection>/<path>`, `ftp://...`); a server's backend is opened, or
     /// opened again after its session went, before the job is submitted (RC-060-05). Under MCP
     /// the sources pass the read guard first, and a panel the person was asked about must still
-    /// show the folder the question showed (`panel_changed`, RC-080-34).
+    /// show the folder the question showed (`panel_changed`, RC-080-34). With `rename_mask`
+    /// every source gets the name Total Commander's mask gives it (RC-110-04,
+    /// `file_ops_mask.rs`).
     pub(crate) async fn ops_transfer(
         &self,
         panel: Option<PanelId>,
         sources: &[String],
-        target: Option<&str>,
+        (target, rename_mask): (Option<&str>, Option<&str>),
         options: JobOptions,
         moving: bool,
     ) -> Result<Outcome, EngineError> {
+        if let Some(mask) = rename_mask {
+            check_rename_mask(mask)?;
+        }
         let id = self.resolve(panel);
         self.remember_selection(id, sources);
         let other = {
@@ -72,6 +78,9 @@ impl Engine {
             Some(path) => self.locate(&other, path).await?,
             None => other,
         };
+        if rename_mask.is_some() {
+            refuse_mask_into_archive(&target)?;
+        }
         // Archives are read-only: nothing goes into one, nothing moves out of one.
         refuse_archive_change(&target)?;
         if moving {
@@ -81,6 +90,12 @@ impl Engine {
         self.open_server(&target).await?;
         self.refuse_guarded(&sources).await?;
         self.apply_transfer_settings().await;
+        if let Some(mask) = rename_mask {
+            let queued = (options, DEFAULT_LIST);
+            return self
+                .submit_masked(sources, &target, mask, queued, moving)
+                .await;
+        }
         let kind = if moving {
             JobKind::Move { sources, target }
         } else {
@@ -168,7 +183,7 @@ impl Engine {
     }
 
     /// Opens the SFTP or FTP backend of `path`'s connection for the queue, when it is one.
-    pub(super) async fn open_server(&self, path: &VfsPath) -> Result<(), EngineError> {
+    pub(crate) async fn open_server(&self, path: &VfsPath) -> Result<(), EngineError> {
         if matches!(path.backend, BackendId::Sftp { .. } | BackendId::Ftp { .. }) {
             self.open_vfs(path, self.announces_locked_vault()).await?;
         }

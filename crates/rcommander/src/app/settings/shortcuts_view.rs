@@ -1,7 +1,7 @@
 //! Drawing the Shortcuts tab: the help line, the search, the table of keys - one stop of the
 //! focus ring -, the recording's prompt, the question before a key moves or the panel of "Add key
-//! for a theme..." (RC-100-55) or "Add key for a workspace..." (RC-100-68), and the tab's
-//! buttons.
+//! for a theme..." (RC-100-55), "Add key for a workspace..." (RC-100-68) or "Add key for an own
+//! command..." and "...for a Start menu entry..." (RC-100-86), and the tab's buttons.
 
 use iced::{
     Alignment, Element, Length,
@@ -12,9 +12,10 @@ use rc_engine::{KeyContext, KeymapRow};
 use super::{
     draft::Draft,
     shortcuts::{
-        Recording, Selected, ShortcutsMsg, ShortcutsPage, ThemeKeyMsg, ThemeOption,
-        WorkspaceKeyMsg, WorkspaceOption, keymap_of, label, lock_reason, page_message, row_of,
-        shown, theme_options, workspace_options,
+        CommandKeyKind, CommandKeyMsg, CommandOption, Recording, Selected, ShortcutsMsg,
+        ShortcutsPage, ThemeKeyMsg, ThemeOption, WorkspaceKeyMsg, WorkspaceOption, command_options,
+        command_panel, keymap_of, label, lock_reason, page_message, row_of, shown, theme_options,
+        workspace_options,
     },
     view::hint,
 };
@@ -23,8 +24,10 @@ use crate::{
         Message,
         palette::{
             themes::{self, ThemeRow},
+            user_commands,
             workspaces::{self, WorkspaceRow},
         },
+        user_commands::known,
     },
     i18n::t,
     theme::{self, Tokens, fit, focus, icon::Icon, layout},
@@ -32,6 +35,9 @@ use crate::{
 
 /// The columns' shares of the width: action, key, where it applies, the mark.
 const PORTIONS: [u16; 4] = [6, 3, 2, 2];
+
+/// The own commands and the Start menu's rows the window knows (RC-100-86).
+type Lists = (Vec<rc_engine::UserCommand>, Vec<rc_engine::StartItem>);
 
 pub fn view<'a>(
     page: &'a ShortcutsPage,
@@ -42,6 +48,8 @@ pub fn view<'a>(
     let rows = shown(&keymap, &page.search);
     let known = themes::known();
     let spaces = workspaces::rows();
+    // The own commands and the Start menu, for their keys' rows and panel (RC-100-86).
+    let lists = (known::commands(), known::start_menu());
     let find = t!("settings.shortcuts.find");
     let search = text_input(t!("settings.shortcuts.search"), &page.search)
         .on_input(|search| page_message(ShortcutsMsg::Search(search)))
@@ -71,7 +79,7 @@ pub fn view<'a>(
         // The rows are one stop of the ring; the tab moves the selection with the arrows.
         focus::choice(
             scrollable(Column::with_children(rows.iter().enumerate().map(
-                |(index, row)| key_row(page, row, index, (&known, &spaces), tokens),
+                |(index, row)| key_row(page, row, index, (&known, &spaces, &lists), tokens),
             )))
             .height(Length::Fill),
             "settings.shortcuts.keys",
@@ -114,7 +122,17 @@ pub fn view<'a>(
     if let Some(adding) = &page.adding_workspace {
         body = body.push(workspace_panel(adding.name.as_deref(), &spaces, tokens));
     }
-    let any = (!known.is_empty(), !spaces.is_empty());
+    if let Some(adding) = &page.adding_command {
+        let options: Vec<CommandOption> = command_options(adding.kind, &lists.0, &lists.1);
+        body = body.push(command_panel(adding, options, tokens));
+    }
+    let entries = command_options(CommandKeyKind::Start, &[], &lists.1);
+    let any = [
+        !known.is_empty(),
+        !spaces.is_empty(),
+        !lists.0.is_empty(),
+        !entries.is_empty(),
+    ];
     body.push(buttons(page, selected, any)).into()
 }
 
@@ -124,7 +142,7 @@ fn key_row<'a>(
     page: &ShortcutsPage,
     row: &KeymapRow,
     index: usize,
-    (known, spaces): (&[ThemeRow], &[WorkspaceRow]),
+    (known, spaces, lists): (&[ThemeRow], &[WorkspaceRow], &Lists),
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let this = Selected {
@@ -147,16 +165,20 @@ fn key_row<'a>(
     let gone = themes::missing(&row.name, known);
     // A workspace key whose workspace was deleted since (RC-100-68).
     let gone_workspace = workspaces::missing(&row.name, spaces);
+    // An own command's or a Start menu entry's key whose command or entry is gone (RC-100-86).
+    let gone_command = user_commands::missing(&row.name, &lists.0, &lists.1);
     let mark = match (row.locked, row.changed) {
         (Some(_), _) => t!("settings.shortcuts.locked"),
         (None, _) if gone => t!("settings.shortcuts.theme_missing"),
         (None, _) if gone_workspace => t!("settings.shortcuts.workspace_missing"),
+        (None, _) if gone_command => t!("settings.shortcuts.user_command_missing"),
         (None, true) => t!("settings.shortcuts.changed"),
         (None, false) => "",
     };
     let mark_cell = fit::cell(mark, mark_share, row.locked.is_some(), tokens);
     let words = themes::label_in(&row.name, known)
         .or_else(|| workspaces::label_in(&row.name, spaces))
+        .or_else(|| user_commands::label_in(&row.name, &lists.0, &lists.1))
         .unwrap_or_else(|| label(&row.name));
     let cells = vec![
         fit::cell(words, action, false, tokens),
@@ -285,18 +307,22 @@ fn workspace_panel<'a>(
 }
 
 /// The selected row's buttons, then "Add key for a theme..." while there are themes, "Add key for
-/// a workspace..." while there are workspaces, and "Reset all"; they wait while a key is
-/// recorded, the question or a panel is open. A row the window keeps gets no other key and keeps
-/// its own.
+/// a workspace..." while there are workspaces, "Add key for an own command..." and "...for a Start
+/// menu entry..." while there are such, and "Reset all"; they wait while a key is recorded, the
+/// question or a panel is open. A row the window keeps gets no other key and keeps its own.
 fn buttons<'a>(
     page: &ShortcutsPage,
     selected: Option<&KeymapRow>,
-    (any_theme, any_workspace): (bool, bool),
+    [any_theme, any_workspace, any_command, any_entry]: [bool; 4],
 ) -> Element<'a, Message> {
     let idle = page.recording.is_none()
         && page.asking.is_none()
         && page.adding.is_none()
-        && page.adding_workspace.is_none();
+        && page.adding_workspace.is_none()
+        && page.adding_command.is_none();
+    let add_command = |any: bool, kind| {
+        (idle && any).then(|| page_message(ShortcutsMsg::Command(CommandKeyMsg::Open(kind))))
+    };
     let row_of_action = selected.filter(|row| idle && row.command.is_some());
     let free = row_of_action.filter(|row| row.locked.is_none());
     let on = |row: Option<&KeymapRow>, message: ShortcutsMsg| row.map(|_| page_message(message));
@@ -335,6 +361,17 @@ fn buttons<'a>(
             layout::secondary_button(
                 t!("settings.shortcuts.reset_all"),
                 idle.then(|| page_message(ShortcutsMsg::ResetAll)),
+            ),
+        ]
+        .spacing(layout::BUTTON_SPACING),
+        row![
+            layout::secondary_button(
+                t!("settings.shortcuts.add_user_command"),
+                add_command(any_command, CommandKeyKind::Own),
+            ),
+            layout::secondary_button(
+                t!("settings.shortcuts.add_start_item"),
+                add_command(any_entry, CommandKeyKind::Start),
             ),
         ]
         .spacing(layout::BUTTON_SPACING),

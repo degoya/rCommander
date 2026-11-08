@@ -6,17 +6,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use rc_remote::{
-    SshError, SshSession,
-    ssh::{SessionOptions, SshTarget},
-};
+use rc_remote::{SshError, SshSession};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     ConnectionId, ConnectionKind, Engine, EngineError, EngineEvent, Inner, Outcome,
     sessions::{
-        ChannelLease, EngineCredentials, EngineGate, Live, SessionChange, SessionChannel,
-        SessionPrefs, SessionStatus, SessionTestReport,
+        ChannelLease, Live, SessionChange, SessionChannel, SessionPrefs, SessionStatus,
+        SessionTestReport,
     },
     settings::{AGENT_MAX_KEYS_KEY, stored_setting},
 };
@@ -51,10 +48,14 @@ impl Engine {
             self.db()?.connection(id).await?;
         }
         let (connecting, live) = self.inner.sessions.slot(id).close();
+        // Its port forwards end with it, without a question (RC-110-03).
+        self.stop_forwards(Some(id));
         if let Some(live) = &live {
             live.session.disconnect().await;
         }
         let ftp = self.forget_remote(id).await;
+        // What a PAM system lent the connection goes back (RC-100-38).
+        self.return_leases(id).await;
         if ftp {
             self.publish(EngineEvent::Session {
                 connection: id,
@@ -98,14 +99,23 @@ impl Engine {
         let slot = self.inner.sessions.slot(id);
         let (cancel, _setup) = slot.begin_setup();
         let started = Instant::now();
-        let session = self.open_session(id, announce, &cancel).await?;
+        let (session, hops) = match Box::pin(self.open_session(id, announce, &cancel)).await {
+            Ok(opened) => opened,
+            Err(error) => {
+                self.return_unused_leases(id).await;
+                return Err(error);
+            }
+        };
         let report = SessionTestReport {
             connection_id: id,
             login: session.auth().clone(),
             host_key: session.host_key().clone(),
             duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            hops,
         };
         session.disconnect().await;
+        // A lease the test took goes back, unless the pooled session uses it (RC-100-38).
+        self.return_unused_leases(id).await;
         Ok(report)
     }
 
@@ -172,7 +182,10 @@ impl Engine {
     }
 
     /// The connection's settings, the defaults where none are stored.
-    async fn session_prefs(&self, id: ConnectionId) -> Result<SessionPrefs, EngineError> {
+    pub(super) async fn session_prefs(
+        &self,
+        id: ConnectionId,
+    ) -> Result<SessionPrefs, EngineError> {
         Ok(self
             .db()?
             .session_prefs(id)
@@ -195,14 +208,24 @@ impl Engine {
             return Ok(live);
         }
         let (cancel, setup) = slot.begin_setup();
-        let session = self.open_session(id, announce, &cancel).await?;
+        let (session, hops) = match Box::pin(self.open_session(id, announce, &cancel)).await {
+            Ok(opened) => opened,
+            Err(error) => {
+                // A login that failed gives back what a PAM system lent it (RC-100-38).
+                drop(setup);
+                self.return_unused_leases(id).await;
+                return Err(error);
+            }
+        };
         if cancel.is_cancelled() {
             // Closed while the last step finished: it does not go into the pool.
             session.disconnect().await;
+            drop(setup);
+            self.return_unused_leases(id).await;
             return Err(EngineError::Cancelled);
         }
         let idle_close_secs = self.session_prefs(id).await?.idle_close_secs;
-        let live = Arc::new(Live::new(session, idle_close_secs));
+        let live = Arc::new(Live::new(session, idle_close_secs, hops));
         slot.set_live(Arc::clone(&live));
         drop(setup);
         tokio::spawn(watch(Arc::downgrade(&self.inner), id, Arc::clone(&live)));
@@ -210,50 +233,34 @@ impl Engine {
             connection: id,
             change: SessionChange::Connected,
         });
+        // The forwards a person marked to start with the session; an agent's connect starts
+        // none (`forwards.start` is a person's, RC-110-03).
+        if announce {
+            self.auto_start_forwards(id).await;
+        }
         Ok(live)
     }
 
-    /// A new session for the connection `id`, outside the pool.
+    /// A new session for the connection `id`, outside the pool, and the names of the jump hosts
+    /// it runs through.
     async fn open_session(
         &self,
         id: ConnectionId,
         announce: bool,
         cancel: &CancellationToken,
-    ) -> Result<SshSession, EngineError> {
+    ) -> Result<(SshSession, Vec<String>), EngineError> {
         if let Some(quick) = self.quick_for_call(id)? {
-            return self.open_quick_session(quick, cancel).await;
+            let session = self.open_quick_session(quick, cancel).await?;
+            return Ok((session, Vec::new()));
         }
         let connection = self.login_connection(id).await?;
         if connection.kind != ConnectionKind::Ssh {
             return Err(EngineError::ConnectionNotSsh { id });
         }
-        let prefs = self.session_prefs(id).await?;
-        let target = SshTarget {
-            host: connection.host,
-            port: connection.port,
-            user: connection.username.unwrap_or_default(),
-        };
-        let totp_prompt = prefs.totp_pattern();
-        let options = SessionOptions {
-            keepalive: Duration::from_secs(u64::from(prefs.keepalive_secs)),
-            auth_order: prefs.auth_order,
-            agents: self.agent_sources().await?,
-            agent_fingerprint: prefs.agent_fingerprint,
-            own_key: connection.key.as_ref().map(|key| key.fingerprint.clone()),
-            max_agent_keys: self.agent_max_keys().await,
-            totp_prompt,
-            ..SessionOptions::default()
-        };
-        let gate = Arc::new(EngineGate {
-            engine: self.clone(),
-        });
-        let credentials = EngineCredentials {
-            engine: self.clone(),
-            connection: id,
-            key_path: connection.key_path,
-            announce,
-        };
-        Ok(SshSession::connect(&target, &options, gate, &credentials, cancel).await?)
+        // Directly, or through its jump hosts (RC-110-03, `sessions_chain.rs`).
+        // Boxed: the chain's handshakes make a large future, and an SFTP copy awaits it deep
+        // inside a worker's stack (the canary sweep overflowed it unboxed).
+        Box::pin(self.open_chain(connection, announce, cancel)).await
     }
 }
 
@@ -296,10 +303,14 @@ async fn watch(inner: Weak<Inner>, id: ConnectionId, live: Arc<Live>) {
     };
     let engine = Engine { inner };
     engine.inner.sessions.slot(id).forget(&live);
+    // Closed, idle or lost: what a PAM system lent it goes back, unless a new session of the
+    // connection is up already (RC-100-38).
+    engine.return_unused_leases(id).await;
     let change = if live.closing.load(Ordering::SeqCst) {
         SessionChange::Closed
     } else {
         tracing::warn!(connection = %id, "SSH connection lost");
+        engine.forwards_after_loss(id).await;
         SessionChange::Lost
     };
     engine.publish(EngineEvent::Session {

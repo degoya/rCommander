@@ -5,6 +5,8 @@ macro_rules! arms {
     ($next:ident, $state:tt, $self:ident, { $($done:tt)* }) => {
         $next! { $state, $self, { $($done)*
             Command::CompareFiles(request) => $self.compare_files(request).await,
+            Command::ApplyBlocks(request) => $self.apply_blocks(request).await,
+            Command::CompareByContent(request) => $self.compare_by_content(request).await,
             Command::CompareDirs(request) => $self.compare_dirs(request).await,
             Command::OpenDiff {} => $self.open_diff(),
             Command::SelectDifferences { by_content } => $self.select_differences(by_content).await,

@@ -1,12 +1,12 @@
 use std::fs;
 
-use rc_engine::{CommandClass, Engine, PanelId, spec};
+use rc_engine::{CommandClass, Engine, ListMode, PanelId, spec};
 use rmcp::{handler::server::wrapper::Parameters, model::CallToolResult};
 use serde_json::Value;
 
 use super::{
     MaskParams, ModeArg, OpenParams, SelectAction, SelectParams, SetViewParams, ShowHiddenParams,
-    SortKeyArg, SortParams,
+    ShowTreeParams, SortKeyArg, SortParams,
 };
 use crate::test_support::{Fixture, hidden_file};
 use crate::{RcMcpServer, coverage::command_of};
@@ -128,12 +128,27 @@ async fn sort_view_and_hidden_change_the_panel() {
         &server
             .panel_set_view(Parameters(SetViewParams {
                 mode: ModeArg::Brief,
+                set: None,
                 panel: None,
             }))
             .await
             .expect("answer"),
     );
     assert_eq!(brief["mode"], "brief");
+
+    // The thumbnails (RC-100-89): the same entries, in the window's grid.
+    let thumbnails = body(
+        &server
+            .panel_set_view(Parameters(SetViewParams {
+                mode: ModeArg::Thumbnails,
+                set: None,
+                panel: None,
+            }))
+            .await
+            .expect("answer"),
+    );
+    assert_eq!(thumbnails["mode"], "thumbnails");
+    assert_eq!(engine.panel(PanelId::Left).mode, ListMode::Thumbnails);
 
     let shown = body(
         &server
@@ -145,6 +160,35 @@ async fn sort_view_and_hidden_change_the_panel() {
         (shown["show_hidden"].clone(), shown["entry_count"].clone()),
         (Value::Bool(true), Value::from(4))
     );
+}
+
+/// Ctrl+F8 through MCP (RC-100-88): the tree in the panel's place and back; the folder stays.
+#[tokio::test]
+async fn panel_show_tree_switches_between_the_tree_and_the_files() {
+    let (root, server, _engine) = server().await;
+    let show = |show| {
+        Parameters(ShowTreeParams {
+            show,
+            panel: Some(super::super::panels::PanelArg::Right),
+        })
+    };
+    let tree = body(&server.panel_show_tree(show(None)).await.expect("answer"));
+    assert_eq!(
+        (tree["view"].clone(), tree["panel"].clone()),
+        ("tree".into(), "right".into())
+    );
+    assert_eq!(
+        tree["path"]["path"],
+        root.path().to_string_lossy().as_ref(),
+        "the panel keeps its folder"
+    );
+    let files = body(
+        &server
+            .panel_show_tree(show(Some(false)))
+            .await
+            .expect("answer"),
+    );
+    assert_eq!(files["view"], "files");
 }
 
 /// A directory only: a file would really be handed to the system here.
@@ -182,7 +226,59 @@ fn file_open_runs_something_and_the_rest_only_reads() {
         "panel_sort",
         "panel_set_view",
         "panel_show_hidden",
+        "panel_show_tree",
     ] {
         assert_eq!(class(tool), CommandClass::Read, "{tool}");
     }
+}
+
+/// RC-100-91: `file_open` follows the internal associations as Enter does; a file whose rule
+/// starts as administrator or asks for its parameters is the person's to open - denied here.
+/// The rules themselves are read with `settings_get` and never set over MCP.
+#[tokio::test]
+async fn file_open_with_an_elevated_rule_is_the_persons() {
+    use rc_engine::{
+        CommandRef, FileAssociation, associations::write_rules, settings::FILE_ASSOCIATIONS_KEY,
+    };
+    use serde_json::json;
+
+    use crate::test_support::call;
+
+    let fixture = Fixture::new();
+    fs::write(fixture.root().join("run.md"), b"x").expect("write");
+    let built = fixture.build().await;
+    let rule = |elevated: bool, params: &str| FileAssociation {
+        mask: "*.md".into(),
+        open: Some(CommandRef {
+            command: "md-viewer.exe".into(),
+            params: params.into(),
+            elevated,
+            ..CommandRef::default()
+        }),
+        ..FileAssociation::default()
+    };
+    let client = built.client().await;
+    for stored in [rule(true, "%1"), rule(false, "?%1")] {
+        built
+            .engine
+            .set_protected_setting(FILE_ASSOCIATIONS_KEY, &json!(write_rules(&[stored])))
+            .await
+            .expect("the window stores");
+        let denied = call(&client, "file_open", json!({ "path": "run.md" })).await;
+        assert_eq!(denied["code"], "policy_denied", "{denied}");
+    }
+    let read = call(
+        &client,
+        "settings_get",
+        json!({ "key": FILE_ASSOCIATIONS_KEY }),
+    )
+    .await;
+    assert!(read.to_string().contains("md-viewer.exe"), "{read}");
+    let refused = call(
+        &client,
+        "settings_set",
+        json!({ "key": FILE_ASSOCIATIONS_KEY, "value": "" }),
+    )
+    .await;
+    assert_eq!(refused["code"], "setting_protected", "{refused}");
 }

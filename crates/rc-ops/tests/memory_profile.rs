@@ -36,6 +36,7 @@ fn entry(name: &str, kind: EntryKind, size: u64) -> Entry {
         size,
         modified: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_600_000_000)),
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,

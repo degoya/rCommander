@@ -36,6 +36,18 @@ pub enum PopupAction {
     /// Show a terminal session (the list of sessions).
     ShowTerminal(TermId),
     CloseTerminal(TermId),
+    /// Show the panel in this view: full, brief, a column set, the comments (RC-100-90).
+    View(rc_engine::ListMode),
+    /// Open the Columns tab of the settings.
+    ConfigureColumns,
+    /// Show one of the most visited folders by its index (RC-100-92).
+    OpenFrequent(usize),
+    /// Ask for a tab's own name (RC-100-92).
+    RenameTab(TabId),
+    /// Close every tab of the panel but the shown one (RC-100-92), asking first.
+    CloseAllTabs,
+    /// Close them now, the locked ones too with `true`.
+    CloseAllNow(bool),
 }
 
 /// One row of a popup.
@@ -76,7 +88,7 @@ pub enum PopupKey {
     MoveTab(TabId, usize),
 }
 
-fn row(label: String, depth: usize, action: Option<PopupAction>) -> PopupRow {
+pub(super) fn row(label: String, depth: usize, action: Option<PopupAction>) -> PopupRow {
     PopupRow {
         label,
         detail: String::new(),
@@ -169,6 +181,17 @@ impl Popup {
                 "tabs.close",
                 PopupAction::CloseTab(tab),
             ),
+            // RC-100-92: Total Commander's "Rename tab..." and "Close all tabs".
+            (
+                t!("tabs.menu_rename"),
+                "tabs.rename",
+                PopupAction::RenameTab(tab),
+            ),
+            (
+                t!("tabs.menu_close_all"),
+                "tabs.close_all",
+                PopupAction::CloseAllTabs,
+            ),
         ];
         let rows = entries
             .into_iter()
@@ -181,6 +204,29 @@ impl Popup {
             panel,
             rows,
             cursor: 0,
+        }
+    }
+
+    /// The question of "Close all tabs" (RC-100-92): keep the locked tabs, or close them too;
+    /// Escape keeps every tab.
+    pub fn close_all(panel: PanelId) -> Self {
+        let rows = vec![
+            row(t!("tabs.close_all_question").to_owned(), 0, None),
+            row(
+                t!("tabs.close_all_keep_locked").to_owned(),
+                0,
+                Some(PopupAction::CloseAllNow(false)),
+            ),
+            row(
+                t!("tabs.close_all_with_locked").to_owned(),
+                0,
+                Some(PopupAction::CloseAllNow(true)),
+            ),
+        ];
+        Self {
+            panel,
+            rows,
+            cursor: 1,
         }
     }
 

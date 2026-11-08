@@ -9,6 +9,7 @@
 //! ([`PropsJob`]) and shows its outcome. Closing a dialog drops its running job - a size count
 //! stops there. While a dialog is open it has the keys: Enter confirms, Escape closes.
 
+mod exif;
 mod form;
 mod view;
 

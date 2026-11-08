@@ -101,6 +101,7 @@ fn the_fetch_copies_the_names_into_the_folder() {
             sources: names(&["a.txt"]),
             target: Some(Path::new("/tmp/x/1").display().to_string()),
             options: JobOptions::default(),
+            rename_mask: None,
         })
     );
 }

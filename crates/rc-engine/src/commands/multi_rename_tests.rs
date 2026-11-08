@@ -456,6 +456,7 @@ async fn the_test_list_masks_preview_apply_and_undo() {
             step: 5,
             width: 3,
         },
+        names: None,
     };
     let wanted = [
         "010-each_20240506.jpg",

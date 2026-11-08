@@ -178,3 +178,15 @@ async fn a_reader_gone_before_its_entry_stops_the_unpacking() {
         .expect("the producer stops")
         .expect("join");
 }
+
+/// RC-110-05: closing the sessions lets the parked producer go, so the archive file is no longer
+/// held open; the next read starts a producer of its own.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn closing_the_sessions_lets_the_parked_producer_go() {
+    let fs = open("tree.zip").await;
+    assert_eq!(read(&fs, "/hello.txt").await, b"hello archive\n");
+    assert!(parked(&fs).await.is_some());
+    fs.close_sessions();
+    assert!(lock(&fs.sessions.slot).is_none());
+    assert_eq!(read(&fs, "/hello.txt").await, b"hello archive\n");
+}

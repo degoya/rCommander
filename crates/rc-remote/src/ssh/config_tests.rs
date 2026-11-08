@@ -30,10 +30,23 @@ fn an_empty_unknown_or_repeated_order_is_refused() {
 fn the_method_used_serializes_without_a_secret() {
     let used = AuthUsed::Key {
         fingerprint: "SHA256:abc".to_owned(),
+        certificate: None,
     };
     assert_eq!(
         serde_json::to_value(&used).expect("serializes"),
         serde_json::json!({"method": "key", "fingerprint": "SHA256:abc"})
+    );
+    let certified = AuthUsed::Key {
+        fingerprint: "SHA256:abc".to_owned(),
+        certificate: Some("rc-test-valid".to_owned()),
+    };
+    assert_eq!(
+        serde_json::to_value(&certified).expect("serializes"),
+        serde_json::json!({
+            "method": "key",
+            "fingerprint": "SHA256:abc",
+            "certificate": "rc-test-valid",
+        })
     );
     assert_eq!(
         AuthUsed::KeyboardInteractive.label(),

@@ -11,6 +11,17 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.21.0
+
+- Your own commands, a Start menu and button bars as in Total Commander: import .bar files, drop files on a button, run as administrator; bar buttons show icons with tooltips, and your own commands take a symbol of their own or one from a built-in collection.
+- File lists gain a folder tree, thumbnails, git status, your own column sets and quick file filters, and they refresh by themselves when a folder changes; the path bar and cd understand folder variables such as %LOCALAPPDATA%, and old locked folders such as "Application Data" open the folder they point to.
+- Internal associations open files by type with programs you choose (Alt+F3 uses the other viewer, Shift+F3 shows only the file under the cursor); find files searches inside archives and through Everything, and new tools find duplicate files and show what fills a disk.
+- Files on SFTP and FTP servers open for editing through a local copy whose saves go back up; SSH connections can go through jump hosts, forward ports and log in with OpenSSH user certificates.
+- Archives can be changed in place; copy and move take rename masks such as *.bak, multi-rename learned more of Total Commander's, and a portable mode keeps all data beside the program.
+- New viewers show Office documents, the text of PDFs, the details of pictures, audio and video, and certificates and keys with their expiry, their chain and whether a key belongs to its certificate, without ever showing a private key; to-do lists (.todo) show in colour with their dates, and so do .env, .npmrc and other files holding credentials, without any plugin seeing them.
+- In the viewer, Ctrl+A selects and Ctrl+C copies the whole text, not just the page you see; code in the Markdown preview shows in a monospaced font and, for common languages, in colour; the compare window can edit and hand off to another tool.
+- The Themes settings show where each theme is used, and a right click on a theme uses it for the light or dark mode or a WSL distribution.
+
 ## 0.20.0
 
 - Install and restart now downloads the update first when needed, so there is no separate Download step any more.

@@ -38,6 +38,13 @@ macro_rules! arms {
                 $self.set_comment(panel, path.as_deref(), comment.as_deref())
                     .await
             }
+            Command::DiskUsage {
+                panel,
+                path,
+                depth,
+                limit,
+            } => $self.disk_usage(panel, path.as_deref(), depth, limit).await,
+            Command::DiskUsageDialog { panel } => Ok($self.disk_usage_dialog(panel)),
             Command::CancelDirSizes { panel } => Ok($self.cancel_dir_sizes(panel)),
             Command::CountDirContent { panel } => Ok($self.count_dir_content(panel)),
             Command::SelectAndSize { panel } => Ok($self.select_and_size(panel).await),

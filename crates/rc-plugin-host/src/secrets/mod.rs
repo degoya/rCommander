@@ -6,6 +6,11 @@
 //! store per call. A store lives for one call, so a source keeps nothing between them. The value
 //! `get` answers leaves this module only as a [`SecretString`]; who it goes to and that it is
 //! scrubbed from every answer afterwards is the engine's (RC-100-34).
+//!
+//! A PAM system (`[secrets] checkout = true`, contract 0.5.0; RC-100-38) lends its secret instead:
+//! [`SecretsPlugin::checkout`] answers a [`Lease`], its value as secret as `get`'s, and
+//! [`SecretsPlugin::checkin`] gives it back. A source whose manifest does not say so, or a
+//! component of an earlier contract, is asked neither (`not-supported`, `plugin_invalid`).
 
 use std::{
     future::Future,
@@ -33,8 +38,8 @@ mod validate;
 
 use guest::{SecretsGuest, SecretsIndices};
 pub use validate::{
-    MAX_ENTRY_ID_CHARS, MAX_ENTRY_TEXT_CHARS, MAX_ENTRY_TITLE_CHARS, MAX_QUERY_CHARS,
-    MAX_SEARCH_ENTRIES, MAX_SECRET_BYTES,
+    Lease, MAX_ENTRY_ID_CHARS, MAX_ENTRY_TEXT_CHARS, MAX_ENTRY_TITLE_CHARS, MAX_QUERY_CHARS,
+    MAX_REASON_CHARS, MAX_SEARCH_ENTRIES, MAX_SECRET_BYTES,
 };
 
 /// What the settings decide about a secret source's calls, and where its records and its health
@@ -64,6 +69,8 @@ struct Shared {
     http: Option<HttpGrant>,
     log: Arc<ExecutionLog>,
     health: Arc<PluginHealth>,
+    /// `[secrets] checkout = true`: a PAM system, asked to lend rather than to get.
+    lends: bool,
 }
 
 impl SecretsPlugin {
@@ -104,6 +111,11 @@ impl SecretsPlugin {
             tracing::debug!("a component is not a secret source of its manifest's contract");
             invalid()
         })?;
+        let lends = manifest.lends_secrets();
+        if lends && !indices.lends() {
+            tracing::debug!("a lending source's component exports no checkout");
+            return Err(invalid());
+        }
         let http = net_http(manifest)
             .map_err(|_| invalid())?
             // A port no plugin reaches is refused here, once: no grant, so `http` stays linked
@@ -132,8 +144,16 @@ impl SecretsPlugin {
                 http,
                 log: options.log,
                 health: options.health,
+                lends,
             }),
         })
+    }
+
+    /// Whether the source lends its secret for a session (`[secrets] checkout = true`): the
+    /// engine asks [`Self::checkout`] then, never [`Self::get`].
+    #[must_use]
+    pub fn lends(&self) -> bool {
+        self.shared.lends
     }
 
     #[must_use]
@@ -204,6 +224,54 @@ impl SecretsPlugin {
         .await
     }
 
+    /// Lends the secret `field` of entry `id` for a session, with the person's `reason` when the
+    /// system asked for one (`rc_plugin_api::secrets::REASON_REQUIRED`).
+    pub async fn checkout(
+        &self,
+        id: &str,
+        field: SecretField,
+        reason: Option<&str>,
+    ) -> Result<Lease, Failure> {
+        if !self.shared.lends {
+            return Err(Failure::new(FailureKind::NotSupported));
+        }
+        if !validate::entry_id(id) || reason.is_some_and(|reason| !validate::reason(reason)) {
+            return Err(failure::coded(
+                FailureKind::BadData,
+                codes::PLUGIN_REQUEST_TOO_LARGE,
+            ));
+        }
+        self.recorded("checkout", async {
+            let (mut store, guest) = self.enter("checkout").await?;
+            let ended = bounded(
+                self.wall_clock(),
+                guest.call_checkout(&mut store, id, validate::field(field), reason),
+            )
+            .await;
+            validate::lease(settle(ended, false, &mut false)?)
+        })
+        .await
+    }
+
+    /// Gives the lease `lease_id` back, one [`Self::checkout`] handed out.
+    pub async fn checkin(&self, lease_id: &str) -> Result<(), Failure> {
+        if !self.shared.lends {
+            return Err(Failure::new(FailureKind::NotSupported));
+        }
+        if !validate::entry_id(lease_id) {
+            return Err(failure::coded(
+                FailureKind::BadData,
+                codes::PLUGIN_REQUEST_TOO_LARGE,
+            ));
+        }
+        self.recorded("checkin", async {
+            let (mut store, guest) = self.enter("checkin").await?;
+            let ended = bounded(self.wall_clock(), guest.call_checkin(&mut store, lease_id)).await;
+            settle(ended, false, &mut false)
+        })
+        .await
+    }
+
     /// The longest the caller waits for one call.
     fn wall_clock(&self) -> Duration {
         self.shared.sandbox.timeout() * WALL_CLOCK_FACTOR
@@ -269,3 +337,7 @@ impl SecretsPlugin {
 #[cfg(test)]
 #[path = "secrets_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "checkout_tests.rs"]
+mod checkout_tests;

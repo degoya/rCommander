@@ -55,6 +55,7 @@ fn names_keep_their_folders_with_slashes_or_only_the_file_name() {
             size: 1,
             modified: None,
             created: None,
+            accessed: None,
             attributes: rc_vfs::Attributes::default(),
             hidden: false,
             owner: None,

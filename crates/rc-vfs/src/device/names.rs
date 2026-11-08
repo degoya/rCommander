@@ -41,6 +41,7 @@ pub(super) fn entry(object: &Object) -> Entry {
         size: if object.folder { 0 } else { object.size },
         modified: object.modified,
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: object.name.starts_with('.'),
         owner: None,

@@ -46,7 +46,9 @@ pub use error::{
     FTP_TLS_FAILED, FTP_TLS_REFUSED, FTP_TOO_MANY_SESSIONS, FtpError, UNSUPPORTED_COMMANDS,
     unsupported_code,
 };
-pub use tls::{CertificateRejection, CertificateTrust, RefuseUnknown, TrustDecision, fingerprint};
+pub use tls::{
+    CertificateRejection, CertificateTrust, HttpsTls, RefuseUnknown, TrustDecision, fingerprint,
+};
 pub use trust::{
     CertificateInfo, CertificateVerdict, PinnedCertificates, certificate_verdict,
     describe_certificate, unix_now,

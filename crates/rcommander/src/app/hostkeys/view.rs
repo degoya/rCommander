@@ -154,9 +154,20 @@ fn fingerprints<'a>(shown: &'a Shown, tokens: &'static Tokens) -> Element<'a, Me
         .into()
 }
 
-/// `host:port` of the question.
+/// `host:port` of the question; for a hop of a chain of jump hosts also which one, "hop 1 of 3:
+/// bastion" (RC-110-03).
 fn server(shown: &Shown) -> String {
-    format!("{}:{}", shown.question.host, shown.question.port)
+    let server = format!("{}:{}", shown.question.host, shown.question.port);
+    match &shown.question.hop {
+        Some(hop) => t!(
+            "hostkeys.hop",
+            server = server,
+            index = hop.index,
+            total = hop.total,
+            name = hop.name
+        ),
+        None => server,
+    }
 }
 
 /// One labelled fact, the value broken anywhere.

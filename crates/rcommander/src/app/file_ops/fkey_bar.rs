@@ -54,7 +54,7 @@ impl App {
 pub fn label_of(command: &Command) -> &'static str {
     match command {
         Command::OpenExternal {
-            program: ExternalProgram::Viewer,
+            program: ExternalProgram::Viewer | ExternalProgram::AltViewer,
             ..
         } => t!("fkey.view"),
         Command::OpenExternal {
@@ -76,6 +76,8 @@ pub fn label_of(command: &Command) -> &'static str {
             SortKey::Ext => t!("fkey.sort_ext"),
             SortKey::Date => t!("fkey.sort_date"),
             SortKey::Size => t!("fkey.sort_size"),
+            // Bound to no function key by default (RC-100-90).
+            SortKey::Created | SortKey::Accessed | SortKey::Comment => "",
         },
         Command::SelectDifferences { .. } => t!("fkey.compare_dirs"),
         _ => "",

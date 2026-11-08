@@ -5,7 +5,8 @@
 //!
 //! - Every literal name on a `Host` line is one candidate; a name with a wildcard (`*`, `?`) or
 //!   a negation (`!`) is skipped with its reason, and its options are no defaults for others.
-//! - Of the options only `HostName`, `User`, `Port`, `IdentityFile` and `ProxyJump` are taken;
+//! - Of the options only `HostName`, `User`, `Port`, `IdentityFile`, `ProxyJump` and
+//!   `LocalForward` (RC-110-03, every line up to `rc_db::connections::MAX_FORWARDS`) are taken;
 //!   every other keyword is listed on the candidate as not imported. The first value wins, as in
 //!   OpenSSH, also across several `Host` blocks naming the same alias (in any case).
 //! - `Match` blocks are skipped up to the next `Host` or `Match` line.
@@ -27,6 +28,7 @@
 //!   `guard`).
 
 mod expand;
+mod forward;
 mod guard;
 mod include;
 mod lex;
@@ -39,6 +41,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use expand::{expand_tilde, expand_tokens, has_wildcard};
+pub use forward::LocalForwardSpec;
 pub use guard::{LoadError, holds_key, is_key_file};
 pub use scope::MAX_FILE_BYTES;
 pub(crate) use scope::McpScope;
@@ -136,6 +139,8 @@ struct Draft {
     identity_files: Vec<Located>,
     /// `Some(None)` for `ProxyJump none`, which also takes the first-value slot.
     proxy_jump: Option<Option<String>>,
+    /// Every `LocalForward` line, in order (RC-110-03).
+    local_forwards: Vec<LocalForwardSpec>,
     ignored_options: Vec<String>,
     source: SourceLine,
 }
@@ -296,6 +301,7 @@ impl<'a> Reader<'a> {
             port: None,
             identity_files: Vec::new(),
             proxy_jump: None,
+            local_forwards: Vec::new(),
             ignored_options: Vec::new(),
             source: source.clone(),
         });
@@ -358,6 +364,7 @@ impl<'a> Reader<'a> {
             port: draft.port,
             identity_files,
             proxy_jump,
+            local_forwards: draft.local_forwards,
             ignored_options: draft.ignored_options,
             source: draft.source,
         }

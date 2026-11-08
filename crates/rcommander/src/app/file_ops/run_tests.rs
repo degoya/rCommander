@@ -84,6 +84,7 @@ async fn a_batch_over_at_once_reads_the_panels_again_once() {
         follow: FollowUp::Refresh,
         background: false,
         result: Ok(snapshots),
+        detail: None,
         refused: None,
     };
     let over: Vec<JobSnapshot> = (1..=50)

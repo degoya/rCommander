@@ -78,12 +78,19 @@ pub enum DocView {
     Markdown,
     Image,
     Tree,
+    /// A photo's EXIF beside the built-in image view (RC-100-99): a tree, named as what it shows.
+    Exif,
 }
 
 impl DocView {
     /// Whether the view shows the document's text: plain, coloured or as Markdown.
     pub fn is_text(self) -> bool {
         matches!(self, Self::Text | Self::Highlighted | Self::Markdown)
+    }
+
+    /// Whether the view is a tree: a plugin's, or a photo's EXIF.
+    pub fn is_tree(self) -> bool {
+        matches!(self, Self::Tree | Self::Exif)
     }
 }
 
@@ -95,6 +102,7 @@ impl fmt::Display for DocView {
             Self::Markdown => t!("viewer.view_markdown"),
             Self::Image => t!("viewer.view_image"),
             Self::Tree => t!("viewer.view_tree"),
+            Self::Exif => t!("viewer.view_exif"),
         })
     }
 }
@@ -148,6 +156,9 @@ pub struct Document {
     source: Arc<dyn DocumentSource>,
     serial: u64,
     text: TextFile,
+    /// The picture is the Lister's file, shown by the built-in image view: a photo's EXIF
+    /// document (RC-100-99).
+    file_picture: bool,
     /// `plugins.viewer_token_colors`, as the window last read it.
     pub colors: bool,
     pub spans: Spans,
@@ -173,6 +184,7 @@ impl Document {
             source,
             serial: NEXT_SERIAL.fetch_add(1, Ordering::Relaxed),
             text: TextFile::Shown,
+            file_picture: false,
             colors: true,
             spans: Spans::default(),
             tree: Tree::default(),
@@ -202,6 +214,19 @@ impl Document {
     pub fn text_later(mut self) -> Self {
         self.text = TextFile::Later;
         self
+    }
+
+    /// The same document, its picture the Lister's file: the built-in image view shows it, and
+    /// the source is never asked for one (RC-100-99).
+    #[must_use]
+    pub fn with_file_picture(mut self) -> Self {
+        self.file_picture = true;
+        self
+    }
+
+    /// Whether the picture is the Lister's file rather than the source's.
+    pub fn file_picture(&self) -> bool {
+        self.file_picture
     }
 
     /// Where the text stands against the Lister's file.

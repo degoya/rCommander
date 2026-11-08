@@ -57,6 +57,7 @@ impl Engine {
             panel: id,
             entries,
             current,
+            frequent: self.frequent(),
         }
     }
 

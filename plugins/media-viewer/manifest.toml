@@ -1,0 +1,49 @@
+# rCommander's bundled media viewer (RC-100-99). The fields every bundled plugin shares are in
+# plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code and a setting's label start with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+# Contract 0.2.0 and later: `settings`, through which `open` reads `cover`.
+api_version = "0.6.0"
+id = "01a1b720-fdcc-7b78-bca0-da328630ad19"
+name = "Media viewer"
+version = "0.1.0"
+
+[match]
+# Audio (lofty), video (our own ISO base media and Matroska readers) and the photos whose EXIF
+# the built-in image view does not show (TIFF, camera raw, HEIF). `probe` checks that the bytes
+# are the format the extension names, so no magic here; and no `max_size`: a film is many GiB,
+# and the viewer reads only the boxes, elements and tags it needs (src/lib.rs).
+extensions = [
+    "mp3", "flac", "ogg", "opus", "m4a", "wav", "aiff", "aif", "ape", "wv", "aac",
+    "mp4", "m4v", "mov", "3gp", "mkv", "webm",
+    "tif", "tiff", "dng", "cr2", "nef", "arw", "heic", "heif",
+]
+magic = []
+
+[viewer]
+# The facts as a tree first, the same facts as text, and the embedded cover as a picture when
+# there is one and the setting `cover` is `on`.
+outputs = ["tree", "text", "image"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else.
+[capabilities]
+
+[metadata]
+description = "Shows the duration, codecs, tracks and tags of audio and video files, their cover, and the EXIF of TIFF, raw and HEIC photos."
+
+# The default 64 MiB of memory: every reader fetches a bounded number of bytes (lofty 32 MiB,
+# the video readers 32 MiB, a TIFF's first 8 MiB, a HEIF's 16 MiB), lofty allocates at most
+# 8 MiB per tag item, and a cover is at most 8 MiB - inside it.
+[limits]
+# lofty looks for an MPEG or ADTS frame a byte at a time and walks a raw AAC stream frame by
+# frame: up to 32 MiB through a reader, more instructions than the default 2e9.
+fuel = 10000000000
+# `open` reads the boxes or elements it needs scattered over a file of many GiB, possibly on a
+# network share or over SFTP, where each window is a round trip: more than a viewer's 5 s.
+timeout_milliseconds = 30000
+
+[[settings]]
+key = "cover"
+type = "choice"
+values = ["on", "off"]
+default = "on"

@@ -20,8 +20,8 @@ use iced::{
 use rc_engine::{
     Command, JobId, JobState, QueueEntry,
     settings::{
-        FKEY_BAR_KEY, HIDE_SINGLE_LANE_KEY, MKDIR_PREFILL_KEY, SHOW_AT_ONCE_KEY, STRIP_ROWS_KEY,
-        TOTAL_SPEED_KEY, stored_bool, stored_setting,
+        FKEY_BAR_KEY, HIDE_SINGLE_LANE_KEY, MKDIR_PREFILL_KEY, RENAME_SELECTION_DIALOG_KEY,
+        SHOW_AT_ONCE_KEY, STRIP_ROWS_KEY, TOTAL_SPEED_KEY, stored_bool, stored_setting,
     },
 };
 
@@ -55,6 +55,9 @@ pub struct Stored {
     pub total_speed: bool,
     /// `queue.hide_single_lane`: the queue window leaves out a lane column all its jobs share.
     pub hide_single_lane: bool,
+    /// `rename.selection_dialog`: Shift+F6 on several selected entries opens a dialog with a
+    /// mask (RC-110-04).
+    pub selection_dialog: bool,
 }
 
 impl Default for Stored {
@@ -66,6 +69,7 @@ impl Default for Stored {
             at_once: true,
             total_speed: true,
             hide_single_lane: true,
+            selection_dialog: true,
         }
     }
 }
@@ -79,6 +83,7 @@ pub fn concerns(key: &str) -> bool {
         SHOW_AT_ONCE_KEY,
         TOTAL_SPEED_KEY,
         HIDE_SINGLE_LANE_KEY,
+        RENAME_SELECTION_DIALOG_KEY,
     ]
     .contains(&key)
 }
@@ -154,7 +159,8 @@ impl App {
 
     /// Reads the function-key bar, whether F7 offers the name under the cursor, how many jobs
     /// the background bar lists, whether the queue window lists the jobs run at once, whether it
-    /// shows their speed together and whether it leaves out a lane column all its jobs share.
+    /// shows their speed together, whether it leaves out a lane column all its jobs share and
+    /// whether Shift+F6 on several entries opens a dialog.
     pub(in crate::app) fn file_ops_settings_task(&self) -> Task<Message> {
         let Some(db) = self.db.clone() else {
             return Task::none();
@@ -169,6 +175,7 @@ impl App {
                     (&mut stored.at_once, SHOW_AT_ONCE_KEY),
                     (&mut stored.total_speed, TOTAL_SPEED_KEY),
                     (&mut stored.hide_single_lane, HIDE_SINGLE_LANE_KEY),
+                    (&mut stored.selection_dialog, RENAME_SELECTION_DIALOG_KEY),
                 ];
                 for (value, key) in switches {
                     *value = stored_bool(&db, key).await;

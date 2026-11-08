@@ -73,6 +73,15 @@ pub(super) fn known_rows(text: &str, state: &ThemesState) -> Vec<WslTheme> {
     rows
 }
 
+/// The distributions' themes the draft holds, without one the window does not offer for its mode.
+pub(super) fn drafted_rows(draft: &Draft, state: &ThemesState) -> Vec<WslTheme> {
+    let text = match draft.field(WSL_THEMES_KEY) {
+        Some(Field::Text(text)) => text.as_str(),
+        _ => "",
+    };
+    known_rows(text, state)
+}
+
 /// `rows` with the theme of the light or the `dark` mode of `distro` set to `id` (`None`: the
 /// window's), written as the setting keeps them; the name compares without regard to case.
 pub(super) fn with_theme(
@@ -143,11 +152,7 @@ pub(super) fn section<'a>(
     draft: &Draft,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
-    let text = match draft.field(WSL_THEMES_KEY) {
-        Some(Field::Text(text)) => text.as_str(),
-        _ => "",
-    };
-    let rows = known_rows(text, state);
+    let rows = drafted_rows(draft, state);
     let mut lines = Column::new().spacing(6).push(
         row![
             label("").width(NAME_WIDTH),

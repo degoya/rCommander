@@ -250,8 +250,9 @@ async fn holds_sensitive(path: &Path) -> bool {
     false
 }
 
-/// The refusal when a source to pack is sensitive or holds a sensitive file below it.
-async fn refuse_sensitive_sources(
+/// The refusal when a source to pack is sensitive or holds a sensitive file below it (also one
+/// to add to an archive, `archive_update.rs`).
+pub(crate) async fn refuse_sensitive_sources(
     engine: &Engine,
     panel: Option<PanelId>,
     sources: &[String],

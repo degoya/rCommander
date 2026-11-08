@@ -13,8 +13,10 @@ macro_rules! arms {
                 sources,
                 target,
                 options,
+                rename_mask,
             }) => {
-                $self.ops_transfer(panel, &sources, target.as_deref(), options, false)
+                let target = (target.as_deref(), rename_mask.as_deref());
+                $self.ops_transfer(panel, &sources, target, options, false)
                     .await
             }
             Command::OpsDelete(crate::DeleteRequest {
@@ -34,8 +36,10 @@ macro_rules! arms {
                 sources,
                 target,
                 options,
+                rename_mask,
             }) => {
-                $self.ops_transfer(panel, &sources, target.as_deref(), options, true)
+                let target = (target.as_deref(), rename_mask.as_deref());
+                $self.ops_transfer(panel, &sources, target, options, true)
                     .await
             }
             Command::OpsPause { job } => Ok(Outcome::job($self.inner.ops.pause(job)?)),

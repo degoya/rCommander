@@ -53,11 +53,15 @@ fn takes(tool: &str) -> Option<Takes> {
         "ops_delete" => names("sources", false),
         "ops_copy" | "ops_move" | "archives_pack" => names("sources", true),
         "archives_extract" => names("archives", true),
+        "archives_add" => names("sources", true),
+        "archives_delete" => names("entries", false),
         "file_open" => Takes {
             cursor: Some("path"),
             ..folder(true, false)
         },
         "terminal_open" => folder(true, false),
+        // An own command's placeholders read both panels' folders (%P, %T).
+        "user_commands_run" | "start_menu_run" | "button_bars_run" => folder(true, true),
         "dirs_sync_apply" => folder(false, true),
         _ => return None,
     })

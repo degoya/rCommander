@@ -68,24 +68,32 @@
 //! FTPS certificates the system roots do not vouch for wait for a person too (`certs.rs`,
 //! RC-070-02): the trusted ones live in the database, `certificates.answer` and
 //! `certificates.remove` are the window's alone. Workspaces ([`workspaces`], RC-100-68) save what
-//! both panels show under a name; `workspaces.apply` makes the panels show one again.
+//! both panels show under a name; column sets ([`columns`], RC-100-90) the file list's columns.
 
 pub mod about;
 mod archives;
+pub mod associations;
+pub mod button_bars;
 mod certs;
+pub mod columns;
 pub mod command_line;
 mod commands;
 mod comments;
 pub mod compare;
 mod connections;
+pub mod disk_usage;
 mod dispatch;
 mod drives;
 mod error;
 mod event;
 pub mod exchange;
+pub mod file_filter;
 mod flat;
+pub mod forwards;
+pub mod git;
 mod hostkeys;
 mod hotlist;
+pub mod ignore_list;
 pub mod import;
 pub mod inventory;
 mod keymap;
@@ -102,6 +110,7 @@ mod recover;
 mod reexports;
 mod registry;
 mod remote;
+mod remote_edit;
 pub mod search;
 pub mod secret_sources;
 mod secrets;
@@ -115,9 +124,12 @@ pub mod tabs;
 #[cfg(test)]
 mod test_support;
 mod transfers;
+pub mod tree;
 pub mod unpacked;
 mod updates;
+pub mod user_commands;
 pub mod viewer;
+mod watch;
 pub mod workspaces;
 
 use std::{
@@ -135,13 +147,16 @@ use tokio::sync::broadcast;
 use crate::recover::LockOrRecover as _;
 
 pub use commands::file_ops::{ExternalProgram, FileDialog};
-pub use commands::filter::QuickFilter;
-pub use commands::terminal::TerminalInfo;
 pub use commands::{
     DEFAULT_PAGE, ImportConflict, ImportReport, LoginRunState, LoginScriptRun, MAX_EXEC_COMMAND,
     MAX_EXEC_STDIN, MAX_PAGE, MAX_PRESET_NAME, MAX_PRESETS, MultiRenameRequest, PanelTerminal,
     RenamePreset, SSH_SHELL, SSH_TERM, SavedList, SearchHandle, Unloadable, cd_command,
     shell_quote,
+};
+pub use commands::{
+    file_filters::{MAX_SAVED_FILTERS, SavedFilter},
+    filter::QuickFilter,
+    terminal::TerminalInfo,
 };
 pub use connections::{
     AuthMethod, Connection, ConnectionDraft, ConnectionError, ConnectionFolder, ConnectionId,
@@ -154,6 +169,7 @@ pub use drives::{
 };
 pub use error::EngineError;
 pub use event::{EngineEvent, PanelChange, TerminalChange};
+pub use file_filter::FileFilter;
 pub use flat::{FlatSource, FlatView, MAX_FLAT_ENTRIES};
 pub use hostkeys::{HostKeyAnswer, HostKeyQuestion, HostKeyQuestionKind};
 pub use import::ssh_config_apply::{
@@ -163,12 +179,6 @@ pub use keymap::{
     Binding, Chord, KeyContext, Keymap, KeymapError, KeymapRow, Lock, MAX_OVERRIDE_TEXT,
     MAX_OVERRIDES, MAX_THEME_KEY_ID, Override, Overrides, PHYSICAL_KEYS, Refusal, Reserved,
     THEME_KEY_PREFIX, WindowKey, physical_code, theme_key, theme_key_name,
-};
-pub use login_scripts::{
-    LoginScript, LoginScriptDeletion, LoginScriptDraft, LoginScriptError, LoginScriptId,
-    LoginScriptInfo, LoginScriptPatch, LoginScriptRecord, Pattern, PatternError, SCHEMA_VERSION,
-    ScriptInvalid, ScriptSecretLabel, ScriptSecretRef, ScriptSecrets, SecretError, SecretSource,
-    Step,
 };
 pub use mcp_questions::{
     MAX_MCP_GRANTS, MAX_MCP_QUESTIONS, MAX_SHOWN_CHARS, McpAnswer, McpArgument, McpAsk,
@@ -180,45 +190,23 @@ pub use plugin_admin::{
     PluginStart, PluginsOutcome, VersionInfo, bundled_plugins_dir,
 };
 pub use properties::{DirSize, ItemProperties, NameFormat, PathUsage, PropertiesReport};
-/// Total Commander's selection masks, for the window's colours by file type (RC-100-43).
-pub use rc_ops::{Meter, mask::Mask};
 pub use read_guard::{RDM_EXPORT_PASSWORDS, ReadJudge, SSH_PRIVATE_FILE, TC_FTP_PASSWORDS};
+pub use reexports::*;
 pub use registry::{
     BackupToRequest, COMMANDS, ChecksumDialog, ChecksumFilesRequest, ChecksumJob, ChecksumRequest,
     CombineRequest, Command, CommandClass, CommandSpec, ConfigExportRequest, ConfigImportRequest,
-    CursorStep, CursorTarget, DeleteRequest, ErrorLogRequest, ImportKeyRequest, MaskRequest,
-    MoveConnectionRequest, MoveFolderRequest, QuickConnectRequest, RdmImportRequest,
+    CursorStep, CursorTarget, DeleteRequest, DuplicatesRequest, ErrorLogRequest, ImportKeyRequest,
+    MaskRequest, MoveConnectionRequest, MoveFolderRequest, QuickConnectRequest, RdmImportRequest,
     RetentionRequest, SaveConnectionRequest, SaveFields, SearchRequest, SecretChange, SplitRequest,
     SshConfigImportRequest, SshExecRequest, TcImportRequest, TcPasswordsRequest, TransferRequest,
-    spec,
+    ZoomStep, spec,
 };
 pub use remote::{
     FTP_SCHEME, ftp_location,
     sftp::{SFTP_SCHEME, sftp_location},
 };
-pub use search::{SearchCancel, SearchEvent, SearchHit, SearchQuery, SearchStats};
-pub use secrets::{
-    KeyFormat, KeyInfo, MAX_KEY_BYTES, MIN_MASTER_PASSWORD_LEN, REDACTED, SecretFlags, SecretKind,
-    SecretParam, SecretRef, StoredKey,
-};
-pub use sessions::{
-    ChannelLease, SessionChange, SessionChannel, SessionPrefs, SessionStatus, SessionTestReport,
-    SshState,
-};
 pub use settings::{SETTINGS, SettingValue};
 pub use sort::{SortKey, SortOrder, extension, natural_cmp};
-pub use tabs::{
-    HISTORY_LIMIT, Relocated, TabId, TabView, TabsError,
-    requests::{
-        AddHotlistFolderRequest, AddHotlistRequest, HistoryJumpRequest, LockTabRequest,
-        MoveHotlistRequest, MoveTabRequest, NextTabRequest, OpenHotlistRequest, OpenTabRequest,
-        PanelRequest, SelectTabRequest, SwapRequest, TabRequest, TransferDirRequest,
-        UpdateHotlistRequest,
-    },
-};
-// Packing and unpacking (RC-030-03, RC-030-04), for the window's dialogs and the MCP tools.
-pub use commands::default_archive_name;
-pub use reexports::*;
 
 /// How many events a slow subscriber may fall behind before it misses some
 /// ([`broadcast::error::RecvError::Lagged`]); it then re-reads the state it cares about.
@@ -287,10 +275,20 @@ struct Inner {
     plugins: OnceLock<plugin_admin::PluginDesk>,
     /// The walks of `files.search` waiting for their next page (RC-080-50).
     search_pages: Mutex<commands::search::SearchPages>,
+    /// The results of `files.find_duplicates` waiting for their next page (RC-100-98).
+    duplicate_pages: Mutex<commands::duplicates::DuplicatePages>,
     /// The self-update: its state, the download, the hand-over (RC-100-05 ... RC-100-07).
     updates: updates::UpdateDesk,
     /// The workspace applied last and the turn of an apply (RC-100-68).
     workspaces: workspaces::WorkspaceDesk,
+    /// The folder trees' levels, read lazily and bounded (RC-100-88, `tree.rs`).
+    tree: tree::TreeStore,
+    /// The panels' git runs (RC-100-97, `git/follow.rs`).
+    git: git::GitDesk,
+    /// The panels' file watcher (RC-110-02, `watch.rs`).
+    watch: watch::WatchDesk,
+    /// The server files edited through watched copies (RC-110-01).
+    remote_edits: remote_edit::RemoteEdits,
 }
 
 struct State {
@@ -299,6 +297,8 @@ struct State {
     active: PanelId,
     /// Rows per page of each panel, by [`PanelId::index`].
     page_rows: [usize; 2],
+    /// Tiles per line of each panel's thumbnails, by [`PanelId::index`] (RC-100-89).
+    page_tiles: [usize; 2],
     /// Whether the panels list hidden and system entries (`panel.toggle_hidden`).
     show_hidden: bool,
     /// The directory each panel last showed on each drive, by [`PanelId::index`] and drive id.
@@ -310,22 +310,6 @@ struct State {
     tabs: tabs::Tabs,
     /// The running folder counts of each panel's size column, by [`PanelId::index`].
     counting: [Option<tokio_util::sync::CancellationToken>; 2],
-}
-
-impl State {
-    fn panel_mut(&mut self, id: PanelId) -> &mut PanelState {
-        match id {
-            PanelId::Left => &mut self.left,
-            PanelId::Right => &mut self.right,
-        }
-    }
-
-    fn panel(&self, id: PanelId) -> &PanelState {
-        match id {
-            PanelId::Left => &self.left,
-            PanelId::Right => &self.right,
-        }
-    }
 }
 
 impl Engine {
@@ -377,6 +361,7 @@ impl Engine {
                     right,
                     active: PanelId::Left,
                     page_rows: [DEFAULT_PAGE_ROWS; 2],
+                    page_tiles: [1; 2],
                     show_hidden: false,
                     last_dirs: Default::default(),
                     shown: [None; 2],
@@ -402,8 +387,13 @@ impl Engine {
                 certificates: certs::CertificateDesk::default(),
                 plugins: OnceLock::new(),
                 search_pages: Mutex::default(),
+                duplicate_pages: Mutex::default(),
                 updates: updates::UpdateDesk::default(),
                 workspaces: workspaces::WorkspaceDesk::default(),
+                tree: tree::TreeStore::default(),
+                git: git::GitDesk::default(),
+                watch: watch::WatchDesk::default(),
+                remote_edits: remote_edit::RemoteEdits::default(),
             }),
         };
         engine.install_transfer_hooks();
@@ -490,6 +480,14 @@ impl Engine {
     }
 
     fn publish(&self, event: EngineEvent) {
+        // A folder shown anew asks for its git marks (RC-100-97).
+        if let EngineEvent::Panel {
+            panel,
+            change: PanelChange::Navigated,
+        } = event
+        {
+            self.git_follow(panel);
+        }
         // No subscriber is not an error: a headless engine may have none.
         let _ = self.inner.events.send(event);
     }

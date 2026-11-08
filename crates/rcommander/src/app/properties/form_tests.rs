@@ -18,6 +18,7 @@ fn report(mode: Option<u32>) -> PropertiesReport {
                 size: 3,
                 modified: Some(modified),
                 created: None,
+                accessed: None,
                 attributes: Attributes {
                     mode,
                     readonly: false,
@@ -33,6 +34,7 @@ fn report(mode: Option<u32>) -> PropertiesReport {
             details: Details::default(),
             usage: None,
             comment: None,
+            exif: None,
         }],
         total: None,
         capabilities: PropertyCapabilities::NONE,

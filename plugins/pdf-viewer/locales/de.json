@@ -1,0 +1,10 @@
+{
+  "name": "PDF-Viewer",
+  "description": "Zeigt den Text eines PDF Seite für Seite und Titel, Autor, Daten, Seiten und Version als Baum.",
+  "codes": {
+    "01a1b720-fdd6-75dd-a577-079e819e4742.too_large": "Das PDF ist größer als 64 MiB und wird nicht gelesen.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.damaged": "Die Datei ist kein lesbares PDF.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.password_required": "Das PDF ist mit einem Passwort geschützt; rCommander kann es nicht zeigen.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.encryption": "Das PDF ist auf eine Weise verschlüsselt, die dieser Viewer nicht lesen kann."
+  }
+}

@@ -177,7 +177,7 @@ async fn a_second_import_of_the_same_file_adds_no_duplicate() {
 }
 
 #[tokio::test]
-async fn identity_files_land_as_paths_and_proxy_jump_in_the_notes() {
+async fn identity_files_land_as_paths_and_proxy_jump_as_the_jump_host() {
     let (root, engine, config) = setup().await;
     report(&engine, &config, import(&config, false)).await;
     let tree = tree(&engine).await;
@@ -196,11 +196,13 @@ async fn identity_files_land_as_paths_and_proxy_jump_in_the_notes() {
     assert_eq!(db.port, 2222);
     let internal = by_name("internal");
     assert_eq!(internal.auth_method, AuthMethod::Agent);
+    // `ProxyJump bastion` names a host of the same file: its jump host (RC-110-03).
+    assert_eq!(internal.jump_id, Some(by_name("bastion").id));
     assert!(
         internal
             .notes
             .as_deref()
-            .is_some_and(|notes| notes.contains("ProxyJump bastion")),
+            .is_none_or(|notes| !notes.contains("ProxyJump")),
         "{:?}",
         internal.notes
     );

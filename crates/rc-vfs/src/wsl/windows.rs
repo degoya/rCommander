@@ -46,6 +46,12 @@ pub(super) async fn list(limit: Duration) -> Vec<WslDistro> {
     assemble(names, &details, host_for_build(windows_build()))
 }
 
+/// The distributions running now; none when WSL is missing, switched off or does not answer
+/// within `limit`.
+pub(super) async fn running(limit: Duration) -> Vec<String> {
+    names_from(wsl(&["--list", "--running", "--quiet"]), limit).await
+}
+
 /// `wsl.exe` from the system folder (never a bare name, RC-080-65) with `args`, without a
 /// console window.
 fn wsl(args: &[&str]) -> Command {

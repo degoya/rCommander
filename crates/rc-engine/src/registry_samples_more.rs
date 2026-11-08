@@ -134,6 +134,7 @@ pub(super) fn more() -> Vec<Command> {
             path: Some("new.txt".into()),
             program: crate::ExternalProgram::Editor,
             create: true,
+            cursor_only: false,
         },
         Command::RunCommandLine {
             panel: None,
@@ -154,6 +155,7 @@ pub(super) fn more() -> Vec<Command> {
             panel: Some(PanelId::Right),
             root: None,
             paths: vec!["a.txt".into()],
+            groups: Vec::new(),
         },
         Command::FindFilesDialog { panel: None },
         Command::ViewFile {
@@ -191,6 +193,18 @@ pub(super) fn more() -> Vec<Command> {
         Command::ArchivePassword {
             job: 1,
             password: None,
+        },
+        Command::ArchiveAdd {
+            panel: Some(PanelId::Left),
+            sources: vec!["a.txt".into()],
+            target: Some("docs.zip/sub".into()),
+            settings: rc_ops::UpdateSettings::default(),
+            options: JobOptions::default(),
+        },
+        Command::ArchiveDelete {
+            panel: None,
+            entries: vec!["old.txt".into()],
+            options: JobOptions::default(),
         },
         Command::OpenTerminalHere {
             panel: None,
@@ -298,6 +312,21 @@ pub(super) fn more() -> Vec<Command> {
             ..crate::ConfigImportRequest::default()
         }),
         Command::OpenDiff {},
+        Command::CompareByContent(crate::compare::ByContentRequest {
+            left: Some(rc_vfs::VfsPath::local("/a/left.txt")),
+            right: Some(rc_vfs::VfsPath::local("/b/right.txt")),
+        }),
+        Command::ApplyBlocks(crate::compare::ApplyBlocksRequest {
+            left: "a.txt".into(),
+            right: "b.txt".into(),
+            blocks: vec![0, 2],
+            direction: crate::compare::Direction::RightToLeft,
+            expect_left: crate::compare::FileStamp {
+                size: 12,
+                modified_unix: Some(1_700_000_000),
+            },
+            ..crate::compare::ApplyBlocksRequest::default()
+        }),
         Command::SelectDifferences { by_content: true },
         Command::SyncApply(crate::sync::SyncApplyRequest::default()),
         Command::OpenSyncDialog {},
@@ -312,6 +341,7 @@ pub(super) fn more() -> Vec<Command> {
         Command::QueueResumeAll {},
         Command::QueueWindow {},
         Command::About {},
+        Command::MakePortable {},
         Command::Quit {},
         Command::GetUpdateStatus {},
         Command::CheckForUpdates {},
@@ -420,6 +450,10 @@ pub(super) fn more() -> Vec<Command> {
         Command::ListSecretSources {
             connection_id: Some(ConnectionId(1)),
         },
+        Command::SetCheckoutReason {
+            connection_id: ConnectionId(1),
+            reason: "ticket 4711".into(),
+        },
         Command::RefreshInventory {
             source: crate::inventory::InventorySourceId(1),
             preview: true,
@@ -456,5 +490,10 @@ pub(super) fn more() -> Vec<Command> {
         Command::DeleteTheme {
             id: "own-1f2e3d4c".into(),
         },
+        Command::ShowTree {
+            panel: Some(PanelId::Right),
+            show: None,
+        },
+        Command::CycleSeparateTree {},
     ]
 }

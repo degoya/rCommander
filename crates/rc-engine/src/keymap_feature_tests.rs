@@ -25,6 +25,7 @@ fn the_function_keys_run_the_file_operations() {
             path: None,
             program,
             create: false,
+            cursor_only: false,
         })
     };
     for (keys, wanted) in [
@@ -52,6 +53,38 @@ fn the_function_keys_run_the_file_operations() {
             "{keys}"
         );
         assert!(keymap.reserved().iter().all(|row| row.chord != chord(keys)));
+    }
+}
+
+/// RC-100-91: Alt+F3 is the other viewer, Shift+F3 the file under the cursor alone - both in the
+/// file list only, as F3.
+#[test]
+fn alt_f3_and_shift_f3_view_as_total_commander() {
+    use crate::ExternalProgram;
+    let keymap = Keymap::standard();
+    let external = |program, cursor_only| {
+        Some(Command::OpenExternal {
+            panel: None,
+            path: None,
+            program,
+            create: false,
+            cursor_only,
+        })
+    };
+    for (keys, wanted) in [
+        ("Alt+F3", external(ExternalProgram::AltViewer, false)),
+        ("Shift+F3", external(ExternalProgram::Viewer, true)),
+    ] {
+        assert_eq!(
+            keymap.lookup(&chord(keys), PanelView::Files).cloned(),
+            wanted,
+            "{keys}"
+        );
+        assert_eq!(
+            keymap.lookup(&chord(keys), PanelView::Terminal),
+            None,
+            "{keys}"
+        );
     }
 }
 

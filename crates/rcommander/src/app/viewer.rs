@@ -8,18 +8,29 @@
 //! and Escape closes the top one. While a Lister has the keys they are its own (`keys.rs`), not
 //! the keymap's.
 //!
-//! - `lister.rs` - one file's view: mode, encoding, place, page; `find.rs` - its search bar.
+//! - `lister.rs` - one file's view: mode, encoding, place, page; `find.rs` - its search bar;
+//!   `copy.rs` - Ctrl+A and Ctrl+C over its whole text (RC-110-06).
 //! - `load.rs` - the reads behind it; `picture.rs` - decoding a picture within limits.
 //! - `quick.rs` - Quick View's state; `draw.rs` - drawing both; `window.rs` - Lister's window.
 //! - `markdown.rs` - a Markdown file's preview, `markdown_view.rs` drawing it, `links.rs` its
-//!   links (RC-020-09); `text_size.rs` - Ctrl+wheel, Ctrl++, Ctrl+- and Ctrl+0 (RC-020-12).
+//!   links (RC-020-09), `code_lexer.rs` the colours of its code blocks (RC-110-06); `text_size.rs` - Ctrl+wheel, Ctrl++, Ctrl+- and Ctrl+0 (RC-020-12).
 //! - `document.rs` - a plugin's document with several views (RC-100-10): `spans.rs` its coloured
 //!   text, `tree.rs` its tree, `views.rs` switching them, `tree_view.rs` drawing the tree and the
 //!   list of views; `run.rs` - a lister's requests as tasks; `plugin.rs` - a file opened with its
-//!   viewer plugin, or built in (RC-100-13).
+//!   viewer plugin, or built in (RC-100-13); `walk.rs` - N and P, through the marked files or
+//!   none (RC-100-91); `credentials.rs` - a credential file (`.env`, `.npmrc`, ...), which no
+//!   plugin may see, coloured in process by the bundled viewers' crates (RC-110-07);
+//!   `cert.rs` - a certificate or key file as its report and tree, put into words by
+//!   `cert_words.rs` (RC-110-08).
 
+mod cert;
+mod cert_words;
+mod code_lexer;
+mod copy;
+mod credentials;
 pub(in crate::app) mod document;
 mod draw;
+mod exif;
 mod find;
 mod keys;
 mod last_page;
@@ -29,7 +40,7 @@ mod load;
 mod markdown;
 mod markdown_view;
 mod output;
-mod picture;
+pub(in crate::app) mod picture;
 mod plugin;
 mod quick;
 mod run;
@@ -40,6 +51,7 @@ mod text_size;
 mod tree;
 mod tree_view;
 mod views;
+mod walk;
 mod window;
 
 use iced::{
@@ -47,7 +59,7 @@ use iced::{
     widget::{Id, operation, text_editor::Action},
 };
 use rc_engine::{
-    Chord, Command, CursorTarget, EngineEvent, Outcome, PanelId, VfsPath,
+    Chord, Command, EngineEvent, ListerFiles, Outcome, PanelId, VfsPath,
     settings::VIEWER_TOKEN_COLORS_KEY,
 };
 
@@ -62,6 +74,7 @@ use self::{
     quick::{DirSummary, Quick, QuickShown},
     text_size::{TextSizeMsg, TextZoom},
     views::TokenColors,
+    walk::Walk,
 };
 pub(super) use self::{
     draw::{editor_style, read_only},
@@ -82,6 +95,8 @@ pub struct Viewers {
     pub token_colors: TokenColors,
     /// The viewer plugins, loaded when first needed (RC-100-13).
     plugins: Plugins,
+    /// The files N and P step through, by Lister; a Lister not here steps through the panel's.
+    walks: Vec<(u64, Walk)>,
     next_id: u64,
 }
 
@@ -101,6 +116,14 @@ impl Viewers {
             return Some(&mut **lister);
         }
         self.open.iter_mut().find(|lister| lister.id == id)
+    }
+
+    /// The files the Lister `id` steps through.
+    fn walk(&self, id: u64) -> Walk {
+        self.walks
+            .iter()
+            .find(|(lister, _)| *lister == id)
+            .map_or(Walk::Panel, |(_, walk)| walk.clone())
     }
 
     fn lister(&self, id: u64) -> Option<&Lister> {
@@ -126,6 +149,10 @@ pub enum ViewerMessage {
     Picture(u64, u64, Result<Picture, &'static str>),
     Found(u64, Found),
     Editor(u64, Action),
+    /// Ctrl+A or Ctrl+C the focused text editor hands to its lister (`copy.rs`).
+    Key(u64, ListerKey),
+    /// The whole text read for Ctrl+C, or why not.
+    Copied(u64, Result<String, &'static str>),
     Viewport(u64, Size),
     Scrollbar(u64, f32),
     BarInput(u64, String),
@@ -152,8 +179,8 @@ impl App {
     /// moves Quick View follows. `None` for a message the viewer leaves alone.
     pub(super) fn viewer_intercept(&mut self, message: &Message) -> Option<Vec<Effect>> {
         match message {
-            Message::Engine(EngineEvent::ViewFile { panel, path }) => {
-                Some(self.open_lister(*panel, path.clone()))
+            Message::Engine(EngineEvent::ViewFile { panel, path, files }) => {
+                Some(self.open_lister(*panel, path.clone(), *files))
             }
             Message::Engine(EngineEvent::QuickView { panel }) => Some(self.toggle_quick(*panel)),
             Message::Engine(EngineEvent::SettingChanged { key }) if text_size::concerns(key) => {
@@ -257,6 +284,8 @@ impl App {
             | ViewerMessage::Picture(id, ..)
             | ViewerMessage::Found(id, _)
             | ViewerMessage::Editor(id, _)
+            | ViewerMessage::Key(id, _)
+            | ViewerMessage::Copied(id, _)
             | ViewerMessage::Viewport(id, _)
             | ViewerMessage::Scrollbar(id, _)
             | ViewerMessage::BarInput(id, _)
@@ -283,6 +312,8 @@ impl App {
             }
             ViewerMessage::Found(_, news) => lister.found(news),
             ViewerMessage::Editor(_, action) => lister.editor(action),
+            ViewerMessage::Key(_, key) => return self.lister_does(id, key),
+            ViewerMessage::Copied(_, copied) => return lister.copied(copied),
             ViewerMessage::Viewport(_, size) => {
                 lister.set_rows(draw::rows_at(size.height, lister.line_height()))
             }
@@ -304,10 +335,16 @@ impl App {
         self.run(id, requests)
     }
 
-    /// F3: a new Lister on top.
-    fn open_lister(&mut self, panel: PanelId, path: VfsPath) -> Vec<Effect> {
+    /// F3: a new Lister on top, stepping through `files` (`walk.rs`); the walks of Listers
+    /// closed meanwhile go.
+    fn open_lister(&mut self, panel: PanelId, path: VfsPath, files: ListerFiles) -> Vec<Effect> {
         let id = self.viewers.next_id();
-        self.viewers.open.push(Lister::new(id, panel, path.clone()));
+        let marked = self.pane(panel).chosen_names();
+        let viewers = &mut self.viewers;
+        let open: Vec<u64> = viewers.open.iter().map(|lister| lister.id).collect();
+        viewers.walks.retain(|(lister, _)| open.contains(lister));
+        viewers.walks.push((id, Walk::of(files, marked)));
+        viewers.open.push(Lister::new(id, panel, path.clone()));
         vec![self.open_file(id, path)]
     }
 
@@ -352,49 +389,6 @@ impl App {
             effects.push(Effect::Task(operation::focus(Id::new(draw::BAR_ID))));
         }
         effects
-    }
-
-    /// N and P: the next or previous file of the panel Lister was opened from, in the same
-    /// Lister; the panel's cursor goes along, as in Total Commander.
-    fn step_file(&mut self, id: u64, forward: bool) -> Vec<Effect> {
-        let Some(lister) = self.viewers.lister(id) else {
-            return Vec::new();
-        };
-        let panel = lister.panel;
-        let pane = self.pane(panel);
-        if lister.path.parent().as_ref() != Some(&pane.state.path) {
-            return Vec::new();
-        }
-        let current = lister.name();
-        let entries = pane.entries();
-        let Some(at) = entries.iter().position(|entry| entry.name == current) else {
-            return Vec::new();
-        };
-        let next = if forward {
-            entries[at + 1..].iter().find(|entry| !entry.is_dir_like())
-        } else {
-            entries[..at]
-                .iter()
-                .rev()
-                .find(|entry| !entry.is_dir_like())
-        };
-        let Some(next) = next else {
-            return Vec::new();
-        };
-        let (name, path) = (next.name.clone(), pane.state.path.join(&next.name));
-        if let Some(lister) = self.viewers.lister_mut(id) {
-            let kept = (lister.wrap, lister.tab_width, lister.text_size);
-            *lister = Lister::new(id, panel, path.clone());
-            (lister.wrap, lister.tab_width, lister.text_size) = kept;
-        }
-        let cursor = Command::SetCursor {
-            panel: Some(panel),
-            target: CursorTarget::Name(name),
-        };
-        vec![
-            Effect::Dispatch(panel, vec![cursor]),
-            self.open_file(id, path),
-        ]
     }
 
     /// Ctrl+Q from `panel`: Quick View of its cursor in the other panel, or off again.

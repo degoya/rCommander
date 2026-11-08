@@ -47,11 +47,11 @@ pub enum PatternErrorKind {
     /// `[]`.
     #[error("an empty placeholder")]
     Empty,
-    /// A placeholder rCommander does not know (Total Commander's `[=plugin.field]`, `[d]`,
-    /// `[t]`, `[S]`, `[R]` among them).
+    /// A placeholder rCommander does not know (Total Commander's `[=plugin.field]` and `[T4]`
+    /// among them).
     #[error("unknown placeholder [{text}]")]
     Unknown { text: String },
-    /// A known placeholder with arguments it does not take, such as `[N0]` or `[Caa+1]`.
+    /// A known placeholder with arguments it does not take, such as `[N0]` or `[CaA]`.
     #[error("invalid arguments in [{text}]")]
     Arguments { text: String },
 }
@@ -72,12 +72,40 @@ pub enum RenameError {
     /// The search expression is not a valid regular expression.
     #[error("invalid regular expression: {message}")]
     Regex { message: String },
+    /// A name list with more names or bytes than a rule may have.
+    #[error("the name list has more than {max_names} names or {max_bytes} bytes")]
+    NameList { max_names: usize, max_bytes: usize },
+    /// `[X]` in a mask, and no text on the clipboard.
+    #[error("the clipboard has no text for [X]")]
+    ClipboardEmpty,
+    /// Wildcards in the replacement of a search with several terms (`|`): which term's match
+    /// they would insert is not clear.
+    #[error("wildcards in the replacement work with one search term only")]
+    ReplaceWildcards,
     /// A plan with conflicts cannot be carried out.
     #[error("the plan has {count} conflicts")]
     Conflicts { count: usize },
     /// The renames could not be put in an order; a defect, never expected.
     #[error("the renames cannot be put in a safe order")]
     Unschedulable,
+    /// Two entries a target mask gives one name (RC-110-04); nothing is copied.
+    #[error("{first} and {second} would both become {name}")]
+    MaskCollision {
+        first: String,
+        second: String,
+        name: String,
+    },
+    /// A copy into its own folder whose name the target mask keeps, or a rename that changes
+    /// no name.
+    #[error("the mask leaves {name} unchanged")]
+    MaskUnchanged { name: String },
+    /// A rename onto the old name of another entry of the same rename; the multi-rename tool
+    /// (Ctrl+M) orders such chains.
+    #[error("{entry} would be renamed to {name}, the name of another entry renamed with it")]
+    MaskChain { entry: String, name: String },
+    /// A target mask into an archive, whose add takes no new names.
+    #[error("files go into an archive under their own names; a mask is not possible there")]
+    MaskIntoArchive,
 }
 
 impl RenameError {
@@ -90,8 +118,15 @@ impl RenameError {
         "rename_mask_unknown",
         "rename_mask_arguments",
         "rename_regex_invalid",
+        "rename_names_too_large",
+        "rename_clipboard_empty",
+        "rename_replace_wildcards",
         "rename_plan_conflicts",
         "rename_unschedulable",
+        "mask_collision",
+        "mask_unchanged",
+        "mask_chain",
+        "mask_into_archive",
     ];
 
     /// The stable code: the GUI looks its message up under `error.<code>`, the MCP server
@@ -108,8 +143,15 @@ impl RenameError {
                 PatternErrorKind::Arguments { .. } => "rename_mask_arguments",
             },
             Self::Regex { .. } => "rename_regex_invalid",
+            Self::NameList { .. } => "rename_names_too_large",
+            Self::ClipboardEmpty => "rename_clipboard_empty",
+            Self::ReplaceWildcards => "rename_replace_wildcards",
             Self::Conflicts { .. } => "rename_plan_conflicts",
             Self::Unschedulable => "rename_unschedulable",
+            Self::MaskCollision { .. } => "mask_collision",
+            Self::MaskUnchanged { .. } => "mask_unchanged",
+            Self::MaskChain { .. } => "mask_chain",
+            Self::MaskIntoArchive => "mask_into_archive",
         }
     }
 }

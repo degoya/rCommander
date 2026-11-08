@@ -129,6 +129,7 @@ async fn a_stored_key_keeps_its_public_half_until_it_is_cleared() {
         comment: Some("me@box".into()),
         stored: true,
         public_key: "ssh-ed25519 AAAA".into(),
+        certificate: None,
     };
     let connection = db
         .store_connection_key(id, b"key-cipher", &info, Some(b"pp-cipher".as_slice()))
@@ -214,6 +215,7 @@ async fn a_secret_write_under_a_stale_vault_key_is_refused() {
         comment: None,
         stored: true,
         public_key: String::new(),
+        certificate: None,
     };
     assert!(
         db.store_connection_key(id, &[7], &info, None)
@@ -253,4 +255,104 @@ async fn a_shared_credential_has_a_seed_column_too() {
         .await
         .expect("the column exists");
     assert_eq!(stored, None);
+}
+
+fn certificate() -> KeyCertificate {
+    KeyCertificate {
+        cert_type: "ssh-ed25519-cert-v01@openssh.com".into(),
+        key_id: "rc-test-valid".into(),
+        serial: 7,
+        principals: vec!["tester".into()],
+        valid_after: 100,
+        valid_before: Some(200),
+        ca_fingerprint: "SHA256:ca".into(),
+        openssh: "ssh-ed25519-cert-v01@openssh.com AAAA cert".into(),
+    }
+}
+
+#[tokio::test]
+async fn a_certificate_is_stored_and_cleared_with_its_key() {
+    let (db, id) = with_connection().await;
+    let info = StoredKey {
+        key_type: "ssh-ed25519".into(),
+        fingerprint: "SHA256:abc".into(),
+        comment: None,
+        stored: true,
+        public_key: "ssh-ed25519 AAAA".into(),
+        certificate: Some(certificate()),
+    };
+    let connection = db
+        .store_connection_key(id, b"key-cipher", &info, None)
+        .await
+        .expect("store");
+    assert_eq!(connection.key.as_ref(), Some(&info));
+    let owner = SecretOwner::Connection(id);
+    assert_eq!(
+        db.key_certificate(owner).await.expect("read").as_deref(),
+        Some("ssh-ed25519-cert-v01@openssh.com AAAA cert")
+    );
+    // MCP sees what it says, never its line.
+    let value = serde_json::to_value(&connection).expect("serializes");
+    assert_eq!(
+        value["key"]["certificate"],
+        serde_json::json!({
+            "type": "ssh-ed25519-cert-v01@openssh.com",
+            "key_id": "rc-test-valid",
+            "serial": 7,
+            "principals": ["tester"],
+            "valid_after": 100,
+            "valid_before": 200,
+            "ca_fingerprint": "SHA256:ca",
+        })
+    );
+
+    // A key taken in without one drops the old key's certificate.
+    let plain = StoredKey {
+        certificate: None,
+        ..info.clone()
+    };
+    db.store_connection_key(id, b"key-cipher-2", &plain, None)
+        .await
+        .expect("store again");
+    assert_eq!(db.key_certificate(owner).await.expect("read"), None);
+
+    db.store_connection_key(id, b"key-cipher-3", &info, None)
+        .await
+        .expect("store with it");
+    let cleared = db
+        .set_connection_secret(id, SecretKind::Key, None)
+        .await
+        .expect("clear");
+    assert_eq!(cleared.key, None);
+    assert_eq!(db.key_certificate(owner).await.expect("read"), None);
+}
+
+#[test]
+fn a_certificate_is_valid_from_its_start_until_its_end() {
+    let certificate = certificate();
+    assert_eq!(
+        certificate.validity_at(99),
+        CertificateValidity::NotYetValid
+    );
+    assert_eq!(certificate.validity_at(100), CertificateValidity::Valid);
+    assert_eq!(certificate.validity_at(199), CertificateValidity::Valid);
+    assert_eq!(certificate.validity_at(200), CertificateValidity::Expired);
+    let forever = KeyCertificate {
+        valid_after: 0,
+        valid_before: None,
+        ..certificate
+    };
+    assert_eq!(forever.validity_at(u64::MAX), CertificateValidity::Valid);
+}
+
+#[test]
+fn a_certificate_names_its_principals_or_anyone_without_them() {
+    let certificate = certificate();
+    assert!(certificate.names("tester"));
+    assert!(!certificate.names("root"));
+    let open = KeyCertificate {
+        principals: Vec::new(),
+        ..certificate
+    };
+    assert!(open.names("root"));
 }

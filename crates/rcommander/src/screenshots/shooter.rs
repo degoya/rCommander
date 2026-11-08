@@ -102,6 +102,7 @@ pub fn show(
     .subscription(Shooter::subscription)
     .default_font(theme::UI_FONT)
     .font(theme::icon::FONT_BYTES)
+    .font(theme::symbols::FONT_BYTES)
     .run()
 }
 
@@ -225,6 +226,10 @@ impl Shooter {
                 .app
                 .update(Message::Engine(EngineEvent::WorkspaceManager))
                 .map(Shot::App),
+            Step::Open(Opening::Commands) => {
+                let open = EngineEvent::UserCommandsWindow { start_menu: false };
+                self.app.update(Message::Engine(open)).map(Shot::App)
+            }
             Step::Close(capture) => {
                 let id = self
                     .window_of(*capture)

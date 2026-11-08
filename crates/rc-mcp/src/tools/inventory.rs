@@ -30,7 +30,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Sync one inventory source's folder of connections with the hosts its inventory lists now: hosts matched by the inventory's id; name, address, port and folder updated; the person's own fields (credentials, login script) kept; a host that left marked, never deleted. preview=true only plans. Answers counts (created, updated, unchanged, missing, still_missing, returned, skipped, refused) and the first refusals. Errors: inventory_source_not_found, inventory_plugin_missing, vault_locked (the token needs the vault), plugin_inventory_too_large (more than 10 000 hosts), plugin_http_denied, plugin_secret_missing, plugin_failed."
+        description = "Sync one inventory source's folder of connections with the hosts its inventory lists now: hosts matched by the inventory's id; name, address, port and folder updated; the person's own fields (credentials, login script) kept; a host that left marked, never deleted. preview=true only plans. Answers counts (created, updated, unchanged, missing, still_missing, returned, skipped, refused) and the first refusals. Errors: inventory_source_not_found, inventory_plugin_missing, vault_locked (the token needs the vault), plugin_inventory_too_large (more than 10 000 hosts), plugin_http_denied, plugin_secret_missing, inventory_unlicensed (a paid plugin without a valid licence key; nothing was asked), certificate_unknown, certificate_changed, certificate_expired (an HTTPS certificate only a person can trust in the window), plugin_failed."
     )]
     pub(crate) async fn inventory_refresh(
         &self,

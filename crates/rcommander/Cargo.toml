@@ -14,6 +14,8 @@ path = "src/main.rs"
 [dependencies]
 # The `rcommander plugin ...` subcommands (RC-100-12).
 anyhow.workspace = true
+# The names of the thumbnails' tiles on disk: a hash of path, size, time and tile size (RC-100-89).
+blake3.workspace = true
 chrono.workspace = true
 clap.workspace = true
 directories.workspace = true
@@ -27,12 +29,20 @@ muda.workspace = true
 open.workspace = true
 # The Markdown preview (RC-020-09): raw HTML found and turned into text before iced parses it.
 pulldown-cmark.workspace = true
+# The certificate viewer's report, put into words and a tree (`app/viewer/cert.rs`, RC-110-08).
+rc-cert = { path = "../rc-cert" }
 rc-db = { path = "../rc-db" }
 rc-engine = { path = "../rc-engine" }
 rc-mcp = { path = "../rc-mcp" }
 # `rcommander plugin new|package|verify|keygen|conformance` (RC-100-12): the packager, the verifier
 # and the conformance run.
 rc-plugin-host = { path = "../rc-plugin-host" }
+# Credential files coloured in the built-in viewer (RC-110-07): the bundled viewers' tokenizers,
+# plain Rust libraries linked natively (no plugin runtime); the XML viewer without its component.
+rc-plugin-config-viewer = { path = "../../plugins/config-viewer" }
+rc-plugin-json-viewer = { path = "../../plugins/json-viewer" }
+rc-plugin-xml-viewer = { path = "../../plugins/xml-viewer", default-features = false }
+rc-plugin-yaml-viewer = { path = "../../plugins/yaml-viewer" }
 # `fc-match` for the system's font families on Linux, without a console window (RC-100-71).
 rc-process = { path = "../rc-process" }
 rc-term = { path = "../rc-term" }
@@ -71,9 +81,11 @@ winsafe = { workspace = true, features = ["kernel", "shell"] }
 # buttons and Shift, and files on the clipboard in global memory (platform/windows/drag_out.rs,
 # platform/windows/clipboard.rs); uxtheme's menu mode looked up by ordinal for dark popup menus
 # (platform/windows/popup_menus.rs); buffered painting that makes the dark menu bar opaque
-# (platform/windows/menu_bar.rs).
+# (platform/windows/menu_bar.rs); the locale's date and time format for the multi-rename tool's
+# [d] and [t] (platform/windows/locale_format.rs, RC-100-96).
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Graphics_Gdi",
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
@@ -93,9 +105,12 @@ windows-sys = { workspace = true, features = [
 # IShellFolder, SHParseDisplayName) and for dragging files out (IShellItemArray's IDataObject,
 # SHDoDragDrop): typed, not hand-written vtables (owner, 2026-10-18). Also a window's property
 # store for the taskbar's relaunch (SHGetPropertyStoreForWindow, IPropertyStore with a VT_LPWSTR
-# PROPVARIANT; platform/windows/taskbar.rs, RC-100-67).
+# PROPVARIANT; platform/windows/taskbar.rs, RC-100-67). Explorer's thumbnails
+# (IShellItemImageFactory, whose GetImage hands out a GDI bitmap; app/thumbnails/explorer/windows.rs,
+# RC-100-89).
 windows = { workspace = true, features = [
     "Win32_Foundation",
+    "Win32_Graphics_Gdi",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Ole",

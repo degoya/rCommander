@@ -22,7 +22,48 @@ fn wanted(wincmd: Option<String>, ftp: Option<String>) -> Wanted {
         ftp_ini: ftp,
         wincmd: true,
         ftp: true,
+        usercmd: true,
     }
+}
+
+/// Total Commander keeps its own commands beside wincmd.ini (RC-100-86); over MCP the guard
+/// holds that file as it holds the others.
+#[test]
+fn usercmd_ini_is_read_beside_wincmd_ini() {
+    let dir = tempfile::tempdir().expect("dir");
+    let wincmd = dir.path().join("wincmd.ini");
+    fs::write(&wincmd, "[user]\nmenu1=Notepad\ncmd1=notepad.exe\n").expect("write");
+    let named = Some(wincmd.display().to_string());
+    let loaded = load(&wanted(named.clone(), None), MCP).expect("load");
+    assert!(loaded.usercmd.is_none(), "none there");
+    let usercmd = dir.path().join("usercmd.ini");
+    fs::write(&usercmd, "[em_np]\ncmd=notepad.exe\n").expect("write");
+    let loaded = load(&wanted(named.clone(), None), MCP).expect("load");
+    assert_eq!(
+        loaded.usercmd.as_ref().map(|(path, _)| path.clone()),
+        Some(usercmd.clone())
+    );
+    let without = Wanted {
+        usercmd: false,
+        ..wanted(named.clone(), None)
+    };
+    assert!(load(&without, MCP).expect("load").usercmd.is_none());
+    let guarded = Caller {
+        mcp: true,
+        guard: Some(ReadGuard::new(
+            |path: &Path| {
+                path.ends_with("usercmd.ini")
+                    .then_some("a file the person keeps")
+            },
+            &BackendId::Local,
+        )),
+    };
+    let loaded = load(&wanted(named, None), guarded).expect("wincmd.ini is read");
+    assert!(loaded.wincmd.is_some());
+    assert!(
+        loaded.usercmd.is_none(),
+        "a guarded usercmd.ini is never read"
+    );
 }
 
 #[test]

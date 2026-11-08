@@ -5,7 +5,10 @@ use std::path::PathBuf;
 
 use rc_engine::{
     SETTINGS,
-    settings::{EDITOR_KEY, LEFT_START_KEY, RIGHT_START_KEY, SettingKind, VIEWER_KEY},
+    settings::{
+        COMPARE_TOOL_KEY, EDITOR_KEY, GIT_PROGRAM_KEY, LEFT_START_KEY, RIGHT_START_KEY,
+        SettingKind, VIEWER_KEY,
+    },
 };
 
 use super::{BrowseMsg, PathField, chosen};
@@ -47,7 +50,9 @@ fn fields() -> Vec<(PathField, Kind, Vec<&'static str>)> {
         (setting(LEFT_START_KEY), Kind::Folder, Vec::new()),
         (setting(RIGHT_START_KEY), Kind::Folder, Vec::new()),
         (setting(VIEWER_KEY), Kind::Open, programs.clone()),
-        (setting(EDITOR_KEY), Kind::Open, programs),
+        (setting(EDITOR_KEY), Kind::Open, programs.clone()),
+        (setting(GIT_PROGRAM_KEY), Kind::Open, programs.clone()),
+        (setting(COMPARE_TOOL_KEY), Kind::Open, programs),
         (PathField::SshConfig, Kind::Open, vec!["*.*"]),
         (PathField::Wincmd, Kind::Open, vec!["wincmd.ini", "*.*"]),
         (PathField::WcxFtp, Kind::Open, vec!["wcx_ftp.ini", "*.*"]),
@@ -60,6 +65,12 @@ fn fields() -> Vec<(PathField, Kind, Vec<&'static str>)> {
             vec!["*.rcplug", "*.*"],
         ),
         (PathField::ThemeFile, Kind::Open, vec!["*.rctheme", "*.*"]),
+        (PathField::RenameNames, Kind::Open, vec!["*.txt", "*.*"]),
+        (
+            PathField::OwnCommandIcon,
+            Kind::Open,
+            vec!["*.ico;*.exe;*.dll;*.png;*.bmp", "*.*"],
+        ),
     ]
 }
 
@@ -152,6 +163,17 @@ fn the_path_chosen_is_the_fields_own_input() {
     assert!(matches!(
         typed(PathField::RenameLog),
         Message::MultiRename(MrMsg::Text(_, path)) if path == "chosen"
+    ));
+    assert!(matches!(
+        typed(PathField::RenameNames),
+        Message::MultiRename(MrMsg::Names(crate::app::multi_rename::NamesMsg::File(path)))
+            if path == "chosen"
+    ));
+    assert!(matches!(
+        typed(PathField::OwnCommandIcon),
+        Message::UserCommands(crate::app::user_commands::UcMsg::Own(
+            crate::app::user_commands::OwnMsg::IconPath(path)
+        )) if path == "chosen"
     ));
     assert!(matches!(
         typed(PathField::ChecksumTarget),

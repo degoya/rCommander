@@ -79,6 +79,15 @@ pub enum TcSkip {
     SearchFilter,
     /// More rules by file type than the setting takes.
     TooMany,
+    /// An own command or Start menu entry that changes the folder (`cd`); the directory hotlist
+    /// holds those (RC-100-86).
+    ChangeDir,
+    /// An own command or Start menu entry rCommander's checks refuse: a list of more than 16
+    /// rows, a program among internal commands, a field too long (RC-100-86).
+    CommandInvalid,
+    /// Own commands and the Start menu are the person's to import, in the window; never over MCP
+    /// (RC-100-86).
+    NeedsGui,
 }
 
 impl TcSkip {
@@ -100,6 +109,9 @@ impl TcSkip {
         Self::ColourInvalid,
         Self::SearchFilter,
         Self::TooMany,
+        Self::ChangeDir,
+        Self::CommandInvalid,
+        Self::NeedsGui,
     ];
 
     /// The stable code; the window's text is `tc_import.skip.<code>`.
@@ -122,6 +134,9 @@ impl TcSkip {
             Self::ColourInvalid => "colour_invalid",
             Self::SearchFilter => "search_filter",
             Self::TooMany => "too_many",
+            Self::ChangeDir => "change_dir",
+            Self::CommandInvalid => "command_invalid",
+            Self::NeedsGui => "needs_gui",
         }
     }
 }
@@ -178,7 +193,7 @@ pub struct TcConnection {
 }
 
 /// A menu name without its `&` accelerators.
-fn menu_name(raw: &str) -> String {
+pub(crate) fn menu_name(raw: &str) -> String {
     raw.replace("&&", "\u{0}")
         .replace('&', "")
         .replace('\u{0}', "&")

@@ -5,10 +5,14 @@
 //! a discriminant, then an `http-response` (status at +4, headers at +8, body at +16) or a
 //! `failure` (24 bytes from +4). A `secret-entry` is 40 bytes: id (ptr, len) at 0, title at 8,
 //! user (tag, ptr, len) at 16, url at 28.
+//!
+//! From contract 0.5.0 a source exports `checkout` and `checkin` as well (RC-100-38): a
+//! `result<lease, failure>` holds its payload at `RET + 8`, the lease's alignment - id (ptr, len)
+//! at +0, value at +8, expires (tag at +16, the `u64` at +24).
 
 use std::fmt::Write as _;
 
-use super::{DATA, HEAP, REALLOC, RET, component_of, ok_pair};
+use super::{DATA, HEAP, REALLOC, RET, component_of, ok_pair, ok_unit};
 
 /// The return area of `http.request`.
 pub const HTTP_RET: u32 = 12352;
@@ -17,32 +21,55 @@ pub const CANARY: &str = "canary-pw-7731";
 /// The WIT enum index of `source-state`'s cases.
 pub const READY: u8 = 0;
 pub const LOCKED: u8 = 1;
+/// The value [`SecretsBed::new`]'s `checkout` lends, and the id of its lease.
+pub const LENT: &str = "canary-lent-5521";
+pub const LEASE_ID: &str = "lease-1";
+/// The WIT enum index of `failure-kind`'s `access-denied`.
+const ACCESS_DENIED: u8 = 2;
 
-/// The exports of `interface secrets`.
+/// The exports of `interface secrets`; `checkout` and `checkin` from contract 0.5.0 on.
 #[derive(Clone, Copy, Debug)]
 pub enum Export {
     Status,
     Search,
     Get,
+    Checkout,
+    Checkin,
 }
 
 impl Export {
-    const ALL: [Self; 3] = [Self::Status, Self::Search, Self::Get];
+    const ALL: [Self; 5] = [
+        Self::Status,
+        Self::Search,
+        Self::Get,
+        Self::Checkout,
+        Self::Checkin,
+    ];
 
     fn name(self) -> &'static str {
         match self {
             Self::Status => "status",
             Self::Search => "search",
             Self::Get => "get",
+            Self::Checkout => "checkout",
+            Self::Checkin => "checkin",
         }
     }
 
-    /// The flattened parameters of the canonical ABI.
+    /// The flattened parameters of the canonical ABI: `checkout` takes the id (ptr, len), the
+    /// field, and the reason (tag, ptr, len).
     fn params(self) -> &'static str {
         match self {
             Self::Status => "",
             Self::Search | Self::Get => "(param i32 i32 i32)",
+            Self::Checkout => "(param i32 i32 i32 i32 i32 i32)",
+            Self::Checkin => "(param i32 i32)",
         }
+    }
+
+    /// Whether a component of contract `version` exports it.
+    fn in_contract(self, version: &str) -> bool {
+        !matches!(self, Self::Checkout | Self::Checkin) || !matches!(version, "0.3.0" | "0.4.0")
     }
 }
 
@@ -63,7 +90,8 @@ impl Default for SecretsBed {
 
 impl SecretsBed {
     /// A source that works: `status` is ready, `search` finds nothing, `get` answers
-    /// [`CANARY`].
+    /// [`CANARY`], `checkout` lends [`LENT`] as lease [`LEASE_ID`] without an end, `checkin`
+    /// takes any lease back.
     pub fn new() -> Self {
         let mut bed = Self {
             data: Vec::new(),
@@ -72,12 +100,41 @@ impl SecretsBed {
             version: rc_plugin_api::API_VERSION,
         };
         let canary = bed.data(CANARY.as_bytes());
+        let lease = bed.data(LEASE_ID.as_bytes());
+        let lent = bed.data(LENT.as_bytes());
         bed.bodies = vec![
             format!("(i32.const {READY})"),
             ok_pair((0, 0)),
             ok_pair(canary),
+            ok_lease(lease, lent, None),
+            ok_unit(),
         ];
         bed
+    }
+
+    /// `checkout` lending [`LENT`] until `expires` (Unix seconds); a past time makes a lease
+    /// that has ended by the next connect.
+    #[must_use]
+    pub fn lending_until(mut self, expires: u64) -> Self {
+        let lease = self.data(LEASE_ID.as_bytes());
+        let lent = self.data(LENT.as_bytes());
+        self.body(Export::Checkout, ok_lease(lease, lent, Some(expires)))
+    }
+
+    /// `checkout` refusing with [`rc_plugin_api::secrets::REASON_REQUIRED`] unless a reason is
+    /// handed over, then lending [`LENT`].
+    #[must_use]
+    pub fn wanting_a_reason(mut self) -> Self {
+        let lease = self.data(LEASE_ID.as_bytes());
+        let lent = self.data(LENT.as_bytes());
+        let code = self.data(rc_plugin_api::secrets::REASON_REQUIRED.as_bytes());
+        let body = format!(
+            "(if (result i32) (i32.eqz (local.get 3))\n\
+             (then {})\n(else {}))",
+            lease_failure(ACCESS_DENIED, code),
+            ok_lease(lease, lent, None)
+        );
+        self.body(Export::Checkout, body)
     }
 
     /// Places `bytes` in a data segment; answers its pointer and length.
@@ -129,7 +186,11 @@ impl SecretsBed {
             let _ = writeln!(text, "(data (i32.const {at}) \"{escaped}\")");
         }
         text.push_str(REALLOC);
-        for (export, body) in Export::ALL.iter().zip(&self.bodies) {
+        for (export, body) in Export::ALL
+            .iter()
+            .zip(&self.bodies)
+            .filter(|(export, _)| export.in_contract(version))
+        {
             let _ = writeln!(
                 text,
                 "(func (export \"rcommander:plugin/secrets@{version}#{}\") {} (result i32) \
@@ -206,5 +267,48 @@ pub fn get_over_http(method: (u32, u32), url: (u32, u32)) -> String {
         HTTP_RET + 20,
         RET + 4,
         HTTP_RET + 4,
+    )
+}
+
+/// `ok(lease)`: the lease's id and value (ptr, len each) and its end, the payload at `RET + 8`.
+pub fn ok_lease(id: (u32, u32), value: (u32, u32), expires: Option<u64>) -> String {
+    let payload = RET + 8;
+    let (tag, seconds) = expires.map_or((0, 0), |seconds| (1, seconds));
+    format!(
+        "(i32.store8 (i32.const {RET}) (i32.const 0))\n\
+         (i32.store (i32.const {}) (i32.const {}))\n(i32.store (i32.const {}) (i32.const {}))\n\
+         (i32.store (i32.const {}) (i32.const {}))\n(i32.store (i32.const {}) (i32.const {}))\n\
+         (i32.store8 (i32.const {}) (i32.const {tag}))\n\
+         (i64.store (i32.const {}) (i64.const {seconds}))\n\
+         (i32.const {RET})",
+        payload,
+        id.0,
+        payload + 4,
+        id.1,
+        payload + 8,
+        value.0,
+        payload + 12,
+        value.1,
+        payload + 16,
+        payload + 24,
+    )
+}
+
+/// `err(failure { kind, code: some(code), params: [] })` of `checkout`, the payload at
+/// `RET + 8`; `kind` is the WIT enum's index.
+pub fn lease_failure(kind: u8, (at, length): (u32, u32)) -> String {
+    let payload = RET + 8;
+    format!(
+        "(i32.store8 (i32.const {RET}) (i32.const 1))\n\
+         (i32.store8 (i32.const {payload}) (i32.const {kind}))\n\
+         (i32.store8 (i32.const {}) (i32.const 1))\n\
+         (i32.store (i32.const {}) (i32.const {at}))\n(i32.store (i32.const {}) (i32.const {length}))\n\
+         (i32.store (i32.const {}) (i32.const 0))\n(i32.store (i32.const {}) (i32.const 0))\n\
+         (i32.const {RET})",
+        payload + 4,
+        payload + 8,
+        payload + 12,
+        payload + 16,
+        payload + 20
     )
 }

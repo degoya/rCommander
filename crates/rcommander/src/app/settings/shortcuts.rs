@@ -18,15 +18,21 @@
 //!
 //! "Add key for a theme..." adds a key that chooses a colour theme (RC-100-55, `theme.rs`); its
 //! row is named by the theme, and marked when the theme was deleted since. "Add key for a
-//! workspace..." does the same for a workspace (RC-100-68, `workspace.rs`).
+//! workspace..." does the same for a workspace (RC-100-68, `workspace.rs`), "Add key for an own
+//! command..." and "...for a Start menu entry..." for those (RC-100-86, `user_command.rs`).
 
 mod theme;
+mod user_command;
 mod workspace;
 
 use rc_engine::{Chord, Keymap, KeymapRow, Lock, Overrides, Refusal, settings::KEYMAP_KEY};
 
 use self::theme::ThemePick;
 pub use self::theme::{ThemeKeyMsg, ThemeOption, options as theme_options};
+pub use self::user_command::{
+    CommandKeyKind, CommandKeyMsg, CommandOption, CommandPick, options as command_options,
+    panel as command_panel,
+};
 use self::workspace::WorkspacePick;
 pub use self::workspace::{WorkspaceKeyMsg, WorkspaceOption, options as workspace_options};
 use super::{
@@ -77,6 +83,8 @@ pub struct ShortcutsPage {
     pub adding: Option<ThemePick>,
     /// "Add key for a workspace..." is open (RC-100-68).
     pub adding_workspace: Option<WorkspacePick>,
+    /// "Add key for an own command..." or "...for a Start menu entry..." is open (RC-100-86).
+    pub adding_command: Option<CommandPick>,
 }
 
 #[derive(Debug, Clone)]
@@ -95,6 +103,8 @@ pub enum ShortcutsMsg {
     Theme(ThemeKeyMsg),
     /// "Add key for a workspace..." (RC-100-68).
     Workspace(WorkspaceKeyMsg),
+    /// "Add key for an own command..." and "...for a Start menu entry..." (RC-100-86).
+    Command(CommandKeyMsg),
 }
 
 pub fn page_message(message: ShortcutsMsg) -> Message {
@@ -179,6 +189,9 @@ impl App {
         if let ShortcutsMsg::Workspace(message) = message {
             return self.workspace_key_message(message);
         }
+        if let ShortcutsMsg::Command(message) = message {
+            return self.command_key_message(message);
+        }
         let Some(dialog) = self.settings.as_mut() else {
             return Vec::new();
         };
@@ -195,6 +208,7 @@ impl App {
                 page.asking = None;
                 page.adding = None;
                 page.adding_workspace = None;
+                page.adding_command = None;
             }
             ShortcutsMsg::Record(recording) => {
                 if page.selected.is_some() && page.asking.is_none() {
@@ -229,6 +243,7 @@ impl App {
                 page.asking = None;
                 page.adding = None;
                 page.adding_workspace = None;
+                page.adding_command = None;
             }
             ShortcutsMsg::Replace => {
                 let asked = page.asking.take();
@@ -247,7 +262,7 @@ impl App {
                 page.asking = None;
                 page.recording = None;
             }
-            ShortcutsMsg::Theme(_) | ShortcutsMsg::Workspace(_) => {}
+            ShortcutsMsg::Theme(_) | ShortcutsMsg::Workspace(_) | ShortcutsMsg::Command(_) => {}
         }
         Vec::new()
     }
@@ -325,6 +340,15 @@ impl App {
             return match key {
                 "Enter" => Some(self.shortcuts_message(theme(ThemeKeyMsg::Record))),
                 "Escape" => Some(self.shortcuts_message(theme(ThemeKeyMsg::Cancel))),
+                "ArrowUp" | "ArrowDown" | "Delete" => Some(Vec::new()),
+                _ => None,
+            };
+        }
+        if dialog.shortcuts.adding_command.is_some() {
+            let command = ShortcutsMsg::Command;
+            return match key {
+                "Enter" => Some(self.shortcuts_message(command(CommandKeyMsg::Record))),
+                "Escape" => Some(self.shortcuts_message(command(CommandKeyMsg::Cancel))),
                 "ArrowUp" | "ArrowDown" | "Delete" => Some(Vec::new()),
                 _ => None,
             };

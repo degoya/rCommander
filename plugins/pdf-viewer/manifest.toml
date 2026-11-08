@@ -1,0 +1,37 @@
+# rCommander's bundled PDF viewer (RC-100-99). The fields every bundled plugin shares are in
+# plugins/metadata.toml; `scripts/build-plugins.sh` writes them into the manifest it packages.
+# A failure code starts with the plugin's id (locales/en.json).
+plugin_type = "viewer"
+api_version = "0.6.0"
+id = "01a1b720-fdd6-75dd-a577-079e819e4742"
+name = "PDF viewer"
+version = "0.1.0"
+
+[match]
+extensions = ["pdf"]
+magic = [
+    { offset = 0, hex = "255044462d" },                                      # %PDF-
+]
+# MAX_PDF_BYTES in src/lib.rs: hayro parses a document in memory, so a larger file is not read.
+max_size = 67108864
+
+[viewer]
+# The text page by page first; the document's information as a tree beside it.
+outputs = ["text", "tree"]
+
+# Nothing granted: the plugin reads the file it is handed and nothing else; no link, no
+# JavaScript and no embedded file is followed.
+[capabilities]
+
+[metadata]
+description = "Shows the text of a PDF page by page, and its title, author, dates, pages and version as a tree."
+
+# The document (64 MiB at most) lives in memory beside hayro's parsed objects, decoded streams,
+# fonts and the text of a page: beyond the default 64 MiB (RC-100-99: PDF up to 256 MiB).
+# Reading 64 MiB through `read-at` alone costs about 9e9 fuel (128 a byte), and running every
+# page's content stream more: the ceiling, 4e10, not the default 2e9. `text` reads every page in
+# one call.
+[limits]
+memory_bytes = 268435456
+fuel = 40000000000
+timeout_milliseconds = 60000

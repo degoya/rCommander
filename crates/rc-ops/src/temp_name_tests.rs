@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::{case_path, is_temp_name, pack_path, part_path};
+use super::{case_path, is_temp_name, pack_path, part_path, save_path};
 
 #[test]
 fn a_part_file_sits_beside_its_target() {
@@ -50,4 +50,17 @@ fn every_scheme_is_known_as_a_temporary_name() {
     for name in ["big.bin", "notes.rcpart.txt", ".rc-temp", "rc-tmp-1"] {
         assert!(!is_temp_name(name), "{name:?}");
     }
+}
+
+/// RC-100-94: the compare window's save goes beside the file, under a name the sweeps know.
+#[test]
+fn a_save_writes_beside_its_file_under_a_temporary_name() {
+    let temp = save_path(Path::new("/docs/notes.txt"), 0x2a);
+    assert_eq!(temp.parent(), Some(Path::new("/docs")));
+    let name = temp
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    assert!(name.ends_with("-2a-save"), "{name}");
+    assert!(is_temp_name(&name), "{name}");
 }

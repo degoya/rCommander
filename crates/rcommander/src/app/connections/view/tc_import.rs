@@ -1,5 +1,6 @@
 //! The page of the import from Total Commander: the two files, then a table with a box per
-//! hotlist item, tab, connection, colour, rule by file type and font with its status, the warnings, and the choices for tabs and
+//! hotlist item, tab, connection, colour, rule by file type and font, own command and Start menu
+//! row (RC-100-86) with its status, the warnings, and the choices for tabs and
 //! passwords in the card's row of buttons - never a password, only whether Total Commander keeps
 //! one. A cell is one line, cut at its column (a path or a host in the middle), its whole value
 //! in a tooltip.
@@ -8,7 +9,10 @@ use iced::{
     Alignment, Element, Length,
     widget::{Column, Space, checkbox, column, row, scrollable},
 };
-use rc_engine::{ImportStatus, PanelId, import::total_commander_report::TcImportReport};
+use rc_engine::{
+    CommandKind, CommandRef, ImportStatus, PanelId, StartItemKind,
+    import::total_commander_report::{TcImportReport, TcRowStatus},
+};
 
 use super::{Actions, cell, field, form::kind_label, hint, label, path_cell, table_row, wrap};
 use crate::{
@@ -233,6 +237,7 @@ fn report_view<'a>(
             ],
         ));
     }
+    rows = commands_view(dialog, report, rows, tokens);
     for warning in &report.warnings {
         rows = rows.push(hint(code_text("tc_import.warning", warning), tokens));
     }
@@ -249,4 +254,89 @@ fn report_view<'a>(
         }
     }
     rows.into()
+}
+
+/// What a command runs, as Total Commander writes it: `*` in front of a program that starts as
+/// administrator, then its parameters; the rows or the own command's name.
+fn action_text(action: Option<&CommandRef>) -> String {
+    let Some(action) = action else {
+        return String::new();
+    };
+    match action.kind {
+        CommandKind::Program => {
+            let star = if action.elevated { "*" } else { "" };
+            format!("{star}{} {}", action.command, action.params)
+                .trim_end()
+                .to_owned()
+        }
+        CommandKind::Internal | CommandKind::Own => action.command.clone(),
+    }
+}
+
+/// A row's status, with the Total Commander commands rCommander does not know.
+fn status_text(status: &TcRowStatus, unknown: &[String]) -> String {
+    let text = match status {
+        TcRowStatus::Skipped { reason } => code_text("tc_import.skip", reason),
+        other => code_text("tc_import.status", row_status_code(other)),
+    };
+    if unknown.is_empty() {
+        return text;
+    }
+    let names = unknown.join(", ");
+    format!("{text}; {}", t!("tc_import.unknown_rows", names = names))
+}
+
+/// The own commands of `usercmd.ini` and the Start menu of `[user]` (RC-100-86).
+fn commands_view<'a>(
+    dialog: &'a TcImportDialog,
+    report: &'a TcImportReport,
+    mut rows: Column<'a, Message>,
+    tokens: &'static Tokens,
+) -> Column<'a, Message> {
+    rows = rows.push(label(t!("tc_import.commands")).font(theme::UI_FONT_STRONG));
+    if let Some(usercmd) = &report.usercmd_ini {
+        rows = rows.push(hint(usercmd.as_str(), tokens));
+    }
+    for (at, command) in report.commands.iter().enumerate() {
+        rows = rows.push(table_row(
+            theme::alternate(at),
+            tokens,
+            vec![
+                pick(dialog, &command.key, row_importable(&command.status)),
+                cell(command.name.as_str(), 3, false, tokens),
+                path_cell(action_text(command.action.as_ref()), 5, false, tokens),
+                cell(
+                    status_text(&command.status, &command.unknown_rows),
+                    3,
+                    true,
+                    tokens,
+                ),
+            ],
+        ));
+    }
+    rows = rows.push(label(t!("tc_import.start_menu")).font(theme::UI_FONT_STRONG));
+    for (at, entry) in report.start_menu.iter().enumerate() {
+        let indent = "    ".repeat(entry.folders.len());
+        let title = match entry.kind {
+            StartItemKind::Item => format!("{indent}{}", entry.title),
+            StartItemKind::Submenu => format!("{indent}{}/", entry.title),
+            StartItemKind::Separator => format!("{indent}{}", t!("tc_import.separator")),
+        };
+        rows = rows.push(table_row(
+            theme::alternate(at),
+            tokens,
+            vec![
+                pick(dialog, &entry.key, row_importable(&entry.status)),
+                cell(title, 3, false, tokens),
+                path_cell(action_text(entry.action.as_ref()), 5, false, tokens),
+                cell(
+                    status_text(&entry.status, &entry.unknown_rows),
+                    3,
+                    true,
+                    tokens,
+                ),
+            ],
+        ));
+    }
+    rows
 }

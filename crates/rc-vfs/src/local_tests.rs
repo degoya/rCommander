@@ -187,3 +187,17 @@ async fn sync_takes_a_read_only_file() {
     std::fs::set_permissions(&file, permissions).expect("read-only");
     LocalFs::new().sync(&file).await.expect("synced");
 }
+
+/// A local listing reports the last access, as the custom columns show it (RC-100-90).
+#[tokio::test]
+async fn a_local_listing_carries_the_last_access() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let fs = LocalFs::new();
+    write(&fs, &dir.path().join("a.txt"), WriteMode::CreateNew, b"a").await;
+    let entries = fs.list(dir.path()).await.expect("list");
+    let entry = entries.iter().find(|entry| entry.name == "a.txt");
+    assert!(
+        entry.is_some_and(|entry| entry.accessed.is_some()),
+        "{entries:?}"
+    );
+}

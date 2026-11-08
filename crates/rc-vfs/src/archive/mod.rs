@@ -12,7 +12,9 @@
 //! The listing is scanned once and cached until the archive file's size or time changes.
 //! Encrypted zip and 7z entries are read with a password a person typed ([`ArchivePassword`],
 //! [`ArchiveFs::with_password`]); without one they are `password_required`.
-//! Writing is `unsupported`: packing is a way of its own (RC-030-04). Entry names are never
+//! Writing is `unsupported`: packing is a way of its own (RC-030-04), and so is changing an
+//! archive (RC-110-05, `rc-ops`' archive update job), which writes a new archive beside the old
+//! one; [`ArchiveFs::close_sessions`] lets go of the old one first. Entry names are never
 //! joined to a real path; names that climb out are cleaned and marked, links are shown and
 //! never followed, and [`ArchiveLimits`] stop archive bombs ([`safety`]).
 
@@ -44,6 +46,9 @@ use serde::{Deserialize, Serialize};
 
 pub use password::ArchivePassword;
 pub use safety::{ArchiveLimits, UnsafeName};
+/// The 7z checks of the decoder memory, for the writer that decodes a block of an archive it
+/// changes (RC-110-05) under the same limit as a read.
+pub use sevenz_memory::{check_block as check_sevenz_block, check_header as check_sevenz_header};
 pub use tree::{ArchiveEntryInfo, ArchiveItem};
 
 use self::{
@@ -265,6 +270,27 @@ impl ArchiveFs {
     /// As [`Vfs::stat`].
     pub async fn stat_detailed(&self, path: &Path) -> Result<ArchiveItem> {
         Ok(self.tree().await?.find(path)?.item())
+    }
+
+    /// The format's indices (zip, 7z) or positions (tar) of the entry at `path` and of every
+    /// stored entry below it: what a change of the archive removes for it (RC-110-05). A
+    /// directory the archive only implies has none of its own. Indices, not names: an entry
+    /// listed under a cleaned name never stands for another one.
+    ///
+    /// # Errors
+    ///
+    /// As [`Vfs::stat`].
+    pub async fn entry_indices(&self, path: &Path) -> Result<Vec<u64>> {
+        let tree = self.tree().await?;
+        let node = tree.find(path)?;
+        Ok(tree.indices_below(node))
+    }
+
+    /// Lets go of the archive file: a reading session parked between two reads ends and closes
+    /// it, so the file can be replaced (Windows replaces no open file). A read still running
+    /// keeps its own.
+    pub fn close_sessions(&self) {
+        self.sessions.close();
     }
 
     /// The tree, scanned again when the archive file changed since the last scan.

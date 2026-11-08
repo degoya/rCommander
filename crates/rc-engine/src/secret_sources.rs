@@ -16,9 +16,13 @@
 //! The commands are in `secret_sources/commands.rs`: listing the sources and searching one are
 //! reads (titles, users and addresses, never a value); setting or removing a reference is the
 //! window's alone (`GuiOnly`).
+//!
+//! A PAM system lends its secret instead (`[secrets] checkout = true`, RC-100-38): checked out at
+//! connect, held for the session and given back when it ends (`secret_sources/leases.rs`).
 
 mod commands;
 mod error;
+mod leases;
 mod wincred;
 
 use std::{
@@ -31,7 +35,7 @@ use std::{
 
 use rc_plugin_api::secrets::{SecretEntry, SecretField, SourceState};
 use rc_plugin_host::{
-    ExecutionLog, InstalledPlugin, PluginType, SecretsOptions, SecretsPlugin, installed,
+    ExecutionLog, InstalledPlugin, Lease, PluginType, SecretsOptions, SecretsPlugin, installed,
 };
 use rc_plugin_types::{Failure, FailureKind};
 use rc_vault::SecretString;
@@ -39,6 +43,8 @@ use rc_vault::SecretString;
 pub(crate) use commands::check_reference;
 pub use commands::{SecretSourceInfo, SecretSourcesOutcome, SourceEntry};
 pub use error::SecretSourceError;
+pub(crate) use leases::Leases;
+pub use leases::{CHECKOUT_KEEP_REASON_KEY, MAX_CHECKOUT_REASON_CHARS};
 pub use rc_db::SecretSourceRef;
 pub use wincred::WINCRED_SOURCE_KEY;
 
@@ -132,6 +138,32 @@ impl LoadedSource {
             }
         }
     }
+
+    /// Whether the source is a PAM system that lends its secret (RC-100-38).
+    pub(crate) fn lends(&self) -> bool {
+        matches!(&self.backend, Backend::Plugin(plugin) if plugin.lends())
+    }
+
+    /// Lends the secret `kind` of entry `id`, with the person's `reason`.
+    async fn checkout(
+        &self,
+        id: &str,
+        kind: SecretKind,
+        reason: Option<&str>,
+    ) -> Result<Lease, Failure> {
+        match &self.backend {
+            Backend::Plugin(plugin) => Box::pin(plugin.checkout(id, field(kind), reason)).await,
+            Backend::Wincred => Err(Failure::new(FailureKind::NotSupported)),
+        }
+    }
+
+    /// Gives the lease `lease_id` back.
+    async fn checkin(&self, lease_id: &str) -> Result<(), Failure> {
+        match &self.backend {
+            Backend::Plugin(plugin) => Box::pin(plugin.checkin(lease_id)).await,
+            Backend::Wincred => Err(Failure::new(FailureKind::NotSupported)),
+        }
+    }
 }
 
 /// `call` on the blocking pool: the credential functions are system calls.
@@ -145,12 +177,28 @@ async fn blocking<T: Send + 'static>(
 }
 
 impl Engine {
-    /// The value of the secret `reference` points to, asked from its source now.
+    /// The value of the secret `reference` points to, asked from its source now - or lent by it:
+    /// the lease held for the connection while it stands, else a new checkout (`leases.rs`).
+    /// `announce` lets a PAM system's wish for a reason open the window's question.
     pub(crate) async fn secret_from_source(
         &self,
         reference: &SecretSourceRef,
+        announce: bool,
     ) -> Result<SecretString, EngineError> {
+        match self
+            .inner
+            .remotes
+            .leases
+            .find(reference, leases::unix_now())
+        {
+            leases::Found::Value(value) => return Ok(value),
+            leases::Found::Stale(ended) => self.give_back(ended).await,
+            leases::Found::Nothing => {}
+        }
         let source = self.load_source(&reference.source).await?;
+        if source.lends() {
+            return Box::pin(self.checkout_secret(reference, source, announce)).await;
+        }
         match source.get(&reference.entry_id, reference.kind).await {
             Ok(value) => {
                 self.remember_secret(&value);
@@ -326,3 +374,7 @@ mod tests;
 #[cfg(test)]
 #[path = "secret_sources_wincred_tests.rs"]
 mod wincred_seam_tests;
+
+#[cfg(test)]
+#[path = "secret_sources_lease_tests.rs"]
+mod lease_tests;

@@ -100,6 +100,11 @@ impl Ini {
             .map(|&at| &self.sections[at])
     }
 
+    /// Every section, in file order (`usercmd.ini`'s `em_*`, RC-100-86).
+    pub fn sections(&self) -> impl Iterator<Item = &Section> {
+        self.sections.iter()
+    }
+
     /// The index of the section `name`, added when it is new.
     fn section_at(&mut self, name: &str) -> usize {
         let next = self.sections.len();

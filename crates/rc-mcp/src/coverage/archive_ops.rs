@@ -3,6 +3,8 @@
 use super::Coverage;
 
 pub(super) const ROWS: &[(&str, Coverage)] = &[
+    ("archive.add", Coverage::Covered("archives_add")),
+    ("archive.delete", Coverage::Covered("archives_delete")),
     ("archive.extract", Coverage::Covered("archives_extract")),
     ("archive.pack", Coverage::Covered("archives_pack")),
     (

@@ -6,7 +6,9 @@
 //! asks for a new master password (`vault.create`) before it stores again; with a locked one it
 //! is `vault_locked`. A private key comes only from its file (`secrets.import_key`), opened once
 //! with its passphrase to prove both, and is stored with its public half in clear; the file is
-//! left as it is. When a removal takes the last stored secret the engine announces
+//! left as it is. The OpenSSH user certificate beside the file (`<key>-cert.pub`, RC-060-09) is
+//! taken in with it while `ssh.certificates` is on: it must certify the key, and is stored in
+//! clear - it is public. When a removal takes the last stored secret the engine announces
 //! [`EngineEvent::VaultUnused`] so the GUI can offer to remove the vault too.
 
 use rc_db::SECRET_COLUMNS;
@@ -19,6 +21,12 @@ use crate::{
     ConnectionId, Engine, EngineError, EngineEvent, MAX_KEY_BYTES, Outcome, SecretKind,
     SecretParam, StoredKey, TreeChange, TreeItem,
     secrets::{field, local_key_path},
+    settings::SSH_CERTIFICATES_KEY,
+};
+use rc_db::KeyCertificate;
+use rc_remote::{
+    SshError,
+    certificate::{self, CERTIFICATE_SUFFIX, CertificateError, MAX_CERTIFICATE_BYTES},
 };
 
 impl Engine {
@@ -43,7 +51,8 @@ impl Engine {
 
     /// `secrets.import_key`: the key file - a local one ([`local_key_path`]) - read once, checked
     /// and opened with `passphrase` off the async threads, then the key, its passphrase (only
-    /// when the key needs one) and its public half stored in one transaction.
+    /// when the key needs one), its public half and the certificate beside it
+    /// ([`Engine::beside_certificate`]) stored in one transaction.
     pub(crate) async fn import_key(
         &self,
         id: ConnectionId,
@@ -62,20 +71,26 @@ impl Engine {
         let passphrase = passphrase
             .filter(|passphrase| !passphrase.is_empty())
             .map(|passphrase| passphrase.secret().clone());
-        self.store_private_key(id, key, passphrase).await
+        self.store_private_key(id, key, passphrase, Some(path))
+            .await
     }
 
     /// A private key's text and its passphrase: opened once off the async threads to prove
     /// both, then the key, its passphrase (only when the key needs one) and its public half
-    /// stored in one transaction. `secrets.import_key` reads the key from its file, the import
-    /// of an export (RC-080-19) from the export.
+    /// stored in one transaction. `secrets.import_key` reads the key from its file - `path`,
+    /// whose certificate beside it is taken too - the import of an export (RC-080-19) from the
+    /// export.
     pub(crate) async fn store_private_key(
         &self,
         id: ConnectionId,
         key: SecretString,
         passphrase: Option<SecretString>,
+        path: Option<&str>,
     ) -> Result<Outcome, EngineError> {
-        let (stored, passphrase) = open_key(&key, passphrase).await?;
+        let (mut stored, passphrase) = open_key(&key, passphrase).await?;
+        if let Some(path) = path {
+            stored.certificate = self.beside_certificate(path, &stored).await?;
+        }
         let connection = {
             let _writes = self.inner.secret_writes.lock().await;
             let vault = self.vault_handle().await?;
@@ -184,8 +199,78 @@ pub(crate) async fn open_key(
         comment: info.comment,
         stored: true,
         public_key: info.public_key,
+        certificate: None,
     };
     Ok((stored, passphrase))
+}
+
+impl Engine {
+    /// The OpenSSH user certificate beside the key file `path` (`<path>-cert.pub`, RC-060-09)
+    /// for the key `stored`, described; `None` when there is none or `ssh.certificates` is off.
+    ///
+    /// # Errors
+    ///
+    /// The certificate cannot be read ([`EngineError::KeyFileUnreadable`]), is no OpenSSH user
+    /// certificate or certifies another key (`ssh_certificate_invalid`,
+    /// `ssh_certificate_key_mismatch`): the person learns why instead of a key that logs in
+    /// without it.
+    pub(crate) async fn beside_certificate(
+        &self,
+        path: &str,
+        stored: &StoredKey,
+    ) -> Result<Option<KeyCertificate>, EngineError> {
+        if !self.setting_on(SSH_CERTIFICATES_KEY).await {
+            return Ok(None);
+        }
+        let Some(text) = read_beside_certificate(path).await? else {
+            return Ok(None);
+        };
+        certificate::inspect_line(&text, &stored.public_key)
+            .map(Some)
+            .map_err(certificate_error)
+    }
+}
+
+/// A certificate's failure as the engine answers it; its code is the certificate's.
+fn certificate_error(error: CertificateError) -> EngineError {
+    EngineError::Ssh(SshError::Certificate(error))
+}
+
+/// The text of `<path>-cert.pub` beside the local key file `path`, at most
+/// [`MAX_CERTIFICATE_BYTES`] and UTF-8; `None` when there is no such file. Public: not zeroized.
+///
+/// # Errors
+///
+/// [`EngineError::KeyFileUnreadable`] naming the certificate's path, `ssh_certificate_invalid`
+/// for one too large or not UTF-8.
+pub(crate) async fn read_beside_certificate(path: &str) -> Result<Option<String>, EngineError> {
+    if !local_key_path(path) {
+        return Ok(None);
+    }
+    let path = format!("{path}{CERTIFICATE_SUFFIX}");
+    let unreadable = |source| EngineError::KeyFileUnreadable {
+        path: path.clone(),
+        source,
+    };
+    match tokio::fs::metadata(&path).await {
+        Ok(found) if found.is_file() => {}
+        Ok(_) => return Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(unreadable(error)),
+    }
+    let file = tokio::fs::File::open(&path).await.map_err(unreadable)?;
+    let limit = u64::try_from(MAX_CERTIFICATE_BYTES).unwrap_or(u64::MAX);
+    let mut bytes = Vec::new();
+    file.take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(unreadable)?;
+    if bytes.len() > MAX_CERTIFICATE_BYTES {
+        return Err(certificate_error(CertificateError::Invalid));
+    }
+    String::from_utf8(bytes)
+        .map(Some)
+        .map_err(|_| certificate_error(CertificateError::Invalid))
 }
 
 /// The key file a connection names (`key_path`, a quick connection's key), for its SSH session:
@@ -262,3 +347,7 @@ mod endpoint_tests;
 #[cfg(test)]
 #[path = "secrets_import_tests.rs"]
 mod import_tests;
+
+#[cfg(test)]
+#[path = "secrets_cert_tests.rs"]
+mod cert_tests;

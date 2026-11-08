@@ -3,7 +3,8 @@
 //! the import of OpenSSH's `known_hosts`; the SSH agents ([`agent`]: `ssh-agent`, the Windows
 //! OpenSSH agent service, Pageant), whose keys it lists and whose signer the login uses; and the
 //! private keys a person takes into the vault ([`private_key`]: checked, described, opened again
-//! for a session), with the one table of what marks key material ([`key_markers`]). [`ftp`] is
+//! for a session), with the one table of what marks key material ([`key_markers`]), and the
+//! OpenSSH user certificates a CA signed for them ([`certificate`], RC-060-09). [`ftp`] is
 //! FTP and FTPS as a file system ([`FtpVfs`]), [`sftp`] SFTP over the channels of an SSH session
 //! ([`SftpVfs`]). [`login_script`] is the
 //! model and the engine of login scripts, played against any byte stream. [`ssh`] is the SSH
@@ -14,6 +15,7 @@
 //! its fixtures.
 
 pub mod agent;
+pub mod certificate;
 pub mod ftp;
 mod hashed;
 pub mod hostkey;
@@ -36,6 +38,7 @@ pub use agent::{
     AGENT_FAILED, AGENT_NOT_FOUND, AGENT_TIMEOUT, AgentError, AgentIdentity, AgentSource,
     AgentSourceKind, WindowsAgents,
 };
+pub use certificate::CertificateError;
 pub use ftp::{FtpError, FtpVfs};
 pub use hostkey::{
     HOST_KEY_CHANGED, HOST_KEY_INVALID, HOST_KEY_REVOKED, HOST_KEY_UNKNOWN, HOST_KEY_UNSUPPORTED,

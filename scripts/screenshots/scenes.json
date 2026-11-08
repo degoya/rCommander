@@ -1,6 +1,9 @@
 {
   "version": 1,
-  "size": { "width": 1280, "height": 800 },
+  "size": {
+    "width": 1280,
+    "height": 800
+  },
   "startup_ms": 3000,
   "scenes": [
     {
@@ -8,10 +11,44 @@
       "theme": "dark",
       "settle_ms": 1000,
       "steps": [
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "website" } } },
-        { "command": { "command": "panel.toggle_selection", "params": { "panel": "right", "names": ["index.html", "style.css"] } } },
-        { "command": { "command": "panel.set_cursor", "params": { "panel": "left", "target": "Documents" } } },
-        { "command": { "command": "panel.switch_active", "params": { "panel": "left" } } }
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "website"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.toggle_selection",
+            "params": {
+              "panel": "right",
+              "names": [
+                "index.html",
+                "style.css"
+              ]
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.set_cursor",
+            "params": {
+              "panel": "left",
+              "target": "Documents"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.switch_active",
+            "params": {
+              "panel": "left"
+            }
+          }
+        }
       ]
     },
     {
@@ -24,66 +61,217 @@
       "theme": "dark",
       "settle_ms": 1000,
       "steps": [
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "Downloads" } } },
-        { "command": { "command": "panel.set_cursor", "params": { "panel": "left", "target": "website-0.9.0.tar" } } },
-        { "command": { "command": "panel.open_entry", "params": { "panel": "left" } } }
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "Downloads"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.set_cursor",
+            "params": {
+              "panel": "left",
+              "target": "website-0.9.0.tar"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.open_entry",
+            "params": {
+              "panel": "left"
+            }
+          }
+        }
       ]
     },
     {
       "name": "connection-manager",
       "settle_ms": 1200,
       "steps": [
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
-        { "key": "Ctrl+F" }
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "{demo}"
+            }
+          }
+        },
+        {
+          "key": "Ctrl+F"
+        }
       ]
     },
     {
       "name": "multi-rename",
       "settle_ms": 1200,
       "steps": [
-        { "key": "Escape" },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "Photos" } } },
-        { "command": { "command": "panel.select_all", "params": { "panel": "left" } } },
-        { "key": "Ctrl+M" }
+        {
+          "key": "Escape"
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "Photos"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.select_all",
+            "params": {
+              "panel": "left"
+            }
+          }
+        },
+        {
+          "key": "Ctrl+M"
+        }
       ]
     },
     {
       "name": "compare",
       "settle_ms": 1500,
       "steps": [
-        { "key": "Escape" },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "Projects" } } },
-        { "command": { "command": "panel.toggle_selection", "params": { "panel": "left", "names": ["config.old.toml", "config.toml"] } } },
-        { "command": { "command": "compare.open_diff", "params": {} } }
+        {
+          "key": "Escape"
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "{demo}"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "Projects"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.toggle_selection",
+            "params": {
+              "panel": "left",
+              "names": [
+                "config.old.toml",
+                "config.toml"
+              ]
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "compare.open_diff",
+            "params": {}
+          }
+        }
       ]
     },
     {
       "name": "synchronize",
       "settle_ms": 1500,
       "steps": [
-        { "key": "Escape" },
-        { "command": { "command": "panel.deselect_all", "params": { "panel": "left" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "website" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "Projects" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "website-backup" } } },
-        { "command": { "command": "sync.open_dialog", "params": {} } }
+        {
+          "key": "Escape"
+        },
+        {
+          "command": {
+            "command": "panel.deselect_all",
+            "params": {
+              "panel": "left"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "website"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "{demo}"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "Projects"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "website-backup"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "sync.open_dialog",
+            "params": {}
+          }
+        }
       ]
     },
     {
       "name": "mcp-question",
       "settle_ms": 1000,
       "steps": [
-        { "key": "Escape" },
-        { "command": { "command": "panel.toggle_selection", "params": { "panel": "left", "names": ["index.html", "style.css"] } } },
+        {
+          "key": "Escape"
+        },
+        {
+          "command": {
+            "command": "panel.toggle_selection",
+            "params": {
+              "panel": "left",
+              "names": [
+                "index.html",
+                "style.css"
+              ]
+            }
+          }
+        },
         {
           "mcp_question": {
             "tool": "ops_copy",
             "class": "write",
             "arguments": [
-              { "name": "panel", "value": "left" },
-              { "name": "target", "value": "{demo}\\Downloads" }
+              {
+                "name": "panel",
+                "value": "left"
+              },
+              {
+                "name": "target",
+                "value": "{demo}\\Downloads"
+              }
             ],
             "session": true
           }
@@ -94,18 +282,51 @@
       "name": "terminal",
       "settle_ms": 3000,
       "steps": [
-        { "command": { "command": "panel.deselect_all", "params": { "panel": "left" } } },
-        { "command": { "command": "panel.switch_active", "params": { "panel": "right" } } },
-        { "key": "Ctrl+[Backquote]" }
+        {
+          "command": {
+            "command": "panel.deselect_all",
+            "params": {
+              "panel": "left"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.switch_active",
+            "params": {
+              "panel": "right"
+            }
+          }
+        },
+        {
+          "key": "Ctrl+[Backquote]"
+        }
       ]
     },
     {
       "name": "lister",
       "settle_ms": 1500,
       "steps": [
-        { "key": "Ctrl+[Backquote]" },
-        { "command": { "command": "panel.switch_active", "params": { "panel": "left" } } },
-        { "command": { "command": "view.open", "params": { "panel": "left", "path": "README.md" } } }
+        {
+          "key": "Ctrl+[Backquote]"
+        },
+        {
+          "command": {
+            "command": "panel.switch_active",
+            "params": {
+              "panel": "left"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "view.open",
+            "params": {
+              "panel": "left",
+              "path": "README.md"
+            }
+          }
+        }
       ]
     },
     {
@@ -113,17 +334,121 @@
       "theme": "dark",
       "settle_ms": 1500,
       "steps": [
-        { "key": "Escape" },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}\\Projects" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}\\Projects\\website" } } },
-        { "command": { "command": "workspaces.capture", "params": { "name": "Website" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}\\Photos" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}\\Downloads" } } },
-        { "command": { "command": "workspaces.capture", "params": { "name": "Sorting photos" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "{demo}\\Documents" } } },
-        { "command": { "command": "workspaces.capture", "params": { "name": "Paperwork" } } },
-        { "open": "workspaces" }
+        {
+          "key": "Escape"
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "{demo}\\Projects"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "{demo}\\Projects\\website"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "workspaces.capture",
+            "params": {
+              "name": "Website"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "{demo}\\Photos"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "{demo}\\Downloads"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "workspaces.capture",
+            "params": {
+              "name": "Sorting photos"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "{demo}"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "{demo}\\Documents"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "workspaces.capture",
+            "params": {
+              "name": "Paperwork"
+            }
+          }
+        },
+        {
+          "open": "workspaces"
+        }
+      ]
+    },
+    {
+      "name": "commands",
+      "theme": "dark",
+      "settle_ms": 1500,
+      "steps": [
+        {
+          "key": "Escape"
+        },
+        {
+          "open": "commands"
+        }
+      ]
+    },
+    {
+      "name": "button-bar",
+      "theme": "dark",
+      "settle_ms": 1500,
+      "steps": [
+        {
+          "key": "Escape"
+        },
+        {
+          "command": {
+            "command": "button_bar.focus",
+            "params": {
+              "bar": "horizontal"
+            }
+          }
+        }
       ]
     },
     {
@@ -131,8 +456,12 @@
       "capture": "settings",
       "settle_ms": 1500,
       "steps": [
-        { "key": "Escape" },
-        { "open": "settings" }
+        {
+          "key": "Escape"
+        },
+        {
+          "open": "settings"
+        }
       ]
     },
     {
@@ -141,8 +470,14 @@
       "capture": "settings",
       "settle_ms": 1500,
       "steps": [
-        { "key": "Escape" },
-        { "open": "settings", "page": "appearance", "tab": "themes" }
+        {
+          "key": "Escape"
+        },
+        {
+          "open": "settings",
+          "page": "appearance",
+          "tab": "themes"
+        }
       ]
     },
     {
@@ -150,13 +485,62 @@
       "theme": "dark",
       "settle_ms": 2000,
       "steps": [
-        { "close": "settings" },
-        { "command": { "command": "settings.set", "params": { "key": "appearance.connection_themes", "value": true } } },
-        { "command": { "command": "settings.set", "params": { "key": "appearance.wsl_themes", "value": "{wsl}\tsolarized-light\tsolarized-dark" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "left", "path": "{demo}" } } },
-        { "command": { "command": "panel.set_cursor", "params": { "panel": "left", "target": "Documents" } } },
-        { "command": { "command": "panel.navigate", "params": { "panel": "right", "path": "\\\\wsl.localhost\\{wsl}\\usr" } } },
-        { "command": { "command": "panel.switch_active", "params": { "panel": "left" } } }
+        {
+          "close": "settings"
+        },
+        {
+          "command": {
+            "command": "settings.set",
+            "params": {
+              "key": "appearance.connection_themes",
+              "value": true
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "settings.set",
+            "params": {
+              "key": "appearance.wsl_themes",
+              "value": "{wsl}\tsolarized-light\tsolarized-dark"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "left",
+              "path": "{demo}"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.set_cursor",
+            "params": {
+              "panel": "left",
+              "target": "Documents"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.navigate",
+            "params": {
+              "panel": "right",
+              "path": "\\\\wsl.localhost\\{wsl}\\usr"
+            }
+          }
+        },
+        {
+          "command": {
+            "command": "panel.switch_active",
+            "params": {
+              "panel": "left"
+            }
+          }
+        }
       ]
     }
   ]

@@ -4,20 +4,22 @@
 
 use iced::{
     Alignment, Color, Element, Length,
-    widget::{Column, Row, Space, checkbox, column, container, mouse_area, pick_list, row, sensor},
+    widget::{Row, Space, checkbox, column, container, pick_list, row},
 };
-use rc_engine::{Conflict, MaskField, SUBFOLDER_SEPARATOR};
+use rc_engine::MaskField;
 
 use super::{
     CaseChoice, Field, Flag, MrMsg, MultiRenameDialog, Placeholder, PresetChoice, Preview, Status,
-    controls::{field, field_sized, flag, indented, labelled, small_button, wrap},
+    controls::{field, field_sized, flag, indented, labelled, mask_field, small_button, wrap},
+    names::more_row,
+    table::table,
 };
 use crate::{
     app::{
         Message,
         browse::{self, PathField},
     },
-    i18n::{error_text, t},
+    i18n::t,
     theme::{
         self, Tokens,
         fit::{self, line},
@@ -28,7 +30,6 @@ use crate::{
 };
 
 const NUMBER_WIDTH: f32 = 70.0;
-const CONFLICT_WIDTH: f32 = 300.0;
 
 /// The dialog over the window.
 pub fn overlay<'a>(dialog: &'a MultiRenameDialog, tokens: &'static Tokens) -> Element<'a, Message> {
@@ -43,7 +44,8 @@ pub fn body<'a>(dialog: &'a MultiRenameDialog, tokens: &'static Tokens) -> Eleme
     let danger = theme::DANGER;
     column![
         masks(dialog, danger),
-        placeholders(),
+        placeholders(dialog.form.names.is_some()),
+        more_row(dialog),
         search(dialog),
         case_and_counter(dialog),
         presets(dialog),
@@ -56,9 +58,11 @@ pub fn body<'a>(dialog: &'a MultiRenameDialog, tokens: &'static Tokens) -> Eleme
     .into()
 }
 
-/// The two masks, each with the position of its error underneath.
+/// The two masks, each with the position of its error underneath; locked while a name list
+/// stands in for them.
 fn masks(dialog: &MultiRenameDialog, danger: Color) -> Element<'_, Message> {
     let form = &dialog.form;
+    let locked = form.names.is_some();
     let error = |mask: MaskField| match &dialog.preview {
         Preview::Failed(error) => error.mask.and_then(|(field, position)| {
             (field == mask).then(|| {
@@ -71,12 +75,17 @@ fn masks(dialog: &MultiRenameDialog, danger: Color) -> Element<'_, Message> {
         }),
         _ => None,
     };
-    let mut name = column![field(&form.name_mask, Field::NameMask, "[N]")].spacing(2);
+    let mut name = column![mask_field(&form.name_mask, Field::NameMask, "[N]", locked)].spacing(2);
     if let Some(error) = error(MaskField::Name) {
         name = name.push(fit::prose(error).color(danger));
     }
-    let mut extension =
-        column![field(&form.extension_mask, Field::ExtensionMask, "[E]")].spacing(2);
+    let mut extension = column![mask_field(
+        &form.extension_mask,
+        Field::ExtensionMask,
+        "[E]",
+        locked
+    )]
+    .spacing(2);
     if let Some(error) = error(MaskField::Extension) {
         extension = extension.push(fit::prose(error).color(danger));
     }
@@ -91,13 +100,13 @@ fn masks(dialog: &MultiRenameDialog, danger: Color) -> Element<'_, Message> {
 }
 
 /// The buttons `[N]`, `[N#-#]`, `[C]`, `[YMD]`, `[hms]` and the menu with all the others; each
-/// goes into the mask typed in last.
-fn placeholders() -> Element<'static, Message> {
+/// goes into the mask typed in last. The buttons are off while a name list is `locked` in.
+fn placeholders(locked: bool) -> Element<'static, Message> {
     let mut buttons = Row::new().spacing(6).align_y(Alignment::Center);
     for placeholder in Placeholder::BUTTONS {
         buttons = buttons.push(small_button(
             placeholder.label(),
-            Some(MrMsg::Insert(placeholder)),
+            (!locked).then_some(MrMsg::Insert(placeholder)),
         ));
     }
     let insert = |placeholder| wrap(MrMsg::Insert(placeholder));
@@ -346,108 +355,6 @@ fn status<'a>(
     ]
     .spacing(16)
     .into()
-}
-
-/// The rows on screen: old name, new name, conflict; a click puts the cursor on one, the wheel
-/// scrolls, a click on the old name's header sorts by it.
-fn table<'a>(
-    dialog: &'a MultiRenameDialog,
-    tokens: &'static Tokens,
-    danger: Color,
-) -> Element<'a, Message> {
-    let list = &dialog.list;
-    // focus-ring: pointer only (the column header; its access key sorts by the old name too)
-    let sort = mouse_area(
-        line(t!("multi_rename.column_old"))
-            .color(tokens.text_secondary)
-            .width(Length::Fill),
-    )
-    .on_press(wrap(MrMsg::SortByName));
-    let header = row![
-        sort,
-        line(t!("multi_rename.column_new"))
-            .color(tokens.text_secondary)
-            .width(Length::Fill),
-        line(t!("multi_rename.column_conflict"))
-            .color(tokens.text_secondary)
-            .width(CONFLICT_WIDTH),
-    ]
-    .spacing(8)
-    .padding([0, 6]);
-    let rows = list.visible().filter_map(|index| {
-        let (old, item) = list.row(index)?;
-        let new = item.map_or_else(String::new, |item| shown(&item.new));
-        let conflict = item.and_then(|item| item.conflict);
-        let reason = conflict.map_or_else(String::new, |conflict| conflict_text(conflict, dialog));
-        let color = if conflict.is_some() {
-            danger
-        } else {
-            tokens.text
-        };
-        // Names are shortened in the middle, the reason cut at its end; each whole in a tooltip when
-        // it does not fit.
-        let reason_cell = container(line(reason.clone()).color(danger))
-            .width(CONFLICT_WIDTH)
-            .clip(true);
-        let reason_cell = if fit::overflows(&reason, CONFLICT_WIDTH) {
-            fit::tip(reason_cell, reason, tokens)
-        } else {
-            reason_cell.into()
-        };
-        let cells = row![
-            fit::path_cell(old, 1, false, tokens),
-            container(fit::path_line(new, color, tokens)).width(Length::Fill),
-            reason_cell,
-        ]
-        .spacing(8)
-        .padding([0, 6])
-        .align_y(Alignment::Center);
-        let cursor = index == list.cursor();
-        let framed = container(cells)
-            .height(theme::ROW_HEIGHT)
-            .width(Length::Fill)
-            .align_y(Alignment::Center)
-            .clip(true)
-            .style(move |_| {
-                theme::striped_row(tokens, cursor, true, false, theme::alternate(index))
-            });
-        Some(
-            // focus-ring: pointer only (a row of the rows choice stop)
-            mouse_area(framed)
-                .on_press(wrap(MrMsg::Click(index)))
-                .into(),
-        )
-    });
-    let body = container(Column::with_children(rows))
-        .height(Length::Fill)
-        .width(Length::Fill)
-        .clip(true);
-    let body = mouse_area(body)
-        .on_scroll(|delta| wrap(MrMsg::Scroll(theme::wheel::rows(delta, theme::ROW_HEIGHT))));
-    // The table reports its height, so as many rows are drawn as fit.
-    let body = sensor(body)
-        .on_show(|size| wrap(MrMsg::Viewport(theme::rows_for(size.height))))
-        .on_resize(|size| wrap(MrMsg::Viewport(theme::rows_for(size.height))));
-    // The rows are one stop of the ring; the dialog moves their cursor with the arrows.
-    let body = focus::choice(body, "multi_rename.rows", None, None);
-    column![header, body].spacing(4).height(Length::Fill).into()
-}
-
-/// A new name as the platform spells a path: `sub\name` on Windows.
-fn shown(name: &str) -> String {
-    name.replace(SUBFOLDER_SEPARATOR, std::path::MAIN_SEPARATOR_STR)
-}
-
-/// Why a row cannot be renamed; a duplicate names the other entry.
-fn conflict_text(conflict: Conflict, dialog: &MultiRenameDialog) -> String {
-    let reason = error_text(conflict.code());
-    match conflict {
-        Conflict::Duplicate { other } => match dialog.list.row(other) {
-            Some((name, _)) => t!("multi_rename.duplicate_of", reason = reason, name = name),
-            None => reason,
-        },
-        _ => reason,
-    }
 }
 
 /// Move up and down at the left; Start (the primary), Undo and Close at the right.

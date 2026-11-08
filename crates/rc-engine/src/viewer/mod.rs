@@ -12,13 +12,20 @@
 //!   forward or backward with progress and cancellation; [`sniff`] tells an image from text.
 //! - [`read`] and [`secret`] serve `files.read_text` and `files.read_hex`, the MCP side: capped
 //!   windows, private keys masked.
+//! - [`cert`] reads certificates and keys for their report and tree (RC-110-08), with
+//!   `rc_cert`; [`memory_text`] shows the report's text from memory as if it were a file.
+//! - [`exif`] reads a photo's EXIF block (JPEG, PNG, WebP) for the image view's EXIF tree and
+//!   `file.properties` (RC-100-99).
 //!
 //! The window that draws all this is the GUI's (`crates/rcommander`); decoding images too.
 
+pub mod cert;
 pub mod cp437;
 pub mod encoding;
+pub mod exif;
 pub mod hex;
 mod line_index;
+pub mod memory_text;
 pub mod read;
 pub mod search;
 pub mod secret;
@@ -26,6 +33,8 @@ pub mod sniff;
 mod source;
 pub mod text;
 
+#[cfg(test)]
+pub(crate) mod exif_fixtures;
 #[cfg(test)]
 pub(crate) mod test_support;
 

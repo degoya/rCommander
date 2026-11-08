@@ -107,6 +107,26 @@ pub const RETAINED_TABLES: &[RetainedTable] = &[
             max_age_days: 365,
         },
     },
+    // The most visited folders (RC-100-92): one row per folder with its halving count, for the
+    // lower end of the history list (Alt+Down). A folder not visited for a year goes.
+    RetainedTable {
+        table: "dir_frequent",
+        time_column: "last_visit",
+        rows_key: "retention.dir_frequent.max_rows",
+        age_key: "retention.dir_frequent.max_age_days",
+        defaults: RetentionLimits {
+            max_rows: 500,
+            max_age_days: 365,
+        },
+        floor: RetentionLimits {
+            max_rows: 50,
+            max_age_days: 30,
+        },
+        ceiling: RetentionLimits {
+            max_rows: 5_000,
+            max_age_days: 3_650,
+        },
+    },
     // The MCP audit log (RC-080-66): one row per tool call the gate decided - masked arguments
     // cut to 2 KiB, never an answer. An agent's busy hour is some hundred calls.
     RetainedTable {

@@ -5,7 +5,10 @@
 //! manager is a large dialog: its card fills the window but for a margin, so a form scrolls only
 //! in a window too small for it.
 
+mod certificate;
 mod form;
+mod form_labels;
+mod forwards;
 mod import;
 mod inventory;
 mod menu;

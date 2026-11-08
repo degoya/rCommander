@@ -11,6 +11,10 @@
 //! middle) reverses its steps at once, so every name is as before; off, the run stops as Total
 //! Commander's does, and the message names each entry left under a temporary name, for Undo.
 //! Neither is protected: either way no file is lost or overwritten.
+//!
+//! Shift+F6 on several selected entries (RC-110-04): on, the default, it opens the rename dialog
+//! with the mask `*.*`, as Total Commander does; off, it always renames the entry under the
+//! cursor in the list.
 
 use super::{Choice, SettingKind, SettingPage, SettingSpec};
 
@@ -18,6 +22,8 @@ use super::{Choice, SettingKind, SettingPage, SettingSpec};
 pub const COPY_LINKS_KEY: &str = "ops.copy_links";
 /// Whether a failed multi-rename with entries under temporary names is reversed at once.
 pub const RENAME_UNDO_ON_FAILURE_KEY: &str = "rename.undo_on_failure";
+/// Whether Shift+F6 on two or more selected entries opens the rename dialog with a mask.
+pub const RENAME_SELECTION_DIALOG_KEY: &str = "rename.selection_dialog";
 
 const COPY_LINKS_CHOICES: &[Choice] = &[
     Choice {
@@ -53,6 +59,16 @@ pub(super) const RENAME_UNDO_ON_FAILURE: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.rename.undo_on_failure",
     help: "setting.rename.undo_on_failure.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const RENAME_SELECTION_DIALOG: SettingSpec = SettingSpec {
+    key: RENAME_SELECTION_DIALOG_KEY,
+    page: SettingPage::Transfers,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.rename.selection_dialog",
+    help: "setting.rename.selection_dialog.help",
     protected: false,
     restart: false,
 };

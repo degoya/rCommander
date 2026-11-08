@@ -33,6 +33,7 @@ fn the_view_serializes_without_its_plan() {
         plan: Arc::new(FlatPlan {
             walk: vec!["/secret/place".into()],
             stat: Vec::new(),
+            groups: Vec::new(),
         }),
         run: 7,
     };

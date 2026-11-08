@@ -40,6 +40,9 @@ pub struct Entry {
     pub modified: Option<SystemTime>,
     /// Creation, when the backend reports it (not every Unix file system does).
     pub created: Option<SystemTime>,
+    /// Last access, where the backend reports it (local, SFTP's `atime`); `None` elsewhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accessed: Option<SystemTime>,
     /// Permissions and attribute flags.
     pub attributes: Attributes,
     /// Whether a panel hides the entry by default: a dot file on Unix and inside a WSL

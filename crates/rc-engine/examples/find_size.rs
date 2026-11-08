@@ -109,7 +109,9 @@ async fn search(root: &Path) -> Result<(), Box<dyn Error>> {
                 println!("search_kept\t{}", hits.len());
                 println!("search_cancelled\t{cancelled}");
             }
-            SearchEvent::Progress { .. } | SearchEvent::Skipped { .. } => {}
+            SearchEvent::Progress { .. }
+            | SearchEvent::Skipped { .. }
+            | SearchEvent::Duplicates(_) => {}
         }
     }
     print_memory();

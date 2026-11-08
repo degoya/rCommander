@@ -45,6 +45,20 @@ pub enum Column {
     Rights,
     /// User and group, where the backend names them and the person switched it on.
     Owner,
+    /// A column set's creation time (RC-100-90).
+    Created,
+    /// A column set's last access.
+    Accessed,
+    /// A column set's attributes: the Windows flags, else the rights.
+    Attributes,
+    /// A column set's owning user alone.
+    User,
+    /// A column set's owning group.
+    Group,
+    /// A column set's or the comments view's `descript.ion` comment.
+    Comment,
+    /// A column set's git status as a word (RC-100-97).
+    Git,
 }
 
 impl Column {
@@ -58,15 +72,24 @@ impl Column {
         Self::Owner,
     ];
 
-    /// The key a click on the column's title sorts by; the packed size, the rights and the owner
-    /// sort by none.
+    /// The key a click on the column's title sorts by; the packed size, the rights, the
+    /// attributes, the owner and the group sort by none.
     pub(super) fn sort_key(self) -> Option<SortKey> {
         match self {
             Self::Name => Some(SortKey::Name),
             Self::Ext => Some(SortKey::Ext),
             Self::Size => Some(SortKey::Size),
             Self::Date => Some(SortKey::Date),
-            Self::Packed | Self::Rights | Self::Owner => None,
+            Self::Created => Some(SortKey::Created),
+            Self::Accessed => Some(SortKey::Accessed),
+            Self::Comment => Some(SortKey::Comment),
+            Self::Packed
+            | Self::Rights
+            | Self::Owner
+            | Self::Attributes
+            | Self::User
+            | Self::Group
+            | Self::Git => None,
         }
     }
 
@@ -78,7 +101,14 @@ impl Column {
     /// The setting that keeps the column's width; `None` for the name, which takes the rest.
     pub(in crate::app) fn setting(self) -> Option<&'static str> {
         match self {
-            Self::Name => None,
+            Self::Name
+            | Self::Created
+            | Self::Accessed
+            | Self::Attributes
+            | Self::User
+            | Self::Group
+            | Self::Comment
+            | Self::Git => None,
             Self::Ext => Some(EXT_WIDTH_KEY),
             Self::Size => Some(SIZE_WIDTH_KEY),
             Self::Packed => Some(PACKED_WIDTH_KEY),
@@ -163,23 +193,31 @@ pub(super) fn columns(archive: bool, rights: bool, owner: bool) -> Vec<Column> {
 }
 
 /// The width of each of `columns` in a list `width` wide (its scrollbar included) at `scale`:
-/// each fixed column its own from `widths`, the name's cell (icon and text) what they leave.
-/// Where that would be less than [`NAME_MIN`], the fixed columns give way, each in proportion to
-/// what it has above its least width; in a list not yet measured, or too narrow even then, the
-/// name gets nothing.
+/// each fixed column its own from `widths`, the name's cell (icon and text) what they leave
+/// ([`split_shown`] over the full view's columns, as the tests ask for them).
+#[cfg(test)]
 pub(super) fn split(width: f32, columns: &[Column], widths: &ColumnWidths, scale: f32) -> Vec<f32> {
-    let mut sizes: Vec<f32> = columns
+    split_shown(width, &super::shown::full(columns, widths), scale)
+}
+
+/// The width of each of `shown` in a list `width` wide (its scrollbar included) at `scale`: each
+/// column of a width its own, the name's cell (icon and text) what they leave. Where that would
+/// be less than [`NAME_MIN`], the fixed columns give way, each in proportion to what it has
+/// above its least width; in a list not yet measured, or too narrow even then, the name gets
+/// nothing.
+pub(super) fn split_shown(width: f32, shown: &[super::shown::Shown], scale: f32) -> Vec<f32> {
+    let mut sizes: Vec<f32> = shown
         .iter()
-        .map(|column| column.width(widths, scale).unwrap_or(0.0))
+        .map(|column| column.width.map_or(0.0, |width| width * scale))
         .collect();
-    let gaps = SPACING * columns.len().saturating_sub(1) as f32;
+    let gaps = SPACING * shown.len().saturating_sub(1) as f32;
     let room = width - SCROLLBAR_WIDTH - ROW_CHROME - gaps;
     let short = sizes.iter().sum::<f32>() + NAME_MIN * scale - room;
     if width > 0.0 && short > 0.0 {
-        let slack: Vec<f32> = columns
+        let slack: Vec<f32> = shown
             .iter()
             .zip(&sizes)
-            .map(|(column, size)| (size - column.bounds().0 * scale).max(0.0))
+            .map(|(column, size)| (size - column.least * scale).max(0.0))
             .collect();
         let total: f32 = slack.iter().sum();
         if total > 0.0 {
@@ -190,8 +228,8 @@ pub(super) fn split(width: f32, columns: &[Column], widths: &ColumnWidths, scale
         }
     }
     let name = (room - sizes.iter().sum::<f32>()).max(0.0);
-    for (size, column) in sizes.iter_mut().zip(columns) {
-        if *column == Column::Name {
+    for (size, column) in sizes.iter_mut().zip(shown) {
+        if column.width.is_none() {
             *size = name;
         }
     }

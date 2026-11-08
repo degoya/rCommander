@@ -18,7 +18,9 @@ use super::{
     properties::{PropsJob, PropsMsg},
     queue_window, quick_connect, quit, resize, search, settings, ssh_exec, tabs,
     terminal_pane::TermMessage,
+    thumbnails, tools, tree,
     update_ui::UpdateMsg,
+    user_commands::UcMsg,
     vault_offer::VaultOfferMsg,
     viewer,
     window_state::WindowChange,
@@ -94,6 +96,8 @@ pub enum Message {
     McpConfirm(mcp_confirm::McpConfirmMsg),
     /// The file icons: their setting, loaded icons (RC-010-10).
     Icons(icons::IconsMsg),
+    /// The thumbnails: their settings, loaded tiles, the disk cache (RC-100-89).
+    Thumbnails(thumbnails::ThumbsMsg),
     /// The tab rows, the history and hotlist popups, the hotlist dialog (RC-010-03).
     Tabs(tabs::TabsMessage),
     /// The file operations: their dialogs, jobs and function-key bar (RC-010-07).
@@ -156,6 +160,17 @@ pub enum Message {
     Refocus(super::refocus::Switches),
     /// The workspaces window, its list and the engine's answers (RC-100-68).
     Workspaces(workspaces::WsMsg),
+    /// The folder trees: their levels, the cursor's rest, clicks, the dialog (RC-100-88).
+    Tree(tree::TreeMsg),
+    /// The own commands' window, the question for a program's parameters and the engine's
+    /// answers (RC-100-86).
+    UserCommands(UcMsg),
+    /// The internal associations' window and the rules the context menu reads (RC-100-91).
+    Associations(super::associations::AssocMsg),
+    /// "Select duplicate files" and the disk-usage window (RC-100-98).
+    Tools(tools::ToolsMsg),
+    /// The button bars: their buttons, menus, drops, window and the engine's answers (RC-100-87).
+    ButtonBar(super::button_bar::BbMsg),
 }
 
 impl Message {
@@ -224,6 +239,8 @@ pub enum Effect {
     TrustStore(settings::TrustStoreCall),
     /// A command of the settings' Plugins page; its answer comes back to the page.
     Plugins(settings::PluginsCall),
+    /// A folder tree's level to read, or the folder a panel follows to (RC-100-88).
+    Tree(tree::TreeCall),
 }
 
 /// Commands queued for the engine on a panel's behalf.

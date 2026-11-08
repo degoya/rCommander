@@ -123,6 +123,8 @@ printf '%s\n' "rCommander $version" "commit $RC_BUILD_COMMIT" "built $RC_BUILD_T
     "target $TARGET, profile $profile" > "$STAGE/VERSION.txt"
 
 echo "==> writing $TARBALL"
+# Never the portable mode's marker or data (RC-100-95).
+rc_package_unportable "$STAGE"
 tar -C "$OUT" -czf "$TARBALL" "$(basename "$STAGE")"
 rm -rf "$STAGE"
 if [[ "${#distribution[@]}" -gt 0 ]]; then

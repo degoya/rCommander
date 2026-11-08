@@ -57,12 +57,13 @@ pub enum Flag {
 pub struct CaseChoice(pub CaseMode);
 
 impl CaseChoice {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self(CaseMode::Unchanged),
         Self(CaseMode::Lower),
         Self(CaseMode::Upper),
         Self(CaseMode::FirstUpper),
         Self(CaseMode::WordsUpper),
+        Self(CaseMode::Title),
     ];
 
     /// The next mode, after the last the first: Alt+C.
@@ -83,6 +84,7 @@ impl fmt::Display for CaseChoice {
             CaseMode::Upper => t!("multi_rename.case_upper"),
             CaseMode::FirstUpper => t!("multi_rename.case_first_upper"),
             CaseMode::WordsUpper => t!("multi_rename.case_words_upper"),
+            CaseMode::Title => t!("multi_rename.case_title"),
         })
     }
 }
@@ -111,6 +113,17 @@ pub enum Placeholder {
     CaseAsIs,
     OpenBracket,
     CloseBracket,
+    Size,
+    LocalDate,
+    LocalTime,
+    Clipboard,
+    FolderDots,
+    TitleCase,
+    Letters,
+    Ancestor,
+    FromRoot,
+    Opened,
+    Changed,
 }
 
 impl Placeholder {
@@ -124,11 +137,21 @@ impl Placeholder {
     ];
 
     /// The menu with all the others.
-    pub const MORE: [Self; 16] = [
+    pub const MORE: [Self; 27] = [
         Self::Extension,
         Self::FileName,
+        Self::Size,
         Self::Parent,
         Self::Grandparent,
+        Self::Ancestor,
+        Self::FromRoot,
+        Self::Letters,
+        Self::LocalDate,
+        Self::LocalTime,
+        Self::Opened,
+        Self::Changed,
+        Self::Clipboard,
+        Self::FolderDots,
         Self::Year,
         Self::Month,
         Self::Day,
@@ -138,6 +161,7 @@ impl Placeholder {
         Self::Upper,
         Self::Lower,
         Self::FirstUpper,
+        Self::TitleCase,
         Self::CaseAsIs,
         Self::OpenBracket,
         Self::CloseBracket,
@@ -168,6 +192,17 @@ impl Placeholder {
             Self::CaseAsIs => "[n]",
             Self::OpenBracket => "[[]",
             Self::CloseBracket => "[]]",
+            Self::Size => "[S]",
+            Self::LocalDate => "[d]",
+            Self::LocalTime => "[t]",
+            Self::Clipboard => "[X]",
+            Self::FolderDots => "[I]",
+            Self::TitleCase => "[f]",
+            Self::Letters => "[Caa+1]",
+            Self::Ancestor => "[B1]",
+            Self::FromRoot => "[B+1]",
+            Self::Opened => "[T2]",
+            Self::Changed => "[T3]",
         }
     }
 
@@ -202,6 +237,17 @@ impl Placeholder {
             Self::CaseAsIs => t!("multi_rename.ph_case_as_is"),
             Self::OpenBracket => t!("multi_rename.ph_open_bracket"),
             Self::CloseBracket => t!("multi_rename.ph_close_bracket"),
+            Self::Size => t!("multi_rename.ph_size"),
+            Self::LocalDate => t!("multi_rename.ph_local_date"),
+            Self::LocalTime => t!("multi_rename.ph_local_time"),
+            Self::Clipboard => t!("multi_rename.ph_clipboard"),
+            Self::FolderDots => t!("multi_rename.ph_folder_dots"),
+            Self::TitleCase => t!("multi_rename.ph_title_case"),
+            Self::Letters => t!("multi_rename.ph_letters"),
+            Self::Ancestor => t!("multi_rename.ph_ancestor"),
+            Self::FromRoot => t!("multi_rename.ph_from_root"),
+            Self::Opened => t!("multi_rename.ph_opened"),
+            Self::Changed => t!("multi_rename.ph_changed"),
         }
     }
 }
@@ -237,6 +283,9 @@ pub struct Form {
     pub counter_step: String,
     pub counter_width: String,
     pub target: MaskTarget,
+    /// A list of new names in place of the masks (Total Commander's "Load names from file"):
+    /// the masks and their placeholders are locked while it is set.
+    pub names: Option<Vec<String>>,
 }
 
 impl Default for Form {
@@ -265,6 +314,7 @@ impl Form {
             counter_step: rule.counter.step.to_string(),
             counter_width: rule.counter.width.to_string(),
             target: MaskTarget::Name,
+            names: rule.names.clone(),
         }
     }
 
@@ -300,7 +350,14 @@ impl Form {
                 substitute: self.substitute,
             }),
             counter: CounterSettings { start, step, width },
+            names: self.names.clone(),
         })
+    }
+
+    /// Whether a mask reads the clipboard (`[X]`, `[X+]`).
+    pub fn reads_clipboard(&self) -> bool {
+        self.names.is_none()
+            && (self.name_mask.contains("[X") || self.extension_mask.contains("[X"))
     }
 
     /// The text of one of the rule's fields; `None` for the preset name and the log path,
@@ -336,7 +393,11 @@ impl Form {
 
     /// Appends `placeholder` to the mask typed in last. iced's text field does not tell where
     /// its caret is, so the placeholder goes to the end, not to the caret as in Total Commander.
+    /// Nothing while a name list stands in for the masks.
     pub fn insert(&mut self, placeholder: Placeholder) {
+        if self.names.is_some() {
+            return;
+        }
         let mask = match self.target {
             MaskTarget::Name => &mut self.name_mask,
             MaskTarget::Extension => &mut self.extension_mask,

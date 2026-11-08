@@ -37,6 +37,7 @@ fn host(alias: &str, source: SourceLine) -> ImportedHost {
         proxy_jump: None,
         ignored_options: Vec::new(),
         source,
+        local_forwards: Vec::new(),
     }
 }
 
@@ -426,6 +427,8 @@ fn every_warning_has_its_own_code() {
         },
         WarningKind::TooManyIncludes,
         WarningKind::TooManyHosts,
+        WarningKind::InvalidForward,
+        WarningKind::ForwardBindLowered,
     ];
     let codes: Vec<&str> = kinds.iter().map(WarningKind::code).collect();
     assert_eq!(

@@ -1,0 +1,14 @@
+{
+  "name": "Media viewer",
+  "description": "Shows the duration, codecs, tracks and tags of audio and video files, their cover, and the EXIF of TIFF, raw and HEIC photos.",
+  "codes": {
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_audio": "The audio file is damaged, or its contents are not the format its extension names.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_exif": "The photo's EXIF data is damaged.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_video": "The video file is damaged: a part of it is cut off or larger than the file.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_exif": "No EXIF data was found in the first 8 MiB of the photo.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_moov": "The video file has no movie header (moov); it may be incomplete.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.not_media": "The file is not an audio file, video file or photo the media viewer reads.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.setting.cover": "Show the embedded cover",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.too_large": "A part of the file the viewer must read (a tag, the cover or the movie header) is larger than it reads."
+  }
+}

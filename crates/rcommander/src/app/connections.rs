@@ -20,10 +20,12 @@ mod drop;
 mod events;
 mod follow;
 mod form;
+mod forwards;
 mod import;
 pub(super) mod inventory;
 mod jobs;
 mod keys;
+mod open;
 mod preview;
 mod rdm_import;
 mod remote;
@@ -116,6 +118,8 @@ pub struct ConnectionManager {
     pub certificates: Vec<rc_db::TrustedCertificate>,
     /// The secret sources and the shown connection's references (RC-100-34).
     pub sources: SourcePanel,
+    /// The shown SSH connection's port forwards (RC-110-03).
+    pub forwards: forwards::ForwardPanel,
     /// The login scripts by id and name.
     pub scripts: Vec<(i64, String)>,
     /// The SSH sessions up or being set up (`Engine::ssh_sessions`).
@@ -175,6 +179,10 @@ pub enum ConnMsg {
     NewCredential,
     /// The shared credential a connection points at; its own secrets for `None`.
     Shared(Option<rc_engine::CredentialId>),
+    /// The jump host a connection goes through; directly for `None` (RC-110-03).
+    Jump(Option<ConnectionId>),
+    /// The port-forward panel under the form (RC-110-03).
+    Forward(forwards::ForwardMsg),
     Edit(Edit),
     Secret(SecretKind, SecretString),
     Kind(ConnectionKind),
@@ -250,7 +258,7 @@ impl App {
                     return Vec::new();
                 };
                 let mut effects = manager.message(message);
-                effects.extend(manager.sources_follow());
+                effects.extend(manager.panels_follow());
                 self.close_connections_if_asked();
                 effects
             }
@@ -268,7 +276,7 @@ impl App {
             _ => return None,
         };
         let mut effects = effects;
-        effects.extend(manager.sources_follow());
+        effects.extend(manager.panels_follow());
         self.close_connections_if_asked();
         Some(effects)
     }
@@ -290,6 +298,9 @@ impl App {
         if let EngineEvent::SecretNeeded { .. } = event {
             return self.secret_needed();
         }
+        if let EngineEvent::CheckoutReasonNeeded { connection } = event {
+            return self.checkout_reason_needed(*connection);
+        }
         if let EngineEvent::Session { .. } = event {
             self.sessions_changed();
             return Vec::new();
@@ -305,6 +316,7 @@ impl App {
             ],
             EngineEvent::Drives => vec![run(Then::Drives, Command::ListDrives { refresh: false })],
             EngineEvent::TrustedCertificatesChanged => vec![remote::list_certificates()],
+            EngineEvent::Forward { connection, .. } => manager.forwards_changed(*connection),
             EngineEvent::SettingChanged { .. } => vec![credentials::read_setting()],
             EngineEvent::LoginScript { .. } => vec![run(Then::Scripts, Command::ListLoginScripts)],
             EngineEvent::VaultLocked => {
@@ -323,45 +335,6 @@ impl App {
                 Vec::new()
             }
             _ => Vec::new(),
-        }
-    }
-
-    fn open_connections(&mut self) -> Vec<Effect> {
-        // In a window of its own, Ctrl+F brings it to the front (RC-080-15).
-        if self.connections.is_some() {
-            return self.dialog_window_front(super::dialog_windows::DialogWindow::Connections);
-        }
-        // The keyboard in the list, on the connection used last; typing there filters at once
-        // (owner, 2026-10-26; `start.rs`).
-        self.connections = Some(ConnectionManager {
-            sessions: self.engine.ssh_sessions(),
-            focus: Focus::Tree,
-            start: self.connections_cursor,
-            ..ConnectionManager::default()
-        });
-        vec![
-            keys::focus_id(view::TREE_STOP_ID),
-            start::read_focus_setting(),
-            run(Then::Tree, Command::ListConnections),
-            run(Then::Drives, Command::ListDrives { refresh: false }),
-            run(Then::Vault, Command::GetVaultStatus),
-            run(Then::Scripts, Command::ListLoginScripts),
-            remote::list_certificates(),
-            sources::list_sources(),
-            credentials::read_setting(),
-        ]
-    }
-
-    fn close_connections_if_asked(&mut self) {
-        if let Some(manager) = &self.connections {
-            self.connections_cursor = manager.tree.cursor;
-        }
-        if self
-            .connections
-            .as_ref()
-            .is_some_and(|manager| manager.close)
-        {
-            self.connections = None;
         }
     }
 }
@@ -404,6 +377,7 @@ impl ConnectionManager {
             ConnMsg::NewCredential => self.new_credential(),
             ConnMsg::ForgetCertificate(id) => self.forget_certificate(id),
             ConnMsg::Source(message) => self.on_source(message),
+            ConnMsg::Forward(message) => self.on_forward(message),
             ConnMsg::Import(message) => self.on_import(message),
             ConnMsg::TcImport(message) => self.on_tc_import(message),
             ConnMsg::RdmImport(message) => self.on_rdm_import(message),
@@ -466,8 +440,14 @@ impl ConnectionManager {
             (Then::RdmPreview(_) | Then::RdmImported, result) => {
                 return self.rdm_import_answer(then, result);
             }
-            (Then::Sources | Then::SourceFound(_) | Then::SourceMapped, result) => {
+            (
+                Then::Sources | Then::SourceFound(_) | Then::SourceMapped | Then::SourceReason,
+                result,
+            ) => {
                 return self.source_answer(then, result);
+            }
+            (Then::Forwards | Then::ForwardDone | Then::ForwardsLan, result) => {
+                return self.forward_answer(then, result);
             }
             (_, Err(code)) => self.note = Some((error_text(code), true)),
             // Every other answer is announced as an event too.

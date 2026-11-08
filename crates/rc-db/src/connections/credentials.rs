@@ -25,7 +25,8 @@ macro_rules! select_credentials {
             "SELECT id, folder_id, name, username, created_at, updated_at, \
              password_enc IS NOT NULL AS has_password, key_enc IS NOT NULL AS has_key, \
              passphrase_enc IS NOT NULL AS has_passphrase, key_type, key_fingerprint, \
-             key_comment, key_public, totp_seed_enc IS NOT NULL AS has_totp_seed, \
+             key_comment, key_public, key_certificate, key_certificate_info, \
+             totp_seed_enc IS NOT NULL AS has_totp_seed, \
              (SELECT count(*) FROM connections WHERE credential_id = credentials.id) AS users \
              FROM credentials ",
             $tail

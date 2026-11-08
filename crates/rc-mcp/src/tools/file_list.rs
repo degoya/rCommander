@@ -1,12 +1,16 @@
-//! The file-list tools: a panel's order, its full or brief view, hidden entries, the selection by
-//! mask (Num+, Num-) or extension, and opening an entry as Enter does.
+//! The file-list tools: a panel's order, its view (full, brief, a column set, the comments),
+//! hidden entries, the selection by mask (Num+, Num-) or extension, and opening an entry as Enter
+//! does.
 
 use rc_engine::{Command, ListMode, SortKey};
 use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
 use serde::Deserialize;
 
 use super::panels::PanelArg;
-use crate::{RcMcpServer, answer::ToolResult};
+use crate::{
+    RcMcpServer,
+    answer::{ToolResult, error_result},
+};
 
 #[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -15,6 +19,9 @@ pub(crate) enum SortKeyArg {
     Ext,
     Size,
     Date,
+    Created,
+    Accessed,
+    Comment,
 }
 
 impl From<SortKeyArg> for SortKey {
@@ -24,6 +31,9 @@ impl From<SortKeyArg> for SortKey {
             SortKeyArg::Ext => Self::Ext,
             SortKeyArg::Size => Self::Size,
             SortKeyArg::Date => Self::Date,
+            SortKeyArg::Created => Self::Created,
+            SortKeyArg::Accessed => Self::Accessed,
+            SortKeyArg::Comment => Self::Comment,
         }
     }
 }
@@ -33,6 +43,12 @@ impl From<SortKeyArg> for SortKey {
 pub(crate) enum ModeArg {
     Full,
     Brief,
+    /// A column set: `set` names it.
+    Custom,
+    /// Name, ext and the descript.ion comment.
+    Comments,
+    /// A grid of tiles: a picture's thumbnail or an icon over each name.
+    Thumbnails,
 }
 
 /// What `panel_select` does.
@@ -55,7 +71,7 @@ pub(crate) enum SelectAction {
 
 #[derive(Deserialize, schemars::JsonSchema)]
 pub(crate) struct SortParams {
-    /// `name`, `ext`, `size` or `date`.
+    /// `name`, `ext`, `size`, `date` (modified), `created`, `accessed` or `comment`.
     pub key: SortKeyArg,
     /// Omitted: the panel's key again turns the direction around, another key starts largest
     /// and newest first for size and date, from A for name and ext.
@@ -68,8 +84,22 @@ pub(crate) struct SortParams {
 
 #[derive(Deserialize, schemars::JsonSchema)]
 pub(crate) struct SetViewParams {
-    /// `full` (name, ext, size, date columns) or `brief` (names only, several columns).
+    /// `full` (name, ext, size, date columns), `brief` (names only, several columns), `custom`
+    /// (the column set `set`) or `comments` (name, ext, comment).
     pub mode: ModeArg,
+    /// The column set's id from column_sets_list; required with `custom`.
+    #[serde(default)]
+    pub set: Option<i64>,
+    /// `left` or `right`; the active panel when omitted.
+    #[serde(default)]
+    pub panel: Option<PanelArg>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct ShowTreeParams {
+    /// `true` shows the folder tree, `false` the files again; omitted, it switches.
+    #[serde(default)]
+    pub show: Option<bool>,
     /// `left` or `right`; the active panel when omitted.
     #[serde(default)]
     pub panel: Option<PanelArg>,
@@ -132,7 +162,7 @@ fn select_command(params: SelectParams) -> Command {
 #[tool_router(router = file_list_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Sort a panel's entries by name, ext, size or date; directories stay on top and names compare naturally (file2 before file10), ignoring case. Without descending the same key again turns the direction around. The cursor stays on its entry. Answers the panel's state with its sort."
+        description = "Sort a panel's entries by name, ext, size, date (modified), created, accessed or comment (descript.ion; by name until the panel shows comments); directories stay on top and names compare naturally (file2 before file10), ignoring case. Without descending the same key again turns the direction around. The cursor stays on its entry. Answers the panel's state with its sort."
     )]
     pub(crate) async fn panel_sort(
         &self,
@@ -147,18 +177,42 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Show a panel in the full view (name, ext, size, date columns) or the brief view (names only, in several columns). Answers the panel's state."
+        description = "Show a panel in the full view (name, ext, size, date columns), the brief view (names only, in several columns), a column set (custom, with set from column_sets_list), the comments view (name, ext, descript.ion comment) or the thumbnails (a grid of tiles, a picture's thumbnail or an icon over each name; the tiles are the window's, get_panel_state reads the same entries). Chosen this way the view stays until the panel enters a folder another column set's mask matches. Answers the panel's state. Errors: column_set_unknown, invalid_params (custom without set)."
     )]
     pub(crate) async fn panel_set_view(
         &self,
         Parameters(params): Parameters<SetViewParams>,
     ) -> ToolResult {
+        let mode = match (params.mode, params.set) {
+            (ModeArg::Full, _) => ListMode::Full,
+            (ModeArg::Brief, _) => ListMode::Brief,
+            (ModeArg::Comments, _) => ListMode::Comments,
+            (ModeArg::Thumbnails, _) => ListMode::Thumbnails,
+            (ModeArg::Custom, Some(set)) => ListMode::Custom { set },
+            (ModeArg::Custom, None) => {
+                return Ok(error_result(
+                    "invalid_params",
+                    "the custom view needs set: a column set's id from column_sets_list",
+                ));
+            }
+        };
         self.run(Command::SetListMode {
             panel: params.panel.map(Into::into),
-            mode: match params.mode {
-                ModeArg::Full => ListMode::Full,
-                ModeArg::Brief => ListMode::Brief,
-            },
+            mode,
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Show the folder tree of a panel's drive in the panel's place (Total Commander's Ctrl+F8), or its files again; omitted show switches. In the window the other panel follows the tree's cursor; the panel keeps its folder, so get_panel_state and list_dir read as before. Answers the panel's state with view tree or files."
+    )]
+    pub(crate) async fn panel_show_tree(
+        &self,
+        Parameters(params): Parameters<ShowTreeParams>,
+    ) -> ToolResult {
+        self.run(Command::ShowTree {
+            panel: params.panel.map(Into::into),
+            show: params.show,
         })
         .await
     }
@@ -212,7 +266,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Open an entry as Enter does in the window: a directory is shown in the panel; a program starts and any other file opens in the program the system associates with it. path is absolute or relative to the panel's directory; omitted, the entry under the cursor. Local files only. Without a path the question names the entry under the cursor, and that entry is opened even if the cursor moves before the person allows it. Errors: not_found, unsupported, open_failed, panel_changed (the panel shows another folder than the question did)."
+        description = "Open an entry as Enter does in the window: a directory is shown in the panel; a file one of the person's internal associations takes (settings_get files.associations) runs that rule's open command; a program starts and any other file opens in the program the system associates with it. A file whose rule starts as administrator or asks for its parameters is the person's to open (gui_only). path is absolute or relative to the panel's directory; omitted, the entry under the cursor. A file on an SFTP or FTP server is fetched into a read-only local copy that nobody watches - nothing goes back to the server; one that would run as a program is refused (remote_edit_program). Without a path the question names the entry under the cursor, and that entry is opened even if the cursor moves before the person allows it. Errors: not_found, unsupported, open_failed, invalid_name, remote_edit_program, panel_changed (the panel shows another folder than the question did)."
     )]
     pub(crate) async fn file_open(&self, Parameters(params): Parameters<OpenParams>) -> ToolResult {
         self.run(Command::OpenFile {

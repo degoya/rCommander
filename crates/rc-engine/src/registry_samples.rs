@@ -53,6 +53,9 @@ pub(super) fn one_of_each() -> Vec<Command> {
             ..crate::MultiRenameRequest::default()
         }),
         Command::MultiRenameUndo,
+        Command::MultiRenameNextStep {
+            names: vec!["a.txt".into(), "b.txt".into()],
+        },
         Command::OpsCopy(crate::TransferRequest {
             panel: None,
             sources: vec!["a".into()],
@@ -61,6 +64,7 @@ pub(super) fn one_of_each() -> Vec<Command> {
                 on_conflict: Some(ConflictChoice::Skip),
                 ..JobOptions::default()
             },
+            rename_mask: None,
         }),
         Command::OpsDelete(crate::DeleteRequest {
             panel: Some(PanelId::Right),
@@ -79,10 +83,12 @@ pub(super) fn one_of_each() -> Vec<Command> {
             sources: Vec::new(),
             target: Some("/x".into()),
             options: JobOptions::default(),
+            rename_mask: None,
         }),
         Command::OpsPause { job: 2 },
         Command::OpsResume { job: 2 },
         Command::GetPanelState { panel: None },
+        Command::GitStatus { panel: None },
         Command::ListDir {
             panel: None,
             path: Some("/".into()),
@@ -294,7 +300,29 @@ pub(super) fn one_of_each() -> Vec<Command> {
             panel: None,
             mode: ListMode::Brief,
         },
+        Command::ThumbnailZoom {
+            step: crate::ZoomStep::In,
+        },
         Command::ToggleHidden { show: Some(true) },
+        Command::ToggleComments { panel: None },
+        Command::ToggleAutoColumns {},
+        Command::ToggleWatch {},
+        Command::ListColumnSets {},
+        Command::GetColumnSet { id: 1 },
+        Command::CreateColumnSet {
+            name: "Photos".into(),
+            spec: crate::ColumnSetSpec::comments(),
+        },
+        Command::UpdateColumnSet {
+            id: 1,
+            spec: crate::ColumnSetSpec::comments(),
+        },
+        Command::RenameColumnSet {
+            id: 1,
+            name: "Pictures".into(),
+        },
+        Command::MoveColumnSet { id: 1, position: 0 },
+        Command::DeleteColumnSet { id: 1 },
         Command::SelectByMask(crate::MaskRequest {
             panel: None,
             mask: Some("*.txt|a*".into()),
@@ -345,7 +373,14 @@ pub(super) fn one_of_each() -> Vec<Command> {
     ]
     .into_iter()
     .chain(super::samples_more::more())
+    .chain(super::samples_forwards::forwards())
+    .chain(super::samples_forwards::remote_edits())
+    .chain(super::samples_panel_lists::panel_lists())
+    .chain(super::samples_duplicates::duplicates())
     .chain(crate::tabs::one_of_each())
     .chain(crate::workspaces::one_of_each())
+    .chain(crate::user_commands::one_of_each())
+    .chain(crate::associations::one_of_each())
+    .chain(crate::button_bars::one_of_each())
     .collect()
 }

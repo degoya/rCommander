@@ -31,7 +31,11 @@ impl SettingSpec {
             | SettingKind::Source { default }
             | SettingKind::Proxy { default }
             | SettingKind::Theme { default }
-            | SettingKind::WslThemes { default } => Value::from(default),
+            | SettingKind::WslThemes { default }
+            | SettingKind::Arguments { default }
+            | SettingKind::FileAssociations { default }
+            | SettingKind::Drives { default }
+            | SettingKind::MaskLines { default } => Value::from(default),
         }
     }
 
@@ -198,6 +202,42 @@ impl SettingSpec {
                         format!("expected empty, direct or http(s)://host:port: {reason}")
                     })
             }
+            SettingKind::Arguments { .. } => {
+                let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
+                let fits = text.len() <= MAX_TEXT
+                    && !text.chars().any(char::is_control)
+                    && crate::compare::external::check(text).is_ok();
+                if fits {
+                    Ok(Value::from(text))
+                } else {
+                    Err(
+                        "expected arguments on one line, every double quote closed, such as \
+                         \"%1\" \"%2\""
+                            .to_owned(),
+                    )
+                }
+            }
+            // Written as the rules write it, so the same rules read as one value (RC-100-91).
+            SettingKind::FileAssociations { .. } => {
+                let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
+                crate::associations::parse_rules(text)
+                    .map(|rules| Value::from(crate::associations::write_rules(&rules)))
+                    .map_err(|error| error.to_string())
+            }
+            SettingKind::Drives { .. } => {
+                let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
+                super::watch::drive_list(text)
+                    .map(Value::from)
+                    .ok_or_else(|| {
+                        "expected drive letters such as \"DE\", and \\ for every network share"
+                            .to_owned()
+                    })
+            }
+            // Written as the list keeps it: lines trimmed, blank ones dropped (RC-100-92).
+            SettingKind::MaskLines { .. } => {
+                let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
+                crate::ignore_list::checked_lines(text).map(Value::from)
+            }
             // Written as the keymap writes it, so the same deviations read as one value.
             SettingKind::Keymap { .. } => {
                 let text = value.as_str().ok_or_else(|| "expected a text".to_owned())?;
@@ -233,6 +273,10 @@ impl SettingSpec {
             SettingKind::Proxy { .. } => "proxy",
             SettingKind::Theme { .. } => "theme",
             SettingKind::WslThemes { .. } => "wsl_themes",
+            SettingKind::Arguments { .. } => "arguments",
+            SettingKind::FileAssociations { .. } => "file_associations",
+            SettingKind::Drives { .. } => "drives",
+            SettingKind::MaskLines { .. } => "mask_lines",
         }
     }
 }

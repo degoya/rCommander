@@ -1,6 +1,6 @@
 //! The import from Total Commander of RC-050-09 as a page of the manager, after the ssh_config
 //! import's: the preview of a dry run with a box per hotlist item, tab, connection, colour, rule
-//! by file type and font (RC-050-14), then the import - and only when the person ticks "Take the passwords", the FTP passwords straight into
+//! by file type and font (RC-050-14), own command and Start menu row (RC-100-86), then the import - and only when the person ticks "Take the passwords", the FTP passwords straight into
 //! the vault, which is the one case the master password is asked for.
 //!
 //! The settings' Import page opens it (RC-050-10), as it takes more than connections: the manager
@@ -361,10 +361,14 @@ fn selected_keys(report: &TcImportReport) -> BTreeSet<String> {
         .iter()
         .map(|row| (row.selected, &row.key));
     let look = report.look.iter().map(|row| (row.selected, &row.key));
+    let commands = report.commands.iter().map(|row| (row.selected, &row.key));
+    let start_menu = report.start_menu.iter().map(|row| (row.selected, &row.key));
     hotlist
         .chain(tabs)
         .chain(connections)
         .chain(look)
+        .chain(commands)
+        .chain(start_menu)
         .filter(|(selected, _)| *selected)
         .map(|(_, key)| key.clone())
         .collect()

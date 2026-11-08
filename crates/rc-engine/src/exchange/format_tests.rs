@@ -1,4 +1,5 @@
 use super::*;
+use crate::ConnectionDraft;
 
 fn plain(content: &str) -> String {
     format!(
@@ -81,6 +82,8 @@ fn a_secret_never_shows_in_debug() {
         private_key: None,
         passphrase: None,
         sources: Vec::new(),
+        jump: None,
+        forwards: Vec::new(),
     };
     assert!(connection.has_secrets());
     assert!(!format!("{connection:?}").contains("canary-hunter2"));

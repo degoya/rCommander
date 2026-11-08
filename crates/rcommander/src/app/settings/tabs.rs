@@ -7,7 +7,7 @@
 //! menu's "Plugins..." opens its page on the first tab, a package's preview turns to it.
 
 use iced::Element;
-use rc_engine::settings::{MENU_BAR_STYLE_KEY, SettingKind, SettingSpec};
+use rc_engine::settings::{MENU_BAR_STYLE_KEY, SettingKind, SettingSpec, THUMBNAIL_EXPLORER_KEY};
 
 use super::{Page, SettingsMessage, wrap};
 use crate::{
@@ -31,6 +31,12 @@ pub enum Tab {
     Lists,
     /// Appearance: the Lister's own rows.
     Viewer,
+    /// Appearance: the thumbnails' size, caches and sources, then the disk cache's button
+    /// (RC-100-89, `thumbnails_page.rs`).
+    Thumbnails,
+    /// Appearance: the column sets and their automatic switch (RC-100-90); the sets drawn by
+    /// `columns_page.rs`, the switch's rows below them.
+    Columns,
     /// Appearance: the colour themes of both modes, the WSL distributions' themes and the
     /// colours by file type (RC-100-50, RC-100-56, RC-100-43); drawn by `themes_page.rs`, not
     /// row by row.
@@ -42,12 +48,14 @@ pub enum Tab {
 }
 
 const PLUGINS: [Tab; 2] = [Tab::Installed, Tab::PluginSettings];
-const APPEARANCE_TABS: [Tab; 5] = [
+const APPEARANCE_TABS: [Tab; 7] = [
     Tab::Window,
     Tab::Fonts,
     Tab::Themes,
     Tab::Lists,
+    Tab::Columns,
     Tab::Viewer,
+    Tab::Thumbnails,
 ];
 const KEYBOARD: [Tab; 2] = [Tab::Keys, Tab::Shortcuts];
 
@@ -64,6 +72,14 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "appearance.menu_bar_style",
             "appearance.macos_look",
             "appearance.function_key_bar",
+            "appearance.button_bar",
+            "appearance.vertical_button_bar",
+            "buttonbar.horizontal",
+            "buttonbar.vertical",
+            "buttonbar.icon_size",
+            "appearance.drive_bar",
+            "appearance.command_line",
+            "appearance.status_bar",
             "appearance.dialog_windows",
             "appearance.gpu_loss_notice",
         ],
@@ -120,20 +136,41 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "columns.owner_width",
             "columns.owner",
             "panels.split_permille",
+            "panels.separate_tree",
+            "panels.tree_width",
             "panels.drive_line_volume",
             "panels.drive_line_buttons",
         ],
+    ),
+    (
+        Tab::Columns,
+        &["columns.auto_switch", "columns.auto_default"],
     ),
     (
         Tab::Viewer,
         &[
             "viewer.markdown_preview",
             "viewer.markdown_select",
+            "viewer.markdown_code_highlight",
             "viewer.picture_megapixels",
             "viewer.dos_extensions",
             "viewer.dos_tight_lines",
             "viewer.text_zoom",
             "viewer.text_zoom_keep",
+            "viewer.exif",
+            "viewer.step_through_selection",
+            "viewer.certificates",
+            "viewer.cert_expiry_warning_days",
+        ],
+    ),
+    (
+        Tab::Thumbnails,
+        &[
+            "thumbnails.size",
+            "thumbnails.disk_cache",
+            "thumbnails.cache_mb",
+            "thumbnails.remote",
+            "thumbnails.explorer",
         ],
     ),
 ];
@@ -156,6 +193,8 @@ fn title(tab: Tab) -> &'static str {
         Tab::Fonts => t!("settings.tab.fonts"),
         Tab::Lists => t!("settings.tab.lists"),
         Tab::Viewer => t!("settings.tab.viewer"),
+        Tab::Thumbnails => t!("settings.tab.thumbnails"),
+        Tab::Columns => t!("settings.tab.columns"),
         Tab::Themes => t!("settings.tab.themes"),
         Tab::Keys => t!("settings.tab.keys"),
         Tab::Shortcuts => t!("settings.tab.shortcuts"),
@@ -231,14 +270,14 @@ pub fn shows(tab: Option<Tab>, spec: &SettingSpec) -> bool {
     }
 }
 
-/// Whether the schema row `key` is drawn on this system: the menu bar's style only on Windows,
-/// the one system where it chooses anything (RC-100-66).
+/// Whether the schema row `key` is drawn on this system: the menu bar's style (RC-100-66) and
+/// Explorer's thumbnails (RC-100-89) only on Windows, the one system where they choose anything.
 pub fn here(key: &str) -> bool {
     here_on(key, cfg!(windows))
 }
 
 fn here_on(key: &str, windows: bool) -> bool {
-    key != MENU_BAR_STYLE_KEY || windows
+    ![MENU_BAR_STYLE_KEY, THUMBNAIL_EXPLORER_KEY].contains(&key) || windows
 }
 
 /// The Appearance tab of the row `key`; a row no group names stands on the first, so none is

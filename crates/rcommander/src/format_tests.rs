@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime};
 
 use rc_engine::EntryKind;
 
-use super::{count, date_in, date_pattern, parse_size, percent, rights, size};
+use super::{attributes, count, date_in, date_pattern, parse_size, percent, rights, size};
 
 const KIB: u64 = 1024;
 const MIB: u64 = KIB * 1024;
@@ -116,4 +116,37 @@ fn a_share_reads_as_a_whole_percent() {
     assert_eq!(percent(0.0), "0 %");
     assert_eq!(percent(0.424), "42 %");
     assert_eq!(percent(1.0), "100 %");
+}
+
+/// A column set's attributes column (RC-100-90): the Windows flags as Total Commander writes them,
+/// else the rights.
+#[test]
+fn attributes_read_as_flags_on_windows_and_as_rights_elsewhere() {
+    let entry = |windows, mode, readonly| rc_vfs::Entry {
+        name: "a".into(),
+        kind: EntryKind::File,
+        size: 0,
+        modified: None,
+        created: None,
+        accessed: None,
+        attributes: rc_vfs::Attributes {
+            mode,
+            readonly,
+            windows,
+        },
+        hidden: false,
+        owner: None,
+    };
+    let flags = rc_vfs::WindowsFlags {
+        hidden: true,
+        system: false,
+        archive: true,
+    };
+    assert_eq!(attributes(&entry(Some(flags), None, true)), "rah-");
+    assert_eq!(
+        attributes(&entry(Some(rc_vfs::WindowsFlags::default()), None, false)),
+        "----"
+    );
+    assert_eq!(attributes(&entry(None, Some(0o644), false)), "-rw-r--r--");
+    assert_eq!(attributes(&entry(None, None, false)), "");
 }

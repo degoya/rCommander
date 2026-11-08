@@ -66,7 +66,11 @@ impl Extent {
             page: pane.page_rows() * pane.columns(),
             total: pane.rows(),
             max_top: pane.max_top(),
-            step: if pane.brief() { pane.page_rows() } else { 1 },
+            step: if pane.brief() {
+                pane.page_rows()
+            } else {
+                pane.columns()
+            },
         }
     }
 

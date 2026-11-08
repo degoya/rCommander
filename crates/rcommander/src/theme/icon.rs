@@ -1,8 +1,9 @@
-//! The icons on the dialogs' buttons (RC-080-07): a subset of Fluent UI System Icons (MIT,
+//! The icons on the dialogs' buttons (RC-080-07) and on a button bar's buttons that run
+//! rCommander's commands (RC-100-87): a subset of Fluent UI System Icons (MIT,
 //! `NOTICE`), compiled in as the font `resources/icons/rcommander-icons.ttf` and handed to iced
 //! when the window opens. An icon is a glyph of text, so it takes the colour of the button it
 //! sits in - the theme's in light and dark, dimmed with a disabled button - and stays sharp at
-//! every scaling; a font of 4.5 KB instead of iced's `svg` feature and its SVG renderer.
+//! every size and scaling; a font of 9 KB instead of iced's `svg` feature and its SVG renderer.
 //!
 //! `scripts/icon-font.sh` writes the font; the tests hold its glyphs and [`Icon`] to each other.
 //! [`super::layout::icon_button`] puts an icon before a label.
@@ -71,12 +72,46 @@ pub enum Icon {
     Outdent,
     /// The drive bar's mark (`star`).
     Star,
+    /// A button bar's Reread (`arrow_clockwise`, RC-100-87).
+    Refresh,
+    /// Brief view (`text_column_three`).
+    BriefView,
+    /// Full view (`text_bullet_list_ltr`).
+    FullView,
+    /// Invert selection (`select_all_off`).
+    InvertSelection,
+    /// Pack (`archive`).
+    Pack,
+    /// Unpack (`archive_arrow_back`).
+    Unpack,
+    /// Find files (`document_search`).
+    FindFiles,
+    /// Quick View (`eye`).
+    QuickView,
+    /// Synchronize folders (`folder_sync`).
+    Synchronize,
+    /// View a file (`document_text`).
+    ViewFile,
+    /// Edit a file (`document_edit`).
+    EditFile,
+    /// Compare by content (`branch_compare`).
+    Compare,
+    /// Swap the panels (`arrow_swap`).
+    Swap,
+    /// Parent folder (`folder_arrow_up`).
+    ParentFolder,
+    /// Folder history (`history`).
+    History,
+    /// Quit (`power`).
+    Quit,
+    /// Select all (`checkbox_checked`).
+    SelectAll,
 }
 
 impl Icon {
     /// Every icon, in the order of `scripts/icon-font.sh` (the font test holds the two together).
     #[cfg(test)]
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 42] = [
         Self::Add,
         Self::Confirm,
         Self::Copy,
@@ -102,6 +137,23 @@ impl Icon {
         Self::Indent,
         Self::Outdent,
         Self::Star,
+        Self::Refresh,
+        Self::BriefView,
+        Self::FullView,
+        Self::InvertSelection,
+        Self::Pack,
+        Self::Unpack,
+        Self::FindFiles,
+        Self::QuickView,
+        Self::Synchronize,
+        Self::ViewFile,
+        Self::EditFile,
+        Self::Compare,
+        Self::Swap,
+        Self::ParentFolder,
+        Self::History,
+        Self::Quit,
+        Self::SelectAll,
     ];
 
     /// The icon's character in [`FONT`]: the upstream code point the script prints.
@@ -132,6 +184,23 @@ impl Icon {
             Self::Indent => '\u{ED2D}',
             Self::Outdent => '\u{ED23}',
             Self::Star => '\u{F70F}',
+            Self::Refresh => '\u{F13D}',
+            Self::BriefView => '\u{F7C3}',
+            Self::FullView => '\u{ECD9}',
+            Self::InvertSelection => '\u{EA85}',
+            Self::Pack => '\u{F139}',
+            Self::Unpack => '\u{E068}',
+            Self::FindFiles => '\u{F3AE}',
+            Self::QuickView => '\u{E5F2}',
+            Self::Synchronize => '\u{E664}',
+            Self::ViewFile => '\u{E557}',
+            Self::EditFile => '\u{F386}',
+            Self::Compare => '\u{E1DB}',
+            Self::Swap => '\u{F18D}',
+            Self::ParentFolder => '\u{E651}',
+            Self::History => '\u{F47E}',
+            Self::Quit => '\u{F60E}',
+            Self::SelectAll => '\u{F28D}',
         }
     }
 }

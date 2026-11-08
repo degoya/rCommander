@@ -9,6 +9,7 @@ fn entry(owner: Option<Owner>) -> Entry {
         size: 3,
         modified: None,
         created: None,
+        accessed: None,
         attributes: Default::default(),
         hidden: false,
         owner,

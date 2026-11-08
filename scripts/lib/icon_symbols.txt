@@ -1,0 +1,484 @@
+# The symbol collection of own commands and button bar buttons (RC-110-10): the glyphs of
+# crates/rcommander/resources/icons/rcommander-symbols.ttf, written by
+# `scripts/icon-font.sh --symbols` from Fluent UI System Icons (MIT) at the pinned commit.
+#
+# One symbol a line: its category, its upstream name without the `ic_fluent_` prefix and the
+# `_20_regular` suffix (the stable name `rc-symbol:<name>` stores), then English keywords the
+# picker's search finds it by besides the words of its name. The order is the picker's.
+# Categories: files edit tools network development media system arrows status.
+
+files folder directory
+files folder_open directory browse
+files folder_add directory new create
+files folder_arrow_up parent up
+files folder_arrow_left back
+files folder_arrow_right forward
+files folder_briefcase work
+files folder_globe web internet
+files folder_link shortcut
+files folder_multiple directories
+files folder_person home user
+files folder_prohibited forbidden denied
+files folder_search find
+files folder_swap exchange
+files folder_sync synchronize
+files folder_zip archive compressed
+files document file page
+files document_add file new create
+files document_copy file duplicate
+files document_edit file write
+files document_text file txt
+files document_search file find
+files document_dismiss file close remove
+files document_checkmark file done
+files document_error file broken
+files document_lock file secure locked
+files document_key file secret
+files document_link file shortcut
+files document_multiple files
+files document_sync file synchronize
+files document_save file
+files document_print file printer
+files document_pdf file acrobat
+files document_image file picture photo
+files document_table file spreadsheet excel
+files document_data file chart
+files document_database file sql
+files document_globe file web html
+files document_settings file configure preferences
+files document_arrow_down file download
+files document_arrow_up file upload
+files document_word file doc
+files document_csv file comma
+files document_markdown file md
+files document_yml file yaml config
+files document_css file style
+files document_javascript file js
+files archive zip box pack
+files archive_arrow_back unpack extract
+files archive_multiple zip packs
+files box package
+files box_multiple packages
+files clipboard paste
+files clipboard_paste paste
+files clipboard_text_ltr
+files notebook journal
+files book reader
+files book_open read
+files bookmark favourite favorite
+files tag label
+files attach paperclip attachment
+files table spreadsheet grid
+files save disk floppy store
+files hard_drive disk drive
+files storage disk
+files usb_stick flash pen drive
+
+edit edit pencil change modify
+edit copy duplicate
+edit cut scissors
+edit delete trash remove bin
+edit dismiss close remove cancel
+edit add new plus create
+edit subtract minus
+edit rename name
+edit text_case_uppercase upper
+edit text_case_lowercase lower
+edit text_bold bold
+edit text_italic italic
+edit text_underline underline
+edit text_font font
+edit text_align_left align
+edit text_align_center align
+edit text_align_right align
+edit text_bullet_list_ltr list bullets
+edit text_number_list_ltr list numbers
+edit text_indent_increase_ltr indent
+edit text_indent_decrease_ltr outdent
+edit text_sort_ascending sort a-z
+edit text_sort_descending sort z-a
+edit text_column_three columns
+edit highlight marker
+edit eraser rubber clear
+edit select_all_on select all
+edit select_all_off select none
+edit checkbox_checked tick
+edit checkbox_unchecked
+edit arrow_undo undo
+edit arrow_redo redo
+edit search find magnifier
+edit filter funnel
+edit merge join combine
+edit split_horizontal divide
+edit split_vertical divide
+edit crop
+edit resize size
+edit ruler measure
+edit pen write
+edit paint_brush paint
+edit paint_bucket fill colour color
+edit color palette colour
+edit draw_shape shape
+edit link url chain
+edit link_dismiss unlink
+edit note memo
+edit comment remark
+edit translate language
+edit braces brackets
+edit number_symbol hash
+
+tools wrench tool spanner settings
+tools toolbox tools
+tools settings gear cog options preferences
+tools options settings preferences
+tools calculator math
+tools calendar date
+tools clock time
+tools timer stopwatch
+tools clock_alarm clock
+tools hourglass wait
+tools notepad note
+tools screenshot capture
+tools scan
+tools scan_text ocr
+tools qr_code barcode
+tools print printer
+tools mail email letter
+tools mail_inbox inbox
+tools send email
+tools person user account
+tools people users group
+tools person_add user new
+tools key password secret
+tools lock_closed locked secure
+tools lock_open unlocked
+tools shield security protect
+tools shield_checkmark security
+tools password secret
+tools wand wizard
+tools lightbulb idea
+tools beaker test lab
+tools puzzle_piece plugin extension
+tools apps_add_in plugin extension
+tools apps applications
+tools app_generic application
+tools broom clean sweep
+tools compass_northwest navigate
+tools location map pin
+tools map
+tools globe world earth
+tools weather_sunny sun weather
+tools home house start
+tools building office company
+tools briefcase work job
+tools trophy award
+tools rocket launch start
+tools heart love favourite favorite
+tools star favourite favorite
+tools flag mark
+tools pin pushpin
+tools thumb_like like
+tools chat message
+tools chat_multiple messages
+tools call phone
+tools sparkle ai magic
+tools bot robot ai
+
+network server host machine
+network server_multiple hosts
+network server_play
+network cloud online
+network cloud_arrow_down download
+network cloud_arrow_up upload
+network cloud_sync synchronize
+network cloud_add
+network cloud_dismiss offline
+network cloud_off offline
+network cloud_link
+network cloud_database
+network database sql data
+network database_search sql query
+network database_link sql
+network database_multiple sql
+network globe_desktop remote
+network globe_search
+network globe_shield
+network router network modem
+network wifi_1 wireless network
+network wifi_off wireless
+network wifi_warning wireless
+network wifi_lock wireless
+network cellular_data_1 mobile
+network plug_connected connect
+network plug_disconnected disconnect
+network connector link
+network network_check ping
+network desktop_arrow_right remote
+network remote rdp
+network share export
+network arrow_download download get
+network arrow_upload upload put
+network arrow_sync synchronize
+network arrow_swap exchange
+network transmission ftp
+network shield_lock tunnel
+network mail_inbox_arrow_down receive
+network rss feed news
+network link_square url
+network web_asset web site
+network people_team team
+network person_key credential login
+network certificate tls ssl
+network lock_shield secure
+
+development code source program
+development code_block snippet
+development code_text editor
+development code_circle
+development braces_variable variable
+development window_console terminal shell command prompt
+development window_dev_tools devtools debug
+development developer_board chip
+development bug debug defect
+development bug_arrow_counterclockwise debug
+development branch git
+development branch_compare diff git
+development branch_fork git fork
+development branch_request pull request git
+development beaker_edit test
+development flow pipeline
+development flowchart diagram
+development data_bar_vertical chart
+development data_bar_horizontal chart
+development data_line chart graph
+development data_pie chart
+development data_trending trend
+development table_simple table
+development table_add
+development table_search
+development cube 3d model
+development layer layers
+development stack
+development class class object
+development book_search docs
+development book_question_mark help docs
+development production build
+development task_list_ltr tasks todo
+development task_list_square_ltr tasks todo
+development list list
+development tasks_app tasks
+development checkmark_starburst approved
+development play_circle run
+development run run
+development stop stop
+development record
+development diagram
+development organization tree
+development tree_deciduous tree
+development calendar_agenda plan
+development timeline
+development grid
+development board kanban
+
+media image picture photo
+media image_multiple pictures photos gallery
+media image_add picture new
+media image_edit picture
+media image_search picture find
+media image_copy picture
+media camera photo
+media video film movie
+media video_clip film
+media video_add
+media video_recording
+media movies_and_tv film
+media music_note_1 music song
+media music_note_2 music song
+media headphones audio
+media speaker_2 sound audio volume
+media speaker_mute mute
+media speaker_1 sound
+media mic microphone record
+media mic_off mute microphone
+media play start run
+media pause
+media previous back
+media next forward
+media fast_forward
+media rewind
+media skip_forward_10
+media skip_back_10
+media replay
+media pause_circle
+media eye view see show
+media eye_off hide
+media zoom_in magnify
+media zoom_out
+media full_screen_maximize fullscreen
+media full_screen_minimize
+media slide_text presentation
+media slide_multiple slides
+media album
+media gif animation
+media live broadcast
+media cast screen
+media tv television
+media shapes
+
+system desktop computer pc monitor
+system laptop notebook
+system phone mobile
+system tablet
+system keyboard
+system keyboard_mouse
+system battery_10 power
+system battery_charge charging
+system power shut down quit
+system sleep moon
+system window window
+system window_new new window
+system window_multiple windows
+system window_apps
+system window_settings
+system panel_left
+system panel_right
+system panel_left_expand
+system panel_right_expand
+system board_split
+system tab_desktop tab
+system tab_add new tab
+system tabs tabs
+system navigation menu hamburger
+system more_horizontal menu
+system more_vertical menu
+system apps_list
+system desktop_mac mac
+system scan_camera scanner
+system bluetooth wireless
+system plug_connected_checkmark
+system top_speed performance gauge
+system gauge performance meter
+system person_lock admin
+system person_accounts users
+system settings_cog_multiple settings
+system wrench_settings
+system arrow_reset reset
+system arrow_clockwise refresh reload reread
+system arrow_counterclockwise
+system history recent
+system clock_arrow_download
+system bin_recycle trash recycle
+system delete_dismiss
+system cursor pointer
+system cursor_click click
+system accessibility
+system dark_theme theme dark light
+system local_language language
+system keyboard_tab tab
+system desktop_cursor
+system desktop_sync
+
+arrows arrow_up up
+arrows arrow_down down
+arrows arrow_left left back
+arrows arrow_right right forward
+arrows arrow_up_left
+arrows arrow_up_right
+arrows arrow_down_left
+arrows arrow_down_right
+arrows arrow_circle_up
+arrows arrow_circle_down
+arrows arrow_circle_left
+arrows arrow_circle_right
+arrows arrow_repeat_all repeat loop
+arrows arrow_shuffle random
+arrows arrow_sort sort
+arrows arrow_sort_up sort ascending
+arrows arrow_sort_down sort descending
+arrows arrow_move move
+arrows arrow_maximize expand
+arrows arrow_minimize collapse
+arrows arrow_expand
+arrows arrow_import import
+arrows arrow_export_ltr export
+arrows arrow_enter enter
+arrows arrow_exit exit leave
+arrows arrow_forward forward
+arrows arrow_reply reply
+arrows arrow_trending trend
+arrows arrow_trending_down trend
+arrows arrow_step_in
+arrows arrow_step_out
+arrows arrow_step_over
+arrows arrow_split
+arrows arrow_join
+arrows arrow_bidirectional_left_right
+arrows arrow_bidirectional_up_down
+arrows arrow_previous first
+arrows arrow_next last
+arrows arrow_collapse_all
+arrows arrow_expand_all
+arrows chevron_up
+arrows chevron_down
+arrows chevron_left
+arrows chevron_right
+arrows chevron_double_up
+arrows chevron_double_down
+arrows chevron_double_left
+arrows chevron_double_right
+arrows caret_up
+arrows caret_down
+arrows caret_left
+arrows caret_right
+arrows triangle_up
+arrows triangle_down
+
+status checkmark ok done yes tick
+status checkmark_circle ok done
+status dismiss_circle cancel no
+status checkmark_square
+status info information about
+status question help
+status question_circle help
+status warning alert caution
+status error_circle error failure
+status alert bell notification
+status alert_off silent
+status alert_urgent urgent
+status prohibited forbidden block
+status shield_error
+status shield_dismiss
+status circle dot
+status circle_half_fill
+status record_stop
+status add_circle new plus
+status subtract_circle minus
+status star_half rating
+status star_off
+status star_emphasis
+status flag_off
+status heart_broken
+status thumb_dislike dislike
+status emoji_sad sad
+status presence_available online
+status presence_away away
+status presence_offline offline
+status hourglass_half wait
+status spinner_ios loading busy
+status badge
+status target goal
+status target_arrow goal
+status pulse activity heartbeat
+status person_prohibited
+status calendar_checkmark
+status calendar_cancel
+status mail_checkmark
+status mail_error
+status mail_unread unread
+status mail_read read
+status number_circle_1 one
+status number_circle_2 two
+status number_circle_3 three
+status cloud_checkmark
+status cloud_error
+status database_warning

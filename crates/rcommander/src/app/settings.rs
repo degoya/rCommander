@@ -26,13 +26,16 @@
 mod about;
 mod apply;
 mod colours_page;
+mod columns_page;
 mod draft;
 mod fonts_page;
 mod host_keys;
 mod host_keys_view;
+mod lines_field;
 mod mcp_log;
 mod mcp_log_view;
 mod mcp_page;
+mod page;
 mod plugins;
 mod plugins_calls;
 mod plugins_view;
@@ -42,6 +45,7 @@ mod shortcuts;
 mod shortcuts_view;
 mod tabs;
 mod themes_page;
+mod thumbnails_page;
 mod view;
 
 use iced::Task;
@@ -49,12 +53,14 @@ use rc_engine::CommandClass;
 use rc_mcp::{McpToken, Rule};
 
 pub(super) use self::about::{window_icon, window_title};
+pub use self::columns_page::ColumnsMsg;
 pub use self::draft::{Changes, Limit, Loaded};
 use self::draft::{Draft, Field};
 pub use self::host_keys::TrustStoreCall;
+pub use self::page::Page;
 pub use self::plugins::{PluginsCall, PluginsMsg};
 pub use self::save::Stored;
-pub use self::shortcuts::{ShortcutsMsg, WorkspaceKeyMsg};
+pub use self::shortcuts::{CommandKeyMsg, ShortcutsMsg, WorkspaceKeyMsg};
 pub use self::tabs::{Tab, Tabs};
 pub use self::themes_page::ThemesMsg;
 // The themes read before the window opens (`startup.rs`).
@@ -72,52 +78,6 @@ use crate::{
     mcp::McpStatus,
     theme::{self, ThemeChoice, fonts::Fonts},
 };
-
-/// The dialog's pages, in its order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Page {
-    Appearance,
-    Folders,
-    /// What F10 does (RC-080-17).
-    Keyboard,
-    Terminal,
-    Vault,
-    /// The trusted SSH host keys and FTPS certificates (RC-050-07).
-    HostKeys,
-    Retention,
-    Mcp,
-    /// The external viewer and editor (RC-010-07).
-    Programs,
-    /// Copies and moves: buffer and how many run at once (RC-060-05).
-    Transfers,
-    /// The installed plugins and their switches (RC-100-09).
-    Plugins,
-    /// Imports from other programs: Total Commander's (RC-050-10).
-    Import,
-    /// The self-update: its state, the offer and its notes, the switches (RC-100-05).
-    Updates,
-    /// The build and the licences (RC-010-19).
-    About,
-}
-
-impl Page {
-    pub const ALL: [Self; 14] = [
-        Self::Appearance,
-        Self::Folders,
-        Self::Keyboard,
-        Self::Terminal,
-        Self::Vault,
-        Self::HostKeys,
-        Self::Retention,
-        Self::Mcp,
-        Self::Programs,
-        Self::Transfers,
-        Self::Plugins,
-        Self::Import,
-        Self::Updates,
-        Self::About,
-    ];
-}
 
 #[derive(Debug, Clone)]
 pub enum SettingsMessage {
@@ -164,6 +124,8 @@ pub enum SettingsMessage {
     Fonts(Box<Fonts>),
     /// The Themes tab and the themes the window draws with (RC-100-50).
     Themes(ThemesMsg),
+    /// The Columns tab: the column sets (RC-100-90).
+    Columns(ColumnsMsg),
     /// Opens the system's colour dialog for a colour of the rules by file type.
     Pick(colours_page::PickTarget),
     /// The colour the dialog gave, `#rrggbb`; `None` when it was cancelled.
@@ -190,8 +152,11 @@ pub struct SettingsDialog {
     plugins: plugins::PluginsPage,
     shortcuts: shortcuts::ShortcutsPage,
     themes: themes_page::ThemesPage,
+    columns: columns_page::ColumnsPage,
     /// What the Updates page shows, read when the dialog opens and after each change.
     updates: Option<Box<rc_engine::UpdateStatus>>,
+    /// The bytes the thumbnails' disk cache holds, once measured (RC-100-89).
+    thumbnail_cache: Option<u64>,
 }
 
 impl SettingsDialog {
@@ -208,7 +173,9 @@ impl SettingsDialog {
             plugins: plugins::PluginsPage::default(),
             shortcuts: shortcuts::ShortcutsPage::default(),
             themes: themes_page::ThemesPage::default(),
+            columns: columns_page::ColumnsPage::default(),
             updates: None,
+            thumbnail_cache: None,
         }
     }
 
@@ -221,6 +188,11 @@ impl SettingsDialog {
     pub(in crate::app) fn set_updates(&mut self, status: Box<rc_engine::UpdateStatus>) {
         self.about.set_update_facts(&status);
         self.updates = Some(status);
+    }
+
+    /// The bytes the thumbnails' disk cache holds, measured or cleared.
+    pub(in crate::app) fn set_thumbnail_cache(&mut self, bytes: u64) {
+        self.thumbnail_cache = Some(bytes);
     }
 
     fn fail(&mut self, code: &str) {
@@ -280,6 +252,9 @@ impl App {
         if let SettingsMessage::Themes(message) = message {
             return self.themes_message(message);
         }
+        if let SettingsMessage::Columns(message) = message {
+            return self.columns_message(message);
+        }
         if let SettingsMessage::Stripes(on) = message {
             theme::set_stripes(on);
             return Vec::new();
@@ -309,6 +284,9 @@ impl App {
         }
         if let SettingsMessage::Tab(tab) = message {
             self.settings_tabs.choose(tab);
+            if let Some(dialog) = self.settings.as_mut() {
+                dialog.themes.close_menu();
+            }
             // Back from the page's settings, the list follows them (`plugins.recent_calls_shown`).
             if tab == Tab::Installed {
                 return self.plugins_shown();
@@ -320,6 +298,7 @@ impl App {
         if let SettingsMessage::Page(page) = message {
             if let Some(dialog) = self.settings.as_mut() {
                 dialog.page = page;
+                dialog.themes.close_menu();
             }
             let mut effects = self.host_keys_shown();
             effects.extend(self.mcp_log_shown());
@@ -403,6 +382,7 @@ impl App {
             | SettingsMessage::Stripes(_)
             | SettingsMessage::Fonts(_)
             | SettingsMessage::Themes(_)
+            | SettingsMessage::Columns(_)
             | SettingsMessage::Pick(_)
             | SettingsMessage::Picked(..)
             | SettingsMessage::ColourRule(..)
@@ -428,7 +408,11 @@ impl App {
         vec![
             Effect::Task(task),
             Effect::Task(self.themes_task()),
+            // The Columns tab's sets (RC-100-90).
+            Effect::Task(self.column_sets_task()),
             super::update_ui::status_task(&self.engine),
+            // What the thumbnails' disk cache holds, for its tab (RC-100-89).
+            Effect::Task(App::thumbnail_cache_task()),
         ]
     }
 
@@ -453,11 +437,13 @@ impl App {
         {
             return None;
         }
-        // The Host keys page's own keys: its rows and the question before a removal.
+        // The Host keys page's own keys: its rows and the question before a removal; the Themes
+        // tab's context menu (RC-110-09).
         if let Message::Key(chord) = message
             && let Some(effects) = self
                 .host_keys_key(chord)
                 .or_else(|| self.shortcuts_key(chord))
+                .or_else(|| self.themes_key(chord))
         {
             return Some(effects);
         }

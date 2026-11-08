@@ -1,5 +1,6 @@
 //! The settings' About page (RC-010-19), after rDownloader's: which build runs, where it comes
-//! from, who made it, and under which licences the crates it contains are.
+//! from, who made it, where it keeps its data (RC-100-95), and under which licences the crates
+//! it contains are.
 //!
 //! Two tabs. *About* shows the logo, the build's facts, the addresses and the credits, all from
 //! [`rc_engine::about::about`] - what `app.about` answers MCP, so the page and an agent never
@@ -128,6 +129,18 @@ fn facts(about: &About) -> [(&'static str, String); 4] {
         ),
         (t!("settings.about.platform"), about.platform.clone()),
     ]
+}
+
+/// The data folder as the page lists it, marked when the copy is portable (RC-100-95). It stays
+/// out of the version line: a bug report need not carry the person's user name.
+fn data_fact(about: &About) -> (&'static str, String) {
+    let folder = or_unknown(about.data_dir.as_deref());
+    let value = if about.portable {
+        t!("settings.about.data_portable", folder = folder)
+    } else {
+        folder
+    };
+    (t!("settings.about.data_dir"), value)
 }
 
 fn or_unknown(value: Option<&str>) -> String {

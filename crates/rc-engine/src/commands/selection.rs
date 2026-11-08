@@ -7,10 +7,13 @@
 
 use rc_vfs::Entry;
 
-use super::cursor::{reach, stepped};
 use crate::{
-    CursorStep, Engine, EngineEvent, Outcome, PanelChange, PanelId, PanelState, extension,
-    mask::Mask, settings::SELECT_FOLDERS_KEY, state::Selection,
+    CursorStep, Engine, EngineError, EngineEvent, FlatSource, Outcome, PanelChange, PanelId,
+    PanelState, extension,
+    mask::Mask,
+    search::{DuplicateSelection, Listed, apply_selection},
+    settings::SELECT_FOLDERS_KEY,
+    state::Selection,
 };
 
 impl Engine {
@@ -87,6 +90,57 @@ impl Engine {
         })
     }
 
+    /// `panel.select_duplicates` (Num+ over a duplicate result, RC-100-98): the selection after
+    /// `spec` over the panel's entries in list order, each with its group.
+    ///
+    /// # Errors
+    ///
+    /// The panel shows no duplicate result.
+    pub(crate) fn select_duplicates(
+        &self,
+        panel: Option<PanelId>,
+        spec: &DuplicateSelection,
+    ) -> Result<Outcome, EngineError> {
+        let id = self.resolve(panel);
+        let duplicates = self
+            .state()
+            .panel(id)
+            .flat
+            .as_ref()
+            .is_some_and(|flat| flat.source == FlatSource::Duplicates);
+        if !duplicates {
+            return Err(EngineError::InvalidSearch {
+                reason: "the panel shows no duplicate result".to_owned(),
+            });
+        }
+        Ok(self.change_selection(Some(id), |state| {
+            let PanelState {
+                path,
+                entries,
+                selection,
+                flat,
+                ..
+            } = state;
+            let Some(flat) = flat else {
+                return;
+            };
+            let groups = flat.plan.groups_by_name(&path.path);
+            let files: Vec<Listed<'_>> = entries
+                .iter()
+                .filter_map(|entry| {
+                    let group = *groups.get(&entry.name)?;
+                    Some(Listed {
+                        name: &entry.name,
+                        group,
+                        modified: entry.modified,
+                        size: entry.size,
+                    })
+                })
+                .collect();
+            apply_selection(spec, &files, selection);
+        }))
+    }
+
     /// `panel.restore_selection`: the remembered names that are still entries; with nothing
     /// remembered the selection stays.
     pub(crate) fn restore_selection(&self, panel: Option<PanelId>) -> Outcome {
@@ -123,13 +177,13 @@ impl Engine {
         let snapshot = {
             let mut state = self.state();
             let active = state.active == id;
-            let (page, column) = state.paging(id);
+            let paging = state.paging(id);
             let panel = state.panel_mut(id);
             let (from, len) = (panel.cursor, panel.entries.len());
             if let Some(entry) = panel.cursor_entry() {
                 let select = !panel.selection.contains(&entry.name);
-                let to = stepped(from, len, page, column, step);
-                let cut_short = reach(from, len, page, column, step) != to as isize;
+                let to = paging.stepped(from, len, step);
+                let cut_short = paging.reach(from, len, step) != to as isize;
                 let inclusive = cut_short || matches!(step, CursorStep::First | CursorStep::Last);
                 let range = match (from <= to, inclusive) {
                     (true, true) => from..to + 1,

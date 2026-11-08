@@ -13,31 +13,38 @@
 //! `multi_rename.undo`. The presets are the engine's (`multi_rename.preset_*`).
 //!
 //! While the dialog is open it has the keyboard and the mouse (`keys.rs`); jobs keep running.
+//! The name lists, the editor and the next step (F5) are `names.rs` (RC-100-96).
 
 mod call;
 mod controls;
 mod form;
 mod keys;
 mod list;
+mod names;
 mod run;
+mod table;
 mod view;
 
 use std::{
     fmt,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
 };
 
-use rc_engine::{Command, EngineEvent, JobId, PanelId, RenamePreset, RenameRule, VfsPath};
+use chrono::NaiveDateTime;
+use rc_engine::{
+    Command, EngineEvent, JobId, PanelId, RenameContext, RenamePreset, RenameRule, VfsPath,
+};
 
 pub(super) use self::view::{body, overlay};
 pub use self::{
     call::{Answer, Call, PreviewError, Queued},
     form::{CaseChoice, Field, Flag, Form, Placeholder},
     list::RenameList,
+    names::NamesMsg,
 };
 use super::{App, Effect, Message};
 use crate::i18n::{error_text, t};
@@ -123,8 +130,21 @@ pub struct MultiRenameDialog {
     running: Option<Running>,
     /// The pairs of the run asked for.
     pending_pairs: Vec<(String, String)>,
-    /// The names before this dialog's last run, which its undo brings back.
-    undo_names: Option<Vec<String>>,
+    /// The names before each of this dialog's runs, the latest last, which its undos bring back.
+    undo_names: Vec<Vec<String>>,
+    /// The names before the last run that went through: what F5 moves on from.
+    next_names: Option<Vec<String>>,
+    /// The "More..." row is open (Alt+M, Shift+F10).
+    pub more: bool,
+    /// The editor's file of names (Edit names), until Take names or Cancel.
+    pub edited: Option<PathBuf>,
+    /// When the dialog opened (`[T2]`) and the rule last changed (`[T3]`).
+    opened_at: NaiveDateTime,
+    changed_at: NaiveDateTime,
+    /// The clipboard's text `[X]` reads, read again when a rule field changes.
+    clipboard: Option<String>,
+    /// The local date and time formats of `[d]` and `[t]`.
+    formats: (Option<String>, Option<String>),
     /// The number of the latest preview asked for, shared with the waiting previews.
     generation: u64,
     latest: Arc<AtomicU64>,
@@ -132,6 +152,7 @@ pub struct MultiRenameDialog {
 
 impl MultiRenameDialog {
     pub fn new(panel: PanelId, dir: VfsPath, names: Vec<String>, selected: bool) -> Self {
+        let opened_at = names::now();
         Self {
             open: true,
             panel,
@@ -150,7 +171,14 @@ impl MultiRenameDialog {
             asked: false,
             running: None,
             pending_pairs: Vec::new(),
-            undo_names: None,
+            undo_names: Vec::new(),
+            next_names: None,
+            more: false,
+            edited: None,
+            opened_at,
+            changed_at: opened_at,
+            clipboard: None,
+            formats: crate::platform::locale_format::formats(),
             generation: 0,
             latest: Arc::new(AtomicU64::new(0)),
         }
@@ -180,6 +208,13 @@ impl MultiRenameDialog {
             dir: Some(self.dir.path.display().to_string()),
             names: self.list.names().to_vec(),
             rule: self.form.rule()?,
+            context: RenameContext {
+                clipboard: self.clipboard.clone(),
+                opened_at: Some(self.opened_at),
+                changed_at: Some(self.changed_at),
+                date_format: self.formats.0.clone(),
+                time_format: self.formats.1.clone(),
+            },
         })
     }
 
@@ -294,6 +329,8 @@ pub enum MrMsg {
     Undo,
     Close,
     Answer(Answer),
+    /// The name lists and the next step (`names.rs`).
+    Names(NamesMsg),
 }
 
 impl App {
@@ -343,6 +380,9 @@ impl App {
         let Some(dialog) = self.multi_rename.as_mut() else {
             return Vec::new();
         };
+        if message.changes_options() {
+            dialog.changed_at = names::now();
+        }
         match message {
             MrMsg::Text(field, text) => match field {
                 Field::PresetName => dialog.preset_name = text,
@@ -351,7 +391,7 @@ impl App {
                     if let Some(slot) = dialog.form.text_mut(field) {
                         *slot = text;
                     }
-                    return self.mr_refresh(true);
+                    return self.mr_mask_changed(true);
                 }
             },
             MrMsg::Flag(flag, on) => {
@@ -364,11 +404,11 @@ impl App {
             }
             MrMsg::Insert(placeholder) => {
                 dialog.form.insert(placeholder);
-                return self.mr_refresh(false);
+                return self.mr_mask_changed(false);
             }
             MrMsg::Preset(choice) => {
                 dialog.load(choice);
-                return self.mr_refresh(false);
+                return self.mr_mask_changed(false);
             }
             MrMsg::SavePreset => return dialog.save_preset(),
             MrMsg::RenamePreset => return dialog.rename_preset(),
@@ -393,8 +433,13 @@ impl App {
             }
             MrMsg::Start => return self.mr_start(),
             MrMsg::Undo => return self.mr_undo(),
-            MrMsg::Close => self.close_multi_rename(),
+            MrMsg::Close => {
+                let discard = self.mr_discard_edit();
+                self.close_multi_rename();
+                return discard;
+            }
             MrMsg::Answer(answer) => return self.mr_answer(answer),
+            MrMsg::Names(message) => return self.mr_names(message),
         }
         Vec::new()
     }

@@ -4,9 +4,10 @@
 //! row, and [`ESCALATIONS`] names each case once: the MCP gate asks by it, the coverage page
 //! (`scripts/mcp-coverage.sh`) shows it.
 //!
-//! Two cases depend on what is stored, not on the parameters alone - a retention limit below
-//! the one in force, a saved queue list holding an overwriting job; `Engine::effective_class`
-//! adds them (`dispatch/mcp.rs`).
+//! Some cases depend on what is stored, not on the parameters alone - a retention limit below
+//! the one in force, a saved queue list holding an overwriting job, an own command or Start menu
+//! entry that starts as administrator or asks, a file whose internal association does so
+//! (RC-100-91); `Engine::effective_class` adds them (`dispatch/mcp.rs`).
 
 use rc_ops::ConflictChoice;
 
@@ -26,6 +27,11 @@ pub struct Escalation {
 /// CommandClass::..., when: "..." },` - with no escaped quotes in `when`.
 pub const ESCALATIONS: &[Escalation] = &[
     Escalation {
+        id: "archive.add",
+        class: CommandClass::Destructive,
+        when: "it deletes its sources or on_conflict overwrites",
+    },
+    Escalation {
         id: "archive.extract",
         class: CommandClass::Destructive,
         when: "on_conflict overwrites",
@@ -36,6 +42,11 @@ pub const ESCALATIONS: &[Escalation] = &[
         when: "it deletes its sources or replaces an archive",
     },
     Escalation {
+        id: "button_bar.run",
+        class: CommandClass::GuiOnly,
+        when: "it gets files or parameters from the caller, or its command starts as administrator, asks for its parameters or runs a row stricter than exec",
+    },
+    Escalation {
         id: "connections.save",
         class: CommandClass::Exec,
         when: "it names a login script",
@@ -44,6 +55,11 @@ pub const ESCALATIONS: &[Escalation] = &[
         id: "diagnostics.set_retention",
         class: CommandClass::Destructive,
         when: "a limit is lowered below the one in force",
+    },
+    Escalation {
+        id: "file.open",
+        class: CommandClass::GuiOnly,
+        when: "the file's internal association starts as administrator, asks for its parameters or runs a row stricter than exec",
     },
     Escalation {
         id: "file.set_attributes",
@@ -76,9 +92,19 @@ pub const ESCALATIONS: &[Escalation] = &[
         when: "the saved list holds a job that overwrites",
     },
     Escalation {
+        id: "start_menu.run",
+        class: CommandClass::GuiOnly,
+        when: "it starts as administrator, asks for its parameters, gets them from the caller or runs a row stricter than exec",
+    },
+    Escalation {
         id: "sync.apply",
         class: CommandClass::Destructive,
         when: "it may delete or overwrite",
+    },
+    Escalation {
+        id: "usercmd.run",
+        class: CommandClass::GuiOnly,
+        when: "it starts as administrator, asks for its parameters, gets them from the caller or runs a row stricter than exec",
     },
 ];
 
@@ -122,6 +148,9 @@ impl Command {
                 overwrites(request.options.on_conflict)
             }
             Self::ArchiveExtract { options, .. } => overwrites(options.on_conflict),
+            Self::ArchiveAdd {
+                settings, options, ..
+            } => settings.delete_sources || overwrites(options.on_conflict),
             Self::ArchivePack { settings, .. } => settings.delete_sources || settings.overwrite,
             Self::SyncApply(request) => {
                 request.run.deletes_confirmed || overwrites(request.run.on_conflict)
@@ -134,6 +163,12 @@ impl Command {
             Self::SetFileAttributes { change, .. } => {
                 change.mode.is_some_and(|mode| mode & 0o020 != 0)
             }
+            // Which program runs with which parameters is a person's choice (RC-100-86).
+            Self::RunUserCommand { params, .. } | Self::RunStartItem { params, .. } => {
+                params.is_some()
+            }
+            // And which files a button gets (RC-100-87).
+            Self::RunButton { params, files, .. } => params.is_some() || !files.is_empty(),
             _ => false,
         }
     }

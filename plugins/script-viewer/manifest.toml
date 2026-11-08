@@ -4,10 +4,10 @@
 # (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.4.0"
+api_version = "0.6.0"
 id = "01a1b57c-cbc8-7e0f-9f76-d73b6cdc02ed"
 name = "Script viewer"
-version = "0.1.0"
+version = "0.1.1"
 
 [match]
 # The language is the name's (src/lang.rs, `Lang::from_name`): Ruby (`.rb`, `Gemfile`,

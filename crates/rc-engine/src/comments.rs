@@ -92,6 +92,14 @@ impl Descriptions {
         }
     }
 
+    /// Every file's comment, line breaks restored, in file order (RC-100-90).
+    pub fn entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        self.lines.iter().filter_map(|line| match line {
+            Line::Entry { name, stored } => Some((name.clone(), unescape(stored))),
+            Line::Other(_) => None,
+        })
+    }
+
     /// Whether no line is left.
     #[must_use]
     pub fn is_empty(&self) -> bool {

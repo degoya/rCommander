@@ -1,15 +1,45 @@
 //! The data folder is the user's alone on Unix (RC-080-42): the database in it holds the MCP
 //! token and the vault's ciphertext, the instance file beside it the server's port. The database
 //! file and SQLite's files beside it are owner-only too (RC-080-68), not only through the folder.
+//!
+//! A portable copy's folder (RC-100-95) may be on a FAT or exFAT stick, which keeps no Unix
+//! modes and refuses `chmod`: there the modes are tried ([`Modes::BestEffort`]) and a failure is
+//! reported, not fatal - the stick is the person's to guard.
 
 use std::{io, path::Path};
+
+/// Whether the owner-only modes must hold or are only tried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Modes {
+    /// The user's data folder: a mode that cannot be set fails the open.
+    Enforced,
+    /// A portable copy's folder: a mode that cannot be set is reported.
+    BestEffort,
+}
+
+impl Modes {
+    /// What the `outcome` of a mode change means: whether the mode holds, or the error when it
+    /// must and does not. Only Unix keeps modes to set.
+    #[cfg(any(unix, test))]
+    pub(crate) fn settle(self, outcome: io::Result<()>) -> io::Result<bool> {
+        match (outcome, self) {
+            (Ok(()), _) => Ok(true),
+            (Err(_), Self::BestEffort) => Ok(false),
+            (Err(error), Self::Enforced) => Err(error),
+        }
+    }
+}
 
 /// Creates `dir` with its missing parents; on Unix every folder it creates is owner-only
 /// (`0700`), and the platform's data folder `data_dir` is made owner-only also when it was
 /// there before (an older rCommander created it `0755`). A folder the person named elsewhere is
 /// left as it is. On Windows the folders inherit the ACL of their parent - in a profile the
-/// person's own.
-pub(crate) async fn create_private_dir(dir: &Path, data_dir: Option<&Path>) -> io::Result<()> {
+/// person's own. Whether every mode holds; `false` only with [`Modes::BestEffort`].
+pub(crate) async fn create_private_dir(
+    dir: &Path,
+    data_dir: Option<&Path>,
+    modes: Modes,
+) -> io::Result<bool> {
     let mut builder = tokio::fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]
@@ -20,12 +50,13 @@ pub(crate) async fn create_private_dir(dir: &Path, data_dir: Option<&Path>) -> i
         use std::os::unix::fs::PermissionsExt as _;
         let mode = tokio::fs::metadata(dir).await?.permissions().mode();
         if mode & 0o077 != 0 {
-            tokio::fs::set_permissions(dir, std::fs::Permissions::from_mode(mode & 0o700)).await?;
+            let owner_only = std::fs::Permissions::from_mode(mode & 0o700);
+            return modes.settle(tokio::fs::set_permissions(dir, owner_only).await);
         }
     }
     #[cfg(not(unix))]
-    let _ = data_dir;
-    Ok(())
+    let _ = (data_dir, modes);
+    Ok(true)
 }
 
 /// Makes the database at `path` owner-only (`0600`) on Unix before it is opened (RC-080-68): a
@@ -33,11 +64,12 @@ pub(crate) async fn create_private_dir(dir: &Path, data_dir: Option<&Path>) -> i
 /// `-journal`) are tightened when an older rCommander or another program left them open to
 /// others. SQLite gives the `-wal` and `-shm` it creates the database file's permissions. A
 /// symbolic link is left as it is, never followed. On Windows the files inherit the ACL of the
-/// private folder.
-pub(crate) async fn secure_database_files(path: &Path) -> io::Result<()> {
+/// private folder. Whether every mode holds; `false` only with [`Modes::BestEffort`].
+pub(crate) async fn secure_database_files(path: &Path, modes: Modes) -> io::Result<bool> {
     #[cfg(unix)]
-    {
+    let kept = {
         use std::os::unix::fs::PermissionsExt as _;
+        let mut kept = true;
         match tokio::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -62,13 +94,17 @@ pub(crate) async fn secure_database_files(path: &Path) -> io::Result<()> {
             let mode = meta.permissions().mode();
             if meta.is_file() && mode & 0o177 != 0 {
                 let owner_only = std::fs::Permissions::from_mode(mode & 0o600);
-                tokio::fs::set_permissions(&file, owner_only).await?;
+                kept &= modes.settle(tokio::fs::set_permissions(&file, owner_only).await)?;
             }
         }
-    }
+        kept
+    };
     #[cfg(not(unix))]
-    let _ = path;
-    Ok(())
+    let kept = {
+        let _ = (path, modes);
+        true
+    };
+    Ok(kept)
 }
 
 #[cfg(test)]

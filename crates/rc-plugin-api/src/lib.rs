@@ -1,17 +1,20 @@
-//! rCommander's plugin contract (RC-100-08): the WIT package `rcommander:plugin@0.4.0` and the
+//! rCommander's plugin contract (RC-100-08): the WIT package `rcommander:plugin@0.6.0` and the
 //! native side of each world, so a plugin's logic is tested without a WebAssembly toolchain.
 //!
 //! Copied and adapted from rDownloader's `crates/rd-plugin-api` at commit 26c8592a6 (`src/lib.rs`,
 //! `wit/rdownloader.wit`): one WIT world per plugin kind, a native trait per world. Stage 1 has
 //! one world, `viewer-plugin` ([`viewer`]); contract 0.3.0 adds `secrets-plugin` ([`secrets`],
-//! RC-100-33); contract 0.4.0 adds `inventory-plugin` ([`inventory`], RC-100-39); the others
-//! arrive with their stages (`docs/plugins.md`, "Staged implementation").
+//! RC-100-33); contract 0.4.0 adds `inventory-plugin` ([`inventory`], RC-100-39); contract 0.5.0
+//! adds `checkout` and `checkin` to `secrets` (RC-100-38); contract 0.6.0 adds `compare-plugin`
+//! ([`compare`], RC-100-41); the others arrive with their stages (`docs/plugins.md`, "Staged
+//! implementation").
 //!
 //! The crate builds for `wasm32-unknown-unknown` as well: a plugin's guest half translates the
 //! generated WIT bindings into the trait here and nothing else.
 
 #![warn(unreachable_pub)]
 
+pub mod compare;
 pub mod inventory;
 pub mod secrets;
 pub mod viewer;
@@ -26,7 +29,7 @@ pub use rc_plugin_types::{Failure, FailureKind, MessageParams};
 pub const WIT: &str = include_str!("../wit/rcommander.wit");
 
 /// The version of `rcommander:plugin` this contract is; a manifest's `api_version`.
-pub const API_VERSION: &str = "0.4.0";
+pub const API_VERSION: &str = "0.6.0";
 
 /// The package name every interface of the contract is imported and exported under.
 #[cfg(test)]

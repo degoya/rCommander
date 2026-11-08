@@ -52,6 +52,12 @@ pub async fn with_mcp_pins<F: Future>(pins: Vec<McpPin>, future: F) -> F::Output
     PINS.scope(pins, future).await
 }
 
+/// The pins of the running MCP call, to carry into a task it starts (task-locals do not cross
+/// `tokio::spawn`); `None` outside one.
+pub(crate) fn current_pins() -> Option<Vec<McpPin>> {
+    PINS.try_with(Clone::clone).ok()
+}
+
 /// The folder the running call pinned `panel` to, if it did.
 pub(crate) fn pinned(panel: PanelId) -> Option<VfsPath> {
     PINS.try_with(|pins| {

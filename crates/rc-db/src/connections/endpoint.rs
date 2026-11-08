@@ -19,7 +19,9 @@ pub enum EndpointRule {
     KeepWhileSecretsHeld,
 }
 
-/// Whether `patch` changes where `connection` connects: its host, port, kind or user.
+/// Whether `patch` changes where `connection` connects: its host, port, kind or user, or the
+/// jump host it goes through (RC-110-03) - the route decides which server answers under the
+/// name.
 #[must_use]
 pub fn moves_endpoint(connection: &Connection, patch: &ConnectionPatch) -> bool {
     patch
@@ -34,6 +36,7 @@ pub fn moves_endpoint(connection: &Connection, patch: &ConnectionPatch) -> bool 
             .username
             .as_ref()
             .is_some_and(|user| Some(user) != connection.username.as_ref())
+        || patch.jump().is_some_and(|jump| jump != connection.jump_id)
 }
 
 /// Refuses `patch` of `current` under `rule`, read on the writer inside the change's

@@ -23,6 +23,16 @@ macro_rules! arms {
                     .await
             }
             Command::OpenFile { panel, path } => $self.open_file(panel, path.as_deref()).await,
+            Command::AssociationsWindow {} => Ok($self.associations_window()),
+            Command::RunAssociation {
+                panel,
+                path,
+                verb,
+                params,
+            } => {
+                $self.run_association(panel, path.as_deref(), &verb, params)
+                    .await
+            }
         } }
     };
 }

@@ -131,6 +131,11 @@ const WITHOUT_A_WAY_IN: &[&str] = &[
     "connections.set_session_prefs",
     "diagnostics.clear_error_log",
     "diagnostics.error_log",
+    // RC-100-92: the Ctrl+F12 prompt's list of saved filters is still to come; MCP has them.
+    "filters.delete",
+    "filters.list",
+    "filters.rename",
+    "filters.save",
     "queue.assign",
     "queue.move",
     "queue.remove",
@@ -169,6 +174,8 @@ fn a_listed_row_names_a_command_the_palette_lists() {
     let lists = [
         super::super::themes::LISTED,
         super::super::workspaces::LISTED,
+        super::super::user_commands::LISTED,
+        super::super::TOGGLE_LISTED,
     ]
     .concat();
     assert_eq!(listed, lists);

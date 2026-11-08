@@ -75,7 +75,8 @@ impl SecretKind {
         let column = self.column();
         // The key's public half goes with it; a key is stored by `write_key`.
         let public = if self == Self::Key {
-            ", key_type = NULL, key_fingerprint = NULL, key_comment = NULL, key_public = NULL"
+            ", key_type = NULL, key_fingerprint = NULL, key_comment = NULL, key_public = NULL, \
+             key_certificate = NULL, key_certificate_info = NULL"
         } else {
             ""
         };
@@ -159,8 +160,8 @@ impl SecretFlags {
 }
 
 /// The public half of a private key stored with a connection, kept in clear for display. MCP
-/// sees `{"type", "fingerprint", "comment", "stored": true}`; the public key itself is for the
-/// window only.
+/// sees `{"type", "fingerprint", "comment", "stored": true, "certificate"}`; the public key
+/// itself is for the window only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredKey {
     /// The key type as SSH names it (`ssh-ed25519`, `ssh-rsa`, ...).
@@ -174,6 +175,88 @@ pub struct StoredKey {
     /// The public key as an `authorized_keys` line, without the comment.
     #[serde(skip)]
     pub public_key: String,
+    /// The OpenSSH user certificate a CA signed for this key, when one was taken in with it
+    /// (RC-060-09).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certificate: Option<KeyCertificate>,
+}
+
+/// An OpenSSH user certificate stored beside a private key (RC-060-09): public, like the key's
+/// public half. MCP and the window see what it says; its `-cert.pub` line is for the login only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyCertificate {
+    /// The certificate type as SSH names it (`ssh-ed25519-cert-v01@openssh.com`, ...).
+    #[serde(rename = "type")]
+    pub cert_type: String,
+    /// The key id the CA wrote into it; what a server logs.
+    pub key_id: String,
+    pub serial: u64,
+    /// The names it is valid for; empty leaves the choice to the server.
+    pub principals: Vec<String>,
+    /// Valid from this Unix time on; 0 is always.
+    pub valid_after: u64,
+    /// Valid before this Unix time; `None` is forever.
+    pub valid_before: Option<u64>,
+    /// `SHA256:<base64>` of the CA that signed it.
+    pub ca_fingerprint: String,
+    /// The certificate as its `-cert.pub` line, what the login sends.
+    #[serde(skip)]
+    pub openssh: String,
+}
+
+/// Whether a certificate is valid at a given time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CertificateValidity {
+    Valid,
+    NotYetValid,
+    Expired,
+}
+
+impl KeyCertificate {
+    /// Whether it is valid at the Unix time `now`: valid after <= now < valid before, as
+    /// OpenSSH's `PROTOCOL.certkeys` has it.
+    #[must_use]
+    pub fn validity_at(&self, now: u64) -> CertificateValidity {
+        if now < self.valid_after {
+            CertificateValidity::NotYetValid
+        } else if self.valid_before.is_some_and(|before| now >= before) {
+            CertificateValidity::Expired
+        } else {
+            CertificateValidity::Valid
+        }
+    }
+
+    /// Whether it names `user` among its principals, or names none.
+    #[must_use]
+    pub fn names(&self, user: &str) -> bool {
+        self.principals.is_empty() || self.principals.iter().any(|name| name == user)
+    }
+
+    /// The certificate of a row that reads `key_certificate` and `key_certificate_info`; `None`
+    /// without one. A summary that does not read is logged and left out: the key stays usable.
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Option<Self>> {
+        let openssh = row.try_get::<Option<String>, _>("key_certificate")?;
+        let info = row.try_get::<Option<String>, _>("key_certificate_info")?;
+        let (Some(openssh), Some(info)) = (openssh, info) else {
+            return Ok(None);
+        };
+        match serde_json::from_str::<Self>(&info) {
+            Ok(certificate) => Ok(Some(Self {
+                openssh,
+                ..certificate
+            })),
+            Err(error) => {
+                tracing::warn!(%error, "a stored certificate's summary does not read");
+                Ok(None)
+            }
+        }
+    }
+
+    /// The summary as `key_certificate_info` stores it.
+    fn info(&self) -> String {
+        serde_json::to_string(self).expect("a certificate's summary has only plain fields")
+    }
 }
 
 impl StoredKey {
@@ -192,6 +275,7 @@ impl StoredKey {
             public_key: row
                 .try_get::<Option<String>, _>("key_public")?
                 .unwrap_or_default(),
+            certificate: KeyCertificate::from_row(row)?,
         }))
     }
 }
@@ -277,6 +361,23 @@ impl Db {
         tx.commit().await?;
         Ok(connection)
     }
+
+    /// The `-cert.pub` line of the certificate stored with `owner`'s private key (RC-060-09);
+    /// `None` without one.
+    ///
+    /// # Errors
+    ///
+    /// The owner missing, or the read fails.
+    pub async fn key_certificate(&self, owner: SecretOwner) -> TreeResult<Option<String>> {
+        let row: Option<(Option<String>,)> = sqlx::query_as(AssertSqlSafe(format!(
+            "SELECT key_certificate FROM {} WHERE id = ?",
+            owner.table()
+        )))
+        .bind(owner.row())
+        .fetch_optional(self.readers())
+        .await?;
+        row.map(|(value,)| value).ok_or_else(|| owner.missing())
+    }
 }
 
 /// Stores the ciphertext `value` as `owner`'s secret of `kind`, or removes it with `None`, on the
@@ -298,9 +399,10 @@ pub(crate) async fn write_secret(
     Ok(())
 }
 
-/// Stores a private key's ciphertext `key`, its public half `info` and, when given, its
-/// passphrase's ciphertext with `owner`, on the writer inside its transaction; without a
-/// passphrase the stored one stays.
+/// Stores a private key's ciphertext `key`, its public half `info` with its certificate (none
+/// removes a stored one: it belonged to the key replaced) and, when given, its passphrase's
+/// ciphertext with `owner`, on the writer inside its transaction; without a passphrase the
+/// stored one stays.
 pub(crate) async fn write_key(
     connection: &mut SqliteConnection,
     owner: SecretOwner,
@@ -310,8 +412,8 @@ pub(crate) async fn write_key(
 ) -> TreeResult<()> {
     let done = sqlx::query(AssertSqlSafe(format!(
         "UPDATE {} SET key_enc = ?, key_type = ?, key_fingerprint = ?, \
-         key_comment = ?, key_public = ?, passphrase_enc = ifnull(?, passphrase_enc), \
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
+         key_comment = ?, key_public = ?, key_certificate = ?, key_certificate_info = ?, \
+         passphrase_enc = ifnull(?, passphrase_enc), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
         owner.table()
     )))
     .bind(key.to_vec())
@@ -319,6 +421,8 @@ pub(crate) async fn write_key(
     .bind(&info.fingerprint)
     .bind(&info.comment)
     .bind(&info.public_key)
+    .bind(info.certificate.as_ref().map(|certificate| certificate.openssh.clone()))
+    .bind(info.certificate.as_ref().map(KeyCertificate::info))
     .bind(passphrase.map(<[u8]>::to_vec))
     .bind(owner.row())
     .execute(&mut *connection)

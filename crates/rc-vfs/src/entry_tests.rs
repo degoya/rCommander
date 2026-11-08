@@ -9,6 +9,7 @@ fn file(modified: Option<SystemTime>) -> Entry {
         size: 0,
         modified,
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,

@@ -1,0 +1,13 @@
+{
+  "name": "Office-Viewer",
+  "description": "Zeigt den Text von Word-, Excel- und PowerPoint-Dokumenten (docx, xlsx, pptx) und ihre Eigenschaften, Blätter und Folien als Baum.",
+  "codes": {
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.setting.sheet_rows": "Angezeigte Zeilen je Blatt",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_many_entries": "Das Dokument hat mehr als 10.000 Teile und wird nicht gelesen.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_large": "Ein Teil des Dokuments entpackt sich auf mehr als 64 MiB und wird nicht gelesen.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_compressed": "Ein Teil des Dokuments entpackt sich auf mehr als das 500-Fache seiner gepackten Größe und wird nicht gelesen.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_deep": "Ein Teil des Dokuments ist zu tief verschachtelt, um gelesen zu werden.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.damaged": "Das Dokument ist beschädigt, verschlüsselt oder auf eine Weise gepackt, die der Viewer nicht lesen kann.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.not_office": "Die Datei ist ein Zip-Archiv, aber kein Word-, Excel- oder PowerPoint-Dokument."
+  }
+}

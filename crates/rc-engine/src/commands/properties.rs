@@ -4,12 +4,13 @@
 //! Like the `ops.*` commands they take the named paths, else the panel's selection, else the
 //! entry under its cursor. A change refreshes the panels that show the folder it touched.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use rc_ops::{ApplyTo, AttributeReport, DirUsage};
 use rc_vfs::{EntryKind, LinkKind, PropertyCapabilities, PropertyChange, VfsPath};
 
 use super::{ops::sources_of, panel::resolve_path};
+use crate::viewer::exif;
 use crate::{Engine, EngineError, ItemProperties, Outcome, PanelId, PathUsage, PropertiesReport};
 
 impl Engine {
@@ -51,12 +52,19 @@ impl Engine {
                 None
             };
             let comment = self.comment_of(&vfs, path).await;
+            // A photo's EXIF block, found by its extension: no other file is opened.
+            let exif = if entry.kind == EntryKind::File && exif::is_photo_name(&path.path) {
+                exif::photo_summary(Arc::clone(&vfs), &path.path).await
+            } else {
+                None
+            };
             items.push(ItemProperties {
                 path: path.clone(),
                 entry,
                 details,
                 usage,
                 comment,
+                exif,
             });
         }
         let total = (items.len() > 1).then(|| sum(&items));
@@ -188,8 +196,10 @@ impl Engine {
         Ok(Outcome::DirSizes { items, total })
     }
 
-    /// Reads again the panels that show the folder of one of `paths`.
+    /// Reads again the panels that show the folder of one of `paths`, and the trees' levels of
+    /// those folders (RC-100-88).
     pub(crate) async fn refresh_showing(&self, paths: &[VfsPath]) {
+        self.trees_changed(paths);
         let parents: Vec<VfsPath> = paths.iter().filter_map(VfsPath::parent).collect();
         for id in PanelId::BOTH {
             let shown = self.state().panel(id).path.clone();

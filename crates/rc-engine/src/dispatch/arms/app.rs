@@ -5,6 +5,7 @@ macro_rules! arms {
     ($next:ident, $state:tt, $self:ident, { $($done:tt)* }) => {
         $next! { $state, $self, { $($done)*
             Command::About {} => Ok(Outcome::About(crate::about::about())),
+            Command::MakePortable {} => $self.make_portable().await,
             Command::Quit {} => Ok($self.quit().await),
         } }
     };

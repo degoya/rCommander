@@ -1,6 +1,7 @@
 //! `import.total_commander` and `import.total_commander_passwords` (RC-050-09): Total Commander's
 //! directory menu, tabs and FTP connections into the hotlist, the panels and the connection tree,
-//! its colours, rules by file type and list font into the settings (RC-050-14), or with `dry_run`
+//! its colours, rules by file type and list font into the settings (RC-050-14), its own commands
+//! (`usercmd.ini`) and Start menu (`[user]`) into rCommander's (RC-100-86), or with `dry_run`
 //! only the preview of that; and, only after the person asked, the passwords of
 //! those connections straight into the vault.
 //!
@@ -24,6 +25,7 @@ use crate::{
     import::{
         tc_password::{TcPassword, reveal},
         total_commander::{self as tc, TcConnection},
+        total_commander_commands,
         total_commander_load::{Caller, Loaded, Wanted, load},
         total_commander_look,
         total_commander_report::{
@@ -143,8 +145,9 @@ impl Engine {
         let loaded = read(Wanted {
             wincmd_ini: request.wincmd_ini.clone(),
             ftp_ini: request.ftp_ini.clone(),
-            wincmd: parts.hotlist || parts.tabs || parts.look,
+            wincmd: parts.hotlist || parts.tabs || parts.look || parts.commands,
             ftp: parts.connections,
+            usercmd: parts.commands,
         })
         .await?;
         let only = request.only.as_deref();
@@ -175,7 +178,22 @@ impl Engine {
             }
             _ => Vec::new(),
         };
+        let (commands, start_menu, start_keys) = match (&loaded.wincmd, parts.commands) {
+            (Some((_, ini)), true) => (
+                loaded
+                    .usercmd
+                    .as_ref()
+                    .map(|(_, usercmd)| total_commander_commands::commands(usercmd))
+                    .unwrap_or_default(),
+                total_commander_commands::start_menu(ini),
+                total_commander_commands::start_menu_has_keys(ini),
+            ),
+            _ => (Vec::new(), Vec::new(), false),
+        };
         let mut warnings = loaded.warnings.clone();
+        if start_keys {
+            warnings.push("start_menu_keys".to_owned());
+        }
         if parts.hotlist
             && loaded
                 .wincmd
@@ -199,6 +217,10 @@ impl Engine {
                 .ftp
                 .as_ref()
                 .map(|(path, _)| path.display().to_string()),
+            usercmd_ini: loaded
+                .usercmd
+                .as_ref()
+                .map(|(path, _)| path.display().to_string()),
             tabs_mode: request.tabs_mode,
             warnings,
             ..TcImportReport::default()
@@ -217,11 +239,19 @@ impl Engine {
             None => Vec::new(),
         };
         let look = self.import_tc_look(&looks, only, request.dry_run).await?;
+        let commands = self
+            .import_tc_commands(&commands, only, request.dry_run)
+            .await?;
+        let start_menu = self
+            .import_tc_start_menu(&start_menu, only, request.dry_run)
+            .await?;
         Ok(Outcome::TcImported(TcImportReport {
             hotlist,
             tabs,
             connections,
             look,
+            commands,
+            start_menu,
             ..report
         }))
     }
@@ -309,6 +339,7 @@ impl Engine {
             ftp_ini: request.ftp_ini.clone(),
             wincmd: false,
             ftp: true,
+            usercmd: false,
         })
         .await?;
         let Some((path, ini)) = &loaded.ftp else {

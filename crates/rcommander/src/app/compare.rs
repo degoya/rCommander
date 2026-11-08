@@ -5,6 +5,12 @@
 //! thread (`Engine::diff_paths`, for binary and large files `Engine::compare_paths`): two text
 //! files side by side, one list so both sides scroll together, changed, deleted and inserted lines
 //! tinted, Alt+Down and Alt+Up to the next and previous difference (`diff.rs`, `diff_view.rs`).
+//! F6 or Alt+M switch its edit mode (RC-100-94): lines changed, blocks copied across, undone and
+//! saved (`edit_mode.rs`, `edit_keys.rs`, `edit_view.rs`). A compare plugin that claims both
+//! files adds the Structure view (RC-100-41, `structure.rs`). `compare.by_content` - the key and the
+//! menu, and here the overwrite question's Compare and a sync row - starts the external compare
+//! tool of the settings instead; Shift held at the click keeps the diff window, as in Total
+//! Commander.
 //!
 //! `sync.open_dialog` (Alt+Shift+F2) opens the synchronize-dirs dialog on the two panels'
 //! folders. Compare runs `Engine::plan_sync` in the background, Stop or Escape cancel it; the
@@ -18,6 +24,11 @@
 
 mod diff;
 mod diff_view;
+mod edit_keys;
+mod edit_mode;
+mod edit_view;
+mod structure;
+mod structure_view;
 mod sync;
 mod sync_input;
 mod sync_view;
@@ -26,13 +37,16 @@ use std::sync::Arc;
 
 use iced::{Element, Size, Task, widget::stack};
 use rc_engine::{
-    CancellationToken, Chord, Engine, EngineEvent, JobId, JobSnapshot, Question, VfsPath,
-    compare::TextOptions,
+    CancellationToken, Chord, Command, Engine, EngineEvent, JobId, JobSnapshot, Question, VfsPath,
+    compare::{ByContentRequest, TextOptions},
     sync::{ItemKind, RowFilter, SyncMode, SyncPlan, proposed_action},
 };
 
+use self::structure::StructureMsg;
 pub use self::{
     diff::{DiffOption, DiffWindow, Loaded, Shown},
+    edit_keys::{Answer, EditMsg},
+    edit_mode::{Ask, Note, SaveCall, Then},
     sync::{Confirm, Flag, Phase, SyncDialog},
 };
 use super::{
@@ -71,6 +85,10 @@ pub enum CompareMsg {
     DiffScroll(isize),
     DiffViewport(Size),
     DiffClose,
+    /// The edit mode (RC-100-94).
+    Edit(EditMsg),
+    /// The Structure view (RC-100-41).
+    Structure(StructureMsg),
     SyncMode(SyncMode),
     SyncFlag(Flag, bool),
     SyncTolerance(String),
@@ -102,7 +120,8 @@ fn wrap(message: CompareMsg) -> Message {
     Message::Compare(message)
 }
 
-/// The diff window's comparison: by line, else by byte. Runs off the window's thread.
+/// The diff window's comparison: by line - both files read for the edit mode as well - else by
+/// byte. Runs off the window's thread.
 pub(super) async fn load(
     engine: Engine,
     left: VfsPath,
@@ -110,8 +129,11 @@ pub(super) async fn load(
     options: TextOptions,
     cancel: CancellationToken,
 ) -> Result<Loaded, &'static str> {
-    match engine.diff_paths(&left, &right, &options, &cancel).await {
-        Ok(Some(diff)) => Ok(Loaded::Text(Arc::new(diff))),
+    match engine.edit_paths(&left, &right, &cancel).await {
+        Ok(Some(session)) => match edit_keys::compute(session.files(), options).await {
+            Some(diff) => Ok(Loaded::Text(diff, Box::new(session))),
+            None => Err("cancelled"),
+        },
         Ok(None) => engine
             .compare_paths(&left, &right, &cancel)
             .await
@@ -131,6 +153,14 @@ impl App {
                 let mut effects = self.open_diff(left.clone(), right.clone());
                 effects.extend(self.dialog_window_front(DialogWindow::Compare));
                 return Some(effects);
+            }
+            // The external compare tool got a copy: what it changes there stays there.
+            Message::Engine(EngineEvent::CompareToolStarted { copies }) => {
+                if *copies {
+                    let active = self.active;
+                    self.pane_mut(active).error = Some(t!("compare.tool_copies").to_owned());
+                }
+                return Some(Vec::new());
             }
             Message::Engine(EngineEvent::SyncDirs { left, right }) => {
                 // The dialog it replaces stops its comparison first (RC-080-44).
@@ -152,7 +182,7 @@ impl App {
             match super::field_walk::walk_key(chord) {
                 Some(walk) if !captured => walk,
                 _ if captured && super::field_walk::taken(chord) => Vec::new(),
-                _ => self.diff_key(chord),
+                _ => self.diff_key(chord, captured),
             }
         } else {
             self.sync_key(chord, captured)
@@ -208,8 +238,12 @@ impl App {
         }
     }
 
-    /// Opens the diff window on two files; one already open makes way.
+    /// Opens the diff window on two files; one already open makes way - one with changes not
+    /// saved asks first, and the new comparison is asked for again after the answer.
     fn open_diff(&mut self, left: VfsPath, right: VfsPath) -> Vec<Effect> {
+        if self.compare.diff.as_ref().is_some_and(DiffWindow::dirty) {
+            return self.unless_unsaved(Then::Close);
+        }
         let generation = self.compare.next_generation();
         if let Some(old) = self.compare.diff.take() {
             old.cancel.cancel();
@@ -229,9 +263,20 @@ impl App {
             window.options,
             window.cancel.clone(),
         );
-        Effect::Task(Task::perform(comparison, move |result| {
-            wrap(CompareMsg::DiffLoaded(generation, result))
-        }))
+        let by_structure = structure::load(
+            self.engine.clone(),
+            window.left.clone(),
+            window.right.clone(),
+            window.cancel.clone(),
+        );
+        Effect::Task(Task::batch([
+            Task::perform(comparison, move |result| {
+                wrap(CompareMsg::DiffLoaded(generation, result))
+            }),
+            Task::perform(by_structure, move |result| {
+                structure::wrap(StructureMsg::Loaded(generation, result))
+            }),
+        ]))
     }
 
     pub(super) fn on_compare(&mut self, message: CompareMsg) -> Vec<Effect> {
@@ -247,6 +292,13 @@ impl App {
                 }
             }
             CompareMsg::DiffOption(option, on) => {
+                // Text is compared again as it is, edits included; bytes are read again.
+                if let Some(window) = self.compare.diff.as_mut()
+                    && window.session.is_some()
+                {
+                    window.set_option(option, on);
+                    return self.recompute();
+                }
                 let generation = self.compare.next_generation();
                 if let Some(window) = self.compare.diff.as_mut() {
                     window.set_option(option, on);
@@ -266,7 +318,9 @@ impl App {
             CompareMsg::DiffViewport(size) => {
                 self.with_diff(|window| window.set_page(diff_view::rows_for(size.height)));
             }
-            CompareMsg::DiffClose => self.close_diff(),
+            CompareMsg::DiffClose => return self.unless_unsaved(Then::Close),
+            CompareMsg::Edit(message) => return self.on_edit(message),
+            CompareMsg::Structure(message) => return self.on_structure(message),
             other => return self.on_sync(other),
         }
         Vec::new()
@@ -284,15 +338,36 @@ impl App {
         }
     }
 
-    /// A key while the diff window is open: Escape closes it, Alt+Down and Alt+Up jump between
-    /// the differences, the cursor keys scroll; every other key stays with the window.
-    fn diff_key(&mut self, chord: &Chord) -> Vec<Effect> {
+    /// "Compare" and a reload: both files read and compared anew.
+    fn reload_diff(&mut self) -> Vec<Effect> {
+        let generation = self.compare.next_generation();
+        let Some(window) = self.compare.diff.as_mut() else {
+            return Vec::new();
+        };
+        window.restart(generation);
+        let task = self
+            .compare
+            .diff
+            .as_ref()
+            .map(|window| self.diff_task(window));
+        task.into_iter().collect()
+    }
+
+    /// A key while the diff window is open: the edit mode's first (`edit_keys.rs`); Escape
+    /// closes - asking first when changes are not saved -, Alt+Down and Alt+Up jump between the
+    /// differences, the cursor keys scroll; every other key stays with the window.
+    fn diff_key(&mut self, chord: &Chord, captured: bool) -> Vec<Effect> {
+        if let Some(effects) = self.structure_key(chord, captured) {
+            return effects;
+        }
+        if let Some(effects) = self.diff_edit_key(chord, captured) {
+            return effects;
+        }
         if chord.ctrl || chord.shift {
             return Vec::new();
         }
         if !chord.alt && chord.key == "Escape" {
-            self.close_diff();
-            return Vec::new();
+            return self.unless_unsaved(Then::Close);
         }
         let Some(window) = self.compare.diff.as_mut() else {
             return Vec::new();
@@ -332,9 +407,26 @@ impl App {
                     _ => None,
                 });
         match pair {
-            Some((source, target)) => self.open_diff(source, target),
+            Some((source, target)) => self.compare_pair(source, target),
             None => Vec::new(),
         }
+    }
+
+    /// Two files asked for by the overwrite question or a sync row: `compare.by_content`, which
+    /// starts the external compare tool when one is set; with Shift held the diff window, as
+    /// Total Commander does.
+    fn compare_pair(&mut self, left: VfsPath, right: VfsPath) -> Vec<Effect> {
+        if self.modifiers_held().shift {
+            return self.open_diff(left, right);
+        }
+        let request = ByContentRequest {
+            left: Some(left),
+            right: Some(right),
+        };
+        vec![Effect::Dispatch(
+            self.active,
+            vec![Command::CompareByContent(request)],
+        )]
     }
 
     /// A row's pair of files into the diff window, when both sides are files.
@@ -349,7 +441,7 @@ impl App {
             return Vec::new();
         }
         let (left, right) = (plan.left.join(&row.path), plan.right.join(&row.path));
-        self.open_diff(left, right)
+        self.compare_pair(left, right)
     }
 
     /// The mode changed: a shown plan takes the new mode's proposals.
@@ -391,6 +483,7 @@ impl App {
                 follow: FollowUp::Refresh,
                 background: place > 0,
                 result: Ok(vec![job]),
+                detail: None,
                 refused: None,
             };
             effects.extend(self.on_file_ops(FileOpsMsg::Submitted(Box::new(submitted))));

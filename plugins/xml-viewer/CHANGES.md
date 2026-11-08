@@ -1,5 +1,9 @@
 # Changes
 
+## 0.1.4
+
+Rebuilt against plugin contract 0.6.0; no other change.
+
 ## 0.1.3
 
 Built against plugin contract 0.4.0; nothing else changed.

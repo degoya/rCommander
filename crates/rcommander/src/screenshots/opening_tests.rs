@@ -87,3 +87,14 @@ fn the_workspaces_window_opens_without_a_page_or_a_tab() {
         assert!(error.to_string().contains("no pages or tabs"), "{error}");
     }
 }
+
+#[test]
+fn the_own_commands_window_opens_without_a_page_or_a_tab() {
+    assert_eq!(
+        check(RawOpening::Commands, None, None).expect("the own commands' window"),
+        Opening::Commands
+    );
+    let error = check(RawOpening::Commands, Some(&json!("appearance")), None)
+        .expect_err("no pages or tabs");
+    assert!(error.to_string().contains("no pages or tabs"), "{error}");
+}

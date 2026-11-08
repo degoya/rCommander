@@ -191,3 +191,55 @@ async fn a_followed_link_does_not_hide_a_key() {
     );
     assert_eq!(page["stats"]["skipped"], 1, "{page}");
 }
+
+/// An archive fixture of rc-vfs (`tests/fixtures/archives/`).
+fn archive_fixture(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../rc-vfs/tests/fixtures/archives")
+        .join(name)
+}
+
+/// With `archives` the tool finds entries inside archives, shown through the archive file; an
+/// archive in a folder the guard keeps is never opened, even for a search by name. Everything is
+/// no parameter of the tool.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn archives_are_searched_but_never_one_the_guard_keeps() {
+    let (context, root) = context().await;
+    fs::copy(archive_fixture("tree.zip"), root.path().join("tree.zip")).expect("copy");
+    fs::create_dir(root.path().join(".ssh")).expect("mkdir");
+    fs::copy(
+        archive_fixture("tree.zip"),
+        root.path().join(".ssh/keys.zip"),
+    )
+    .expect("copy");
+    let client = connect(&context).await;
+
+    let closed = call(&client, json!({ "name": "hello.txt" })).await;
+    assert_eq!(paths(&closed), Vec::<String>::new(), "{closed}");
+
+    let page = call(&client, json!({ "name": "hello.txt", "archives": true })).await;
+    let shown = root
+        .path()
+        .join("tree.zip")
+        .join("hello.txt")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(paths(&page), [shown], "{page}");
+    assert_eq!(page["stats"]["skipped"], 1, "the guarded archive: {page}");
+
+    let tools = client.list_all_tools().await.expect("tools");
+    let tool = tools
+        .iter()
+        .find(|tool| tool.name == "files_search")
+        .expect("files_search is served");
+    let properties = tool
+        .input_schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .expect("properties");
+    assert!(properties.contains_key("archives"));
+    assert!(
+        properties.keys().all(|key| !key.contains("everything")),
+        "Everything is never asked over MCP"
+    );
+}

@@ -44,7 +44,7 @@ pub(super) fn write_compressed(
 }
 
 /// Writes `members` as a plain tar into `out`; `out` back after the closing blocks.
-pub(super) fn write_plain<W: Write>(out: W, members: &[Member], feed: &Feed) -> io::Result<W> {
+pub(crate) fn write_plain<W: Write>(out: W, members: &[Member], feed: &Feed) -> io::Result<W> {
     let mut builder = Builder::new(out);
     for member in members {
         let mut header = Header::new_gnu();

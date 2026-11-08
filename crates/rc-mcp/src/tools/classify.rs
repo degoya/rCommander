@@ -9,13 +9,17 @@ use serde_json::{Map, Value};
 
 use super::{
     archive_ops::{ExtractParams, PackParams},
+    archive_update::AddParams,
+    button_bars::RunParams as ButtonRunParams,
     compare::DirsSyncApplyParams,
     connections_save::SaveParams,
     diagnostics::SetRetentionParams,
+    file_list::OpenParams,
     login_scripts::{CreateParams, UpdateParams},
     ops::TransferParams,
     properties::SetAttributesParams,
     queue::SavedParams,
+    user_commands::{RunParams, StartRunParams},
 };
 
 /// The tools whose calls [`command_of`] reads: every tool that covers a command of
@@ -23,17 +27,22 @@ use super::{
 /// arms of [`command_of`].
 #[cfg(test)]
 pub(crate) const READ_TOOLS: &[&str] = &[
+    "archives_add",
     "archives_extract",
     "archives_pack",
+    "button_bars_run",
     "connections_save",
     "diagnostics_set_retention",
     "dirs_sync_apply",
+    "file_open",
     "files_set_attributes",
     "login_scripts_create",
     "login_scripts_update",
     "ops_copy",
     "ops_move",
     "queue_load",
+    "start_menu_run",
+    "user_commands_run",
 ];
 
 /// `arguments` as the parameters `T`; `None` when they do not read, and the tool then refuses
@@ -56,6 +65,9 @@ pub(crate) fn command_of(tool: &str, arguments: Option<&Map<String, Value>>) -> 
         "archives_pack" => {
             typed::<PackParams>(arguments).map(|params| params.command(params.sources.clone()))
         }
+        "archives_add" => {
+            typed::<AddParams>(arguments).map(|params| params.command(params.sources.clone()))
+        }
         "dirs_sync_apply" => typed::<DirsSyncApplyParams>(arguments)
             .map(|params| Command::SyncApply(params.request())),
         "connections_save" => typed::<SaveParams>(arguments)
@@ -76,6 +88,15 @@ pub(crate) fn command_of(tool: &str, arguments: Option<&Map<String, Value>>) -> 
         "queue_load" => typed::<SavedParams>(arguments).map(|params| Command::QueueLoad {
             saved: params.saved,
         }),
+        // The file's internal association decides (RC-100-91): `Engine::judge_class` reads it.
+        "file_open" => typed::<OpenParams>(arguments).map(|params| Command::OpenFile {
+            panel: params.panel.map(Into::into),
+            path: params.path,
+        }),
+        // What is stored decides (elevated, `?`): `Engine::judge_class` reads it.
+        "user_commands_run" => typed::<RunParams>(arguments).map(|params| params.command()),
+        "start_menu_run" => typed::<StartRunParams>(arguments).map(|params| params.command()),
+        "button_bars_run" => typed::<ButtonRunParams>(arguments).map(|params| params.command()),
         _ => None,
     }
 }

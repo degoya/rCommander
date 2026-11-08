@@ -31,6 +31,7 @@ async fn f3_announces_the_file_under_the_cursor_for_its_panel() {
         Some(EngineEvent::ViewFile {
             panel: PanelId::Right,
             path: VfsPath::local(root.path().join("notes.txt")),
+            files: crate::ListerFiles::Panel,
         })
     );
 }

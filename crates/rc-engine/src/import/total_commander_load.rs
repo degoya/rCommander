@@ -1,5 +1,7 @@
-//! Finding and reading the two files of an import from Total Commander (RC-050-09), off the
-//! async threads.
+//! Finding and reading the files of an import from Total Commander (RC-050-09), off the async
+//! threads: `wincmd.ini`, `wcx_ftp.ini` and the own commands' `usercmd.ini` beside `wincmd.ini`
+//! (RC-100-86), which over MCP is read only under that name and when the read guard lets it
+//! through.
 //!
 //! A path the caller names is read as named; over MCP only a file called `wincmd.ini` or
 //! `wcx_ftp.ini` that the read guard lets through, and a refused one answers the same whether it
@@ -13,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use super::{
     tc_ini::{self, Ini, IniError},
+    total_commander_commands::USERCMD_INI,
     total_commander_path::{
         Registry, WCX_FTP_INI, WINCMD_INI, environment, ftp_candidates, is_named, registry,
         wincmd_candidates,
@@ -35,6 +38,8 @@ pub(crate) struct Caller {
 pub(crate) struct Loaded {
     pub(crate) wincmd: Option<(PathBuf, Ini)>,
     pub(crate) ftp: Option<(PathBuf, Ini)>,
+    /// `usercmd.ini` beside `wincmd.ini`, when asked for and there.
+    pub(crate) usercmd: Option<(PathBuf, Ini)>,
     /// `wincmd_not_found`, `ftp_ini_not_found`, `value_too_long`.
     pub(crate) warnings: Vec<String>,
     pub(crate) registry: Registry,
@@ -56,6 +61,8 @@ pub(crate) struct Wanted {
     pub(crate) wincmd: bool,
     /// The connections are asked for.
     pub(crate) ftp: bool,
+    /// The own commands are asked for: `usercmd.ini` beside `wincmd.ini`.
+    pub(crate) usercmd: bool,
 }
 
 fn read(path: &Path) -> Result<Ini, EngineError> {
@@ -162,7 +169,14 @@ pub(crate) fn load(wanted: &Wanted, caller: Caller) -> Result<Loaded, EngineErro
     if wincmd.is_none() && ftp.is_none() {
         return Err(EngineError::TcIniNotFound);
     }
-    let dropped = [&wincmd, &ftp]
+    // Total Commander keeps it in the folder of wincmd.ini.
+    let usercmd = match (&wincmd, wanted.usercmd) {
+        (Some((path, _)), true) => {
+            first_found(caller, vec![path.with_file_name(USERCMD_INI)], USERCMD_INI)?
+        }
+        _ => None,
+    };
+    let dropped = [&wincmd, &ftp, &usercmd]
         .into_iter()
         .flatten()
         .any(|(_, ini)| ini.dropped > 0);
@@ -171,6 +185,7 @@ pub(crate) fn load(wanted: &Wanted, caller: Caller) -> Result<Loaded, EngineErro
     }
     loaded.wincmd = wincmd;
     loaded.ftp = ftp;
+    loaded.usercmd = usercmd;
     loaded.warnings = warnings;
     Ok(loaded)
 }

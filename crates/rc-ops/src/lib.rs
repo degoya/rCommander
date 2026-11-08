@@ -36,6 +36,10 @@
 //! Checksum files, their check, split and combine (`checksum.rs`, RC-020-05) are jobs too: the
 //! work is `rc-checksum`'s, the queue gives it pause, cancel and progress, and what it found is
 //! the snapshot's [`JobReport`].
+//!
+//! Changing an archive (`update/`, RC-110-05) is a job as well: entries added to and removed
+//! from a local zip, 7z or plain tar by writing a new archive beside the old one, checking it,
+//! and renaming it onto the old one only then.
 
 mod archive_test;
 mod attributes;
@@ -50,6 +54,7 @@ mod dir_size;
 mod error;
 mod event;
 mod extract;
+mod ignore;
 mod job;
 mod journal;
 mod links;
@@ -68,6 +73,7 @@ mod staging;
 mod stream_pair;
 pub mod temp_name;
 mod trash;
+mod update;
 mod verify;
 mod walk;
 
@@ -76,10 +82,13 @@ pub use attributes::{
 };
 pub use checksum::{JobReport, MAX_REPORT_LINES};
 pub use conflict::{Answer, ConflictChoice, EntryInfo, ErrorChoice, Question};
-pub use dir_size::{DirUsage, dir_size, dir_sizes};
+pub use dir_size::{
+    Counted, DirUsage, UsageVisitor, UsageWalk, dir_size, dir_size_without, dir_sizes, walk_usage,
+};
 pub use error::OpsError;
 pub use event::{EventSink, JobChange, JobEvent};
 pub use extract::ExtractSettings;
+pub use ignore::{IgnoreRule, SkipEntry};
 pub use job::{
     DeleteMode, ErrorPolicy, Failure, JobId, JobKind, JobOptions, JobSnapshot, JobSpec, JobState,
 };
@@ -101,3 +110,4 @@ pub use resume::{
     is_connection_lost,
 };
 pub use trash::{SystemTrash, Trash};
+pub use update::{ArchiveRelease, UpdateSettings};

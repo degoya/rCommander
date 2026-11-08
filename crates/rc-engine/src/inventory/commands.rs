@@ -12,7 +12,10 @@ use rc_plugin_host::{
     ExecutionLog, InstalledPlugin, InventoryList, InventoryOptions, InventoryPlugin, PluginType,
     secret_slots,
 };
+use rc_plugin_types::{Failure, FailureKind};
+use rc_remote::ftp::HttpsTls;
 use rc_vault::{FieldRef, SecretString, VaultError};
+use url::Url;
 
 use super::{
     InventoryOutcome, InventoryPluginInfo, InventoryReport, InventorySecret, InventorySourceError,
@@ -27,6 +30,11 @@ use crate::{
 
 /// The most refusals a report names; the rest are only counted.
 pub const MAX_REFUSALS_SHOWN: usize = 20;
+
+/// What a paid inventory answers without a valid licence key (RC-100-40): `access-denied` with
+/// its own code `<plugin id>.unlicensed`, before it sends any request. The core checks no
+/// licence (RC-100-36); it only names the answer.
+pub const INVENTORY_UNLICENSED: &str = "inventory_unlicensed";
 
 fn answer(outcome: InventoryOutcome) -> Outcome {
     Outcome::Inventory(Box::new(outcome))
@@ -169,22 +177,60 @@ impl Engine {
             .ok_or_else(|| InventorySourceError::PluginMissing {
                 name: source.name.clone(),
             })?;
-        let plugin = self.build_inventory(source, package).await?;
-        Box::pin(plugin.list()).await.map_err(|failure| {
-            InventorySourceError::Failed {
-                name: source.name.clone(),
-                code: failure_code(failure.code()),
-            }
-            .into()
-        })
+        let tls = self.inventory_tls(&source.address).await?;
+        let plugin = self.build_inventory(source, package, tls.as_ref()).await?;
+        let failure = match Box::pin(plugin.list()).await {
+            Ok(listed) => return Ok(listed),
+            Err(failure) => failure,
+        };
+        // A certificate the trust refused becomes the person's question, as for FTPS.
+        if let Some(rejection) = tls.as_ref().and_then(HttpsTls::rejection) {
+            return Err(self.certificate_refused(rejection).await);
+        }
+        Err(InventorySourceError::Failed {
+            name: source.name.clone(),
+            code: inventory_failure_code(&failure),
+        }
+        .into())
     }
 
-    /// `package` compiled as the inventory of `source`: its address, the values of its slots
-    /// (decrypted now and remembered for the MCP mask), the engine's log, health and settings.
+    /// The TLS of an HTTPS `address` (RC-100-40): the system roots, then the certificate a
+    /// person trusted for its host and port and an "accept once" waiting for it (RC-070-02) -
+    /// the FTPS trust, so a self-signed Proxmox node is asked about, never let through. `None`
+    /// for any other address (the plugin host refuses what it must) or when the TLS cannot be
+    /// set up: then the system roots alone decide.
+    pub(super) async fn inventory_tls(
+        &self,
+        address: &str,
+    ) -> Result<Option<HttpsTls>, EngineError> {
+        let Ok(url) = Url::parse(address) else {
+            return Ok(None);
+        };
+        let (Some(host), Some(port)) = (url.host_str(), url.port_or_known_default()) else {
+            return Ok(None);
+        };
+        if url.scheme() != "https" {
+            return Ok(None);
+        }
+        let host = host.trim_start_matches('[').trim_end_matches(']');
+        let (trust, _) = self.certificate_trust(host, port).await?;
+        match HttpsTls::new(host, port, Arc::new(trust)) {
+            Ok(tls) => Ok(Some(tls)),
+            Err(error) => {
+                tracing::warn!(%error, "an inventory's TLS could not be set up");
+                Ok(None)
+            }
+        }
+    }
+
+    /// `package` compiled as the inventory of `source`: its address and its TLS, the values of
+    /// its slots (decrypted now and remembered for the MCP mask), the engine's log, health and
+    /// settings.
     async fn build_inventory(
         &self,
         source: &InventorySource,
         package: InstalledPlugin,
+        tls: Option<&HttpsTls>,
     ) -> Result<InventoryPlugin, EngineError> {
         let mut secrets = Vec::new();
         for slot in secret_slots(&package.manifest).unwrap_or_default() {
@@ -206,6 +252,7 @@ impl Engine {
             address: Some(source.address.clone()),
             secrets,
             refused_ports: refused_ports(),
+            tls: tls.map(HttpsTls::client_config),
         };
         let name = source.name.clone();
         let built = tokio::task::spawn_blocking(move || {
@@ -255,6 +302,20 @@ impl Engine {
             Err(VaultError::Locked) => Err(EngineError::VaultLocked),
             Err(error) => Err(error.into()),
         }
+    }
+}
+
+/// The code an inventory's failure shows as: [`INVENTORY_UNLICENSED`] for a paid plugin without a
+/// valid licence key, else the host's code or `plugin_failed`.
+pub(super) fn inventory_failure_code(failure: &Failure) -> &'static str {
+    let unlicensed = failure.kind == FailureKind::AccessDenied
+        && failure
+            .code()
+            .is_some_and(|code| code.ends_with(".unlicensed"));
+    if unlicensed {
+        INVENTORY_UNLICENSED
+    } else {
+        failure_code(failure.code())
     }
 }
 

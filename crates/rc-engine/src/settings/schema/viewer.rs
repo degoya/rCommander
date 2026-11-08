@@ -8,7 +8,11 @@
 //! Ctrl+wheel, Ctrl++, Ctrl+- and Ctrl+0 change the text size, and whether a changed size stays
 //! with its window or is stored as `viewer.font_size` (RC-020-12); the font size itself is held
 //! to 6 to 72 points, the range those keys reach. Whether DOS text draws its lines as tall as the
-//! font's full block, so the blocks of DOS art touch (owner, 2026-10-20).
+//! font's full block, so the blocks of DOS art touch (owner, 2026-10-20). Whether the image view
+//! offers a photo's EXIF as a second view (RC-100-99), on by default and not protected: it only
+//! shows what the file holds. Whether certificates and keys open as their report and tree, and
+//! how many days before its end a certificate warns (RC-110-08); neither is protected - the
+//! report never shows private key material either way, and that is no setting.
 
 use super::{Choice, SettingKind, SettingPage, SettingSpec};
 
@@ -16,6 +20,9 @@ use super::{Choice, SettingKind, SettingPage, SettingSpec};
 pub const MARKDOWN_PREVIEW_KEY: &str = "viewer.markdown_preview";
 /// Whether the Markdown preview selects and copies its text.
 pub const MARKDOWN_SELECT_KEY: &str = "viewer.markdown_select";
+/// Whether the Markdown preview colours a fenced code block whose tag names a language it knows
+/// (RC-110-06).
+pub const MARKDOWN_HIGHLIGHT_KEY: &str = "viewer.markdown_code_highlight";
 /// The most pixels, in millions, the image view shows of a picture; a larger one is scaled down.
 pub const PICTURE_MEGAPIXELS_KEY: &str = "viewer.picture_megapixels";
 /// The extensions, without dots and separated by spaces, of the files Lister and Quick View
@@ -34,6 +41,17 @@ pub const TEXT_ZOOM_KEEP_KEY: &str = "viewer.text_zoom_keep";
 /// The smallest and the largest text size of the viewer in points, of the setting and the keys.
 pub const VIEWER_MIN_FONT_SIZE: i64 = 6;
 pub const VIEWER_MAX_FONT_SIZE: i64 = 72;
+/// Whether the image view offers a JPEG's, PNG's or WebP's EXIF as a tree beside the picture
+/// (`7` switches).
+pub const EXIF_KEY: &str = "viewer.exif";
+/// Whether Lister and Quick View show a certificate or key file as its checks and objects, as
+/// text and as a tree (`7` switches); off, the file shows as it is (RC-110-08).
+pub const CERTIFICATES_KEY: &str = "viewer.certificates";
+/// The days before a certificate's end from which the certificate view warns; 0 never warns.
+pub const CERT_EXPIRY_WARNING_DAYS_KEY: &str = "viewer.cert_expiry_warning_days";
+/// Whether F3 with marked files lets N and P step through the marked ones only, as Total
+/// Commander's Lister does (RC-100-91); off, they step through every file of the panel.
+pub const STEP_THROUGH_SELECTION_KEY: &str = "viewer.step_through_selection";
 
 /// On the Appearance page beside the viewer's font: the dialog has no page of the viewer's own.
 pub(super) const MARKDOWN_PREVIEW: SettingSpec = SettingSpec {
@@ -52,6 +70,16 @@ pub(super) const MARKDOWN_SELECT: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.viewer.markdown_select",
     help: "setting.viewer.markdown_select.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const MARKDOWN_HIGHLIGHT: SettingSpec = SettingSpec {
+    key: MARKDOWN_HIGHLIGHT_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.viewer.markdown_code_highlight",
+    help: "setting.viewer.markdown_code_highlight.help",
     protected: false,
     restart: false,
 };
@@ -122,6 +150,51 @@ pub(super) const TEXT_ZOOM_KEEP: SettingSpec = SettingSpec {
     },
     label: "setting.viewer.text_zoom_keep",
     help: "setting.viewer.text_zoom_keep.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const EXIF: SettingSpec = SettingSpec {
+    key: EXIF_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.viewer.exif",
+    help: "setting.viewer.exif.help",
+    protected: false,
+    restart: false,
+};
+
+/// Not protected: it only chooses which files N and P show.
+pub(super) const STEP_THROUGH_SELECTION: SettingSpec = SettingSpec {
+    key: STEP_THROUGH_SELECTION_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.viewer.step_through_selection",
+    help: "setting.viewer.step_through_selection.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const CERTIFICATES: SettingSpec = SettingSpec {
+    key: CERTIFICATES_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.viewer.certificates",
+    help: "setting.viewer.certificates.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const CERT_EXPIRY_WARNING_DAYS: SettingSpec = SettingSpec {
+    key: CERT_EXPIRY_WARNING_DAYS_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Int {
+        min: 0,
+        max: 365,
+        default: 30,
+    },
+    label: "setting.viewer.cert_expiry_warning_days",
+    help: "setting.viewer.cert_expiry_warning_days.help",
     protected: false,
     restart: false,
 };

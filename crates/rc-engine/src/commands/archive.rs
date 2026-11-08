@@ -29,7 +29,7 @@ pub(crate) fn refuse_archive_change(path: &VfsPath) -> Result<(), EngineError> {
 }
 
 /// The refusal of a file that is no archive this backend reads.
-fn not_an_archive(path: &VfsPath) -> EngineError {
+pub(super) fn not_an_archive(path: &VfsPath) -> EngineError {
     EngineError::NotAnArchive {
         name: shown_path(path).display().to_string(),
     }

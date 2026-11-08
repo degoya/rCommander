@@ -1,5 +1,6 @@
 //! Multi-rename: Total Commander's multi-rename tool - preview, apply as a queued job, undo
-//! (RC-020-01); its dialog (Ctrl+M) and the saved rules, the presets (RC-020-02).
+//! (RC-020-01); its dialog (Ctrl+M) and the saved rules, the presets (RC-020-02); the next step
+//! (RC-100-96).
 
 use super::{CommandClass, CommandSpec};
 
@@ -9,6 +10,11 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         id: "multi_rename.apply",
         class: CommandClass::Write,
         summary: "Rename entries of a folder by masks, case and search and replace, as a queued job logged for undo; refused while the preview has conflicts",
+    },
+    CommandSpec {
+        id: "multi_rename.next_step",
+        class: CommandClass::Read,
+        summary: "The names of a multi-rename's entries after the latest run, as the sources of a next step",
     },
     CommandSpec {
         id: "multi_rename.open_dialog",
@@ -55,6 +61,8 @@ macro_rules! commands {
         $next! { $rest, { $($done)*
             // The multi-rename commands keep their parameters in a struct of their module.
             "multi_rename.apply" => MultiRenameApply(MultiRenameRequest),
+            /// F5 in the dialog (RC-100-96): `names` in the order of the run, as they are after it.
+            "multi_rename.next_step" => MultiRenameNextStep { names: Vec<String> },
             /// Ctrl+M: the window opens the multi-rename dialog for the panel.
             "multi_rename.open_dialog" => MultiRenameOpenDialog {
                 #[serde(default)]

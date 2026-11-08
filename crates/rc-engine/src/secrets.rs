@@ -206,9 +206,30 @@ impl Engine {
             .secret_source(secret.connection, secret.kind)
             .await?
         {
-            return self.secret_from_source(&reference).await.map(Some);
+            return self
+                .secret_from_source(&reference, announce)
+                .await
+                .map(Some);
         }
         self.vault_secret(secret, announce).await
+    }
+
+    /// The `-cert.pub` line of the OpenSSH user certificate stored with the connection's key -
+    /// its shared credential's when it takes its secrets from one (RC-060-09); `None` without
+    /// one.
+    ///
+    /// # Errors
+    ///
+    /// The connection is missing, no database is attached, or the read fails.
+    pub(crate) async fn stored_certificate(
+        &self,
+        connection: ConnectionId,
+    ) -> Result<Option<String>, EngineError> {
+        let owner = match self.shared_credential(connection).await? {
+            Some(credential) => SecretOwner::Credential(credential.id),
+            None => SecretOwner::Connection(connection),
+        };
+        Ok(self.db()?.key_certificate(owner).await?)
     }
 
     /// [`Engine::secret_for`] from the vault alone, whatever a reference says: what an export

@@ -140,11 +140,13 @@ fn pointer_in(window: &dyn window::Window) -> Option<Pointer> {
     // SAFETY: as above; `client` is ours.
     succeeded(unsafe { GetClientRect(hwnd, &raw mut client) })?;
     let width = client.right - client.left;
-    if width <= 0 {
+    let height = client.bottom - client.top;
+    if width <= 0 || height <= 0 {
         return None;
     }
     Some(Pointer {
         across: point.x as f32 / width as f32,
+        down: point.y as f32 / height as f32,
         shift: key_down(VK_SHIFT),
     })
 }

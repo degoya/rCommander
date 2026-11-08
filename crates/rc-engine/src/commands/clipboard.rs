@@ -104,7 +104,7 @@ impl Engine {
     /// For a folder on a connection, the connection's name and how its locations are written;
     /// `None` for a local or archive folder, or when the connection cannot be read (the path on
     /// the server is written then).
-    async fn connection_writer(&self, folder: &VfsPath) -> Option<(String, Written)> {
+    pub(crate) async fn connection_writer(&self, folder: &VfsPath) -> Option<(String, Written)> {
         let (id, written): (i64, Written) = match folder.backend {
             BackendId::Ftp { connection_id } => (connection_id, ftp_location),
             BackendId::Sftp { connection_id } => (connection_id, sftp_location),

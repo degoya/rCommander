@@ -52,6 +52,7 @@ impl App {
             follow,
             background,
             result,
+            detail,
             refused,
         } = submitted;
         if let Some(command) = refused {
@@ -65,7 +66,7 @@ impl App {
         let snapshots = match result {
             Ok(snapshots) => snapshots,
             Err(code) => {
-                self.pane_mut(panel).error = Some(error_text(code));
+                self.pane_mut(panel).error = Some(detail.unwrap_or_else(|| error_text(code)));
                 return Vec::new();
             }
         };

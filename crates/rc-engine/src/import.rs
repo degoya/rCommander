@@ -12,6 +12,8 @@ pub mod tc_ini;
 pub mod tc_password;
 pub mod total_commander;
 pub(crate) mod total_commander_apply;
+pub mod total_commander_commands;
+pub(crate) mod total_commander_commands_apply;
 pub(crate) mod total_commander_load;
 pub mod total_commander_look;
 pub(crate) mod total_commander_look_apply;

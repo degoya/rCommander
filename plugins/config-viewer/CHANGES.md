@@ -1,5 +1,9 @@
 # Changes
 
+## 0.3.1
+
+Rebuilt against plugin contract 0.6.0; no other change.
+
 ## 0.3.0
 
 Visual Studio solutions (`.sln`): the format line, comments, the blocks `Project(...)`,

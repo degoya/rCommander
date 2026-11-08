@@ -132,6 +132,7 @@ pub fn command(panel: PanelId, names: &[String], folder: &Path) -> Command {
         sources: names.to_vec(),
         target: Some(folder.display().to_string()),
         options: JobOptions::default(),
+        rename_mask: None,
     })
 }
 

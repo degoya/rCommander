@@ -59,7 +59,7 @@ impl Engine {
             } else {
                 let plan = FlatPlan {
                     walk: vec![panel.path.path.clone()],
-                    stat: Vec::new(),
+                    ..FlatPlan::default()
                 };
                 (panel.path.clone(), FlatSource::Branch, plan)
             }
@@ -69,36 +69,50 @@ impl Engine {
 
     /// `panel.feed_paths`: the panel shows `root` (its own folder when `None`) flat with the
     /// entries at `paths` (relative ones from `root`), each once; missing ones are counted as
-    /// skipped.
+    /// skipped. A `root` through an archive file (`C:\data\backup.zip`) is inside the archive:
+    /// the search's hits from one archive (RC-100-93). With `groups`, one per path, the panel
+    /// shows a duplicate result (RC-100-98).
     pub(crate) async fn feed_paths(
         &self,
         panel: Option<PanelId>,
         root: Option<&str>,
         paths: &[String],
+        groups: &[u32],
     ) -> Result<Outcome, EngineError> {
         if paths.len() > MAX_FLAT_ENTRIES {
             return Err(EngineError::InvalidSearch {
                 reason: format!("at most {MAX_FLAT_ENTRIES} paths"),
             });
         }
+        if !groups.is_empty() && groups.len() != paths.len() {
+            return Err(EngineError::InvalidSearch {
+                reason: "groups need one group per path".to_owned(),
+            });
+        }
         let id = self.resolve(panel);
         let current = self.state().panel(id).path.clone();
-        let root = root.map_or_else(|| current.clone(), |root| resolve_path(&current, root));
-        let vfs = self.vfs(&root)?;
-        if !vfs.stat(&root.path).await?.is_dir_like() {
-            return Err(VfsError::NotADirectory { path: root.path }.into());
+        let mut root = root.map_or_else(|| current.clone(), |root| resolve_path(&current, root));
+        if !self.vfs(&root)?.stat(&root.path).await?.is_dir_like() {
+            match self.through_archive(&root).await? {
+                Some(inside) => root = inside,
+                None => return Err(VfsError::NotADirectory { path: root.path }.into()),
+            }
         }
         let mut seen = HashSet::new();
-        let stat = paths
-            .iter()
-            .map(|path| resolve_path(&root, path).path)
-            .filter(|path| seen.insert(path.clone()))
-            .collect();
-        let plan = FlatPlan {
-            walk: Vec::new(),
-            stat,
+        let mut plan = FlatPlan::default();
+        for (at, path) in paths.iter().enumerate() {
+            let path = resolve_path(&root, path).path;
+            if seen.insert(path.clone()) {
+                plan.stat.push(path);
+                plan.groups.extend(groups.get(at));
+            }
+        }
+        let source = if groups.is_empty() {
+            FlatSource::Paths
+        } else {
+            FlatSource::Duplicates
         };
-        self.start_flat(id, root, FlatSource::Paths, Arc::new(plan))
+        self.start_flat(id, root, source, Arc::new(plan))
     }
 
     /// `files.find_dialog`: announces that the find-files dialog is wanted for the panel.
@@ -155,7 +169,7 @@ impl Engine {
     }
 
     /// The panel shows `path` flat and empty, and a task fills it from `plan`.
-    fn start_flat(
+    pub(super) fn start_flat(
         &self,
         id: PanelId,
         path: VfsPath,
@@ -197,6 +211,19 @@ impl Engine {
         tokio::spawn(filler.fill(vfs, path, plan, show_hidden));
         Ok(Outcome::Panel(snapshot))
     }
+}
+
+/// Whether the ignore list hides `entry` at `path` on the backend of `root` (RC-100-92).
+fn ignored_at(root: &VfsPath, path: &std::path::Path, entry: &Entry) -> bool {
+    path.parent().is_some_and(|dir| {
+        crate::ignore_list::ignored(
+            &VfsPath {
+                backend: root.backend.clone(),
+                path: dir.to_path_buf(),
+            },
+            entry,
+        )
+    })
 }
 
 /// The plan of Ctrl+Shift+B: the selected folders walked, the selected files as they are; the
@@ -249,7 +276,9 @@ impl Filler {
     async fn fill(mut self, vfs: Arc<dyn Vfs>, root: VfsPath, plan: Arc<FlatPlan>, shown: bool) {
         for path in &plan.stat {
             match vfs.stat(path).await {
-                Ok(mut entry) if shown || !is_hidden(&entry) => {
+                Ok(mut entry)
+                    if (shown || !is_hidden(&entry)) && !ignored_at(&root, path, &entry) =>
+                {
                     entry.name = flat_name(&root.path, path);
                     self.push(entry);
                 }
@@ -309,6 +338,7 @@ impl Filler {
                 SearchEvent::Skipped { .. } => self.skipped += 1,
                 SearchEvent::Hit(_)
                 | SearchEvent::Progress { .. }
+                | SearchEvent::Duplicates(_)
                 | SearchEvent::Finished { .. } => {}
             }
             if !self.tick() {

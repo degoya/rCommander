@@ -1,9 +1,9 @@
 use tempfile::TempDir;
 
-use super::stepped;
+use super::{Paging, stepped};
 use crate::test_support;
 use crate::test_support::run_panel;
-use crate::{Command, CursorStep, EngineEvent, PanelChange, PanelId, PanelSnapshot};
+use crate::{Command, CursorStep, EngineEvent, ListMode, PanelChange, PanelId, PanelSnapshot};
 
 /// `root/` with the directories `alpha/` (holding `inner.txt`) and `beta/`, and the files
 /// `c.txt` to `f.txt`: six entries in panel order.
@@ -169,4 +169,63 @@ fn a_column_step_moves_by_a_column_in_the_brief_view_only() {
     assert_eq!(stepped(4, 30, 9, 10, CursorStep::Left), 0);
     assert_eq!(stepped(5, 30, 9, 0, CursorStep::Left), 5, "the full view");
     assert_eq!(stepped(5, 30, 9, 0, CursorStep::Right), 5, "the full view");
+}
+
+#[test]
+fn the_thumbnails_step_a_line_of_tiles_up_and_down_and_a_tile_aside() {
+    // Three lines of four tiles fit: a page is two lines.
+    let grid = Paging {
+        page: 2 * 4,
+        column: 1,
+        line: 4,
+    };
+    assert_eq!(grid.stepped(5, 30, CursorStep::Down), 9);
+    assert_eq!(grid.stepped(5, 30, CursorStep::Up), 1);
+    assert_eq!(grid.stepped(2, 30, CursorStep::Up), 0, "held to the first");
+    assert_eq!(
+        grid.stepped(27, 30, CursorStep::Down),
+        29,
+        "held to the last"
+    );
+    assert_eq!(grid.stepped(5, 30, CursorStep::Left), 4);
+    assert_eq!(grid.stepped(5, 30, CursorStep::Right), 6);
+    assert_eq!(grid.stepped(5, 30, CursorStep::PageDown), 13);
+    assert_eq!(grid.stepped(13, 30, CursorStep::PageUp), 5);
+    assert_eq!(grid.stepped(7, 30, CursorStep::First), 0);
+    assert_eq!(grid.stepped(7, 30, CursorStep::Last), 29);
+    assert_eq!(grid.reach(2, 30, CursorStep::Up), -2, "cut short");
+}
+
+#[tokio::test]
+async fn the_thumbnails_page_by_the_lines_and_tiles_the_window_reported() {
+    let root = tree();
+    let engine = test_support::headless(root.path()).await;
+    let thumbnails = Command::SetListMode {
+        panel: None,
+        mode: ListMode::Thumbnails,
+    };
+    run_panel(&engine, thumbnails).await;
+    engine.set_page_rows(PanelId::Left, 2);
+    engine.set_page_tiles(PanelId::Left, 3);
+    let down = run_panel(&engine, step(CursorStep::Down)).await;
+    assert_eq!(cursor_name(&down), Some("d.txt"), "a line of three tiles");
+    let right = run_panel(&engine, step(CursorStep::Right)).await;
+    assert_eq!(cursor_name(&right), Some("e.txt"), "one tile");
+    let page = run_panel(&engine, step(CursorStep::PageUp)).await;
+    assert_eq!(cursor_name(&page), Some("beta"), "a page is one line here");
+    let end = run_panel(&engine, step(CursorStep::Last)).await;
+    assert_eq!(cursor_name(&end), Some("f.txt"));
+    let home = run_panel(&engine, step(CursorStep::First)).await;
+    assert_eq!(cursor_name(&home), Some("alpha"));
+    let full = Command::SetListMode {
+        panel: None,
+        mode: ListMode::Full,
+    };
+    run_panel(&engine, full).await;
+    let down = run_panel(&engine, step(CursorStep::Down)).await;
+    assert_eq!(
+        cursor_name(&down),
+        Some("beta"),
+        "the full view steps one entry"
+    );
 }

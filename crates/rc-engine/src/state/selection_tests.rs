@@ -11,6 +11,7 @@ fn entry(name: &str) -> Entry {
         size: 0,
         modified: None,
         created: None,
+        accessed: None,
         attributes: rc_vfs::Attributes::default(),
         hidden: false,
         owner: None,

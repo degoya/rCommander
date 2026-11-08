@@ -1,5 +1,11 @@
 # Changes
 
+## 0.1.6
+
+A file the viewer refuses (too large, a damaged `.svgz`, not an SVG, too complex) shows its
+explanation again: the failure codes carry the plugin's id, as its texts do. Built against plugin
+contract 0.6.0.
+
 ## 0.1.5
 
 Two more ways a small file kept the plugin busy end with "too complex" at once. An arc with a

@@ -24,6 +24,9 @@ pub enum PluginType {
     /// A server inventory whose hosts become connections (`world inventory-plugin`, contract
     /// 0.4.0, RC-100-39).
     Inventory,
+    /// Two files of the kinds its `[match]` claims compared by structure (`world compare-plugin`,
+    /// contract 0.6.0, RC-100-41).
+    Compare,
     /// Anything this build does not know - the kinds of later stages included; refused by
     /// validation rather than treated as a viewer.
     Unknown(String),
@@ -36,6 +39,7 @@ impl PluginType {
             Self::Viewer => "viewer",
             Self::Secrets => "secrets",
             Self::Inventory => "inventory",
+            Self::Compare => "compare",
             Self::Unknown(value) => value,
         }
     }
@@ -44,7 +48,8 @@ impl PluginType {
     #[must_use]
     pub fn default_timeout_milliseconds(&self) -> u64 {
         match self {
-            Self::Viewer => crate::limits::DEFAULT_VIEWER_TIMEOUT_MILLISECONDS,
+            // A comparison reads two whole files, as a viewer's `open` reads one.
+            Self::Viewer | Self::Compare => crate::limits::DEFAULT_VIEWER_TIMEOUT_MILLISECONDS,
             Self::Secrets => crate::limits::DEFAULT_SECRETS_TIMEOUT_MILLISECONDS,
             Self::Inventory | Self::Unknown(_) => crate::limits::DEFAULT_TIMEOUT_MILLISECONDS,
         }
@@ -64,6 +69,7 @@ impl<'de> Deserialize<'de> for PluginType {
             "viewer" => Self::Viewer,
             "secrets" => Self::Secrets,
             "inventory" => Self::Inventory,
+            "compare" => Self::Compare,
             _ => Self::Unknown(raw),
         })
     }
@@ -202,6 +208,17 @@ pub enum MatchRank {
 #[serde(deny_unknown_fields)]
 pub struct ViewerSection {
     pub outputs: Vec<Output>,
+}
+
+/// `[secrets]` (`secrets` kind, contract 0.5.0; RC-100-38): what a secret source does besides
+/// handing out a value.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SecretsSection {
+    /// A PAM system: the secret is lent for a session (`checkout`) and given back when it ends
+    /// (`checkin`); the engine never asks such a source's `get`.
+    #[serde(default)]
+    pub checkout: bool,
 }
 
 /// The grants a manifest asks for, each one WIT interface.

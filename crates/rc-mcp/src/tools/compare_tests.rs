@@ -5,7 +5,8 @@ use rmcp::{handler::server::wrapper::Parameters, model::CallToolResult};
 use serde_json::Value;
 
 use super::{
-    DirsCompareParams, DirsSyncApplyParams, FilesCompareParams, ModeArg,
+    CompareModeArg, DirectionArg, DirsCompareParams, DirsSyncApplyParams, FilesCompareApplyParams,
+    FilesCompareParams, ModeArg,
     apply::{ActionArg, RowActionArg},
 };
 use crate::RcMcpServer;
@@ -47,7 +48,28 @@ fn files(left: &str, right: &str) -> FilesCompareParams {
         ignore_case: false,
         ignore_line_endings: false,
         unified_limit: None,
+        mode: None,
     }
+}
+
+#[tokio::test]
+async fn files_compare_by_structure_says_when_no_plugin_claims_the_files() {
+    let (_root, server) = server().await;
+    let answer = server
+        .files_compare(Parameters(FilesCompareParams {
+            mode: Some(CompareModeArg::Structure),
+            ..files("a.txt", "b.txt")
+        }))
+        .await
+        .expect("answer");
+    let answer = body(&answer);
+    assert_eq!(answer["kind"], "file_comparison");
+    assert_eq!(answer["structure"]["status"], "no_plugin");
+    let text = server
+        .files_compare(Parameters(files("a.txt", "b.txt")))
+        .await
+        .expect("answer");
+    assert_eq!(body(&text)["structure"], Value::Null);
 }
 
 fn dirs(mode: Option<ModeArg>) -> DirsCompareParams {
@@ -290,5 +312,111 @@ async fn a_cancelled_call_ends_with_cancelled() {
         body(&compared).get("code").is_none(),
         "{:?}",
         body(&compared)
+    );
+}
+
+/// The parameters of `files_compare_apply` for `blocks` of `left` and `right` as `answer` (a
+/// `files_compare` answer) found them.
+fn apply_blocks(
+    left: &str,
+    right: &str,
+    answer: &Value,
+    blocks: Vec<usize>,
+    direction: DirectionArg,
+) -> FilesCompareApplyParams {
+    FilesCompareApplyParams {
+        left: left.into(),
+        right: right.into(),
+        blocks,
+        direction,
+        ignore_whitespace: false,
+        ignore_case: false,
+        ignore_line_endings: false,
+        expect_left_size: answer["left_size"].as_u64().expect("a size"),
+        expect_left_modified_unix: answer["left_modified_unix"].as_u64(),
+        expect_right_size: answer["right_size"].as_u64().expect("a size"),
+        expect_right_modified_unix: answer["right_modified_unix"].as_u64(),
+    }
+}
+
+/// RC-100-94: the block files_compare counted is copied over and the file saved; the answer is
+/// the comparison afterwards.
+#[tokio::test]
+async fn files_compare_apply_copies_a_block_and_saves_the_target() {
+    let (root, server) = server().await;
+    let compared = body(
+        &server
+            .files_compare(Parameters(files("a.txt", "b.txt")))
+            .await
+            .expect("answer"),
+    );
+    assert!(compared["left_modified_unix"].is_u64(), "{compared}");
+    let answer = server
+        .files_compare_apply(Parameters(apply_blocks(
+            "a.txt",
+            "b.txt",
+            &compared,
+            vec![0],
+            DirectionArg::RightToLeft,
+        )))
+        .await
+        .expect("answer");
+    assert_ne!(answer.is_error, Some(true), "{:?}", body(&answer));
+    assert_eq!(body(&answer)["identical"], true);
+    assert_eq!(
+        fs::read_to_string(root.path().join("a.txt")).expect("read"),
+        "one\nTWO\n"
+    );
+
+    // The same call again: b.txt changed since that comparison, nothing is written.
+    fs::write(root.path().join("b.txt"), "one\nthree\n").expect("write");
+    let stale = server
+        .files_compare_apply(Parameters(apply_blocks(
+            "a.txt",
+            "b.txt",
+            &compared,
+            vec![0],
+            DirectionArg::RightToLeft,
+        )))
+        .await
+        .expect("answer");
+    assert_eq!(
+        body(&stale)["code"],
+        "compare_changed",
+        "{:?}",
+        body(&stale)
+    );
+    assert_eq!(
+        fs::read_to_string(root.path().join("a.txt")).expect("read"),
+        "one\nTWO\n"
+    );
+}
+
+/// The write guard judges the file the blocks land on before anything is read or written.
+#[tokio::test]
+async fn files_compare_apply_never_writes_a_shell_start_up_file() {
+    let (root, server) = server().await;
+    fs::write(root.path().join(".bashrc"), "one\nTWO\n").expect("write");
+    // Refused before either file is read: the stamps do not matter.
+    let compared = serde_json::json!({ "left_size": 0, "right_size": 0 });
+    let refused = server
+        .files_compare_apply(Parameters(apply_blocks(
+            "a.txt",
+            ".bashrc",
+            &compared,
+            vec![0],
+            DirectionArg::LeftToRight,
+        )))
+        .await
+        .expect("answer");
+    assert_eq!(
+        body(&refused)["code"],
+        "protected_target",
+        "{:?}",
+        body(&refused)
+    );
+    assert_eq!(
+        fs::read_to_string(root.path().join(".bashrc")).expect("read"),
+        "one\nTWO\n"
     );
 }

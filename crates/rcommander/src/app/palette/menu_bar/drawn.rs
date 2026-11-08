@@ -189,13 +189,49 @@ pub fn key(menus: &[BarMenu], open: &mut OpenMenu, chord: &Chord) -> Step {
     Step::Stay
 }
 
+/// The menus as the drawn bar shows them: a submenu (the Start menu's, RC-100-86) laid out in
+/// place - its title a heading no key or click chooses, its entries indented under it -, as the
+/// drawn menu opens no menu beside it.
+pub fn flatten(menus: Vec<BarMenu>) -> Vec<BarMenu> {
+    menus
+        .into_iter()
+        .map(|menu| BarMenu {
+            title: menu.title,
+            items: flat(menu.items, 0),
+        })
+        .collect()
+}
+
+fn flat(items: Vec<BarItem>, depth: usize) -> Vec<BarItem> {
+    // An em space a level: the entry's own text keeps its access key.
+    let indent = |text: String| format!("{}{text}", "\u{2003}".repeat(depth));
+    let mut laid = Vec::new();
+    for item in items {
+        match item {
+            BarItem::Entry { id, text } => laid.push(BarItem::Entry {
+                id,
+                text: indent(text),
+            }),
+            BarItem::Separator => laid.push(BarItem::Separator),
+            BarItem::Submenu { text, items } => {
+                laid.push(BarItem::Submenu {
+                    text: indent(text),
+                    items: Vec::new(),
+                });
+                laid.extend(flat(items, depth + 1));
+            }
+        }
+    }
+    laid
+}
+
 impl App {
     /// The menus again, with the keys of the keymap in force: when the bar is shown and after the
     /// keymap changed.
     pub(in crate::app) fn rebuild_drawn_menus(&mut self) {
         let entries =
             super::super::entries(&self.keymap, &reach::standard(), self.drive_bar.network);
-        self.dialog_windows.menu_bar.menus = build(&self.keymap, &entries);
+        self.dialog_windows.menu_bar.menus = flatten(build(&self.keymap, &entries));
     }
 
     /// Whether the drawn bar shows.

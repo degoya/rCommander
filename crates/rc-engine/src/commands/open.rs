@@ -1,8 +1,12 @@
-//! `file.open`, what Enter does in Total Commander: a directory is shown in the panel, and so is
-//! an archive (by its extension, while `archive.enter_opens` is on); any other entry is handed to
-//! the system - a program starts, a document opens in the program associated with it
-//! (`ShellExecuteW` on Windows, `open` on macOS, `xdg-open` elsewhere). A file inside an archive
-//! is unpacked into a temporary folder first, read-only.
+//! `file.open`, what Enter does in Total Commander: a directory is shown in the panel; a file an
+//! internal association takes runs that rule's `open` (RC-100-91, `associations/run.rs`; an
+//! archive only by a rule naming its extension); an archive is shown in the panel too (by its
+//! extension, while `archive.enter_opens` is on); any other entry is handed to the system - a
+//! program starts, a document opens in the program associated with it (`ShellExecuteW` on
+//! Windows, `open` on macOS, `xdg-open` elsewhere). A file inside an archive is unpacked into a
+//! temporary folder first, read-only; a file on a server is fetched into a watched copy
+//! (RC-110-01) - one that would run as a program only with `remote_edit.open_programs` - and over
+//! MCP into a read-only one nobody watches.
 
 use std::path::Path;
 
@@ -13,7 +17,10 @@ use super::panel::resolve_path;
 use crate::recover::LockOrRecover as _;
 use crate::recover::LogPanic as _;
 use crate::{
-    Engine, EngineError, Outcome, PanelId, archives::opens_on_enter, mcp_questions::check_mcp_pin,
+    Engine, EngineError, Outcome, PanelId,
+    archives::opens_on_enter,
+    mcp_questions::check_mcp_pin,
+    remote_edit::{OpenRemote, is_server},
 };
 
 impl Engine {
@@ -33,6 +40,7 @@ impl Engine {
             check_mcp_pin(id, &panel.path)?;
             (panel.path.clone(), panel.cursor_entry().cloned())
         };
+        let listed = cursor.clone().filter(|_| path.is_none());
         let (target, is_dir) = match path {
             Some(path) => {
                 let target = resolve_path(&directory, path);
@@ -58,6 +66,10 @@ impl Engine {
             .path
             .file_name()
             .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+        // The internal associations come before the archive and the system (RC-100-91).
+        if let Some(opened) = self.open_by_rule(id, &target).await? {
+            return Ok(opened);
+        }
         // An archive opens in the panel, as a folder does (RC-030-02).
         if target.backend == BackendId::Local
             && opens_on_enter(&name)
@@ -66,11 +78,22 @@ impl Engine {
         {
             return self.show_path(id, root).await;
         }
+        let server = is_server(&target.backend);
         let file = match target.backend {
             BackendId::Local => target.path,
             // Inside an archive the system gets a read-only copy.
             BackendId::Archive { .. } => self.unpack_to_temp(&target).await?,
-            // On a server a file would have to be fetched first.
+            // On a server a watched copy, whose saves go back up (RC-110-01).
+            _ if server => {
+                let how = OpenRemote {
+                    program: None,
+                    system: true,
+                    listed,
+                };
+                self.edit_remote(target, how).await?;
+                return Ok(Outcome::Panel(self.snapshot(Some(id))));
+            }
+            // A device's file is not fetched.
             _ => {
                 return Err(VfsError::Unsupported {
                     path: target.path,

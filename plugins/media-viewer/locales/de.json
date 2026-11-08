@@ -1,0 +1,14 @@
+{
+  "name": "Medien-Viewer",
+  "description": "Zeigt Dauer, Codecs, Spuren und Tags von Audio- und Videodateien, ihr Cover und das EXIF von TIFF-, RAW- und HEIC-Fotos.",
+  "codes": {
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_audio": "Die Audiodatei ist beschädigt, oder ihr Inhalt hat nicht das Format, das ihre Endung nennt.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_exif": "Die EXIF-Daten des Fotos sind beschädigt.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.bad_video": "Die Videodatei ist beschädigt: Ein Teil ist abgeschnitten oder größer als die Datei.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_exif": "In den ersten 8 MiB des Fotos wurden keine EXIF-Daten gefunden.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.no_moov": "Die Videodatei hat keinen Film-Kopf (moov); sie ist vielleicht unvollständig.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.not_media": "Die Datei ist keine Audiodatei, Videodatei oder kein Foto, das der Medien-Viewer liest.",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.setting.cover": "Eingebettetes Cover zeigen",
+    "01a1b720-fdcc-7b78-bca0-da328630ad19.too_large": "Ein Teil der Datei, den der Viewer lesen muss (ein Tag, das Cover oder der Film-Kopf), ist größer, als er liest."
+  }
+}

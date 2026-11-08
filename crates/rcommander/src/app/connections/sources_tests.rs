@@ -60,6 +60,7 @@ fn manager() -> ConnectionManager {
         name: "Bitwarden".to_owned(),
         state: "ready".to_owned(),
         code: None,
+        lends: false,
     }];
     let follow = manager.source_answer(
         Then::Sources,
@@ -231,4 +232,68 @@ fn a_label_is_title_and_user_cut_to_what_is_kept() {
         ..entry
     };
     assert_eq!(entry_label(&short), "web (root)");
+}
+
+/// A connection mapped to a PAM system that lends shows the reason field; Set hands the typed
+/// reason over for the next checkout, and the answer says it is held (RC-100-38).
+#[test]
+fn a_lending_source_offers_the_reason_and_set_hands_it_over() {
+    let mut manager = ConnectionManager {
+        form: Some(Form::of(&stored(), false)),
+        ..ConnectionManager::default()
+    };
+    manager.sources.sources = vec![SecretSourceInfo {
+        source: SOURCE.to_owned(),
+        name: "PAM".to_owned(),
+        state: "ready".to_owned(),
+        code: None,
+        lends: true,
+    }];
+    manager.sources.connection = Some(ConnectionId(7));
+    assert!(!manager.sources.wants_reason());
+    manager.sources.mappings = vec![reference("acct-17")];
+    assert!(manager.sources.wants_reason());
+
+    assert!(
+        manager
+            .on_source(SourceMsg::Reason("ticket 4711".into()))
+            .is_empty()
+    );
+    let sent = commands(manager.on_source(SourceMsg::SetReason));
+    let [
+        (
+            Then::SourceReason,
+            Command::SetCheckoutReason {
+                connection_id,
+                reason,
+            },
+        ),
+    ] = sent.as_slice()
+    else {
+        panic!("the reason, got {sent:?}");
+    };
+    assert_eq!(
+        (*connection_id, reason.as_str()),
+        (ConnectionId(7), "ticket 4711")
+    );
+    manager.source_answer(
+        Then::SourceReason,
+        answer(SecretSourcesOutcome::Reason {
+            connection_id: ConnectionId(7),
+            held: true,
+        }),
+    );
+    assert!(manager.note.as_ref().is_some_and(|(_, error)| !error));
+}
+
+/// The engine asked a reason for the shown connection: the field shows even before the
+/// sources say the source lends.
+#[test]
+fn an_asked_reason_shows_the_field() {
+    let mut manager = ConnectionManager::default();
+    manager.sources.connection = Some(ConnectionId(7));
+    manager.sources.reason_asked = Some(ConnectionId(8));
+    assert!(!manager.sources.wants_reason());
+    manager.sources.reason_asked = Some(ConnectionId(7));
+    assert!(manager.sources.wants_reason());
 }

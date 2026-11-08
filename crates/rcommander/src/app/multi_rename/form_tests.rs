@@ -21,6 +21,7 @@ fn full_rule() -> RenameRule {
             step: 10,
             width: 4,
         },
+        names: Some(vec!["one.txt".to_owned()]),
     }
 }
 
@@ -93,6 +94,37 @@ fn a_placeholder_goes_into_the_mask_typed_in_last() {
 fn the_case_cycles() {
     assert_eq!(
         CaseChoice(CaseMode::WordsUpper).next(),
+        CaseChoice(CaseMode::Title)
+    );
+    assert_eq!(
+        CaseChoice(CaseMode::Title).next(),
         CaseChoice(CaseMode::Unchanged)
+    );
+}
+
+/// Every button and menu entry inserts a placeholder the engine takes (RC-100-96).
+#[test]
+fn every_placeholder_inserts_one_the_engine_parses() {
+    for placeholder in Placeholder::BUTTONS.into_iter().chain(Placeholder::MORE) {
+        assert!(
+            rc_rename::parse(placeholder.text()).is_ok(),
+            "{placeholder:?}: {}",
+            placeholder.text()
+        );
+    }
+}
+
+#[test]
+fn a_name_list_locks_the_masks_and_flags_the_clipboard_off() {
+    let mut form = Form::default();
+    form.insert(Placeholder::Clipboard);
+    assert!(form.reads_clipboard());
+    form.names = Some(vec!["x".to_owned()]);
+    assert!(!form.reads_clipboard());
+    form.insert(Placeholder::Counter);
+    assert_eq!(form.name_mask, "[N][X]");
+    assert_eq!(
+        form.rule().expect("reads").names,
+        Some(vec!["x".to_owned()])
     );
 }

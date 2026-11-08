@@ -37,6 +37,7 @@ async fn copy_takes_the_selection_into_the_other_panel() {
                 sources: Vec::new(),
                 target: None,
                 options: JobOptions::default(),
+                rename_mask: None,
             }))
             .await
             .expect("queued"),
@@ -97,6 +98,7 @@ async fn one_job_per_item_follows_its_setting() {
         sources: Vec::new(),
         target: None,
         options: JobOptions::default(),
+        rename_mask: None,
     });
     let one = expect_job(engine.dispatch(copy).await.expect("queued"));
     assert_eq!(one.batch, None);
@@ -145,6 +147,7 @@ async fn named_sources_and_a_relative_target() {
                     on_conflict: Some(ConflictChoice::Skip),
                     ..JobOptions::default()
                 },
+                rename_mask: None,
             }))
             .await
             .expect("queued"),
@@ -224,6 +227,7 @@ async fn an_mcp_copy_of_a_folder_holding_a_guarded_file_is_refused() {
             sources,
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         })
     };
     let error = engine
@@ -243,6 +247,7 @@ async fn an_mcp_copy_of_a_folder_holding_a_guarded_file_is_refused() {
         sources: Vec::new(),
         target: None,
         options: JobOptions::default(),
+        rename_mask: None,
     });
     let error = engine
         .dispatch_mcp(moving)
@@ -298,6 +303,7 @@ async fn copies_and_moves_reach_a_server_by_its_location() {
             sources,
             target: Some(target),
             options: JobOptions::default(),
+            rename_mask: None,
         })
     };
     let up = copy(
@@ -360,6 +366,7 @@ async fn sources_on_the_local_disk_and_a_server_copy_in_one_call() {
             ],
             target: Some(out.display().to_string()),
             options: JobOptions::default(),
+            rename_mask: None,
         }))
         .await
         .expect("queued");

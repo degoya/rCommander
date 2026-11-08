@@ -2,8 +2,8 @@
 //! line's text beside it, for both passes (the line index of `open` and the tokens of the lines
 //! on screen). It reads the UTF-8 text the Lister shows, so every offset is a byte of it.
 //!
-//! Each format has its own lexer ([`rst`] with [`inline`], [`latex`], [`bibtex`]) over the
-//! shared [`Cursor`]. What reaches from one line into the next is one [`Block`] - an indented
+//! Each format has its own lexer ([`rst`] with [`inline`], [`latex`], [`bibtex`], [`todo`]) over
+//! the shared [`Cursor`]. What reaches from one line into the next is one [`Block`] - an indented
 //! reStructuredText block or the expectation of one, LaTeX math or a verbatim environment, a
 //! BibTeX entry and its value - and whether the line is a title's underline.
 //!
@@ -18,6 +18,7 @@ mod cursor;
 mod inline;
 mod latex;
 mod rst;
+mod todo;
 
 pub(crate) use cursor::Cursor;
 
@@ -262,6 +263,10 @@ pub(crate) fn lex_line(
             block: bibtex::line(&mut cur, state.block),
             underline: false,
         },
+        Lang::Todo => {
+            todo::line(&mut cur);
+            LineState::default()
+        }
     }
 }
 

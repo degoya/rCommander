@@ -73,6 +73,23 @@ async fn system_list(_limit: Duration) -> Vec<WslDistro> {
     Vec::new()
 }
 
+/// The names of the distributions running now (`wsl.exe --list --running --quiet`), which
+/// starts none; empty when none runs, WSL is missing or does not answer within
+/// [`QUERY_TIMEOUT`], and on every platform but Windows. The git marks of a folder on a
+/// distribution's share ask it first, so they never boot the distribution (RC-100-97).
+pub async fn running_distros() -> Vec<String> {
+    system_running(QUERY_TIMEOUT).await
+}
+
+#[cfg(windows)]
+use windows::running as system_running;
+
+/// No WSL outside Windows.
+#[cfg(not(windows))]
+async fn system_running(_limit: Duration) -> Vec<String> {
+    Vec::new()
+}
+
 /// Where a [`WslCatalog`] reads the list from: the system, or a test's stand-in.
 #[async_trait]
 trait DistroSource: Send + Sync {

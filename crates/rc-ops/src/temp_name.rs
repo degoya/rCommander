@@ -1,6 +1,7 @@
 //! The names rCommander gives a file beside its target for a while, in one place (RC-080-48): a
 //! copy's part file `<name>.rcpart`, a packed archive's `.<name>.<job>.rcpart`, a case-only
-//! rename's `.rc-tmp-<process>-<time>-<n>` and a multi-rename's `.rc-rename-<tag>-<n>` - the last
+//! rename's `.rc-tmp-<process>-<time>-<n>`, the compare window's save `.rc-tmp-<process>-<time>-save`
+//! (RC-100-94) and a multi-rename's `.rc-rename-<tag>-<n>` - the last
 //! made by `rc_rename`, which this crate builds on, from its [`rc_rename::TEMP_PREFIX`].
 //! [`is_temp_name`] knows every one of them, for whatever sweeps or hides what a run left.
 
@@ -33,6 +34,17 @@ pub(crate) fn pack_path(dest: &Path, job: u64) -> PathBuf {
 pub(crate) fn case_path(dir: &Path, nanos: u32, n: u32) -> PathBuf {
     dir.join(format!(
         "{CASE_PREFIX}{:x}-{nanos:x}-{n}",
+        std::process::id()
+    ))
+}
+
+/// The temporary file a save of `dest` writes before it takes `dest`'s place (the compare
+/// window's edit mode, RC-100-94), `nanos` the save's time: `.rc-tmp-<process>-<time>-save`
+/// beside it.
+#[must_use]
+pub fn save_path(dest: &Path, nanos: u32) -> PathBuf {
+    dest.with_file_name(format!(
+        "{CASE_PREFIX}{:x}-{nanos:x}-save",
         std::process::id()
     ))
 }

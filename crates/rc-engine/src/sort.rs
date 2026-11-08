@@ -1,5 +1,5 @@
-//! The order of a panel's entries: directories first, then by a key - name, extension, size or
-//! date - with names compared naturally (`file2` before `file10`) and without regard to case,
+//! The order of a panel's entries: directories first, then by a key - name, extension, size,
+//! date, creation, last access or comment (RC-100-90) - with names compared naturally (`file2` before `file10`) and without regard to case,
 //! as in Total Commander. Names follow Windows' word sort, as Total Commander shows them:
 //! punctuation and symbols (`_`, `$`, `[`, ...) before digits, digits before letters, and the
 //! hyphen and the apostrophe count only between names that are otherwise equal - so
@@ -28,14 +28,24 @@ pub enum SortKey {
     Ext,
     Size,
     Date,
+    /// The creation time (a column set's `created`, RC-100-90).
+    Created,
+    /// The last access (a column set's `accessed`).
+    Accessed,
+    /// The comment of `descript.ion` (a column set's `comment`); sorted as the name until the
+    /// panel has read the comments ([`sort_by_comments`]).
+    Comment,
 }
 
 impl SortKey {
     /// Whether the key starts out descending: the largest and the newest first, as in Total
-    /// Commander; names and extensions start from A.
+    /// Commander; names, extensions and comments start from A.
     #[must_use]
     pub fn descending_first(self) -> bool {
-        matches!(self, Self::Size | Self::Date)
+        matches!(
+            self,
+            Self::Size | Self::Date | Self::Created | Self::Accessed
+        )
     }
 }
 
@@ -288,6 +298,34 @@ pub fn sort_entries(entries: &mut [Entry], order: SortOrder, names: Names) {
     entries.sort_unstable_by(|a, b| panel_cmp(a, b, order, names));
 }
 
+/// `entries` in panel order by their comments in `comments` (the key [`SortKey::Comment`]):
+/// directories first, then by comment as names compare - an entry without one as an empty text,
+/// first - and equal comments by name. Each comment is looked up once, not per comparison.
+pub(crate) fn sort_by_comments(
+    entries: Vec<Entry>,
+    descending: bool,
+    names: Names,
+    comments: &crate::columns::FolderComments,
+) -> Vec<Entry> {
+    let mut keyed: Vec<(String, Entry)> = entries
+        .into_iter()
+        .map(|entry| (comments.get(&entry.name).unwrap_or("").to_owned(), entry))
+        .collect();
+    keyed.sort_by(|(a_comment, a), (b_comment, b)| {
+        let (a_dir, b_dir) = (a.is_dir_like(), b.is_dir_like());
+        b_dir.cmp(&a_dir).then_with(|| {
+            let by_comment =
+                compare_names(a_comment, b_comment, names).then_with(|| by_names(a, b, names));
+            if descending {
+                by_comment.reverse()
+            } else {
+                by_comment
+            }
+        })
+    });
+    keyed.into_iter().map(|(_, entry)| entry).collect()
+}
+
 /// The panel order of [`sort_entries`] for two entries.
 pub(crate) fn panel_cmp(a: &Entry, b: &Entry, order: SortOrder, names: Names) -> Ordering {
     let (a_dir, b_dir) = (a.is_dir_like(), b.is_dir_like());
@@ -338,6 +376,10 @@ fn compare(a: &Entry, b: &Entry, key: SortKey, names: Names) -> Ordering {
         SortKey::Ext => compare_names(extension(a), extension(b), names),
         SortKey::Size => a.size.cmp(&b.size),
         SortKey::Date => a.modified.cmp(&b.modified),
+        SortKey::Created => a.created.cmp(&b.created),
+        SortKey::Accessed => a.accessed.cmp(&b.accessed),
+        // The comments are the panel's, not the entry's: by name until they are read.
+        SortKey::Comment => Ordering::Equal,
     };
     by_key.then_with(|| by_names(a, b, names))
 }

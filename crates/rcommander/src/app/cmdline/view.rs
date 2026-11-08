@@ -143,13 +143,29 @@ pub(in crate::app) fn with_filter<'a>(
     state: &PanelState,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
-    let Some(pattern) = &state.filter.pattern else {
-        return bar;
+    // The file filter (Ctrl+F10, Ctrl+F11, Ctrl+F12; RC-100-92) beside the quick filter.
+    let files = match &state.filter.files {
+        rc_engine::FileFilter::All => None,
+        rc_engine::FileFilter::Programs => Some(t!("panel.file_filter_programs").to_owned()),
+        rc_engine::FileFilter::Mask(mask) => Some(t!("panel.file_filter_mark", mask = mask)),
     };
-    let mark = text(t!("panel.filter_mark", pattern = pattern))
-        .size(theme::TEXT_SIZE)
-        .font(theme::UI_FONT_STRONG)
-        .color(tokens.accent)
-        .wrapping(text::Wrapping::None);
-    row![bar, mark].spacing(8).align_y(Alignment::Center).into()
+    let quick = state
+        .filter
+        .pattern
+        .as_ref()
+        .map(|pattern| t!("panel.filter_mark", pattern = pattern));
+    if files.is_none() && quick.is_none() {
+        return bar;
+    }
+    let mut line = row![bar].spacing(8).align_y(Alignment::Center);
+    for mark in files.into_iter().chain(quick) {
+        line = line.push(
+            text(mark)
+                .size(theme::TEXT_SIZE)
+                .font(theme::UI_FONT_STRONG)
+                .color(tokens.accent)
+                .wrapping(text::Wrapping::None),
+        );
+    }
+    line.into()
 }

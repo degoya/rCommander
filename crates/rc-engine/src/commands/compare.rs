@@ -29,7 +29,8 @@ use crate::{
 
 impl Engine {
     /// `compare.files`. Under MCP, both files - given or picked from the panels - pass the read
-    /// guard first: whether two files are equal tells about the contents of each.
+    /// guard first: whether two files are equal tells about the contents of each. With
+    /// `structure`, a compare plugin that claims both compares them as well (RC-100-41).
     pub(crate) async fn compare_files(
         &self,
         request: FileCompareRequest,
@@ -42,7 +43,7 @@ impl Engine {
             }
         }
         let (left_vfs, right_vfs) = (self.vfs(&left)?, self.vfs(&right)?);
-        let comparison = compare::compare_files(
+        let mut comparison = compare::compare_files(
             Side {
                 vfs: &*left_vfs,
                 path: &left,
@@ -56,6 +57,11 @@ impl Engine {
             &call_token(),
         )
         .await?;
+        if request.structure {
+            let token = call_token();
+            let structure = self.structure_paths(&left, &right, &token);
+            comparison.structure = Some(Box::pin(structure).await?);
+        }
         Ok(Outcome::FileComparison(comparison))
     }
 
@@ -339,7 +345,7 @@ impl Engine {
     /// The files of `compare.files`, as Total Commander picks them: given paths against their
     /// panels; without paths the two selected files of the active panel, else the file under
     /// each panel's cursor.
-    fn files_to_compare(
+    pub(super) fn files_to_compare(
         &self,
         left: Option<&str>,
         right: Option<&str>,

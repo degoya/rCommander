@@ -2,7 +2,7 @@
 #
 # scripts/fuzz.sh in a throwaway repository, without a nightly: the script, its libraries and
 # fuzz/Cargo.toml are copied beside a little test data, and stand-ins for cargo and rustup on
-# PATH record what they are asked. --list names the six targets of fuzz/Cargo.toml; wrong
+# PATH record what they are asked. --list names the nine targets of fuzz/Cargo.toml; wrong
 # arguments and an unknown target are refused; a machine without the nightly or cargo-fuzz runs
 # nothing and says what to install; a run fuzzes every target (or the ones named) for the
 # seconds asked, in the build lock's jobs, from a corpus seeded with the test data, after copying
@@ -68,8 +68,8 @@ FUZZ_SH="$REPO/scripts/fuzz.sh"
 
 run_status "$FUZZ_SH" --list
 expect_status "--list passes" 0
-expect "and names the six targets in fuzz/Cargo.toml's order" \
-    "archive_listing ftp_listing known_hosts osc plugin_manifest tc_ini" "$(tr '\n' ' ' <<< "$output" | sed 's/ $//')"
+expect "and names the nine targets in fuzz/Cargo.toml's order" \
+    "archive_listing ftp_listing known_hosts osc plugin_manifest tc_ini everything_reply git_porcelain cert_viewer" "$(tr '\n' ' ' <<< "$output" | sed 's/ $//')"
 expect_true "without asking cargo anything" '[[ ! -e "$CALLS" ]]'
 
 run_status "$FUZZ_SH" --seconds 0
@@ -96,14 +96,14 @@ rm -f "$CALLS"
 run_status "$FUZZ_SH"
 expect_status "a run without a finding passes" 0
 expect_true "every target is fuzzed 60 s on the pinned nightly, with debug assertions, in RC_JOBS jobs" \
-    '[[ "$(grep -c "fuzz run" "$CALLS")" -eq 6 ]] && has "$CALLS" "cargo +$RC_FUZZ_NIGHTLY fuzz run --fuzz-dir $REPO/fuzz --target-dir $FUZZ/build --debug-assertions tc_ini $FUZZ/corpus/tc_ini -- -max_total_time=60 -timeout=25 -print_final_stats=1 jobs=3"'
+    '[[ "$(grep -c "fuzz run" "$CALLS")" -eq 9 ]] && has "$CALLS" "cargo +$RC_FUZZ_NIGHTLY fuzz run --fuzz-dir $REPO/fuzz --target-dir $FUZZ/build --debug-assertions tc_ini $FUZZ/corpus/tc_ini -- -max_total_time=60 -timeout=25 -print_final_stats=1 jobs=3"'
 expect_output "each with its inputs" "ok      ftp_listing: 1234 inputs in 60 s"
 expect_true "the corpus is seeded with the test data" '[[ -e "$FUZZ/corpus/ftp_listing/seed-crates_rc-remote_tests_fixtures_ftp_list_unix.txt" && -e "$FUZZ/corpus/plugin_manifest/seed-plugins_a-viewer_manifest.toml" ]]'
 printf '\033]9;9;"C:\134Users\134me"\033\134' > "$SCRATCH/osc9"
 expect_true "the OSC target with sequences of its own" 'cmp -s "$FUZZ/corpus/osc/seed-osc9" "$SCRATCH/osc9"'
 expect_output "a target without test data says so" "note: no test data found to seed known_hosts"
 expect_true "the main Cargo.lock was copied in" 'cmp -s "$REPO/Cargo.lock" "$REPO/fuzz/Cargo.lock"'
-expect_true "the summary is kept" '[[ "$(cat "$SCRATCH"/logs/*/summary | wc -l)" -eq 6 ]]'
+expect_true "the summary is kept" '[[ "$(cat "$SCRATCH"/logs/*/summary | wc -l)" -eq 9 ]]'
 
 rm -f "$CALLS"
 RC_FUZZ_TIMEOUT=9 run_status "$FUZZ_SH" --seconds 5 osc

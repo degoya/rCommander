@@ -1,7 +1,16 @@
-use std::fs;
+use std::{
+    fs,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use tempfile::TempDir;
 
+use crate::recover::LockOrRecover as _;
+use crate::search::{
+    SearchCancel,
+    everything::{Everything, EverythingError, tests::reply},
+};
 use crate::test_support;
 use crate::{Command, Engine, Outcome, SearchEvent, SearchHit, SearchQuery, SearchStats};
 
@@ -179,7 +188,9 @@ async fn the_stream_reports_the_same_hits_as_the_pages() {
                 assert!(!cancelled);
                 break;
             }
-            SearchEvent::Progress { .. } | SearchEvent::Skipped { .. } => {}
+            SearchEvent::Progress { .. }
+            | SearchEvent::Skipped { .. }
+            | SearchEvent::Duplicates(_) => {}
         }
     }
     assert_eq!(streamed, paged);
@@ -226,4 +237,183 @@ fn the_command_reads_with_defaults() {
     assert!(paths.is_empty());
     assert_eq!(query.name, "*.rs");
     assert_eq!(query.content.expect("content").text, "fn main");
+}
+
+/// Pages of a search through archives add up to the whole one, also when the walk of the page
+/// before is gone; a cursor of the same search without archives belongs to another one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pages_over_archives_need_no_kept_walk() {
+    let root = tree();
+    for name in ["tree.7z", "tree.zip"] {
+        fs::copy(
+            crate::archives::tests::fixture(name),
+            root.path().join(name),
+        )
+        .expect("copy");
+    }
+    let engine = test_support::headless(root.path()).await;
+    let inside = SearchQuery {
+        archives: true,
+        ..query("*.txt")
+    };
+    let (whole, _, _) = page(&engine, &inside, None, None).await;
+    assert!(
+        whole
+            .iter()
+            .any(|hit| crate::archive_file(&hit.path).is_some()),
+        "hits inside the archives"
+    );
+    let (first, cursor, _) = page(&engine, &inside, Some(31), None).await;
+    let cursor = cursor.expect("a next page");
+    let without_id = cursor.rsplit_once('-').expect("an id").0.to_owned();
+    let (rest, _, _) = page(&engine, &inside, None, Some(without_id)).await;
+    let mut paged = first;
+    paged.extend(rest);
+    assert_eq!(paged, whole);
+
+    let refused = engine
+        .dispatch_mcp(Command::SearchFiles(crate::SearchRequest {
+            panel: None,
+            paths: Vec::new(),
+            query: query("*.txt"),
+            limit: Some(31),
+            cursor: Some(cursor),
+        }))
+        .await
+        .expect_err("another search");
+    assert_eq!(refused.code(), "invalid_search");
+}
+
+/// A stand-in for Everything behind its interface: answers with `reply`, or waits for the stop.
+struct StandIn {
+    reply: Result<Vec<u8>, EverythingError>,
+    wait_for_stop: bool,
+    asked: Mutex<Vec<String>>,
+}
+
+impl StandIn {
+    fn new(reply: Result<Vec<u8>, EverythingError>) -> Arc<Self> {
+        Arc::new(Self {
+            reply,
+            wait_for_stop: false,
+            asked: Mutex::default(),
+        })
+    }
+}
+
+impl Everything for StandIn {
+    fn query(
+        &self,
+        search: &str,
+        _max: u32,
+        cancel: &SearchCancel,
+    ) -> Result<Vec<u8>, EverythingError> {
+        self.asked
+            .lock_or_recover("test.everything")
+            .push(search.to_owned());
+        if self.wait_for_stop {
+            while !cancel.is_cancelled() {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            return Err(EverythingError::Cancelled);
+        }
+        self.reply.clone()
+    }
+}
+
+/// The names of the hits of a search that asks `everything`.
+async fn streamed(engine: &Engine, query: &SearchQuery, everything: Arc<StandIn>) -> Vec<String> {
+    let mut handle = engine
+        .start_search_with(None, &[], query, Some(everything))
+        .await
+        .expect("start");
+    let mut names = Vec::new();
+    while let Some(event) = handle.next().await {
+        if let SearchEvent::Hit(hit) = event {
+            names.push(hit.entry.name);
+        }
+    }
+    names
+}
+
+/// Everything names the candidates; the walk lists nothing and judges only them.
+#[tokio::test]
+async fn everything_names_the_candidates() {
+    let root = tree();
+    let engine = test_support::headless(root.path()).await;
+    let candidates: Vec<String> = ["f00.txt", "gone.txt", "sub/g0.txt", "sub"]
+        .iter()
+        .map(|name| root.path().join(name).to_string_lossy().into_owned())
+        .collect();
+    let candidates: Vec<&str> = candidates.iter().map(String::as_str).collect();
+    let answer = reply(&candidates);
+    let everything = StandIn::new(Ok(answer));
+    let names = streamed(&engine, &query("*.txt"), Arc::clone(&everything)).await;
+    assert_eq!(names, ["f00.txt", "g0.txt"]);
+    let asked = everything.asked.lock_or_recover("test.everything").clone();
+    assert_eq!(asked.len(), 1);
+    assert!(asked[0].ends_with(" \"*.txt\""), "{asked:?}");
+
+    // A regular expression or a search of archives is never handed over.
+    let regex = SearchQuery {
+        name_regex: true,
+        ..query("^f0")
+    };
+    let silent = StandIn::new(Ok(reply(&[])));
+    assert_eq!(
+        streamed(&engine, &regex, Arc::clone(&silent)).await.len(),
+        10
+    );
+    let archives = SearchQuery {
+        archives: true,
+        ..query("*.txt")
+    };
+    assert_eq!(
+        streamed(&engine, &archives, Arc::clone(&silent))
+            .await
+            .len(),
+        30
+    );
+    assert!(silent.asked.lock_or_recover("test.everything").is_empty());
+}
+
+/// Without a running Everything the search walks the folders as without it.
+#[tokio::test]
+async fn without_everything_the_folders_are_walked() {
+    let root = tree();
+    let engine = test_support::headless(root.path()).await;
+    for failure in [EverythingError::NotRunning, EverythingError::TimedOut] {
+        let names = streamed(&engine, &query("*.txt"), StandIn::new(Err(failure))).await;
+        assert_eq!(names.len(), 30);
+    }
+    let broken = StandIn::new(Ok(vec![1, 2, 3]));
+    assert_eq!(streamed(&engine, &query("*.txt"), broken).await.len(), 30);
+}
+
+/// A stop while Everything is asked drops its answer and ends the search.
+#[tokio::test]
+async fn a_stop_while_everything_is_asked_ends_the_search() {
+    let root = tree();
+    let engine = test_support::headless(root.path()).await;
+    let waiting = Arc::new(StandIn {
+        reply: Ok(Vec::new()),
+        wait_for_stop: true,
+        asked: Mutex::default(),
+    });
+    let mut handle = engine
+        .start_search_with(None, &[], &query("*.txt"), Some(waiting))
+        .await
+        .expect("start");
+    handle.cancel();
+    let mut events = Vec::new();
+    while let Some(event) = handle.next().await {
+        events.push(event);
+    }
+    assert!(matches!(
+        events.as_slice(),
+        [SearchEvent::Finished {
+            cancelled: true,
+            ..
+        }]
+    ));
 }

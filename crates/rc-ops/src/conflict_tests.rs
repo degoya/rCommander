@@ -24,6 +24,7 @@ fn file(modified: Option<u64>) -> Entry {
         size: 1,
         modified: modified.map(|secs| SystemTime::UNIX_EPOCH + Duration::from_secs(secs)),
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,

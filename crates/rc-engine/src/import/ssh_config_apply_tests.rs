@@ -28,6 +28,7 @@ fn host(alias: &str) -> ImportedHost {
         proxy_jump: None,
         ignored_options: Vec::new(),
         source: at(1),
+        local_forwards: Vec::new(),
     }
 }
 
@@ -48,7 +49,7 @@ fn a_host_becomes_a_draft_with_its_key_as_a_path() {
             PathBuf::from("/home/tester/.ssh/id_db"),
             PathBuf::from("/home/tester/keys/other"),
         ],
-        proxy_jump: Some("bastion".into()),
+        proxy_jump: Some("j1,j2".into()),
         ..host("DB")
     };
     let made = candidates(&found(vec![db, host("plain")]), None);
@@ -62,7 +63,8 @@ fn a_host_becomes_a_draft_with_its_key_as_a_path() {
     assert_eq!(draft.auth_method, AuthMethod::Key);
     assert_eq!(draft.key_path.as_deref(), Some("/home/tester/.ssh/id_db"));
     let notes = draft.notes.as_deref().expect("notes");
-    assert!(notes.contains("ProxyJump bastion"), "{notes}");
+    // A list of jump hosts stays a note; one alias becomes the jump host (`ssh_import_links`).
+    assert!(notes.contains("ProxyJump j1,j2 (not imported)"), "{notes}");
     assert!(notes.contains("/home/tester/keys/other"), "{notes}");
 
     let plain = &made[1].draft;
@@ -215,5 +217,21 @@ fn raw_text_of_the_file_is_never_echoed() {
     let json = serde_json::to_string(&shown).expect("json");
     for leaked in [blob, "sk-ant", "hunter2", "%Q", "private.txt"] {
         assert!(!json.contains(leaked), "{leaked} leaked: {json}");
+    }
+}
+
+#[test]
+fn only_one_alias_alone_is_a_jump_host_to_set() {
+    use super::single_jump;
+    assert_eq!(single_jump(" bastion "), Some("bastion"));
+    for written in [
+        "j1,j2",
+        "jump@bastion",
+        "bastion:2222",
+        "[::1]:22",
+        "",
+        "a b",
+    ] {
+        assert_eq!(single_jump(written), None, "{written}");
     }
 }

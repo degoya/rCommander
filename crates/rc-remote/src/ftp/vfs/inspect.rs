@@ -32,6 +32,7 @@ fn bare_entry(name: String, kind: EntryKind, size: u64, modified: Option<SystemT
         size,
         modified,
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         owner: None,
     }

@@ -32,7 +32,8 @@ pub(super) enum Ready {
     Value(SecretKind, SecretString),
     Key {
         key: SecretString,
-        info: StoredKey,
+        /// Boxed: with its certificate it is far larger than the other variants.
+        info: Box<StoredKey>,
         /// Only when the key needs one.
         passphrase: Option<SecretString>,
     },
@@ -169,10 +170,12 @@ impl Engine {
                         .as_ref()
                         .filter(|passphrase| !passphrase.is_empty())
                         .map(|passphrase| passphrase.secret().clone());
-                    let (info, passphrase) = open_key(&key, passphrase).await?;
+                    let (mut info, passphrase) = open_key(&key, passphrase).await?;
+                    // The certificate beside the file comes with it (RC-060-09).
+                    info.certificate = self.beside_certificate(path, &info).await?;
                     Ready::Key {
                         key,
-                        info,
+                        info: Box::new(info),
                         passphrase,
                     }
                 }

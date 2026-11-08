@@ -29,7 +29,10 @@ async fn f5_takes_the_cursor_entry_and_offers_the_other_panel() {
         Dialog::open(FileDialog::Copy, PanelId::Left, &state, false, other()).expect("a dialog");
     assert_eq!(dialog.count, 1);
     assert_eq!(dialog.single.as_deref(), Some("a.txt"));
-    assert_eq!(dialog.text, format!("{}{MAIN_SEPARATOR}", other()));
+    assert_eq!(dialog.text, format!("{}{MAIN_SEPARATOR}*.*", other()));
+    // The cursor before the mask, nothing selected (RC-110-04).
+    let caret = other().chars().count() + 1;
+    assert_eq!(dialog.selection(), Some((caret, caret)));
     let (command, follow) = dialog.submit().expect("a command");
     assert_eq!(
         command,
@@ -143,8 +146,8 @@ async fn ok_copies_what_the_dialog_showed_not_the_selection_since() {
 async fn f5_offers_a_server_as_its_location() {
     let (_root, state) = state("a.txt", &[]).await;
     for (other, offered) in [
-        ("sftp://box/srv/www", "sftp://box/srv/www/"),
-        ("sftp://box/", "sftp://box/"),
+        ("sftp://box/srv/www", "sftp://box/srv/www/*.*"),
+        ("sftp://box/", "sftp://box/*.*"),
     ] {
         let dialog =
             Dialog::open(FileDialog::Copy, PanelId::Left, &state, false, other).expect("a dialog");
@@ -178,7 +181,7 @@ async fn shift_f5_offers_the_name_with_its_stem_selected() {
     let dialog = Dialog::open(FileDialog::CopyHere, PanelId::Left, &state, false, other())
         .expect("a dialog");
     assert_eq!(dialog.text, "b.tar.gz");
-    assert_eq!(dialog.selection(), Some(5));
+    assert_eq!(dialog.selection(), Some((0, 5)));
     let (command, _) = dialog.submit().expect("a command");
     assert!(matches!(
         command,
@@ -259,6 +262,7 @@ async fn shift_f4_offers_the_cursor_file_and_opens_the_editor() {
             path: Some("a.txt".into()),
             program: ExternalProgram::Editor,
             create: true,
+            cursor_only: false,
         }
     );
 }
@@ -300,4 +304,141 @@ async fn shift_f6_renames_with_a_checked_name() {
         }
     );
     assert_eq!(follow, FollowUp::Cursor(Some("c.tar.gz".into())));
+}
+
+/// F6 offers the other panel's folder with `*.*`, as F5 does (RC-110-04).
+#[tokio::test]
+async fn f6_offers_the_other_folder_with_the_mask_that_keeps_the_names() {
+    let (_root, state) = state("a.txt", &["a.txt", "docs"]).await;
+    let dialog =
+        Dialog::open(FileDialog::Move, PanelId::Left, &state, false, other()).expect("a dialog");
+    assert_eq!(dialog.text, format!("{}{MAIN_SEPARATOR}*.*", other()));
+}
+
+/// Shift+F5 on several selected entries copies each beside itself under a mask: the dialog
+/// opens with `*.*`, all of it selected, and `*.*` unchanged is refused in the dialog.
+#[tokio::test]
+async fn shift_f5_on_several_entries_offers_a_mask() {
+    let (_root, state) = state("a.txt", &["a.txt", "b.tar.gz", "docs"]).await;
+    let mut dialog = Dialog::open(FileDialog::CopyHere, PanelId::Left, &state, false, other())
+        .expect("a dialog");
+    assert_eq!((dialog.text.as_str(), dialog.count), ("*.*", 3));
+    assert_eq!(dialog.selection(), None, "typing replaces the mask");
+    assert_eq!(dialog.submit(), Err("mask_unchanged"));
+    dialog.text = "start_**_x.*".into();
+    let (command, follow) = dialog.submit().expect("a command");
+    assert!(
+        matches!(&command, Command::OpsCopyTo { sources, target, .. }
+            if sources.len() == 3 && target == "start_**_x.*"),
+        "{command:?}"
+    );
+    assert_eq!(follow, FollowUp::Transfer { deselect: true });
+}
+
+/// Shift+F6 on two selected entries is the rename dialog with `*.*`; on one it is no dialog
+/// (the list's editor).
+#[tokio::test]
+async fn shift_f6_on_several_entries_is_a_dialog_with_a_mask() {
+    let (_root, state) = state("a.txt", &["a.txt", "b.tar.gz"]).await;
+    let mut dialog =
+        Dialog::open(FileDialog::Rename, PanelId::Left, &state, false, other()).expect("a dialog");
+    assert_eq!((dialog.text.as_str(), dialog.count), ("*.*", 2));
+    assert!(dialog.transfers(), "the presets of a move");
+    dialog.text = "*.old".into();
+    let (command, _) = dialog.submit().expect("a command");
+    assert!(
+        matches!(&command, Command::OpsMoveTo { sources, target, .. }
+            if sources.len() == 2 && target == "*.old"),
+        "{command:?}"
+    );
+    let (_root, one) = self::state("a.txt", &["a.txt"]).await;
+    assert_eq!(
+        Dialog::open(FileDialog::Rename, PanelId::Left, &one, false, other()),
+        None
+    );
+}
+
+/// Through the keys: Shift+F6 with two selected opens the dialog, with one the editor in the
+/// list; `rename.selection_dialog` off, always the editor.
+#[tokio::test]
+async fn shift_f6_opens_the_dialog_for_a_selection_until_switched_off() {
+    let (root, _state) = state("a.txt", &[]).await;
+    let mut harness = crate::app::harness::Harness::headless(root.path()).await;
+    let engine = harness.app.engine().clone();
+    let select = |name: &str| Command::ToggleSelection {
+        panel: Some(PanelId::Left),
+        names: vec![name.into()],
+    };
+    let cursor = Command::SetCursor {
+        panel: Some(PanelId::Left),
+        target: rc_engine::CursorTarget::Name("a.txt".into()),
+    };
+    engine.dispatch(cursor).await.expect("the cursor");
+    engine.dispatch(select("a.txt")).await.expect("selects");
+    harness.settle().await;
+    harness.press("Shift+F6").await;
+    assert!(harness.app.file_ops.dialog.is_none());
+    assert!(
+        harness.app.file_ops.rename.is_some(),
+        "one selected: the editor"
+    );
+    harness.press("Escape").await;
+
+    engine.dispatch(select("b.tar.gz")).await.expect("selects");
+    harness.settle().await;
+    harness.press("Shift+F6").await;
+    let dialog = harness.app.file_ops.dialog.clone().expect("the dialog");
+    assert_eq!((dialog.kind, dialog.count), (FileDialog::Rename, 2));
+    harness.press("Escape").await;
+
+    let off = super::super::FileOpsMsg::Settings(super::super::strip::Stored {
+        selection_dialog: false,
+        ..super::super::strip::Stored::default()
+    });
+    harness.send(crate::app::Message::FileOps(off)).await;
+    harness.press("Shift+F6").await;
+    assert!(harness.app.file_ops.dialog.is_none());
+    assert!(
+        harness.app.file_ops.rename.is_some(),
+        "switched off: the editor"
+    );
+}
+
+/// RC-110-02, against Total Commander's old fault (deleting the file under the cursor instead
+/// of the one asked about when the folder was read again behind the question): the names are
+/// fixed when the question opens, a reading meanwhile changes nothing.
+#[tokio::test]
+async fn a_delete_question_deletes_the_names_it_showed_after_a_reading() {
+    let root = tempfile::tempdir().expect("temp dir");
+    fs::write(root.path().join("b.txt"), b"b").expect("write");
+    fs::write(root.path().join("c.txt"), b"c").expect("write");
+    let engine = headless_engine(root.path()).await;
+    engine
+        .dispatch(Command::SetCursor {
+            panel: Some(PanelId::Left),
+            target: rc_engine::CursorTarget::Name("c.txt".into()),
+        })
+        .await
+        .expect("cursor");
+    let state = engine.panel(PanelId::Left);
+    let dialog =
+        Dialog::open(FileDialog::Delete, PanelId::Left, &state, false, other()).expect("a dialog");
+    // A file appears before the cursor's entry and the panel is read again, as the watcher does.
+    fs::write(root.path().join("a.txt"), b"a").expect("write");
+    engine
+        .dispatch(Command::Refresh {
+            panel: Some(PanelId::Left),
+        })
+        .await
+        .expect("read again");
+    let now = engine.panel(PanelId::Left);
+    assert_eq!(
+        now.cursor_entry().map(|entry| entry.name.as_str()),
+        Some("c.txt")
+    );
+    let (command, _) = dialog.submit().expect("a command");
+    assert!(
+        matches!(command, Command::OpsDelete(ref request) if request.sources == ["c.txt"]),
+        "{command:?}"
+    );
 }

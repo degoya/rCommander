@@ -14,6 +14,7 @@ fn link(name: &str) -> Entry {
         size: 10,
         modified: None,
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,

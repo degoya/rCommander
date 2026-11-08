@@ -136,9 +136,35 @@ impl Db {
             sqlx::query_scalar("SELECT run FROM rename_log ORDER BY id DESC LIMIT 1")
                 .fetch_optional(self.readers())
                 .await?;
-        let Some(run) = run else {
-            return Ok(None);
-        };
+        match run {
+            Some(run) => self.rename_run(run).await,
+            None => Ok(None),
+        }
+    }
+
+    /// The run logged just before `run`, the newest first: where an undo goes on once `run` is
+    /// undone (RC-100-96). `None` when `run` is the oldest stored, or not stored.
+    ///
+    /// # Errors
+    ///
+    /// The database's errors.
+    pub async fn rename_run_before(&self, run: &str) -> Result<Option<RenameRun>> {
+        let before: Option<String> = sqlx::query_scalar(
+            "SELECT run FROM rename_log \
+             WHERE id < (SELECT MIN(id) FROM rename_log WHERE run = ?) \
+             ORDER BY id DESC LIMIT 1",
+        )
+        .bind(run)
+        .fetch_optional(self.readers())
+        .await?;
+        match before {
+            Some(before) => self.rename_run(before).await,
+            None => Ok(None),
+        }
+    }
+
+    /// The stored rows of `run`, `None` when the sweep removed them between two reads.
+    async fn rename_run(&self, run: String) -> Result<Option<RenameRun>> {
         let rows: Vec<Row> = sqlx::query_as(
             "SELECT seq, steps, from_name, to_name, done, recorded_at, dir FROM rename_log \
              WHERE run = ? ORDER BY seq",

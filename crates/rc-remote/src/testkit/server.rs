@@ -1,7 +1,8 @@
 //! An in-process SSH server for the session tests: no Docker, no network beyond 127.0.0.1.
 //!
 //! It accepts a password (also as the answer to a `keyboard-interactive` prompt, with a one-time
-//! code after it when [`ServerOptions::second_factor`] is set) and the public keys it is given,
+//! code after it when [`ServerOptions::second_factor`] is set), the public keys it is given and,
+//! with [`ServerOptions::user_ca`], the user certificates that CA signed for the user,
 //! offers the methods it is told to, acts out a few `exec` commands ([`super::exec`]; any other
 //! is echoed back), and echoes what a shell channel receives. Every
 //! TCP connection it accepts is counted, so a test can prove that two channels share one, and
@@ -12,7 +13,9 @@
 //! ([`TestServer::forward_requests`]); with `probe_forwarding` the server tries to open agent,
 //! X11, forwarded TCP/IP and session channels towards the client after the login and records
 //! whether the client took them ([`TestServer::probes`]). With [`ServerOptions::sftp`] it serves
-//! the `sftp` subsystem from a directory on disk (`super::sftp`).
+//! the `sftp` subsystem from a directory on disk (`super::sftp`); with
+//! [`ServerOptions::direct_tcpip`] it carries `direct-tcpip` channels to ports of 127.0.0.1
+//! (`direct_tcpip.rs`, RC-110-03): a jump host, or the server end of a port forward.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -25,7 +28,7 @@ use std::{
 
 use russh::{
     Channel, ChannelId, MethodKind, MethodSet, Sig,
-    keys::{PrivateKey, PublicKey},
+    keys::{Certificate, PublicKey},
     server::{
         self, Auth, ChannelOpenHandle, Msg, PublicKeyOffer, Response, Session, VerifiedPublicKey,
     },
@@ -35,49 +38,16 @@ use tokio::{net::TcpListener, task::JoinHandle};
 use self::link::Link;
 use super::exec::ExecRuns;
 
+pub use self::direct_tcpip::echo_server;
 pub use self::kbd::SecondFactor;
+pub use self::link::silent_server;
+pub use self::options::ServerOptions;
 
+mod ca;
+mod direct_tcpip;
 mod kbd;
 pub(super) mod link;
-
-/// What the server accepts and offers.
-#[derive(Clone)]
-pub struct ServerOptions {
-    pub host_key: PrivateKey,
-    /// The password accepted for every user; none when `None`.
-    pub password: Option<String>,
-    /// The public keys accepted for every user.
-    pub authorized: Vec<PublicKey>,
-    /// The methods offered to the client.
-    pub methods: Vec<MethodKind>,
-    /// After the login, try to open channels towards the client ([`TestServer::probes`]).
-    pub probe_forwarding: bool,
-    /// The `sftp` subsystem; refused when `None`.
-    pub sftp: Option<super::SftpServe>,
-    /// A one-time code `keyboard-interactive` asks for after the password (RC-060-08).
-    pub second_factor: Option<SecondFactor>,
-}
-
-impl ServerOptions {
-    /// A server with `host_key` that takes [`super::PASSWORD`] and the fixtures' client keys over
-    /// `password`, `publickey` and `keyboard-interactive`.
-    #[must_use]
-    pub fn new(host_key: PrivateKey) -> Self {
-        Self {
-            host_key,
-            password: Some(super::PASSWORD.to_owned()),
-            authorized: super::client_public_keys(),
-            methods: vec![
-                MethodKind::Password,
-                MethodKind::PublicKey,
-                MethodKind::KeyboardInteractive,
-            ],
-            probe_forwarding: false,
-            sftp: None,
-            second_factor: None,
-        }
-    }
-}
+mod options;
 
 /// A running server; stopped when dropped.
 pub struct TestServer {
@@ -109,6 +79,9 @@ impl TestServer {
             methods: MethodSet::from(options.methods.as_slice()),
             auth_rejection_time: Duration::ZERO,
             auth_rejection_time_initial: Some(Duration::ZERO),
+            // russh's session waits while a channel's queue is full, and a forward test's echo
+            // fills it: with small socket buffers (macOS) the session then stalls (RC-110-03).
+            channel_buffer_size: 1 << 14,
             ..server::Config::default()
         });
         let options = Arc::new(options);
@@ -121,10 +94,7 @@ impl TestServer {
                 while let Ok((stream, _)) = listener.accept().await {
                     accepts.fetch_add(1, Ordering::SeqCst);
                     let frozen = Arc::new(AtomicBool::new(false));
-                    links
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .push(Arc::clone(&frozen));
+                    lock(&links).push(Arc::clone(&frozen));
                     let link = Link { stream, frozen };
                     let handler = Handler {
                         options: Arc::clone(&options),
@@ -188,14 +158,15 @@ impl TestServer {
         lock(&self.seen.probes).clone()
     }
 
+    /// The `direct-tcpip` channels opened so far, over every connection.
+    #[must_use]
+    pub fn direct_opens(&self) -> usize {
+        self.seen.direct.load(Ordering::SeqCst)
+    }
+
     /// Every connection accepted so far stops answering and swallows what it is sent.
     pub fn freeze(&self) {
-        for link in self
-            .links
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .iter()
-        {
+        for link in lock(&self.links).iter() {
             link.store(true, Ordering::SeqCst);
         }
     }
@@ -207,28 +178,12 @@ impl Drop for TestServer {
     }
 }
 
-/// A port where a listener accepts TCP connections and never says a word: a hanging server.
-///
-/// # Panics
-///
-/// No port can be bound.
-pub async fn silent_server() -> (u16, JoinHandle<()>) {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).await.expect("bind");
-    let port = listener.local_addr().expect("address").port();
-    let task = tokio::spawn(async move {
-        let mut held = Vec::new();
-        while let Ok((stream, _)) = listener.accept().await {
-            held.push(stream);
-        }
-    });
-    (port, task)
-}
-
 /// What clients asked for and what they took.
 #[derive(Default)]
 struct Seen {
     requests: Mutex<Vec<&'static str>>,
     probes: Mutex<Vec<(&'static str, bool)>>,
+    direct: AtomicUsize,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -242,7 +197,7 @@ struct Handler {
     seen: Arc<Seen>,
     /// Session channels no request has claimed yet; a subsystem takes its own.
     channels: HashMap<ChannelId, Channel<Msg>>,
-    /// The channels SFTP runs on: their data is SFTP's, not echoed.
+    /// The channels SFTP or a `direct-tcpip` copy runs on: their data is theirs, not echoed.
     sftp: HashSet<ChannelId>,
     exec: Arc<ExecRuns>,
     /// Where its `keyboard-interactive` login stands.
@@ -296,7 +251,13 @@ impl server::Handler for Handler {
         _user: &str,
         offer: PublicKeyOffer<'_>,
     ) -> Result<Auth, Self::Error> {
-        Ok(self.authorized(offer.public_key))
+        // russh offers a certificate's key here too; with a CA, its signature decides.
+        let authorized = self.authorized(offer.public_key);
+        Ok(if self.options.user_ca.is_some() {
+            Auth::Accept
+        } else {
+            authorized
+        })
     }
 
     async fn auth_publickey(
@@ -305,6 +266,19 @@ impl server::Handler for Handler {
         key: VerifiedPublicKey<'_>,
     ) -> Result<Auth, Self::Error> {
         Ok(self.authorized(key.public_key))
+    }
+
+    async fn auth_openssh_certificate(
+        &mut self,
+        user: &str,
+        certificate: &Certificate,
+    ) -> Result<Auth, Self::Error> {
+        self.attempt();
+        Ok(ca::accepts(
+            self.options.user_ca.as_ref(),
+            user,
+            certificate,
+        ))
     }
 
     async fn auth_keyboard_interactive<'a>(
@@ -375,6 +349,31 @@ impl server::Handler for Handler {
         _session: &mut Session,
     ) -> Result<bool, Self::Error> {
         self.requested("streamlocal_forward")
+    }
+
+    async fn channel_open_direct_tcpip(
+        &mut self,
+        channel: Channel<Msg>,
+        host_to_connect: &str,
+        port_to_connect: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: ChannelOpenHandle,
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        // Its data goes to the TCP connection only; the echo of `data` would mix into it.
+        self.sftp.insert(channel.id());
+        let opens = &self.seen.direct;
+        direct_tcpip::open(
+            &self.options,
+            opens,
+            channel,
+            host_to_connect,
+            port_to_connect,
+            reply,
+        )
+        .await;
+        Ok(())
     }
 
     async fn channel_open_session(

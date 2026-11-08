@@ -27,4 +27,7 @@ async fn app_about_answers_what_the_about_page_shows() {
     assert_eq!(answer["kind"], "about");
     assert_eq!(answer["version"], env!("CARGO_PKG_VERSION"));
     assert!(answer.get("licenses").is_none(), "{answer}");
+    // RC-100-95: the data folder and the portable mode.
+    assert_eq!(answer["portable"], false);
+    assert!(answer.get("data_dir").is_some(), "{answer}");
 }

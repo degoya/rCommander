@@ -211,6 +211,7 @@ pub fn apply(panel: &mut PanelSpec, message: PanelMsg) {
                     sort: None,
                     mode: None,
                     locked: false,
+                    title: None,
                 });
             tab.location = location;
             tab.locked = false;

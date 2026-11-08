@@ -8,7 +8,7 @@ pub enum SettingPage {
     Terminal,
     Vault,
     Mcp,
-    /// The external viewer and editor (RC-010-07).
+    /// The external viewer and editor (RC-010-07), the internal associations (RC-100-91).
     Programs,
     /// Copies and moves: buffer and how many run at once (RC-060-05), retries of a lost
     /// connection (RC-060-07).
@@ -99,6 +99,26 @@ pub enum SettingKind {
     },
     /// The themes of the WSL distributions: `Distro<TAB>light<TAB>dark` per line (RC-100-56).
     WslThemes {
+        default: &'static str,
+    },
+    /// A program's arguments: words, double quotes round one with spaces, `%1` and `%2` for the
+    /// two files (RC-100-94, `compare::external`).
+    Arguments {
+        default: &'static str,
+    },
+    /// The internal associations: a JSON list of rules, empty for none (RC-100-91,
+    /// `rc_engine::associations`).
+    FileAssociations {
+        default: &'static str,
+    },
+    /// Drive letters, and `\` for every UNC path, as Total Commander's `WatchDirsExclude`
+    /// (RC-110-02, `schema/watch.rs`); empty for none.
+    Drives {
+        default: &'static str,
+    },
+    /// A name, a mask or a path per line, as the ignore list takes them (RC-100-92,
+    /// `ignore_list::checked_lines`); empty for none.
+    MaskLines {
         default: &'static str,
     },
 }

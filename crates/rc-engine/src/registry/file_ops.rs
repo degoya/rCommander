@@ -7,7 +7,7 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "file.open_external",
         class: CommandClass::Exec,
-        summary: "Open a file in the viewer or editor of the settings, or the system's program (F3, F4, Shift+F4)",
+        summary: "Open a file in the viewer or editor of the settings, or the system's program (F3, F4, Shift+F4, Alt+F3, Shift+F3)",
     },
     CommandSpec {
         id: "ops.copy_to",
@@ -67,7 +67,8 @@ macro_rules! commands {
                 #[serde(default)]
                 queue: Option<QueueListId>,
             },
-            /// F3 and F4: the file in the viewer or editor of the settings.
+            /// F3 and F4: the file in the viewer or editor of the settings; Alt+F3 the other
+            /// viewer, Shift+F3 the file under the cursor alone (RC-100-91).
             "file.open_external" => OpenExternal {
                 #[serde(default)]
                 panel: Option<PanelId>,
@@ -80,6 +81,10 @@ macro_rules! commands {
                 /// A missing `path` is made as an empty file first (Shift+F4).
                 #[serde(default)]
                 create: bool,
+                /// Lister shows this file alone, even with files marked: N and P stay on it
+                /// (Shift+F3); without, F3 with marked files steps through those.
+                #[serde(default)]
+                cursor_only: bool,
             },
         } }
     };

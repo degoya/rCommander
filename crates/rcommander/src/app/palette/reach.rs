@@ -5,7 +5,8 @@
 //! A row says one of: `palette` - the command palette runs it without parameters; `listed` - the
 //! palette has a row per item of a list for it, each with its parameters (`theme.select`, a row
 //! per theme and mode, RC-100-55, `themes.rs`; `workspaces.apply`, a row per workspace,
-//! RC-100-68, `workspaces.rs`), and says which; `via` - it is
+//! RC-100-68, `workspaces.rs`; `usercmd.run` and `start_menu.run`, a row per own command and per
+//! Start menu entry, RC-100-86, `user_commands.rs`), and says which; `via` - it is
 //! reached in what another command opens (`"via": "connections.manager"`, with `how`), or in a
 //! place of the window (`"via": "window:settings"`: a window key of the keymap, or one of
 //! `SURFACES`); `asked` - a question the window opens by itself runs it; `shown` - it is a
@@ -25,9 +26,10 @@ use serde_json::json;
 const REACH: &str = include_str!("reach.json");
 
 /// The places of the window a `via` names as `window:<place>` besides the keymap's window keys:
-/// the settings and the database dialog (both in the command palette) and the command line.
+/// the settings and the database dialog (both in the command palette), the command line, and the
+/// menu bar's entries that ask for a file first (RC-100-92, `palette/lists.rs`).
 #[cfg(test)]
-pub const SURFACES: &[&str] = &["settings", "database", "cmdline"];
+pub const SURFACES: &[&str] = &["settings", "database", "cmdline", "menu"];
 
 /// How a command without a key is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,7 +150,9 @@ pub fn problems(ids: &[&str], keymap: &Keymap, rows: &[ReachRow]) -> Vec<String>
             }
             Reach::Listed(_)
                 if !super::themes::LISTED.contains(&id)
-                    && !super::workspaces::LISTED.contains(&id) =>
+                    && !super::workspaces::LISTED.contains(&id)
+                    && !super::user_commands::LISTED.contains(&id)
+                    && !super::TOGGLE_LISTED.contains(&id) =>
             {
                 problems.push(format!(
                     "{id}: the palette makes no rows from a list for it"

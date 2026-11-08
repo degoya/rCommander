@@ -4,15 +4,16 @@
 # (locales/en.json).
 plugin_type = "viewer"
 # Contract 0.2.0: `settings`, through which `open` reads `encoding`.
-api_version = "0.4.0"
+api_version = "0.6.0"
 id = "01a1b57c-cbd2-77a4-a5f6-fffa5d998657"
 name = "Markup viewer"
-version = "0.1.0"
+version = "0.2.0"
 
 [match]
 # The format is the extension's (src/lang.rs, `Lang::from_name`): reStructuredText (`.rst`),
-# LaTeX (`.tex`, `.sty`), BibTeX (`.bib`). No magic: the content never names the format.
-extensions = ["rst", "tex", "sty", "bib"]
+# LaTeX (`.tex`, `.sty`), BibTeX (`.bib`), TaskPaper/PlainTasks to-do lists (`.todo`,
+# `.taskpaper`, RC-110-07). No magic: the content never names the format.
+extensions = ["rst", "tex", "sty", "bib", "todo", "taskpaper"]
 magic = []
 # The viewer's text limit (`plugins.viewer_output_limit_mib`, 256 MiB): the text of a larger
 # file would be cut anyway.
@@ -26,7 +27,7 @@ outputs = ["highlighted"]
 [capabilities]
 
 [metadata]
-description = "Shows reStructuredText, LaTeX and BibTeX files coloured like an editor."
+description = "Shows reStructuredText, LaTeX, BibTeX and to-do list files coloured like an editor."
 
 # The host's 64 MiB of memory hold the index of at most 16 MiB (INDEX_BUDGET_BYTES in
 # src/lib.rs), the 1 MiB windows `open` and `text` read and write through, and two lines of at

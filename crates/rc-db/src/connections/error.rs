@@ -77,6 +77,35 @@ pub enum ConnectionError {
          host, port, kind or user"
     )]
     EndpointChangeNeedsGui { id: ConnectionId },
+    /// The jump host would be the connection itself, or one whose chain leads back to it
+    /// (RC-110-03).
+    #[error("a connection cannot reach itself through its jump hosts")]
+    JumpCycle,
+    /// The chain of jump hosts would be longer than [`super::MAX_JUMPS`], for this connection or
+    /// one that connects through it.
+    #[error("a chain of jump hosts is at most {max} hops long")]
+    JumpChainTooLong { max: usize },
+    /// A jump host that is not an SSH connection, a connection of another kind naming one, or a
+    /// jump host that would become one of another kind.
+    #[error("only SSH connections use or are jump hosts")]
+    JumpNeedsSsh,
+    /// The connection is the jump host of others; it is deleted after them or once they name
+    /// another one.
+    #[error("the connection is the jump host of {}; change those first", .users.join(", "))]
+    ConnectionIsJumpHost {
+        id: ConnectionId,
+        users: Vec<String>,
+    },
+    /// No port forward has this id.
+    #[error("there is no port forward with id {id}")]
+    ForwardNotFound { id: i64 },
+    /// A port forward that cannot be stored: an empty or overlong host, a port outside 1 to
+    /// 65535, a forward on a connection that is not SSH.
+    #[error("the port forward is refused: {reason}")]
+    ForwardInvalid { reason: &'static str },
+    /// The connection has [`super::MAX_FORWARDS`] port forwards already.
+    #[error("a connection has at most {max} port forwards")]
+    ForwardsTooMany { max: usize },
     /// The database failed.
     #[error(transparent)]
     Db(#[from] DbError),
@@ -103,6 +132,13 @@ impl ConnectionError {
         "text_too_long",
         "path_too_long",
         "endpoint_change_needs_gui",
+        "jump_cycle",
+        "jump_chain_too_long",
+        "jump_needs_ssh",
+        "connection_is_jump_host",
+        "forward_not_found",
+        "forward_invalid",
+        "forwards_too_many",
         "database_error",
     ];
 
@@ -128,6 +164,13 @@ impl ConnectionError {
             Self::TextTooLong { .. } => "text_too_long",
             Self::PathTooLong { .. } => "path_too_long",
             Self::EndpointChangeNeedsGui { .. } => "endpoint_change_needs_gui",
+            Self::JumpCycle => "jump_cycle",
+            Self::JumpChainTooLong { .. } => "jump_chain_too_long",
+            Self::JumpNeedsSsh => "jump_needs_ssh",
+            Self::ConnectionIsJumpHost { .. } => "connection_is_jump_host",
+            Self::ForwardNotFound { .. } => "forward_not_found",
+            Self::ForwardInvalid { .. } => "forward_invalid",
+            Self::ForwardsTooMany { .. } => "forwards_too_many",
             Self::Db(_) => "database_error",
         }
     }

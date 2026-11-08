@@ -10,6 +10,9 @@ pub enum Lang {
     Latex,
     /// BibTeX databases, `.bib`.
     Bibtex,
+    /// To-do lists in TaskPaper's and PlainTasks' plain text, `.todo` and `.taskpaper`
+    /// (RC-110-07).
+    Todo,
 }
 
 impl Lang {
@@ -22,6 +25,7 @@ impl Lang {
             "rst" => Self::Rst,
             "tex" | "sty" => Self::Latex,
             "bib" => Self::Bibtex,
+            "todo" | "taskpaper" => Self::Todo,
             _ => return None,
         })
     }

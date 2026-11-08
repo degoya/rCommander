@@ -9,7 +9,15 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
             "opens a dialog in the window; files_search runs the search and panel_feed_paths shows its hits in a panel",
         ),
     ),
+    (
+        "files.find_duplicates",
+        Coverage::Covered("files_find_duplicates"),
+    ),
     ("files.search", Coverage::Covered("files_search")),
     ("panel.branch_view", Coverage::Covered("panel_branch_view")),
     ("panel.feed_paths", Coverage::Covered("panel_feed_paths")),
+    (
+        "panel.select_duplicates",
+        Coverage::Covered("panel_select_duplicates"),
+    ),
 ];

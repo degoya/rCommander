@@ -42,8 +42,10 @@ impl Engine {
     /// The class an MCP call of `command` is gated as (RC-080-42): [`Command::effective_class`]
     /// from its parameters, and its escalation row's class where what is stored makes it so - a
     /// retention limit below the one in force (or limits that cannot be read), a saved queue
-    /// list with a job that overwrites (or a list that cannot be read). `rc-mcp`'s gate asks by
-    /// this and nothing else.
+    /// list with a job that overwrites (or a list that cannot be read), an own command, Start
+    /// menu entry or button that starts as administrator, asks or runs a row stricter than
+    /// `Exec`, and a file whose internal association's `open` does so (RC-100-91). `rc-mcp`'s
+    /// gate asks by this and nothing else.
     pub async fn effective_class(&self, command: &Command) -> CommandClass {
         self.judge_class(command).await.0
     }
@@ -60,6 +62,15 @@ impl Engine {
                 judged.queue = entries.map(|entries| (*saved, entries));
                 overwrites
             }
+            // The run itself refuses what changed since (`user_commands/run.rs`).
+            Command::RunUserCommand { .. } | Command::RunStartItem { .. } => {
+                self.stored_run_needs_person(command).await
+            }
+            // The file's internal association, as Enter would run it (RC-100-91).
+            Command::OpenFile { panel, path } => {
+                self.open_needs_person(*panel, path.as_deref()).await
+            }
+            Command::RunButton { .. } => self.stored_button_needs_person(command).await,
             _ => false,
         };
         let class = match escalation(command.id()) {

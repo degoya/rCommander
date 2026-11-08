@@ -5,7 +5,9 @@
 //! person and refuses. The credentials are [`Engine::resolve_secret`]'s, read one at a time when
 //! their method's turn comes; the one-time code is made from the connection's seed when the
 //! server asks for it, unless `connections.totp_autofill` is off (RC-060-08). For MCP (`announce` off) a locked vault is not announced, so no
-//! unlock dialog opens for an agent's call: the answer is `vault_locked`, nothing more.
+//! unlock dialog opens for an agent's call: the answer is `vault_locked`, nothing more. A key
+//! comes with its OpenSSH user certificate (RC-060-09) while `ssh.certificates` is on: the one
+//! stored with it, or the `<key>-cert.pub` beside a key file.
 
 use async_trait::async_trait;
 use rc_remote::{
@@ -15,12 +17,16 @@ use rc_remote::{
 use rc_vault::SecretString;
 
 use crate::{
-    ConnectionId, Engine, EngineError, SecretKind, SecretRef, settings::TOTP_AUTOFILL_KEY,
+    ConnectionId, Engine, EngineError, HopLabel, SecretKind, SecretRef,
+    settings::{SSH_CERTIFICATES_KEY, TOTP_AUTOFILL_KEY},
 };
 
 /// The trust store, with its questions for a person.
 pub(crate) struct EngineGate {
     pub engine: Engine,
+    /// Which hop of a chain of jump hosts the key is checked for (RC-110-03); the question says
+    /// so. `None` for a direct session.
+    pub hop: Option<HopLabel>,
 }
 
 #[async_trait]
@@ -31,7 +37,12 @@ impl HostKeyGate for EngineGate {
         port: u16,
         offered: OfferedKey,
     ) -> Result<(), HostKeyRefusal> {
-        match self.engine.check_host_key(host, port, offered).await {
+        let hop = self.hop.clone();
+        match self
+            .engine
+            .check_host_key_at(host, port, offered, hop)
+            .await
+        {
             Ok(()) => Ok(()),
             Err(EngineError::HostKeyUnknown { .. }) => Err(HostKeyRefusal::Unknown),
             Err(EngineError::HostKeyChanged {
@@ -81,19 +92,42 @@ impl Credentials for EngineCredentials {
     }
 
     async fn private_key(&self) -> Result<Option<KeyMaterial>, CredentialError> {
-        let key = match self.secret(SecretKind::Key).await? {
-            Some(key) => key,
+        let certificates = self.engine.setting_on(SSH_CERTIFICATES_KEY).await;
+        let (key, certificate) = match self.secret(SecretKind::Key).await? {
+            Some(key) => {
+                let certificate = if certificates {
+                    self.engine
+                        .stored_certificate(self.connection)
+                        .await
+                        .map_err(credential_error)?
+                } else {
+                    None
+                };
+                (key, certificate)
+            }
             None => match self.key_path.as_deref() {
                 // Refused unread unless local: opening a share would hand it the person's
                 // credentials (RC-050-06).
-                Some(path) => crate::commands::read_local_key_file(path)
-                    .await
-                    .map_err(credential_error)?,
+                Some(path) => {
+                    let key = crate::commands::read_local_key_file(path)
+                        .await
+                        .map_err(credential_error)?;
+                    let certificate = if certificates {
+                        beside_certificate(path).await
+                    } else {
+                        None
+                    };
+                    (key, certificate)
+                }
                 None => return Ok(None),
             },
         };
         let passphrase = self.secret(SecretKind::Passphrase).await?;
-        Ok(Some(KeyMaterial { key, passphrase }))
+        Ok(Some(KeyMaterial {
+            key,
+            passphrase,
+            certificate,
+        }))
     }
 
     async fn totp_code(&self) -> Result<Option<SecretString>, CredentialError> {
@@ -104,6 +138,21 @@ impl Credentials for EngineCredentials {
             .totp_code(self.connection, self.announce)
             .await
             .map_err(credential_error)
+    }
+}
+
+/// The `<path>-cert.pub` beside the key file `path`, for its login; one that cannot be read is
+/// left out - the key still logs in alone - and logged.
+pub(crate) async fn beside_certificate(path: &str) -> Option<String> {
+    match crate::commands::read_beside_certificate(path).await {
+        Ok(certificate) => certificate,
+        Err(error) => {
+            tracing::warn!(
+                code = error.code(),
+                "the certificate beside the key file is not used"
+            );
+            None
+        }
     }
 }
 

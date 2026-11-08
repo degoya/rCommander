@@ -1,9 +1,20 @@
-//! Packing and unpacking archives as jobs of the operations queue (RC-030-03, RC-030-04).
+//! Packing and unpacking archives as jobs of the operations queue (RC-030-03, RC-030-04), and
+//! changing one - files added, entries removed (RC-110-05).
 
 use super::{CommandClass, CommandSpec};
 
 /// This group's rows, sorted by id.
 pub(super) const COMMANDS: &[CommandSpec] = &[
+    CommandSpec {
+        id: "archive.add",
+        class: CommandClass::Write,
+        summary: "Add files and folders to an existing zip, 7z or tar archive (into a folder inside it) as a queued job; the archive is rewritten beside itself and replaced when complete",
+    },
+    CommandSpec {
+        id: "archive.delete",
+        class: CommandClass::Destructive,
+        summary: "Remove entries from a zip, 7z or tar archive for good (no recycle bin) as a queued job; the archive is rewritten beside itself and replaced when complete",
+    },
     CommandSpec {
         id: "archive.extract",
         class: CommandClass::Write,
@@ -26,6 +37,37 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
 macro_rules! commands {
     ($next:ident, $rest:tt, { $($done:tt)* }) => {
         $next! { $rest, { $($done)*
+            /// F5 (F6 with `delete_sources`) with an archive in the target panel (RC-110-05):
+            /// the sources into the archive the other panel shows, at the folder it shows. From a
+            /// key without `target` the window first opens the pack dialog in its add mode.
+            "archive.add" => ArchiveAdd {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                /// Absolute, or relative to the panel's directory. Empty: the selection, else the
+                /// cursor.
+                #[serde(default)]
+                sources: Vec<String>,
+                /// Where inside which archive: a location inside an archive (`C:\a.zip\docs`)
+                /// or an archive file (its root); `None` is the other panel's location, which
+                /// must lie inside an archive.
+                #[serde(default)]
+                target: Option<String>,
+                #[serde(default)]
+                settings: rc_ops::UpdateSettings,
+                #[serde(default)]
+                options: JobOptions,
+            },
+            /// F8 or Del inside an archive (RC-110-05): the entries go for good.
+            "archive.delete" => ArchiveDelete {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                /// Names in the panel's directory inside an archive. Empty: the selection, else
+                /// the cursor.
+                #[serde(default)]
+                entries: Vec<String>,
+                #[serde(default)]
+                options: JobOptions,
+            },
             /// Alt+F9 (RC-030-03). From a key without `target` the window first opens its dialog.
             "archive.extract" => ArchiveExtract {
                 #[serde(default)]

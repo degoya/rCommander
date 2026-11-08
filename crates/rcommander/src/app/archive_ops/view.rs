@@ -9,8 +9,8 @@ use iced::{
 use rc_vault::ExposeSecret as _;
 
 use super::{
-    ArchiveDialog, ArchiveMsg, CONFLICT_PRESETS, ExtractDialog, FormatChoice, PackDialog,
-    PackOption, PackStep, PasswordPrompt, Typed, wrap,
+    ArchiveDialog, ArchiveMsg, CONFLICT_PRESETS, DeletePrompt, ExtractDialog, FormatChoice,
+    PackDialog, PackOption, PackStep, PasswordPrompt, Typed, wrap,
 };
 use crate::{
     app::Message,
@@ -37,7 +37,7 @@ const LEVELS: [u8; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 /// The open dialog over the window.
 pub fn overlay<'a>(dialog: &'a ArchiveDialog, tokens: &'static Tokens) -> Element<'a, Message> {
     let width = match dialog {
-        ArchiveDialog::Password(_) => layout::SMALL_DIALOG_WIDTH,
+        ArchiveDialog::Password(_) | ArchiveDialog::Delete(_) => layout::SMALL_DIALOG_WIDTH,
         _ => layout::MEDIUM_DIALOG_WIDTH,
     };
     Message::overlay(title(dialog), body(dialog, tokens), width, tokens)
@@ -46,7 +46,9 @@ pub fn overlay<'a>(dialog: &'a ArchiveDialog, tokens: &'static Tokens) -> Elemen
 /// The dialog's title: in its card's head, or in its window's title bar.
 pub fn title(dialog: &ArchiveDialog) -> &'static str {
     match dialog {
+        ArchiveDialog::Pack(pack) if pack.adding => t!("archive_ops.add_title"),
         ArchiveDialog::Pack(_) => t!("archive_ops.pack_title"),
+        ArchiveDialog::Delete(_) => t!("archive_ops.delete_title"),
         ArchiveDialog::Extract(_) => t!("archive_ops.extract_title"),
         ArchiveDialog::Password(_) => t!("archive_ops.password_title"),
     }
@@ -58,6 +60,7 @@ pub fn body<'a>(dialog: &'a ArchiveDialog, tokens: &'static Tokens) -> Element<'
         ArchiveDialog::Pack(pack) => pack_view(pack, tokens),
         ArchiveDialog::Extract(extract) => extract_view(extract, tokens),
         ArchiveDialog::Password(prompt) => password_view(prompt, tokens),
+        ArchiveDialog::Delete(prompt) => delete_view(prompt, tokens),
     }
 }
 
@@ -69,7 +72,8 @@ fn pack_view<'a>(pack: &'a PackDialog, tokens: &'static Tokens) -> Element<'a, M
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([6, 8]);
-    if editing {
+    // Adding (RC-110-05): the place inside the archive is the other panel's, not typed.
+    if editing && !pack.adding {
         name = name.on_input(|name| wrap(ArchiveMsg::Name(name)));
     }
     let formats: Vec<FormatChoice> = rc_engine::PackFormat::ALL
@@ -81,14 +85,20 @@ fn pack_view<'a>(pack: &'a PackDialog, tokens: &'static Tokens) -> Element<'a, M
     let choose_level = |level| wrap(ArchiveMsg::Level(level));
     let format_moves = focus::moves(&formats, Some(&format), &choose_format);
     let format_list = pick_list(formats, Some(format), choose_format).width(120);
+    let format_stop: Element<'a, Message> = if pack.adding {
+        // The archive's own format: fixed.
+        line(pack.settings.format.extension()).into()
+    } else {
+        layout::keyed(
+            focus::Stop::pick(format_list, t!("archive_ops.format"), format_moves),
+            t!("archive_ops.format"),
+        )
+    };
     let level_list = pick_list(&LEVELS[..], Some(pack.settings.level), choose_level).width(70);
     let (format_label, level_label) = (t!("archive_ops.format"), t!("archive_ops.level"));
     let choices = row![
         layout::caption(format_label, None),
-        layout::keyed(
-            focus::Stop::pick(format_list, format_label, format_moves),
-            format_label
-        ),
+        format_stop,
         layout::caption(level_label, None),
         layout::keyed(
             focus::Stop::pick(
@@ -102,7 +112,7 @@ fn pack_view<'a>(pack: &'a PackDialog, tokens: &'static Tokens) -> Element<'a, M
     .spacing(8)
     .align_y(Alignment::Center);
     let settings = &pack.settings;
-    let options = column![
+    let mut options = column![
         toggle(
             t!("archive_ops.recurse"),
             settings.recurse,
@@ -115,40 +125,49 @@ fn pack_view<'a>(pack: &'a PackDialog, tokens: &'static Tokens) -> Element<'a, M
             PackOption::KeepPaths,
             editing
         ),
-        toggle(
+    ]
+    .spacing(6);
+    if !pack.adding {
+        options = options.push(toggle(
             t!("archive_ops.each_own"),
             settings.each_own_archive,
             PackOption::EachOwn,
-            editing
-        ),
-        toggle(
+            editing,
+        ));
+    }
+    let options = options
+        .push(toggle(
             t!("archive_ops.solid"),
             settings.solid,
             PackOption::Solid,
-            editing
-        ),
-        toggle(
+            editing,
+        ))
+        .push(toggle(
             t!("archive_ops.store_links"),
             settings.store_links,
             PackOption::StoreLinks,
-            editing
-        ),
-        toggle(
+            editing,
+        ))
+        .push(toggle(
             t!("archive_ops.delete_sources"),
             settings.delete_sources,
             PackOption::DeleteSources,
-            editing
-        ),
-    ]
-    .spacing(6);
+            editing,
+        ));
+    let heading = if pack.adding {
+        t!("archive_ops.add_to", count = count)
+    } else {
+        t!("archive_ops.pack_to", count = count)
+    };
     let mut body = column![
-        line(t!("archive_ops.pack_to", count = count)).color(tokens.text_secondary),
+        line(heading).color(tokens.text_secondary),
         name,
         choices,
         options,
     ]
     .spacing(10);
     let confirm = match pack.step {
+        PackStep::Editing if pack.adding => t!("archive_ops.add_ok"),
         PackStep::Editing => t!("archive_ops.pack_ok"),
         PackStep::Checking => {
             body = body.push(prose(t!("archive_ops.checking")).color(tokens.text_secondary));
@@ -217,6 +236,23 @@ fn extract_view<'a>(extract: &'a ExtractDialog, tokens: &'static Tokens) -> Elem
         ),
         conflict,
         buttons(t!("archive_ops.extract_ok"), true),
+    ]
+    .spacing(10)
+    .into()
+}
+
+/// F8 inside an archive (RC-110-05): how many entries go from which archive, for good.
+fn delete_view<'a>(prompt: &'a DeletePrompt, tokens: &'static Tokens) -> Element<'a, Message> {
+    let count = prompt.entries.len().to_string();
+    column![
+        prose(t!(
+            "archive_ops.delete_question",
+            count = count,
+            archive = prompt.archive
+        ))
+        .color(tokens.text),
+        prose(t!("archive_ops.delete_warning")).color(theme::DANGER),
+        buttons(t!("archive_ops.delete_ok"), true),
     ]
     .spacing(10)
     .into()

@@ -19,6 +19,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+rc-cert = { path = "../crates/rc-cert" }
 rc-engine = { path = "../crates/rc-engine" }
 rc-plugin-host = { path = "../crates/rc-plugin-host" }
 rc-remote = { path = "../crates/rc-remote" }
@@ -71,6 +72,27 @@ bench = false
 [[bin]]
 name = "tc_ini"
 path = "fuzz_targets/tc_ini.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "everything_reply"
+path = "fuzz_targets/everything_reply.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "git_porcelain"
+path = "fuzz_targets/git_porcelain.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cert_viewer"
+path = "fuzz_targets/cert_viewer.rs"
 test = false
 doc = false
 bench = false

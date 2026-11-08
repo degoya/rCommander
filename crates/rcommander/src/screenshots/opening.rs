@@ -1,9 +1,11 @@
 //! The dialog an `open` step opens that no step may open by its key: the settings, as they open
 //! or on a page and a tab of it (RC-100-55) - `{ "open": "settings", "page": "appearance", "tab":
 //! "themes" }` - and the workspaces' window - `{ "open": "workspaces" }`, whose key runs the
-//! `GuiOnly` `workspaces.manager` (RC-100-68). A page or a tab the settings do not have, a tab of
-//! another page, a tab without its page, a page or tab that is no name, or a page or tab given
-//! to the workspaces' window ends the run before a window opens.
+//! `GuiOnly` `workspaces.manager` (RC-100-68) -, and the own commands' window - `{ "open":
+//! "commands" }`, as `usercmd.manager` opens it (RC-100-86). A page or a tab the settings do not
+//! have, a tab of another page, a tab without its page, a page or tab that is no name, or a page
+//! or tab given to the workspaces' or the own commands' window ends the run before a window
+//! opens.
 
 use anyhow::{Result, bail};
 use serde::Deserialize;
@@ -17,6 +19,7 @@ use crate::app::settings::{Page, Tab, Tabs};
 pub enum RawOpening {
     Settings,
     Workspaces,
+    Commands,
 }
 
 /// A dialog a step opens, checked.
@@ -29,6 +32,8 @@ pub enum Opening {
     },
     /// The workspaces' window, as Ctrl+Shift+W opens it.
     Workspaces,
+    /// The own commands' window, as Configuration > "Own commands..." opens it.
+    Commands,
 }
 
 /// The settings' pages by the name a scene gives them.
@@ -67,13 +72,18 @@ pub const TABS: [(&str, Tab); 9] = [
 /// # Errors
 ///
 /// A page or a tab is no name the settings have, a tab is not of the page, a tab comes
-/// without its page, or the workspaces' window is given a page or a tab.
+/// without its page, or the workspaces' or the own commands' window is given a page or a tab.
 pub fn check(opening: RawOpening, page: Option<&Value>, tab: Option<&Value>) -> Result<Opening> {
-    if opening == RawOpening::Workspaces {
+    let window = match opening {
+        RawOpening::Workspaces => Some(("workspaces'", Opening::Workspaces)),
+        RawOpening::Commands => Some(("own commands'", Opening::Commands)),
+        RawOpening::Settings => None,
+    };
+    if let Some((name, window)) = window {
         if page.is_some() || tab.is_some() {
-            bail!("the workspaces' window has no pages or tabs");
+            bail!("the {name} window has no pages or tabs");
         }
-        return Ok(Opening::Workspaces);
+        return Ok(window);
     }
     let page = page.map(|page| named(page, "page", &PAGES)).transpose()?;
     let tab = tab.map(|tab| named(tab, "tab", &TABS)).transpose()?;

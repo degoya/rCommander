@@ -7,8 +7,8 @@
 //! (`path_too_long`). An imported file can no longer put a megabyte into a row.
 
 use crate::connections::{
-    AuthMethod, Connection, ConnectionDraft, ConnectionError, ConnectionKind, ConnectionPatch,
-    DefaultView, FtpDataMode, FtpEncoding,
+    AuthMethod, Connection, ConnectionDraft, ConnectionError, ConnectionId, ConnectionKind,
+    ConnectionPatch, DefaultView, FtpDataMode, FtpEncoding,
 };
 
 /// The longest name, host or user name, in characters; a DNS name has at most 253.
@@ -148,6 +148,8 @@ pub(crate) struct Fields {
     pub(crate) ftp_encoding: Option<FtpEncoding>,
     pub(crate) theme_light: Option<String>,
     pub(crate) theme_dark: Option<String>,
+    /// Checked against the tree by `jump::check` before it is written (RC-110-03).
+    pub(crate) jump_id: Option<ConnectionId>,
 }
 
 impl Fields {
@@ -171,6 +173,7 @@ impl Fields {
             ftp_encoding: draft.ftp_encoding,
             theme_light: theme(draft.theme_light.as_deref())?,
             theme_dark: theme(draft.theme_dark.as_deref())?,
+            jump_id: draft.jump_id,
         }
         .consistent()
     }
@@ -215,6 +218,7 @@ impl Fields {
             ftp_encoding: patch.ftp_encoding.or(current.ftp_encoding),
             theme_light: theme(text(&patch.theme_light, &current.theme_light).as_deref())?,
             theme_dark: theme(text(&patch.theme_dark, &current.theme_dark).as_deref())?,
+            jump_id: patch.jump().unwrap_or(current.jump_id),
         }
         .consistent()
     }

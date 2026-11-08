@@ -4,6 +4,20 @@
 macro_rules! arms {
     ($next:ident, $state:tt, $self:ident, { $($done:tt)* }) => {
         $next! { $state, $self, { $($done)*
+            Command::ArchiveAdd {
+                panel,
+                sources,
+                target,
+                settings,
+                options,
+            } => {
+                $self.archive_add(panel, &sources, target.as_deref(), settings, options).await
+            }
+            Command::ArchiveDelete {
+                panel,
+                entries,
+                options,
+            } => $self.archive_delete(panel, &entries, options).await,
             Command::ArchiveExtract {
                 panel,
                 archives,

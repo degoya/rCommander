@@ -17,9 +17,12 @@
 //! with a single tab; while the panel shows its terminal it lists the terminal's sessions, the
 //! bar above it, and the terminal lets go of the keyboard until the list closes (RC-080-16).
 
+mod close_all;
 pub(super) mod editor;
+mod history_search;
 mod overflow;
 pub(super) mod popup;
+mod popup_views;
 mod reorder;
 mod view;
 
@@ -57,6 +60,8 @@ pub struct TabsUi {
     pub strips: [Vec<TabView>; 2],
     /// The open popup.
     pub popup: Option<Popup>,
+    /// The quick search of the open history list (RC-100-92); `None` for every other popup.
+    pub search: Option<history_search::HistorySearch>,
     /// The hotlist dialog, while it is open.
     pub editor: Option<HotlistEditor>,
     /// Ctrl+D was pressed in this panel; the menu opens when the hotlist is read.
@@ -94,6 +99,8 @@ pub enum TabsMessage {
         drag: bool,
         keys: bool,
     },
+    /// "Close all tabs" of the panel, asking first (`tabs.confirm_close_all`, RC-100-92).
+    CloseAll(PanelId, bool),
     /// A click on a popup's row.
     Pick(usize),
     /// A click beside the popup.
@@ -164,7 +171,11 @@ impl App {
             return Vec::new();
         };
         let panel = popup.panel;
-        match popup.key(chord) {
+        let searched = match self.tabs.search.as_mut() {
+            Some(search) if search.owns(popup) => search.key(chord, popup),
+            _ => None,
+        };
+        match searched.unwrap_or_else(|| popup.key(chord)) {
             PopupKey::Stay => self.popup_in_view(),
             PopupKey::Close => {
                 self.tabs.popup = None;
@@ -211,7 +222,12 @@ impl App {
         match command {
             Command::HistoryList(_) => {
                 let (entries, current) = self.engine.history(active);
-                self.tabs.popup = Some(Popup::history(active, &entries, current));
+                let history = Popup::history(active, &entries, current);
+                // The most visited folders below, typing filters both (RC-100-92).
+                let (popup, search) =
+                    history_search::with_frequent(history, &self.engine.frequent());
+                self.tabs.popup = Some(popup);
+                self.tabs.search = Some(search);
                 Some(self.popup_in_view())
             }
             Command::ListHotlist {} => {
@@ -300,6 +316,13 @@ impl App {
                 self.tabs_settings(drag, keys);
                 Vec::new()
             }
+            TabsMessage::CloseAll(panel, true) => {
+                self.tabs.popup = Some(Popup::close_all(panel));
+                self.popup_in_view()
+            }
+            TabsMessage::CloseAll(panel, false) => {
+                self.popup_action(panel, PopupAction::CloseAllNow(false))
+            }
             other => self.editor_message(other),
         }
     }
@@ -381,6 +404,23 @@ impl App {
             }),
             PopupAction::ShowTerminal(terminal) => Command::ShowTerminal { terminal },
             PopupAction::CloseTerminal(terminal) => Command::CloseTerminal { terminal },
+            PopupAction::View(mode) => Command::SetListMode {
+                panel: Some(panel),
+                mode,
+            },
+            PopupAction::ConfigureColumns => return self.configure_columns(),
+            PopupAction::OpenFrequent(index) => Command::HistoryOpenFrequent {
+                panel: Some(panel),
+                index,
+            },
+            PopupAction::RenameTab(tab) => {
+                return self.open_prompt(panel, super::keys::PromptKind::TabTitle(tab));
+            }
+            PopupAction::CloseAllTabs => return self.close_all_tabs(panel),
+            PopupAction::CloseAllNow(include_locked) => Command::CloseAllTabs {
+                panel: Some(panel),
+                include_locked,
+            },
         };
         vec![Effect::Dispatch(panel, vec![command])]
     }

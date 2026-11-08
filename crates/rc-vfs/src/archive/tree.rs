@@ -103,6 +103,7 @@ impl Node {
                 size: 0,
                 modified: None,
                 created: None,
+                accessed: None,
                 attributes: Attributes::default(),
                 hidden: false,
                 owner: None,
@@ -141,6 +142,7 @@ impl Node {
                 size,
                 modified: raw.modified,
                 created: None,
+                accessed: None,
                 attributes: Attributes {
                     mode: raw.mode,
                     readonly: raw.readonly,
@@ -278,6 +280,17 @@ impl Tree {
             current = &self.nodes[*child];
         }
         Ok(current)
+    }
+
+    /// The format's index of `node` and of every stored entry below it, in no set order.
+    pub(crate) fn indices_below(&self, node: &Node) -> Vec<u64> {
+        let mut indices = Vec::new();
+        let mut stack = vec![node];
+        while let Some(at) = stack.pop() {
+            indices.extend(at.index);
+            stack.extend(self.children(at));
+        }
+        indices
     }
 
     /// The entries of a directory node, by name.

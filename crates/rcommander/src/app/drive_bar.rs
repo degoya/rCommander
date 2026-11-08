@@ -47,6 +47,8 @@ use serde::{Deserialize, Serialize};
 pub(super) use self::line::concerns as line_concerns;
 pub(super) use self::network_view::{body as network_body, title as network_title};
 pub(super) use self::view::{above_panel, above_panels, with_menu};
+// The button bars draw their buttons and tooltips alike (RC-100-87).
+pub(in crate::app) use self::view::{button_style, card_style};
 use self::{
     actions::{DriveAction, DriveContext, context_actions, menu_actions},
     line::{LineSettings, LineStep},

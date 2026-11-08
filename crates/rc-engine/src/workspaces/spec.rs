@@ -79,6 +79,9 @@ pub struct TabSpec {
     /// A locked tab keeps its folder (RC-010-03).
     #[serde(default)]
     pub locked: bool,
+    /// The name a person gave the tab (RC-100-92); its folder's when `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 /// The terminal a panel shows.
@@ -279,6 +282,13 @@ impl PanelSpec {
         }
         for tab in &self.tabs {
             check_location(&tab.location, context)?;
+            if let Some(title) = &tab.title
+                && let Err(error) = crate::tabs::checked_title(title)
+            {
+                return Err(WorkspaceError::Tabs {
+                    reason: error.to_string(),
+                });
+            }
         }
         if self.view == PanelView::Terminal && self.terminal.is_none() {
             return Err(WorkspaceError::Terminal {
@@ -425,6 +435,7 @@ pub(crate) fn sample() -> WorkspaceSpec {
         sort: None,
         mode: None,
         locked: false,
+        title: None,
     };
     WorkspaceSpec {
         version: SPEC_VERSION,

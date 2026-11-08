@@ -1,5 +1,5 @@
 //! The folder tabs of both panels and their folder history (`tabs`, `dir_history`, migration
-//! 0008).
+//! 0008; a tab's name and file filter, migration 0031).
 //!
 //! The tabs are state the window leaves behind: [`Db::save_tabs`] replaces all of them, with
 //! their history, in one transaction when the app ends; [`Db::load_tabs`] reads them at the next
@@ -28,6 +28,10 @@ pub struct StoredTab {
     pub sort: String,
     /// Full or brief, as the engine's JSON.
     pub mode: String,
+    /// The name a person gave the tab; `None` while it shows its folder's (RC-100-92).
+    pub title: Option<String>,
+    /// The file filter, as the engine's JSON (RC-100-92).
+    pub file_filter: String,
     /// The folders behind and ahead of `location`.
     pub history: Vec<StoredVisit>,
 }
@@ -58,8 +62,8 @@ impl Db {
         let mut visits: Vec<(i64, &StoredVisit)> = Vec::new();
         for tab in tabs {
             let id = sqlx::query(
-                "INSERT INTO tabs (panel, position, active, locked, location, sort, mode) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO tabs (panel, position, active, locked, location, sort, mode, title, \
+                 file_filter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&tab.panel)
             .bind(tab.position)
@@ -68,6 +72,8 @@ impl Db {
             .bind(&tab.location)
             .bind(&tab.sort)
             .bind(&tab.mode)
+            .bind(tab.title.as_deref())
+            .bind(&tab.file_filter)
             .execute(&mut *tx)
             .await?
             .last_insert_rowid();
@@ -100,8 +106,8 @@ impl Db {
     pub async fn load_tabs(&self) -> Result<Vec<StoredTab>> {
         let mut snapshot = self.readers().begin().await?;
         let rows = sqlx::query(
-            "SELECT id, panel, position, active, locked, location, sort, mode FROM tabs \
-             ORDER BY panel, position, id",
+            "SELECT id, panel, position, active, locked, location, sort, mode, title, file_filter \
+             FROM tabs ORDER BY panel, position, id",
         )
         .fetch_all(&mut *snapshot)
         .await?;
@@ -130,6 +136,8 @@ impl Db {
                 location: row.try_get("location")?,
                 sort: row.try_get("sort")?,
                 mode: row.try_get("mode")?,
+                title: row.try_get("title")?,
+                file_filter: row.try_get("file_filter")?,
                 history,
             });
         }

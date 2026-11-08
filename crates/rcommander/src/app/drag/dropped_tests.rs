@@ -108,6 +108,7 @@ fn a_local_other_panel_copies_into_the_target_whatever_its_backend() {
             sources: vec!["/data/a".into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         })
     );
 }

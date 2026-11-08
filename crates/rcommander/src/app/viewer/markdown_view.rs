@@ -1,7 +1,8 @@
 //! Drawing the Markdown preview (RC-020-09): iced's own `markdown` view in the theme's colours,
-//! prose in the interface font at the viewer's size, code in the viewer's font (RC-010-17), both at
-//! the window's text size (RC-020-12). A
-//! scrollable holds it; the scrolling keys reach it by its id ([`super::markdown::scroll_id`]).
+//! prose in the interface font at the viewer's size, code in a monospaced font - the viewer's
+//! (RC-010-17) when it is one, else the theme's (RC-110-06) - both at the window's text size
+//! (RC-020-12). A scrollable holds it; the scrolling keys reach it by its id
+//! ([`super::markdown::scroll_id`]).
 //!
 //! Three of iced's defaults are drawn here instead: an image is never loaded and shows its alt
 //! text in a frame; a code block takes the theme's surface rather than iced's fixed dark one; a
@@ -9,7 +10,8 @@
 //!
 //! While selecting is on (RC-020-14) each paragraph line, heading and code line is a
 //! [`Selectable`] block, numbered as `select::blocks` numbers them, and the selected bytes carry
-//! the theme's selection colour.
+//! the theme's selection colour. A code block coloured with the parse (`code_lexer.rs`,
+//! RC-110-06) draws its tokens in the theme's `syntax.*` colours.
 
 use std::{cell::Cell, sync::Arc};
 
@@ -25,11 +27,14 @@ use iced::{
 };
 
 use super::{
-    ViewerMessage, links,
+    ViewerMessage,
+    code_lexer::{BlockTokens, LineTokens},
+    links,
     lister::Lister,
     markdown::{PreviewMessage, scroll_id},
     select::{self, Gesture, Selection, Span},
     selectable::Selectable,
+    spans::color,
     wrap,
 };
 use crate::{
@@ -51,6 +56,8 @@ pub fn view<'a>(
         tokens,
         selection: lister.selection(),
         next: Cell::new(0),
+        code: lister.code_tokens(),
+        next_code: Cell::new(0),
     };
     let shown =
         markdown::view_with(items, settings(tokens, lister.font()), &look).map(move |shown| {
@@ -99,13 +106,33 @@ pub fn settings(tokens: &Tokens, viewer: AreaFont) -> Settings {
             left: 2.0,
         },
         inline_code_color: tokens.text,
-        inline_code_font: viewer.font,
-        code_block_font: viewer.font,
+        inline_code_font: code_font(viewer),
+        code_block_font: code_font(viewer),
         link_color: tokens.accent,
     };
     let mut settings = Settings::with_text_size(viewer.size, style);
     settings.code_size = viewer.size.into();
     settings
+}
+
+/// The font of code: the viewer's when it is monospaced, else the theme's monospace - code is
+/// never drawn in a proportional font (RC-110-06).
+pub fn code_font(viewer: AreaFont) -> Font {
+    if viewer.mono {
+        viewer.font
+    } else {
+        theme::MONO_FONT
+    }
+}
+
+/// The style a code block's lines are drawn in: iced gives each of their spans the prose font
+/// (`style.font`), which beats the font of the `rich_text` around them, so the code font takes
+/// its place (RC-110-06).
+pub fn code_style(style: Style) -> Style {
+    Style {
+        font: style.code_block_font,
+        ..style
+    }
 }
 
 /// What the preview reports: a link clicked, or the mouse selecting.
@@ -122,6 +149,10 @@ struct Look<'s> {
     selection: Option<&'s Selection>,
     /// The number of the next block.
     next: Cell<usize>,
+    /// The tokens of the code blocks; `None` while highlighting is off.
+    code: Option<&'s [BlockTokens]>,
+    /// The number of the next code block.
+    next_code: Cell<usize>,
 }
 
 impl<'a> Look<'a> {
@@ -259,14 +290,21 @@ impl<'a> Viewer<'a, Shown> for Look<'a> {
     ) -> Element<'a, Shown> {
         let tokens = self.tokens;
         let font = settings.style.code_block_font;
-        let lines: Column<'a, Shown> = column(lines.iter().map(|line| {
+        let style = code_style(settings.style);
+        let index = self.next_code.get();
+        self.next_code.set(index + 1);
+        let coloured = self
+            .code
+            .and_then(|code| code.get(index))
+            .and_then(Option::as_ref);
+        let lines: Column<'a, Shown> = column(lines.iter().enumerate().map(|(at, line)| {
+            let tokens = coloured.and_then(|block| block.get(at));
+            let spans = paint(line.spans(style), tokens, &self.tokens.syntax);
             if self.selection.is_some() {
-                return self.text(settings.style, line, settings.code_size, Some(font));
+                // A code line has no hard break: one block, as `select::blocks` counts it.
+                return self.block(spans, settings.code_size, Some(font));
             }
-            rich_text(line.spans(settings.style))
-                .font(font)
-                .size(settings.code_size)
-                .into()
+            rich_text(spans).font(font).size(settings.code_size).into()
         }));
         let sideways = scrollable(container(lines).padding(settings.code_size.0 / 2.0))
             .direction(Direction::Horizontal(Scrollbar::default()));
@@ -276,6 +314,45 @@ impl<'a> Viewer<'a, Shown> for Look<'a> {
             .style(move |_| code_frame(tokens))
             .into()
     }
+}
+
+/// `plain`, the one span of a code line, cut at `tokens` and each token in its class's colour;
+/// `plain` itself without tokens.
+pub fn paint(
+    plain: Arc<[Span]>,
+    tokens: Option<&LineTokens>,
+    syntax: &theme::Syntax,
+) -> Arc<[Span]> {
+    let (Some(tokens), [span]) = (tokens, &plain[..]) else {
+        return plain;
+    };
+    if tokens.is_empty() {
+        return plain;
+    }
+    let text: &str = span.text.as_ref();
+    let piece = |range: std::ops::Range<usize>| -> Option<Span> {
+        text.get(range)
+            .filter(|part| !part.is_empty())
+            .map(|part| Span {
+                text: part.to_owned().into(),
+                ..span.clone()
+            })
+    };
+    let mut out = Vec::with_capacity(tokens.len() * 2 + 1);
+    let mut from = 0;
+    for (range, class) in tokens {
+        if range.start < from || range.end > text.len() {
+            return plain;
+        }
+        out.extend(piece(from..range.start));
+        out.extend(piece(range.clone()).map(|token| Span {
+            color: Some(color(syntax, *class)),
+            ..token
+        }));
+        from = range.end;
+    }
+    out.extend(piece(from..text.len()));
+    out.into()
 }
 
 /// The tooltip of a paragraph's links: one target a line, one that never opens marked.

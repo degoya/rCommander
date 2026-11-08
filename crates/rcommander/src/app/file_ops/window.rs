@@ -18,23 +18,24 @@ use crate::{
     theme::Tokens,
 };
 
-/// The window of the dialog `kind` opens: copy and move, a new folder or text file, delete;
-/// none for Shift+F6, which renames in the list.
+/// The window of the dialog `kind` opens: copy, move and rename (Shift+F6 on several entries,
+/// RC-110-04), a new folder or text file, delete.
 pub(in crate::app) fn dialog_window(kind: FileDialog) -> Option<DialogWindow> {
     match kind {
-        FileDialog::Copy | FileDialog::CopyHere | FileDialog::Move => Some(DialogWindow::Transfer),
+        FileDialog::Copy | FileDialog::CopyHere | FileDialog::Move | FileDialog::Rename => {
+            Some(DialogWindow::Transfer)
+        }
         FileDialog::Mkdir | FileDialog::NewText => Some(DialogWindow::NewItem),
         FileDialog::Delete | FileDialog::DeletePermanent => Some(DialogWindow::Delete),
-        FileDialog::Rename => None,
     }
 }
 
-/// Gives the field `id` the keys, with its first `select` characters selected (all of them
-/// when `None`), so typing replaces them.
-pub(super) fn focus_task(id: &'static str, select: Option<usize>) -> Task<Message> {
+/// Gives the field `id` the keys, with the characters from and to `select` selected (all of
+/// them when `None`), so typing replaces them; from and to alike put the cursor there.
+pub(super) fn focus_task(id: &'static str, select: Option<(usize, usize)>) -> Task<Message> {
     let id = Id::new(id);
     let select = match select {
-        Some(end) => operation::select_range(id.clone(), 0, end),
+        Some((start, end)) => operation::select_range(id.clone(), start, end),
         None => operation::select_all(id.clone()),
     };
     Task::batch([operation::focus(id), select])
@@ -97,11 +98,12 @@ impl App {
             _ => match ops.dialog.as_ref().map(|dialog| dialog.kind) {
                 Some(FileDialog::Copy | FileDialog::CopyHere) => t!("ops.window.copy"),
                 Some(FileDialog::Move) => t!("ops.window.move"),
+                Some(FileDialog::Rename) => t!("ops.window.rename"),
                 Some(FileDialog::Mkdir) => t!("ops.window.mkdir"),
                 Some(FileDialog::NewText) => t!("ops.window.new_text"),
                 Some(FileDialog::Delete) => t!("ops.window.delete"),
                 Some(FileDialog::DeletePermanent) => t!("ops.window.delete_permanent"),
-                Some(FileDialog::Rename) | None => "",
+                None => "",
             },
         }
     }

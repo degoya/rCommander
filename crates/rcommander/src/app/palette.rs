@@ -12,16 +12,20 @@
 //! key, not a registry command: there is nothing in it for MCP, which calls the commands directly.
 //! The menu bar (`menu_bar.rs`, RC-080-18) runs the palette's rows by their names. The colour
 //! themes are rows too, one per theme and mode (RC-100-55, `themes.rs`), and so are the
-//! workspaces, one each (RC-100-68, `workspaces.rs`).
+//! workspaces, one each (RC-100-68, `workspaces.rs`), and the own commands and the Start menu's
+//! entries, one each (RC-100-86, `user_commands.rs`).
 
+mod column_sets;
+pub mod lists;
 pub mod menu_bar;
 pub mod reach;
 pub mod themes;
+pub mod user_commands;
 mod view;
 pub mod workspaces;
 
 use iced::widget::{Id, operation};
-use rc_engine::{Chord, Command, Keymap};
+use rc_engine::{BarKind, Chord, Command, Keymap};
 
 use self::reach::{Reach, ReachRow};
 pub(super) use self::view::overlay;
@@ -106,6 +110,8 @@ pub enum PaletteMsg {
     Pick(usize),
     /// The menu bar: its setting read, an entry chosen (RC-080-18).
     MenuBar(menu_bar::MenuBarMsg),
+    /// A menu entry's file or clipboard, read (RC-100-92, `panel_lists.rs`).
+    Lists(lists::ListsMsg),
 }
 
 /// Every row of the palette, by label: one per name of the keymap with all its chords - a
@@ -175,6 +181,11 @@ pub fn entries(keymap: &Keymap, rows: &[ReachRow], network: bool) -> Vec<Entry> 
         String::new(),
         Action::CenterDivider,
     ));
+    // Each bar of the window shown or hidden, the View menu's entries too (RC-100-87).
+    for bar in BarKind::ALL {
+        let toggle = Box::new(Command::ToggleBar { bar });
+        entries.push(entry(&toggle_name(bar), String::new(), Action::Run(toggle)));
+    }
     if network {
         for (name, action) in [
             ("map_network_drive", DriveAction::MapNetwork),
@@ -191,6 +202,16 @@ pub fn entries(keymap: &Keymap, rows: &[ReachRow], network: bool) -> Vec<Entry> 
     entries
 }
 
+/// The command whose palette rows the bars of the window make (`reach.json`'s `listed`).
+#[cfg(test)]
+pub const TOGGLE_LISTED: &[&str] = &["view.toggle_bar"];
+
+/// The name of the row that shows or hides `bar`: `toggle_bar.<bar>`, its words
+/// `keys.toggle_bar.<bar>` and in the menu bar `menubar.toggle_bar.<bar>`.
+pub fn toggle_name(bar: BarKind) -> String {
+    format!("toggle_bar.{}", bar.as_str())
+}
+
 fn entry(name: &str, keys: String, action: Action) -> Entry {
     Entry {
         name: name.to_owned(),
@@ -202,11 +223,12 @@ fn entry(name: &str, keys: String, action: Action) -> Entry {
     }
 }
 
-/// The words of a row's name: its `keys.` key's, or a theme key's (RC-100-55), or a workspace
-/// key's (RC-100-68).
+/// The words of a row's name: its `keys.` key's, or a theme key's (RC-100-55), a workspace
+/// key's (RC-100-68), an own command's or a Start menu entry's (RC-100-86).
 pub fn label(name: &str) -> String {
     themes::label(name)
         .or_else(|| workspaces::label(name))
+        .or_else(|| user_commands::label(name))
         .unwrap_or_else(|| i18n::code_text("keys", name))
 }
 
@@ -297,6 +319,13 @@ impl App {
         let mut entries = entries(&self.keymap, &reach::standard(), self.drive_bar.network);
         themes::add_rows(&mut entries, &themes::known());
         workspaces::add_rows(&mut entries, &workspaces::rows());
+        let shown = self.pane(self.active).state.mode;
+        column_sets::add_rows(&mut entries, self.resize.sets(), shown);
+        let (commands, items) = (
+            super::user_commands::known::commands(),
+            super::user_commands::known::start_menu(),
+        );
+        user_commands::add_rows(&mut entries, &commands, &items);
         self.palette = Some(Palette::new(entries));
         vec![Effect::Task(operation::focus(Id::new(FIELD_ID)))]
     }
@@ -328,6 +357,9 @@ impl App {
         if let PaletteMsg::MenuBar(message) = message {
             return self.on_menu_bar(message);
         }
+        if let PaletteMsg::Lists(message) = message {
+            return self.on_lists(message);
+        }
         let Some(palette) = self.palette.as_mut() else {
             return Vec::new();
         };
@@ -338,7 +370,7 @@ impl App {
                     return self.run_palette(action);
                 }
             }
-            PaletteMsg::MenuBar(_) => {}
+            PaletteMsg::MenuBar(_) | PaletteMsg::Lists(_) => {}
         }
         Vec::new()
     }
@@ -352,6 +384,8 @@ impl App {
             // A workspace's row applies it with its notes for the status bar (RC-100-68).
             Action::Run(command) => match *command {
                 Command::ApplyWorkspace { id } => self.apply_workspace_now(id),
+                // "Close all tabs" asks first (RC-100-92).
+                Command::CloseAllTabs { .. } => self.close_all_tabs(self.active),
                 command => vec![Effect::Dispatch(self.active, vec![command])],
             },
             Action::Bound(command) => self.run_bound(*command),

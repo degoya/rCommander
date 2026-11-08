@@ -5,7 +5,7 @@
 
 use std::{
     fs::File,
-    io::{self, BufWriter},
+    io::{self, BufWriter, Seek, Write},
     time::SystemTime,
 };
 
@@ -23,22 +23,34 @@ pub(super) fn write(
 ) -> io::Result<File> {
     let mut zip = ZipWriter::new(out);
     for member in members {
-        let options = options(member, level);
-        match &member.kind {
-            MemberKind::Dir => zip.add_directory(member.name.as_str(), options)?,
-            MemberKind::Link(target) => {
-                zip.add_symlink(member.name.as_str(), target.as_str(), options)?;
-            }
-            MemberKind::File => {
-                zip.start_file(member.name.as_str(), options)?;
-                let mut source = feed.open(member)?;
-                io::copy(&mut source, &mut zip)?;
-            }
-        }
+        add_member(&mut zip, member, level, feed)?;
     }
     zip.finish()?
         .into_inner()
         .map_err(io::IntoInnerError::into_error)
+}
+
+/// Adds `member` to `zip`, its data read through `feed` (also an archive update's new entries,
+/// RC-110-05).
+pub(crate) fn add_member<W: Write + Seek>(
+    zip: &mut ZipWriter<W>,
+    member: &Member,
+    level: u32,
+    feed: &Feed,
+) -> io::Result<()> {
+    let options = options(member, level);
+    match &member.kind {
+        MemberKind::Dir => zip.add_directory(member.name.as_str(), options)?,
+        MemberKind::Link(target) => {
+            zip.add_symlink(member.name.as_str(), target.as_str(), options)?;
+        }
+        MemberKind::File => {
+            zip.start_file(member.name.as_str(), options)?;
+            let mut source = feed.open(member)?;
+            io::copy(&mut source, zip)?;
+        }
+    }
+    Ok(())
 }
 
 fn options(member: &Member, level: u32) -> SimpleFileOptions {

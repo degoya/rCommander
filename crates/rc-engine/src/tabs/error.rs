@@ -1,4 +1,5 @@
-//! Why a command of the tabs, the folder history or the hotlist was refused.
+//! Why a command of the tabs, the folder history, the hotlist or the panels' lists (file filters,
+//! selections and list files, RC-100-92) was refused.
 
 use rc_db::HotlistError;
 
@@ -38,6 +39,26 @@ pub enum TabsError {
     /// does not read.
     #[error("this folder cannot be kept in the hotlist")]
     HotlistBadPath,
+    /// A tab's name too long or holding a control character (RC-100-92).
+    #[error("a tab's name: {reason}")]
+    TabTitleInvalid { reason: &'static str },
+    /// A saved file filter's name or mask that does not fit, or one too many (RC-100-92).
+    #[error("a saved file filter: {reason}")]
+    SavedFilterInvalid { reason: &'static str },
+    #[error("there is no saved file filter named {name}")]
+    SavedFilterNotFound { name: String },
+    /// A selection or list file larger than the limit, or with more lines (RC-100-92).
+    #[error("a list file holds at most {max_bytes} bytes and {max_lines} lines")]
+    ListFileTooLarge { max_bytes: u64, max_lines: usize },
+    /// A selection or list file somewhere else than on this machine's disks.
+    #[error("a selection or list file lies on this machine's disks")]
+    ListFileNotLocal,
+    /// The selection file is there already; over MCP it is never overwritten.
+    #[error("the file exists already")]
+    ListFileExists,
+    /// A list file without one absolute path to show.
+    #[error("the list file names no absolute path")]
+    ListFileEmpty,
 }
 
 impl TabsError {
@@ -54,6 +75,13 @@ impl TabsError {
         "hotlist_too_deep",
         "hotlist_bad_name",
         "hotlist_bad_path",
+        "tab_title_invalid",
+        "saved_filter_invalid",
+        "saved_filter_not_found",
+        "list_file_too_large",
+        "list_file_not_local",
+        "file_exists",
+        "list_file_empty",
     ];
 
     /// The stable code.
@@ -71,6 +99,13 @@ impl TabsError {
             Self::HotlistTooDeep { .. } => "hotlist_too_deep",
             Self::HotlistBadName { .. } => "hotlist_bad_name",
             Self::HotlistBadPath => "hotlist_bad_path",
+            Self::TabTitleInvalid { .. } => "tab_title_invalid",
+            Self::SavedFilterInvalid { .. } => "saved_filter_invalid",
+            Self::SavedFilterNotFound { .. } => "saved_filter_not_found",
+            Self::ListFileTooLarge { .. } => "list_file_too_large",
+            Self::ListFileNotLocal => "list_file_not_local",
+            Self::ListFileExists => "file_exists",
+            Self::ListFileEmpty => "list_file_empty",
         }
     }
 }

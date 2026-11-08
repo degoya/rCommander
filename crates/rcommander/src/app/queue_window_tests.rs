@@ -55,6 +55,7 @@ async fn copy_aside(harness: &mut Harness, name: &str) -> JobId {
             sources: vec![name.into()],
             target: None,
             options: JobOptions::default(),
+            rename_mask: None,
         }),
     )
     .await;

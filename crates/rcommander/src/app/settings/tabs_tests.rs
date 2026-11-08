@@ -83,9 +83,9 @@ fn each_page_keeps_its_own_tab() {
     assert_eq!(tabs.chosen(Page::Folders), None);
     assert!(of(Page::Folders).is_empty());
     assert_eq!(of(Page::Plugins), PLUGINS.as_slice());
-    tabs.choose(Tab::Viewer);
+    tabs.choose(Tab::Thumbnails);
     tabs.choose(Tab::PluginSettings);
-    assert_eq!(tabs.chosen(Page::Appearance), Some(Tab::Viewer));
+    assert_eq!(tabs.chosen(Page::Appearance), Some(Tab::Thumbnails));
     assert_eq!(tabs.chosen(Page::Plugins), Some(Tab::PluginSettings));
     tabs.turn(Page::Appearance, false);
     assert_eq!(tabs.chosen(Page::Appearance), Some(Tab::Window), "round");
@@ -114,7 +114,7 @@ async fn ctrl_tab_turns_the_tabs_and_the_choice_outlives_the_window() {
     harness.press("Ctrl+Shift+Tab").await;
     assert_eq!(
         chosen(&harness, Page::Appearance),
-        Some(Tab::Viewer),
+        Some(Tab::Thumbnails),
         "back round from the first to the last"
     );
     harness
@@ -127,7 +127,7 @@ async fn ctrl_tab_turns_the_tabs_and_the_choice_outlives_the_window() {
     assert!(harness.app.settings.is_none());
     harness.send(Message::Settings(SettingsMessage::Open)).await;
     assert_eq!(chosen(&harness, Page::Plugins), Some(Tab::PluginSettings));
-    assert_eq!(chosen(&harness, Page::Appearance), Some(Tab::Viewer));
+    assert_eq!(chosen(&harness, Page::Appearance), Some(Tab::Thumbnails));
 }
 
 /// The Keyboard page (RC-100-21): its schema rows under General, the table of keys under
@@ -160,4 +160,23 @@ fn the_menu_bar_style_is_drawn_on_windows_only() {
     assert!(!here_on("appearance.menu_bar_style", false));
     assert!(here_on("appearance.menu_bar", false));
     assert_eq!(here("appearance.menu_bar_style"), cfg!(windows));
+}
+
+/// The thumbnails' rows have their tab (RC-100-89); Explorer's thumbnails are a row on Windows
+/// only, where they exist.
+#[test]
+fn the_thumbnails_tab_holds_their_rows_and_explorer_only_on_windows() {
+    for key in [
+        "thumbnails.size",
+        "thumbnails.disk_cache",
+        "thumbnails.cache_mb",
+        "thumbnails.remote",
+        "thumbnails.explorer",
+    ] {
+        assert_eq!(appearance_tab(key), Tab::Thumbnails, "{key}");
+    }
+    assert!(here_on("thumbnails.explorer", true));
+    assert!(!here_on("thumbnails.explorer", false));
+    assert!(here_on("thumbnails.size", false));
+    assert_eq!(here("thumbnails.explorer"), cfg!(windows));
 }

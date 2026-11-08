@@ -1,21 +1,24 @@
 //! The diff window's state: what it compares, what it found, and which rows are on screen.
 //!
 //! Only the rows on screen are drawn ([`ListWindow`]), so a diff of a million lines costs what a
-//! page does; the window has no cursor of its own, its view is all that moves. The
-//! two sides scroll together because they are one list: each row holds the left and the right
-//! line (`TextDiff::rows`).
+//! page does; outside the edit mode the window has no cursor of its own, its view is all that
+//! moves (the edit mode's cursor and its changes: `edit_mode.rs`, RC-100-94). The two sides
+//! scroll together because they are one list: each row holds the left and the right line
+//! (`TextDiff::rows`).
 
 use std::sync::Arc;
 
 use rc_engine::{
     CancellationToken, VfsPath,
-    compare::{FileComparison, TextDiff, TextOptions},
+    compare::{EditSession, FileComparison, TextDiff, TextOptions},
 };
 
+use super::edit_mode::{Ask, EditCursor, Field, Note, SaveCall, Then};
+use super::structure::{DiffView, Structure};
 use crate::app::list_window::ListWindow;
 
 /// Rows kept above a difference jumped to, so its context shows.
-const CONTEXT: usize = 3;
+pub(super) const CONTEXT: usize = 3;
 
 /// What the window shows.
 #[derive(Debug, Clone)]
@@ -33,7 +36,8 @@ pub enum Shown {
 /// What a comparison of the window's task found.
 #[derive(Debug, Clone)]
 pub enum Loaded {
-    Text(Arc<TextDiff>),
+    /// Two text files: the diff, and both files as the edit mode changes them.
+    Text(Arc<TextDiff>, Box<EditSession>),
     Bytes(Box<FileComparison>),
 }
 
@@ -62,6 +66,28 @@ pub struct DiffWindow {
     pub generation: u64,
     /// Stops the running comparison.
     pub cancel: CancellationToken,
+    /// Both files as text, as the edit mode changes them; `None` while loading and for the
+    /// byte comparison.
+    pub session: Option<EditSession>,
+    /// The edit mode (F6, Alt+M) and its cursor; `None` outside it.
+    pub edit: Option<EditCursor>,
+    /// The line being typed in the edit mode.
+    pub field: Option<Field>,
+    /// The session's generation the diff shown was computed at: an older one is being
+    /// compared again.
+    pub shown_generation: u64,
+    /// A question the window asks over its buttons.
+    pub ask: Option<Ask>,
+    /// A line under the paths: why a side is read-only, a save that failed.
+    pub note: Option<Note>,
+    /// The saves running; their answers come back as `EditMsg::Saved`.
+    pub saving: Vec<SaveCall>,
+    /// What follows once the saves are done: closing, or comparing again.
+    pub then: Option<Then>,
+    /// The structural comparison of a compare plugin (RC-100-41, `structure.rs`).
+    pub structure: Structure,
+    /// The text view, or the Structure view while a plugin's comparison is there.
+    pub view: DiffView,
 }
 
 impl DiffWindow {
@@ -76,6 +102,16 @@ impl DiffWindow {
             current: None,
             generation,
             cancel: CancellationToken::new(),
+            session: None,
+            edit: None,
+            field: None,
+            shown_generation: 0,
+            ask: None,
+            note: None,
+            saving: Vec::new(),
+            then: None,
+            structure: Structure::Running,
+            view: DiffView::Text,
         }
     }
 
@@ -88,6 +124,14 @@ impl DiffWindow {
         self.changes = 0;
         self.rows.reset();
         self.current = None;
+        // Read again from the files: what was changed and not saved is gone.
+        self.session = None;
+        self.field = None;
+        self.ask = None;
+        self.note = None;
+        self.then = None;
+        // Compared again by structure as well; the view the person chose stays.
+        self.structure = Structure::Running;
     }
 
     pub fn set_option(&mut self, option: DiffOption, on: bool) {
@@ -102,7 +146,11 @@ impl DiffWindow {
     /// The comparison's answer; the view starts at the first difference.
     pub fn loaded(&mut self, result: Result<Loaded, &'static str>) {
         self.shown = match result {
-            Ok(Loaded::Text(diff)) => Shown::Text(diff),
+            Ok(Loaded::Text(diff, session)) => {
+                self.shown_generation = session.generation();
+                self.session = Some(*session);
+                Shown::Text(diff)
+            }
             Ok(Loaded::Bytes(comparison)) => Shown::Bytes(comparison),
             Err(code) => Shown::Failed(code),
         };
@@ -110,9 +158,14 @@ impl DiffWindow {
         self.rows.reset();
         self.current = None;
         self.next();
+        // The edit mode stays on over a new comparison, its cursor on the first difference.
+        if self.edit.is_some() {
+            self.edit = None;
+            self.toggle_edit();
+        }
     }
 
-    fn diff(&self) -> Option<&TextDiff> {
+    pub(super) fn diff(&self) -> Option<&TextDiff> {
         match &self.shown {
             Shown::Text(diff) => Some(diff),
             _ => None,
@@ -170,12 +223,16 @@ impl DiffWindow {
         self.go_to(found)
     }
 
-    fn go_to(&mut self, start: Option<usize>) -> bool {
+    pub(super) fn go_to(&mut self, start: Option<usize>) -> bool {
         let Some(start) = start else {
             return false;
         };
         self.current = Some(start);
         self.rows.set_top(start.saturating_sub(CONTEXT), self.len());
+        // In the edit mode the cursor goes along.
+        if let Some(cursor) = self.edit.as_mut() {
+            cursor.row = start;
+        }
         true
     }
 }

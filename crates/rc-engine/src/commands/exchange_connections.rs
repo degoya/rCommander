@@ -64,7 +64,9 @@ impl Engine {
         let mut seen = HashSet::new();
         let themes = crate::settings::themes::load(db).await;
         for entry in &part.connections {
-            let (draft, unthemed) = fit_themes(&entry.connection, &themes, incoming);
+            let (mut draft, unthemed) = fit_themes(&entry.connection, &themes, incoming);
+            // A file's id names nothing here: the jump host comes by its mark (RC-110-03).
+            draft.jump_id = None;
             let mut row = row(
                 format!("connection:{}/{}", entry.source, entry.key),
                 ExchangePart::Connections,
@@ -166,6 +168,8 @@ impl Engine {
             }
             rows.push(row);
         }
+        // The jump hosts and the forwards, once every connection is written (RC-110-03).
+        self.exchange_links(part, &mut rows, dry_run).await?;
         Ok(rows)
     }
 
@@ -217,7 +221,7 @@ impl Engine {
                 let passphrase = passphrase
                     .as_ref()
                     .map(|passphrase| SecretString::from(passphrase.expose()));
-                self.store_private_key(id, SecretString::from(key.expose()), passphrase)
+                self.store_private_key(id, SecretString::from(key.expose()), passphrase, None)
                     .await?;
             }
             (None, Some(passphrase)) => {

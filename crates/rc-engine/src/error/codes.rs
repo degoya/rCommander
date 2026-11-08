@@ -34,8 +34,12 @@ macro_rules! codes {
             /// [`crate::NetworkDriveError::ALL_CODES`], a plugin command's one of
             /// [`crate::PluginAdminError::ALL_CODES`], a secret source's one of
             /// [`crate::SecretSourceError::ALL_CODES`], a workspace's one of
-            /// [`crate::WorkspaceError::ALL_CODES`] and an inventory's one of
-            /// [`crate::inventory::InventorySourceError::ALL_CODES`].
+            /// [`crate::WorkspaceError::ALL_CODES`], an inventory's one of
+            /// [`crate::inventory::InventorySourceError::ALL_CODES`], a port forward's one of
+            /// [`crate::ForwardError::ALL_CODES`], a column set's one of
+            /// [`crate::ColumnSetError::ALL_CODES`], an own command's one of
+            /// [`crate::UserCommandError::ALL_CODES`] and a remote edit's one of
+            /// [`crate::RemoteEditError::ALL_CODES`]; a jump host's failure keeps its own.
             pub const ALL_CODES: &[&str] = &[$($code,)*];
 
             /// The stable code.
@@ -95,6 +99,9 @@ codes! {
         EngineError::InvalidSearch { .. } => "invalid_search",
         EngineError::Cancelled => "cancelled",
         EngineError::CompareNeedsFiles => "compare_needs_files",
+        EngineError::CompareChanged { .. } => "compare_changed",
+        EngineError::CompareNotEditable { .. } => "compare_not_editable",
+        EngineError::CompareBlockNotFound { .. } => "compare_block_not_found",
         EngineError::SyncDeletesUnconfirmed { .. } => "sync_deletes_unconfirmed",
         EngineError::SyncActionInvalid { .. } => "sync_action_invalid",
         EngineError::SyncRowNotFound { .. } => "sync_row_not_found",
@@ -171,5 +178,10 @@ codes! {
         EngineError::Update(error) => error.code(),
         EngineError::Workspace(error) => error.code(),
         EngineError::Inventory(error) => error.code(),
+        EngineError::Hop { source, .. } => source.code(),
+        EngineError::Forward(error) => error.code(),
+        EngineError::ColumnSet(error) => error.code(),
+        EngineError::UserCommand(error) => error.code(),
+        EngineError::RemoteEdit(error) => error.code(),
     }
 }

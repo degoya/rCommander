@@ -128,6 +128,7 @@ fn stored() -> Connection {
         secrets: SecretFlags::default(),
         key: None,
         credential_id: None,
+        jump_id: None,
     }
 }
 

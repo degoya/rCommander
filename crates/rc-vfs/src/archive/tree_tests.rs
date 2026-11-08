@@ -129,3 +129,23 @@ fn file_times_and_modes_convert() {
     assert!(!readonly_mode(Some(0o644)));
     assert!(!readonly_mode(None));
 }
+
+/// RC-110-05: a folder's indices are its own and those of every stored entry below it; a folder
+/// the archive only implies has none of its own, and an unsafe name stands only for its index.
+#[test]
+fn indices_below_a_node_are_its_stored_entries() {
+    let tree = Tree::build(vec![
+        file("a/b/c.txt", 0),
+        dir("a/d/", 1),
+        file("a/d/e.txt", 2),
+        file("f.txt", 3),
+        file("../g.txt", 4),
+    ]);
+    let mut below = tree.indices_below(tree.find(Path::new("/a")).expect("a"));
+    below.sort_unstable();
+    assert_eq!(below, [0, 1, 2]);
+    let f = tree.find(Path::new("/f.txt")).expect("f");
+    assert_eq!(tree.indices_below(f), [3]);
+    let g = tree.find(Path::new("/g.txt")).expect("g");
+    assert_eq!(tree.indices_below(g), [4]);
+}

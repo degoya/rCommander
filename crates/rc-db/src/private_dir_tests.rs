@@ -1,5 +1,5 @@
 #[cfg(unix)]
-use super::create_private_dir;
+use super::{Modes, create_private_dir};
 
 /// RC-080-42: a new data folder and its new parents are owner-only; the platform's data folder
 /// is tightened when it was there before, a folder elsewhere is not.
@@ -16,16 +16,22 @@ async fn the_data_folder_is_the_users_alone() {
     };
     let root = tempfile::tempdir().expect("temp dir");
     let new = root.path().join("a").join("b");
-    create_private_dir(&new, None).await.expect("created");
+    create_private_dir(&new, None, Modes::Enforced)
+        .await
+        .expect("created");
     assert_eq!(mode(&new), 0o700);
     assert_eq!(mode(&root.path().join("a")), 0o700);
 
     let open = root.path().join("open");
     std::fs::create_dir(&open).expect("mkdir");
     std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-    create_private_dir(&open, None).await.expect("there");
+    create_private_dir(&open, None, Modes::Enforced)
+        .await
+        .expect("there");
     assert_eq!(mode(&open), 0o755, "a folder the person named stays");
-    create_private_dir(&open, Some(&open)).await.expect("there");
+    create_private_dir(&open, Some(&open), Modes::Enforced)
+        .await
+        .expect("there");
     assert_eq!(mode(&open), 0o700, "the data folder is tightened");
 }
 
@@ -71,8 +77,34 @@ async fn the_database_files_are_the_users_alone() {
     std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o644)).expect("chmod");
     let link = root.path().join("linked.db");
     std::os::unix::fs::symlink(&target, &link).expect("link");
-    super::secure_database_files(&link)
+    super::secure_database_files(&link, Modes::Enforced)
         .await
         .expect("left alone");
     assert_eq!(mode(&target), 0o644, "a link is not followed");
+}
+
+/// RC-100-95: a portable copy's stick (FAT, exFAT) refuses `chmod`; in its folder that is a
+/// warning in the error log, while the user's folder still fails without its modes.
+#[tokio::test]
+async fn a_filesystem_without_modes_warns_in_portable_mode() {
+    use std::io;
+    let refused = || Err(io::Error::from(io::ErrorKind::PermissionDenied));
+    assert!(!super::Modes::BestEffort.settle(refused()).expect("tried"));
+    assert!(super::Modes::Enforced.settle(refused()).is_err());
+    assert!(super::Modes::BestEffort.settle(Ok(())).expect("held"));
+    assert!(super::Modes::Enforced.settle(Ok(())).expect("held"));
+
+    let db = crate::Db::open_in_memory().await.expect("open");
+    db.warn_modes_not_kept().await;
+    let lines = db
+        .error_log(&crate::ErrorLogQuery::default())
+        .await
+        .expect("read");
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].level, crate::LogLevel::Warn);
+    assert_eq!(
+        lines[0].code.as_deref(),
+        Some(crate::error_log::MODES_NOT_KEPT)
+    );
+    assert!(!lines[0].message.contains('/'), "no path in the line");
 }

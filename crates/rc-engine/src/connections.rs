@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 pub use rc_db::connections::{
     AuthMethod, Connection, ConnectionDraft, ConnectionError, ConnectionFolder, ConnectionId,
     ConnectionKind, ConnectionPatch, ConnectionTree, Credential, CredentialDraft, CredentialId,
-    CredentialPatch, DefaultView, FolderDeletion, FolderId, FolderNode, FtpDataMode, FtpEncoding,
-    ImportStatus, MAX_DEPTH,
+    CredentialPatch, DefaultView, FolderDeletion, FolderId, FolderNode, Forward, ForwardDraft,
+    FtpDataMode, FtpEncoding, ImportStatus, LOOPBACK, MAX_DEPTH, MAX_FORWARDS, MAX_JUMPS,
 };
 
 /// One node of the tree: `{"connection": 3}`, `{"folder": 1}` or `{"credential": 2}` - a shared

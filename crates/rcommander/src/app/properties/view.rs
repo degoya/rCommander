@@ -160,6 +160,9 @@ fn facts<'a>(report: &'a PropertiesReport, tokens: &'static Tokens) -> Element<'
     if let Some(comment) = &item.comment {
         rows = rows.push(fact(t!("props.comment"), comment.clone(), tokens));
     }
+    for (label, value) in item.exif.iter().flat_map(super::exif::facts) {
+        rows = rows.push(fact(label, value, tokens));
+    }
     rows.into()
 }
 

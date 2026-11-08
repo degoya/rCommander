@@ -250,6 +250,7 @@ impl Lying {
             size: 4,
             modified: None,
             created: None,
+            accessed: None,
             attributes: Attributes::default(),
             hidden: false,
             owner: None,

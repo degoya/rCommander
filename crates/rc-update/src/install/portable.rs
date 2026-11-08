@@ -28,9 +28,14 @@ use super::{
     steps, trash,
 };
 
-/// What may live beside a portable program and is never replaced by an update: a data folder
-/// kept there, and the marker a later installer writes (`install_kind.rs`).
-pub const KEPT: &[&str] = &["data", "install-kind"];
+/// What may live beside a portable program and is never replaced by an update: the portable
+/// mode's data folder and marker (RC-100-95, `portable_mode.rs`), and the marker a later
+/// installer writes (`install_kind.rs`).
+pub const KEPT: &[&str] = &[
+    crate::portable_mode::DATA_DIR,
+    crate::portable_mode::MARKER,
+    crate::install_kind::INSTALL_KIND_FILE,
+];
 
 /// Unpacks the verified artifact beside the program, records the entries it brings and which of
 /// them exist now, and writes the journal as `staged`.

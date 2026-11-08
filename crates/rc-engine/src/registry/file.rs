@@ -1,5 +1,6 @@
 //! One file: open it as Enter does (RC-010-02), split it into parts and combine them again
-//! (RC-020-05).
+//! (RC-020-05), run a command of its internal association and open the associations' window
+//! (RC-100-91).
 
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +39,11 @@ pub struct CombineRequest {
 /// This group's rows, sorted by id.
 pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
+        id: "file.associations",
+        class: CommandClass::GuiOnly,
+        summary: "Open the internal associations' window",
+    },
+    CommandSpec {
         id: "file.combine",
         class: CommandClass::Write,
         summary: "Put split parts (.001 or .crc) back together into a new file, CRC checked",
@@ -45,7 +51,12 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "file.open",
         class: CommandClass::Exec,
-        summary: "Open the entry under a panel's cursor or a path: show a directory, start a program, open a file in its associated program",
+        summary: "Open the entry under a panel's cursor or a path: show a directory, start a program, open a file by its internal association or in the program the system associates with it",
+    },
+    CommandSpec {
+        id: "file.run_association",
+        class: CommandClass::Exec,
+        summary: "Run a command of a file's internal association, as its context menu entry does",
     },
     CommandSpec {
         id: "file.split",
@@ -70,6 +81,22 @@ macro_rules! commands {
                 /// `None`.
                 #[serde(default)]
                 path: Option<String>,
+            },
+            /// The window opens the internal associations' window (RC-100-91).
+            "file.associations" => AssociationsWindow {},
+            /// The command `verb` of the file's internal association (`open` for Enter's), as its
+            /// context menu entry runs it; `params` replace a program's stored parameters - what
+            /// the window sends after asking (`?`).
+            "file.run_association" => RunAssociation {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                /// Absolute, or relative to the panel's directory; the file under the cursor when
+                /// `None`.
+                #[serde(default)]
+                path: Option<String>,
+                verb: String,
+                #[serde(default)]
+                params: Option<String>,
             },
         } }
     };

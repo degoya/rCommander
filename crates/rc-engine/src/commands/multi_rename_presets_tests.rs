@@ -31,6 +31,7 @@ fn full_rule() -> RenameRule {
             step: 5,
             width: 3,
         },
+        names: None,
     }
 }
 
@@ -205,4 +206,45 @@ async fn ctrl_m_announces_the_dialog_for_the_panel() {
             };
     }
     assert!(seen);
+}
+
+/// A preset stored before RC-100-96 - without the name list, written by an older version - still
+/// reads, and a name list given to a save is not kept.
+#[tokio::test]
+async fn an_old_preset_still_loads() {
+    let (_root, engine, db) = engine().await;
+    let old = serde_json::json!([{
+        "name": "old",
+        "rule": {
+            "name_mask": "[N]_[C:3]",
+            "extension_mask": "[E]",
+            "case": "words_upper",
+            "search": null,
+            "counter": {"start": 1, "step": 1, "width": 3}
+        }
+    }]);
+    db.set(PRESETS_KEY, &old).await.expect("stored");
+    let (list, _) = presets(&engine, Command::MultiRenamePresetList).await;
+    assert_eq!(names(&list), ["old"]);
+    assert_eq!(list[0].rule.name_mask, "[N]_[C:3]");
+    assert_eq!(list[0].rule.case, CaseMode::WordsUpper);
+    assert_eq!(list[0].rule.names, None);
+
+    let listed = RenameRule {
+        names: Some(vec!["x.txt".to_owned()]),
+        ..full_rule()
+    };
+    let (list, _) = presets(
+        &engine,
+        Command::MultiRenamePresetSave {
+            name: "listed".to_owned(),
+            rule: listed,
+        },
+    )
+    .await;
+    let saved = list
+        .iter()
+        .find(|preset| preset.name == "listed")
+        .expect("saved");
+    assert_eq!(saved.rule, full_rule());
 }

@@ -77,6 +77,7 @@ impl Vfs for PatternFs {
             size: Self::SIZE,
             modified: Some(SystemTime::UNIX_EPOCH),
             created: None,
+            accessed: None,
             attributes: Attributes::default(),
             hidden: false,
             owner: None,

@@ -3,23 +3,29 @@
 //! sorted column carries an arrow. Inside an archive the packed size, on a server the rights,
 //! where switched on the owner, which sort by nothing. The cells have the rows' widths
 //! (`columns.rs`) and font. The gap left of each fixed column's title is its grip (RC-010-20):
-//! dragged, it sets the column's width; double-clicked, the default (`app/resize.rs`).
+//! dragged, it sets the column's width - a column set's in the set (RC-100-90); double-clicked,
+//! the default (`app/resize.rs`). A column set's titles are its own; a right click on the header
+//! opens the menu of the column sets (Total Commander's `cm_SrcCustomViewMenu`).
 
 use iced::{
     Element, Length, Padding,
     alignment::Horizontal,
-    widget::{Space, button, column, container, row},
+    widget::{Space, button, column, container, mouse_area, row},
 };
 use rc_engine::{PanelId, SortKey};
 
 use super::{
-    columns::{Column, ColumnWidths, SCROLLBAR_WIDTH, SPACING, split},
+    columns::{Column, SCROLLBAR_WIDTH, SPACING, split_shown},
     divider,
     rows::sized,
-    shown_columns,
+    shown::Shown,
 };
 use crate::{
-    app::{Message, panel::Pane, resize},
+    app::{
+        Message,
+        panel::Pane,
+        resize::{self, ResizeMsg},
+    },
     i18n::t,
     theme::{self, Tokens, fonts},
 };
@@ -30,23 +36,24 @@ const TITLE_PAD: f32 = 3.0;
 pub(super) fn column_header<'a>(
     pane: &'a Pane,
     side: PanelId,
-    widths: &ColumnWidths,
+    columns: &[Shown],
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let sort = pane.state.sort;
     let font = fonts::list();
-    let columns = shown_columns(pane, widths);
-    let sizes = split(pane.width(), &columns, widths, font.column_scale());
+    let sizes = split_shown(pane.width(), columns, font.column_scale());
     // A title's height: its line (iced's default 1.3 of the size) and the space around it.
     let height = font.size * 1.3 + 2.0 * TITLE_PAD;
     // The pill's place and the gap after it, as in the rows.
     let mut titles: Vec<Element<'a, Message>> = vec![Space::new().width(3.0 + SPACING).into()];
-    for (shown, size) in columns.into_iter().zip(sizes) {
-        if shown != Column::Name {
-            titles.push(resize::column_grip(shown, SPACING, height));
+    for (shown, size) in columns.iter().zip(sizes) {
+        if let Some(target) = shown.grip {
+            titles.push(resize::column_grip(target, SPACING, height));
+        } else if shown.column != Column::Name {
+            titles.push(Space::new().width(SPACING).height(height).into());
         }
-        let name = title(shown);
-        let name = match shown.sort_key() {
+        let name = shown.title.as_deref().unwrap_or(title(shown.column));
+        let name = match shown.column.sort_key() {
             Some(key) if key == sort.key && sort.descending => {
                 t!("column.sorted_down", column = name)
             }
@@ -55,20 +62,26 @@ pub(super) fn column_header<'a>(
         };
         let label = container(sized(name, font.font, font.size).color(tokens.text_secondary))
             .width(Length::Fill)
-            .align_x(if shown.right() {
+            .align_x(if shown.right {
                 Horizontal::Right
             } else {
                 Horizontal::Left
             })
             .clip(true);
-        let width = if shown == Column::Name {
+        let width = if shown.width.is_none() {
             Length::Fill
         } else {
             Length::Fixed(size)
         };
-        titles.push(header_cell(label, width, shown.sort_key(), side, tokens));
+        titles.push(header_cell(
+            label,
+            width,
+            shown.column.sort_key(),
+            side,
+            tokens,
+        ));
     }
-    column![
+    let titles = mouse_area(
         container(
             row(titles)
                 // The rows' own padding on the left; theirs plus the scrollbar on the right.
@@ -80,9 +93,9 @@ pub(super) fn column_header<'a>(
                 }),
         )
         .width(Length::Fill),
-        divider(tokens),
-    ]
-    .into()
+    )
+    .on_right_press(Message::Resize(ResizeMsg::Menu(side)));
+    column![titles, divider(tokens)].into()
 }
 
 /// A title's cell `width` wide: all of it sorts by `key`; without a key it is a plain cell.
@@ -111,5 +124,12 @@ fn title(shown: Column) -> &'static str {
         Column::Date => t!("column.date"),
         Column::Rights => t!("column.rights"),
         Column::Owner => t!("column.owner"),
+        Column::Created => t!("column.field.created"),
+        Column::Accessed => t!("column.field.accessed"),
+        Column::Attributes => t!("column.field.attributes"),
+        Column::User => t!("column.field.owner"),
+        Column::Group => t!("column.field.group"),
+        Column::Comment => t!("column.field.comment"),
+        Column::Git => t!("column.field.git"),
     }
 }

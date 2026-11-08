@@ -82,6 +82,7 @@ impl App {
             WorkspaceKeyMsg::Open | WorkspaceKeyMsg::OpenFor(_) if !idle => {}
             WorkspaceKeyMsg::Open => {
                 page.adding = None;
+                page.adding_command = None;
                 page.adding_workspace = Some(WorkspacePick {
                     name: first(&rows()),
                 });
@@ -89,6 +90,7 @@ impl App {
             }
             WorkspaceKeyMsg::OpenFor(name) => {
                 page.adding = None;
+                page.adding_command = None;
                 page.adding_workspace = Some(WorkspacePick { name: Some(name) });
                 dialog.note = None;
             }

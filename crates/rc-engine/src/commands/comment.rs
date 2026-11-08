@@ -13,7 +13,10 @@ use crate::{
 };
 
 /// The comments of the folder `dir`; none when it has no `descript.ion`.
-async fn read_descriptions(vfs: &Arc<dyn Vfs>, dir: &VfsPath) -> Result<Descriptions, EngineError> {
+pub(crate) async fn read_descriptions(
+    vfs: &Arc<dyn Vfs>,
+    dir: &VfsPath,
+) -> Result<Descriptions, EngineError> {
     let file = dir.join(DESCRIPTION_FILE);
     let entry = match vfs.stat(&file.path).await {
         Ok(entry) => entry,

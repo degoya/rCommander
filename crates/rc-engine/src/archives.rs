@@ -6,12 +6,14 @@
 //! At most [`KEEP_OPEN`] stay open, each with its cached listing; the oldest goes first. Nested
 //! archives are not opened. Each opens with the decoder memory of `archive.decoder_memory_mib`
 //! (RC-080-35); when the setting changes, the open ones are closed and open anew under it.
+//! Before an archive update replaces an archive file, the backends open on it let go of it
+//! ([`rc_ops::ArchiveRelease`], RC-110-05).
 
 use std::{
     collections::{BTreeMap, VecDeque},
     path::{Component, Path, PathBuf},
     sync::{
-        Arc, Mutex, MutexGuard,
+        Arc, Mutex, MutexGuard, Weak,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -25,7 +27,7 @@ use serde_json::Value;
 
 use crate::recover::LockOrRecover as _;
 use crate::{
-    Engine, EngineError,
+    Engine, EngineError, Inner,
     settings::{DECODER_MEMORY_KEY, stored_setting},
 };
 
@@ -68,6 +70,24 @@ impl ArchiveCatalog {
         ArchiveLimits {
             max_decoder_memory: self.decoder_memory.load(Ordering::Relaxed),
             ..ArchiveLimits::default()
+        }
+    }
+}
+
+/// The queue's hook that lets go of an archive file before an update replaces it: every
+/// archive backend open on it closes its parked reading session. It holds the engine weakly: the
+/// queue it lives in is the engine's own.
+struct Release(Weak<Inner>);
+
+impl rc_ops::ArchiveRelease for Release {
+    fn release(&self, archive: &VfsPath) {
+        let Some(inner) = self.0.upgrade() else {
+            return;
+        };
+        for (id, fs) in inner.archives.lock().iter() {
+            if matches!(id, BackendId::Archive { outer, .. } if **outer == *archive) {
+                fs.close_sessions();
+            }
         }
     }
 }
@@ -128,6 +148,13 @@ pub(crate) fn nested(path: &Path) -> EngineError {
 }
 
 impl Engine {
+    /// Gives the operations queue the hook that lets go of an archive before an update replaces
+    /// it (RC-110-05).
+    pub(crate) fn install_archive_release(&self) {
+        let release = Release(Arc::downgrade(&self.inner));
+        self.inner.ops.set_archive_release(Arc::new(release));
+    }
+
     /// The archive backend `backend` names, opened when it is not yet.
     pub(crate) fn archive_fs(&self, backend: &BackendId) -> Result<Arc<ArchiveFs>, EngineError> {
         let BackendId::Archive { outer, format } = backend else {

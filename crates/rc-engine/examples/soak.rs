@@ -177,6 +177,7 @@ async fn round(engine: &Engine, dir: &Path, batches: bool) -> Result<u64, Failur
         sources,
         target: Some(path_text(&copy)),
         options,
+        rename_mask: None,
     });
     jobs += run(engine, copy_all).await?;
     let move_copy = Command::OpsMove(TransferRequest {
@@ -184,6 +185,7 @@ async fn round(engine: &Engine, dir: &Path, batches: bool) -> Result<u64, Failur
         sources: vec![path_text(&copy)],
         target: Some(path_text(&moved)),
         options,
+        rename_mask: None,
     });
     jobs += run(engine, move_copy).await?;
     let delete = Command::OpsDelete(DeleteRequest {

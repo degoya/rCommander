@@ -5,18 +5,28 @@
 //!
 //! The panel shows only while a source is installed; the sources and their state are read when
 //! the manager opens, a connection's references when its form shows.
+//!
+//! A PAM system lends a secret for a session and may want a reason (RC-100-38): for a connection
+//! mapped to such a source, or one the engine asked a reason for
+//! (`EngineEvent::CheckoutReasonNeeded`), the panel shows a reason field; Set hands it over
+//! (`secrets.checkout_reason`) for the next connect.
 
 use rc_db::MAX_SOURCE_LABEL_CHARS;
 use rc_engine::{
-    Command, ConnectionId, Outcome, SecretKind, SecretSourceRef, SecretSourcesOutcome,
+    Command, ConnectionId, Outcome, SecretKind, SecretSourceRef, SecretSourcesOutcome, TreeItem,
     secret_sources::{SecretSourceInfo, SourceEntry},
 };
 
 use super::{ConnectionManager, jobs::Then, run};
-use crate::{app::Effect, i18n::error_text};
+use crate::{
+    app::{App, Effect},
+    i18n::{error_text, t},
+};
 
 /// The search field of the panel.
 pub const SOURCE_QUERY_FIELD: &str = "rcommander.connections.source_query";
+/// The checkout reason's field of the panel (RC-100-38).
+pub const SOURCE_REASON_FIELD: &str = "rcommander.connections.source_reason";
 
 /// What the panel's controls say.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +37,10 @@ pub enum SourceMsg {
     Search,
     /// An entry of the search's results, by its place.
     Pick(usize),
+    /// The checkout reason typed (RC-100-38).
+    Reason(String),
+    /// The typed reason handed over for the next checkout.
+    SetReason,
 }
 
 /// The search in one source for one secret of the connection.
@@ -53,12 +67,27 @@ pub struct SourcePanel {
     pub search: Option<SourceSearch>,
     /// Counts the searches asked, across the searches opened.
     pub searches: u32,
+    /// The checkout reason typed for the shown connection.
+    pub reason: String,
+    /// The connection a PAM system wants a reason for, as the engine asked.
+    pub reason_asked: Option<ConnectionId>,
 }
 
 impl SourcePanel {
     /// Where the secret `kind` comes from: the source's name, `None` for the vault.
     pub fn mapping(&self, kind: SecretKind) -> Option<&SecretSourceRef> {
         self.mappings.iter().find(|mapping| mapping.kind == kind)
+    }
+
+    /// Whether the shown connection takes a secret from a source that lends, or the engine asked
+    /// a reason for it: the reason field shows.
+    pub fn wants_reason(&self) -> bool {
+        let lends = self.mappings.iter().any(|mapping| {
+            self.sources
+                .iter()
+                .any(|info| info.source == mapping.source && info.lends)
+        });
+        lends || (self.reason_asked.is_some() && self.reason_asked == self.connection)
     }
 }
 
@@ -91,6 +120,7 @@ impl ConnectionManager {
         self.sources.connection = shown;
         self.sources.mappings.clear();
         self.sources.search = None;
+        self.sources.reason.clear();
         shown
             .map(|id| {
                 run(
@@ -163,6 +193,17 @@ impl ConnectionManager {
                 };
                 vec![run(Then::SourceMapped, Command::MapSecretSource(reference))]
             }
+            SourceMsg::Reason(text) => {
+                self.sources.reason = text;
+                Vec::new()
+            }
+            SourceMsg::SetReason => {
+                let command = Command::SetCheckoutReason {
+                    connection_id: id,
+                    reason: self.sources.reason.clone(),
+                };
+                vec![run(Then::SourceReason, command)]
+            }
         }
     }
 
@@ -224,8 +265,42 @@ impl ConnectionManager {
                 self.sources.search = None;
             }
             SecretSourcesOutcome::Mappings { .. } => {}
+            SecretSourcesOutcome::Reason {
+                connection_id,
+                held,
+            } if Some(connection_id) == self.sources.connection => {
+                self.sources.reason_asked = None;
+                let text = if held {
+                    t!("connections.source.reason_kept")
+                } else {
+                    t!("connections.source.reason_cleared")
+                };
+                self.note = Some((text.to_owned(), false));
+            }
+            SecretSourcesOutcome::Reason { .. } => {}
         }
         Vec::new()
+    }
+}
+
+impl App {
+    /// A PAM system wants a reason for the checkout of connection `id`
+    /// (`EngineEvent::CheckoutReasonNeeded`): the manager opens on the connection, says why, and
+    /// its reason field takes the keyboard. The engine sends this only for the window's own
+    /// connects, never over MCP.
+    pub(in crate::app) fn checkout_reason_needed(&mut self, id: ConnectionId) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        if self.connections.is_none() {
+            self.connections_cursor = Some(TreeItem::Connection(id));
+            effects = self.open_connections();
+        }
+        let Some(manager) = self.connections.as_mut() else {
+            return effects;
+        };
+        manager.sources.reason_asked = Some(id);
+        manager.note = Some((t!("connections.source.reason_needed").to_owned(), true));
+        effects.push(super::keys::focus_id(SOURCE_REASON_FIELD));
+        effects
     }
 }
 

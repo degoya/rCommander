@@ -17,8 +17,10 @@ use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
 use serde::{Deserialize, Serialize};
 
 mod apply;
+mod blocks;
 
 pub(crate) use self::apply::DirsSyncApplyParams;
+pub(crate) use self::blocks::{DirectionArg, FilesCompareApplyParams};
 use crate::{
     RcMcpServer,
     answer::{ToolResult, error_result, json_result, respond},
@@ -49,6 +51,19 @@ pub(crate) struct FilesCompareParams {
     /// Include a unified diff of at most this many bytes (up to 1048576); none when omitted.
     #[serde(default)]
     pub unified_limit: Option<usize>,
+    /// text (default): bytes and lines. structure: also by structure, when an installed compare
+    /// plugin claims both files (JSON, CSV).
+    #[serde(default)]
+    pub mode: Option<CompareModeArg>,
+}
+
+/// How two files are compared.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CompareModeArg {
+    #[default]
+    Text,
+    Structure,
 }
 
 /// Which way a synchronization goes.
@@ -233,7 +248,7 @@ impl From<DirComparison> for DirsView {
 #[tool_router(router = compare_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Compare two files by content (Total Commander's Compare by content). Answers identical, both sizes, first_difference (offset of the first differing byte and both byte values; null for a file that ended there) and, for two text files up to 16 MiB and 1,000,000 lines that differ, text: the encodings, equal (no line differs under the ignore options), changes (blocks of differing lines), first_change (line numbers) and with unified_limit a unified diff, truncated past that many bytes. Files of any size are compared streamed. Keys and credential files are refused with sensitive_path, also when picked from the panels. Errors: compare_needs_files, is_a_directory, not_found, permission_denied, sensitive_path."
+        description = "Compare two files by content (Total Commander's Compare by content). Answers identical, both sizes, first_difference (offset of the first differing byte and both byte values; null for a file that ended there) and, for two text files up to 16 MiB and 1,000,000 lines that differ, text: the encodings, equal (no line differs under the ignore options), changes (blocks of differing lines), first_change (line numbers) and with unified_limit a unified diff, truncated past that many bytes. Files of any size are compared streamed. Keys and credential files are refused with sensitive_path, also when picked from the panels. left_modified_unix and right_modified_unix, where the file system tells, are what files_compare_apply expects with the sizes. mode=structure adds structure, from the installed compare plugin that claims both files by extension (JSON, CSV): status compared with plugin and comparison (summary: added, removed, changed, moved, truncated; changes: kind added/removed/changed/moved, path - a JSON Pointer or a CSV row's key -, column, old_value, new_value cut to 1024 characters, old_line, new_line; notices: the plugin's codes such as a duplicate key), or no_plugin, unlicensed (a paid plugin without a valid licence key), too_large (limit_mib, the setting plugins.compare_limit_mib), sensitive, failed (code). Errors: compare_needs_files, is_a_directory, not_found, permission_denied, sensitive_path."
     )]
     pub(crate) async fn files_compare(
         &self,
@@ -248,8 +263,35 @@ impl RcMcpServer {
                 ignore_line_endings: params.ignore_line_endings,
             },
             unified_limit: params.unified_limit.unwrap_or(0).min(UNIFIED_LIMIT_MAX),
+            structure: params.mode == Some(CompareModeArg::Structure),
         };
         self.dispatch_mcp(Command::CompareFiles(request)).await
+    }
+
+    #[tool(
+        description = "Copy blocks of differing lines between two text files compared with files_compare (Total Commander's Copy -> and Copy <- in the edit mode of Compare by content) and save the file they land on. blocks are places from 0 among the text changes of that answer, counted under the same ignore options; direction left_to_right replaces the right file's lines of each block with the left file's, right_to_left the other way. expect_left_size, expect_left_modified_unix, expect_right_size and expect_right_modified_unix are left_size, left_modified_unix, right_size and right_modified_unix of that answer: when either file changed since, nothing is written (compare_changed). Only text up to 4 MiB that writes back as it was read, outside archives, is changed; its encoding, byte order mark and line endings stay. Answers the comparison afterwards, as files_compare does. A target in rCommander's data folder, an SSH folder or an autostart folder, or a shell's start-up file, is refused with protected_target; keys and credential files with sensitive_path. Errors: compare_changed, compare_block_not_found, compare_not_editable, archive_read_only, protected_target, sensitive_path, is_a_directory, not_found, permission_denied."
+    )]
+    pub(crate) async fn files_compare_apply(
+        &self,
+        Parameters(params): Parameters<FilesCompareApplyParams>,
+    ) -> ToolResult {
+        self.context
+            .engine
+            .pin_mcp_panels(async {
+                // The file the blocks land on passes the write guard (RC-080-09), named against
+                // its panel's folder pinned for the call (RC-080-42).
+                let (panel, target) = match params.direction {
+                    DirectionArg::LeftToRight => (PanelId::Right, params.right.as_str()),
+                    DirectionArg::RightToLeft => (PanelId::Left, params.left.as_str()),
+                };
+                let target = self.context.engine.resolve_target(Some(panel), target);
+                if let Some(refusal) = self.write_guard().refuse(&target).await {
+                    return Ok(refusal);
+                }
+                self.dispatch_mcp(Command::ApplyBlocks(params.request()))
+                    .await
+            })
+            .await
     }
 
     #[tool(

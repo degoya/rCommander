@@ -20,7 +20,7 @@ use iced::{
     futures::{SinkExt, Stream, channel::mpsc},
     window,
 };
-use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{Menu, MenuEvent, Submenu};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 use crate::recover::LockOrRecover as _;
@@ -45,6 +45,12 @@ pub enum BarItem {
         text: String,
     },
     Separator,
+    /// A submenu: its title with its mnemonic's `&`, and its entries - the Start menu's
+    /// (RC-100-86).
+    Submenu {
+        text: String,
+        items: Vec<BarItem>,
+    },
 }
 
 /// How the bar is to look.
@@ -222,22 +228,7 @@ pub fn relabel(id: window::Id, menus: Vec<BarMenu>) -> Task<()> {
                 return;
             };
             for submenu in &bar.submenus {
-                for item in submenu.items() {
-                    let Some(item) = item.as_menuitem() else {
-                        continue;
-                    };
-                    let text =
-                        menus
-                            .iter()
-                            .flat_map(|menu| &menu.items)
-                            .find_map(|entry| match entry {
-                                BarItem::Entry { id, text } if item.id() == *id => Some(text),
-                                _ => None,
-                            });
-                    if let Some(text) = text {
-                        item.set_text(entry_text(text));
-                    }
-                }
+                refill::relabel_items(&submenu.items(), &menus);
             }
         });
     })
@@ -276,13 +267,8 @@ fn build(menus: &[BarMenu]) -> muda::Result<(Menu, Vec<Submenu>)> {
     for menu in menus {
         let submenu = Submenu::new(&menu.title, true);
         for item in &menu.items {
-            match item {
-                // No accelerator: the key stays the keymap's, the text after the tab shows it.
-                BarItem::Entry { id, text } => {
-                    submenu.append(&MenuItem::with_id(*id, entry_text(text), true, None))?;
-                }
-                BarItem::Separator => submenu.append(&PredefinedMenuItem::separator())?,
-            }
+            // No accelerator: the key stays the keymap's, the text after the tab shows it.
+            refill::append(&submenu, item)?;
         }
         bar.append(&submenu)?;
         submenus.push(submenu);

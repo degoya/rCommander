@@ -1,7 +1,8 @@
 //! Drawing the diff window over the whole window: the options, both paths, then the rows on
-//! screen - line numbers and text of each side, tinted by what differs - and the row of buttons
-//! (the jumps at the left, Close at the right). A pair of binary or large files shows the byte
-//! comparison instead.
+//! screen - line numbers and text of each side, tinted by what differs, the edit mode's cursor
+//! framed - and the row of buttons (`edit_view.rs`: the jumps and the edit mode's at the left,
+//! Close at the right). A pair of binary or large files shows the byte comparison instead; a
+//! compare plugin's changes show in the Structure view (`structure_view.rs`, RC-100-41).
 
 use iced::{
     Alignment, Background, Color, Element, Length,
@@ -10,11 +11,11 @@ use iced::{
 };
 use rc_engine::{
     VfsPath,
-    compare::{FileComparison, RowKind, TextDiff, TextFile},
+    compare::{CompareSide, FileComparison, RowKind, TextDiff, TextFile},
     shown_path,
 };
 
-use super::{CompareMsg, DiffOption, DiffWindow, Shown, wrap};
+use super::{CompareMsg, DiffOption, DiffWindow, EditMsg, Shown, edit_view, structure_view, wrap};
 use crate::{
     app::Message,
     format,
@@ -22,9 +23,7 @@ use crate::{
     theme::{
         self, Tokens,
         fit::{self, line},
-        focus,
-        icon::Icon,
-        layout,
+        focus, layout,
     },
 };
 
@@ -56,7 +55,6 @@ pub fn body<'a>(window: &'a DiffWindow, tokens: &'static Tokens) -> Element<'a, 
             wrap(CompareMsg::DiffOption(which, on))
         })
     };
-    let text_view = matches!(window.shown, Shown::Text(_));
     let tools = row![
         option(
             t!("compare.ignore_whitespace"),
@@ -74,36 +72,39 @@ pub fn body<'a>(window: &'a DiffWindow, tokens: &'static Tokens) -> Element<'a, 
             DiffOption::LineEndings
         ),
     ]
+    .extend(structure_view::switch(window))
     .spacing(12)
     .align_y(Alignment::Center);
-    let buttons = layout::button_row(
-        None,
-        [layout::secondary_icon_button(
-            Icon::Close,
-            t!("compare.close"),
-            Some(wrap(CompareMsg::DiffClose)),
-        )],
-        [
-            button(
-                t!("compare.previous"),
-                text_view.then_some(CompareMsg::DiffPrevious),
-            ),
-            button(
-                t!("compare.next"),
-                text_view.then_some(CompareMsg::DiffNext),
-            ),
-        ],
-    );
+    let buttons = edit_view::buttons(window, tokens);
     let paths = row![path(&window.left, tokens), path(&window.right, tokens)].spacing(8);
-    let body: Element<'a, Message> = match &window.shown {
+    let body: Element<'a, Message> = match (&window.shown, window.pane()) {
+        // A compare plugin's changes (RC-100-41).
+        (_, Some(pane)) if window.showing_structure() => structure_view::pane(pane, tokens),
+        (shown, _) => text_body(window, shown, tokens),
+    };
+    column![tools, status(window, tokens)]
+        .extend(structure_view::note(window, tokens))
+        .extend(edit_view::note(window, tokens))
+        .push(paths)
+        .push(body)
+        .extend(edit_view::field(window, tokens))
+        .push(buttons)
+        .spacing(8)
+        .into()
+}
+
+/// The line diff, the byte comparison, or where the comparison stands.
+fn text_body<'a>(
+    window: &'a DiffWindow,
+    shown: &'a Shown,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    match shown {
         Shown::Loading => center(line(t!("compare.loading"))).into(),
         Shown::Failed(code) => center(fit::prose(error_text(code)).color(theme::DANGER)).into(),
         Shown::Bytes(comparison) => bytes(comparison),
         Shown::Text(diff) => rows(window, diff, tokens),
-    };
-    column![tools, status(window, tokens), paths, body, buttons]
-        .spacing(8)
-        .into()
+    }
 }
 
 /// One side's path or folder in half the width, shortened in the middle.
@@ -111,9 +112,18 @@ pub(super) fn path<'a>(path: &VfsPath, tokens: &'static Tokens) -> Element<'a, M
     fit::path_line(shown_path(path).display().to_string(), tokens.text, tokens)
 }
 
-/// How many differences, or none.
+/// How many differences, or none - "Comparing..." while a change is compared again - and in the
+/// edit mode the cursor's place.
 fn status<'a>(window: &DiffWindow, tokens: &'static Tokens) -> Element<'a, Message> {
-    let text = match &window.shown {
+    let mut text = match &window.shown {
+        Shown::Text(_)
+            if window.session.is_some()
+                && window.fresh().is_none()
+                && window.saving.is_empty()
+                && window.ask.is_none() =>
+        {
+            t!("compare.loading").to_owned()
+        }
         Shown::Text(_) if window.changes == 0 => t!("compare.no_differences").to_owned(),
         Shown::Text(_) => t!(
             "compare.differences",
@@ -121,6 +131,10 @@ fn status<'a>(window: &DiffWindow, tokens: &'static Tokens) -> Element<'a, Messa
         ),
         _ => String::new(),
     };
+    if let Some(edit) = edit_view::status(window) {
+        text.push_str("   ");
+        text.push_str(&edit);
+    }
     line(text).color(tokens.accent).into()
 }
 
@@ -164,16 +178,31 @@ fn rows<'a>(
             RowKind::Inserted => (Some(tokens.stroke), Some(palette.success)),
         };
         let current = window.current == Some(index);
+        let cursor = window
+            .edit
+            .filter(|cursor| cursor.row == index)
+            .map(|cursor| cursor.side);
+        let editing = window.edit.is_some();
         let marker = container(Space::new().width(3.0).height(LINE_HEIGHT)).style(move |_| {
             container::Style {
                 background: current.then_some(Background::Color(tokens.accent)),
                 ..container::Style::default()
             }
         });
+        let side = |side: CompareSide, file, line, tint| {
+            let drawn = cell(file, line, tint, cursor == Some(side), tokens);
+            if !editing {
+                return drawn;
+            }
+            // focus-ring: pointer only (a line of the rows stop; the arrows move the cursor)
+            mouse_area(drawn)
+                .on_press(wrap(CompareMsg::Edit(EditMsg::Click(index, side))))
+                .into()
+        };
         row![
             marker,
-            cell(&diff.left, shown.left, left, tokens),
-            cell(&diff.right, shown.right, right, tokens),
+            side(CompareSide::Left, &diff.left, shown.left, left),
+            side(CompareSide::Right, &diff.right, shown.right, right),
         ]
         .spacing(4)
         .into()
@@ -200,6 +229,7 @@ fn cell<'a>(
     file: &'a TextFile,
     line_index: Option<usize>,
     tint: Option<Color>,
+    cursor: bool,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let (number, content) = match line_index.and_then(|index| file.lines.get(index)) {
@@ -228,6 +258,16 @@ fn cell<'a>(
         .clip(true)
         .style(move |_| container::Style {
             background: tint.map(|color| Background::Color(color.scale_alpha(0.22))),
+            // The edit mode's cursor: the line framed in the accent.
+            border: if cursor {
+                iced::Border {
+                    color: tokens.accent,
+                    width: 1.0,
+                    radius: 2.0.into(),
+                }
+            } else {
+                iced::Border::default()
+            },
             ..container::Style::default()
         })
         .into()

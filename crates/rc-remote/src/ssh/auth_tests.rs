@@ -90,7 +90,7 @@ async fn a_key_with_its_passphrase_logs_in() {
         .await
         .expect("logged in");
     assert!(
-        matches!(session.auth(), AuthUsed::Key { fingerprint } if fingerprint.starts_with("SHA256:")),
+        matches!(session.auth(), AuthUsed::Key { fingerprint, certificate: None } if fingerprint.starts_with("SHA256:")),
         "{:?}",
         session.auth()
     );
@@ -133,6 +133,7 @@ async fn an_agent_logs_in_without_asking_for_a_secret() {
         &AuthUsed::Agent {
             source: crate::AgentSourceKind::SshAuthSock,
             fingerprint: fingerprint(&client_ed25519()),
+            certificate: None,
         }
     );
     assert_eq!(credentials.asked(), 0, "the vault is never touched");
@@ -178,7 +179,8 @@ async fn the_order_decides_which_method_is_used() {
     assert_eq!(
         session.auth(),
         &AuthUsed::Key {
-            fingerprint: fingerprint(&client_ed25519())
+            fingerprint: fingerprint(&client_ed25519()),
+            certificate: None,
         }
     );
 }

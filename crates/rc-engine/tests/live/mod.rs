@@ -364,6 +364,7 @@ pub async fn transfer(
         sources,
         target: Some(target),
         options,
+        rename_mask: None,
     };
     let command = if moving {
         Command::OpsMove(request)

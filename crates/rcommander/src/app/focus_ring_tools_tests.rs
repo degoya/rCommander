@@ -20,7 +20,7 @@ use crate::{
         Message,
         checksum::{self, ChecksumMsg, ChecksumWindow},
         compare::{self, CompareMsg, DiffOption, Flag as SyncFlag},
-        database_dialog::{self, DatabaseMsg},
+        database_dialog::{self, DatabaseMsg, PortableMsg, PortableStep},
         drag::DragMsg,
         drive_bar::{self, DriveMessage, actions::DriveAction, network::NetworkMsg},
         queue_window::{ListMsg, MenuMsg, QueueMsg},
@@ -319,6 +319,31 @@ async fn the_database_dialog_walks_its_modes_path_switch_and_buttons() {
     ));
     let close = press_on(&mut screen, "Close", Named::Enter);
     assert!(matches!(close[..], [Message::Database(DatabaseMsg::Close)]));
+}
+
+/// RC-100-95: the question before a portable copy - its two buttons, nothing else.
+#[tokio::test]
+async fn the_portable_question_walks_its_two_buttons() {
+    let (_root, mut harness) = harness().await;
+    harness.send(Message::Database(DatabaseMsg::Open)).await;
+    let ask = DatabaseMsg::Portable(PortableMsg::Ask);
+    harness.send(Message::Database(ask)).await;
+    let dialog = harness.app.database.as_ref().expect("the dialog");
+    if dialog.portable != PortableStep::Asking {
+        return; // macOS offers no portable copy
+    }
+    let mut screen = Screen::new(database_dialog::overlay(dialog, theme::tokens(false))).await;
+    let stops = walk_round(&mut screen, "portable question");
+    assert_eq!(kinds(&stops), [Some(Kind::Button), Some(Kind::Button)]);
+    assert_eq!(screen.loose_buttons(), 1, "only the head's X");
+    press_every_stop(&mut screen, &stops, "portable question");
+    let yes = press_at(&mut screen, 0, Named::Enter);
+    assert!(matches!(
+        yes[..],
+        [Message::Database(DatabaseMsg::Portable(
+            PortableMsg::Confirm
+        ))]
+    ));
 }
 
 /// The hotlist editor ("Configure..." in Ctrl+D's menu) with one entry chosen: its list, its

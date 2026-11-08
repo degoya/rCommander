@@ -2,7 +2,7 @@
 name = "rc-plugin-powershell-viewer"
 description = "rCommander's bundled PowerShell viewer plugin: .ps1, .psm1 and .psd1 coloured, for files of any size"
 # The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
-version = "0.1.2"
+version = "0.1.3"
 edition.workspace = true
 rust-version.workspace = true
 # Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").

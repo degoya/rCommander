@@ -20,6 +20,7 @@ fn file(name: &str, size: u64, age_days: u64) -> Entry {
         size,
         modified: Some(now() - Duration::from_secs(age_days * DAY)),
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,

@@ -11,9 +11,15 @@
 //! dialogs or switches it off; it is read at the start and whenever it changes. The command
 //! palette's row runs `app.quit` whatever the setting says.
 //!
+//! Copies of server files with a change not on the server (RC-110-01, `quit/remote_edit.rs`) are
+//! asked about too, the first three named with their server: Cancel, or "Quit and keep changes" -
+//! the copies stay for the next start, nothing is uploaded and nothing waited for.
+//!
 //! A lost graphics device (`gpu_loss.rs`) asks in the system's message box whether to restart,
 //! unless `appearance.gpu_loss_notice` is off; yes leaves as a confirmed quit does - the queue's
 //! jobs are kept - and the program starts again once the window has closed.
+
+pub mod remote_edit;
 
 use iced::{
     Element, Subscription, Task,
@@ -21,7 +27,7 @@ use iced::{
     widget::column,
 };
 use rc_engine::{
-    Chord, EngineEvent,
+    Chord, EngineEvent, RemoteEditQuestion,
     settings::{F10_KEY, GPU_LOSS_NOTICE_KEY, stored_bool, stored_setting},
 };
 
@@ -69,10 +75,16 @@ pub struct Quit {
     pub asking: Option<usize>,
     /// The tabs and places are being stored on the way out; a second quit starts nothing.
     pub leaving: bool,
+    /// The server files the question names, with a change not on the server (RC-110-01).
+    pub kept: Option<String>,
+    /// The server files edited through copies: their questions and their list.
+    pub remote: remote_edit::RemoteEditUi,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuitMsg {
+    /// The server files edited through copies (`quit/remote_edit.rs`).
+    RemoteEdit(remote_edit::RemoteEditMsg),
     /// The setting `keys.f10`, read.
     Mode(F10Mode),
     /// Quit in the question.
@@ -120,7 +132,11 @@ impl App {
                 Some(vec![Effect::Task(self.f10_task())])
             }
             Message::Quit(message) => Some(self.on_quit(*message)),
-            _ if self.quit.asking.is_none() => None,
+            // The edits' list stays current under the question.
+            Message::Engine(EngineEvent::RemoteEdit { .. } | EngineEvent::RemoteEditWindow) => {
+                self.remote_edit_intercept(message)
+            }
+            _ if self.quit.asking.is_none() => self.remote_edit_intercept(message),
             // Tab and Shift+Tab walk the two buttons (RC-080-16).
             Message::Key(chord) if field_walk::tab(chord).is_some() => field_walk::walk_key(chord),
             // Enter on no focused button takes the default, Cancel; a focused one took it.
@@ -132,12 +148,21 @@ impl App {
         }
     }
 
-    /// `app.quit` announced: the question when jobs run or wait, else the way out.
+    /// `app.quit` announced: the question when jobs run or wait or a server file's change is not
+    /// on the server, else the way out.
     fn quit_wanted(&mut self, unfinished: usize) -> Vec<Effect> {
         if self.quit.leaving {
             return Vec::new();
         }
-        if unfinished > 0 {
+        let changed: Vec<&rc_engine::RemoteEditInfo> = self
+            .quit
+            .remote
+            .edits
+            .iter()
+            .filter(|edit| edit.state.unsaved() || edit.question == Some(RemoteEditQuestion::Kept))
+            .collect();
+        self.quit.kept = (!changed.is_empty()).then(|| remote_edit::named(&changed));
+        if unfinished > 0 || self.quit.kept.is_some() {
             self.quit.asking = Some(unfinished);
             return Vec::new();
         }
@@ -147,6 +172,7 @@ impl App {
     pub(super) fn on_quit(&mut self, message: QuitMsg) -> Vec<Effect> {
         match message {
             QuitMsg::Mode(mode) => self.quit.f10 = mode,
+            QuitMsg::RemoteEdit(message) => return self.on_remote_edit(message),
             // The question closes at once, so a second click cannot send it again.
             QuitMsg::Confirm if self.quit.asking.take().is_some() => return self.leave(),
             QuitMsg::Confirm | QuitMsg::Cancel => self.quit.asking = None,
@@ -191,7 +217,17 @@ impl App {
         self.quit.leaving = true;
         let engine = self.engine.clone();
         let mut exit = Some(self.save_and_exit());
-        let handed = Task::perform(async move { engine.update_on_quit().await }, |_| ());
+        let handed = Task::perform(
+            async move {
+                // The server copies: the unchanged go, the changed stay for the next start.
+                let edits = engine.clone();
+                let _ = tokio::task::spawn_blocking(move || edits.finish_remote_edits())
+                    .await
+                    .log_panic("app.finish_remote_edits");
+                engine.update_on_quit().await
+            },
+            |_| (),
+        );
         vec![Effect::Task(
             handed.then(move |()| exit.take().unwrap_or_else(Task::none)),
         )]
@@ -220,22 +256,29 @@ impl App {
     /// its own (RC-080-23).
     pub(super) fn quit_body(&self) -> Option<Element<'_, Message>> {
         let unfinished = self.quit.asking?;
+        let confirm = match self.quit.kept {
+            Some(_) => t!("quit.keep_changes"),
+            None => t!("quit.confirm"),
+        };
         let buttons = layout::button_row(
             Some(layout::primary_button(
                 t!("quit.cancel"),
                 Some(Message::Quit(QuitMsg::Cancel)),
             )),
             [layout::secondary_button(
-                t!("quit.confirm"),
+                confirm,
                 Some(Message::Quit(QuitMsg::Confirm)),
             )],
             [],
         );
-        Some(
-            column![label(t!("quit.text", count = unfinished)), buttons]
-                .spacing(10)
-                .into(),
-        )
+        let mut body = column![].spacing(10);
+        if unfinished > 0 || self.quit.kept.is_none() {
+            body = body.push(label(t!("quit.text", count = unfinished)));
+        }
+        if let Some(names) = &self.quit.kept {
+            body = body.push(label(t!("quit.remote_edits", names = names.as_str())));
+        }
+        Some(body.push(buttons).into())
     }
 }
 

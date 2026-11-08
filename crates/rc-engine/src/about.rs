@@ -1,5 +1,5 @@
 //! What the About page shows and `app.about` answers (RC-010-19): which build runs, where it
-//! comes from, who made it, under which licence.
+//! comes from, who made it, under which licence, and where it keeps its data (RC-100-95).
 //!
 //! Nothing here is kept twice: the version, the authors, the licence and the repository come
 //! from `Cargo.toml`; the commit and the build time are what `rcommander`'s `build.rs` compiled
@@ -52,6 +52,13 @@ pub struct About {
     pub license: String,
     pub authors: Vec<String>,
     pub links: Vec<AboutLink>,
+    /// The folder the database, the plugins and the backups live in (RC-100-95); `None` when
+    /// the platform names none.
+    #[serde(default)]
+    pub data_dir: Option<String>,
+    /// Whether this copy keeps its data beside the program (`rcommander.portable`).
+    #[serde(default)]
+    pub portable: bool,
 }
 
 /// One address the page offers.
@@ -133,6 +140,8 @@ pub fn about() -> About {
                 CHANGELOG_PUBLISHED,
             ),
         ],
+        data_dir: rc_db::data_dir().ok().map(|dir| dir.display().to_string()),
+        portable: rc_db::is_portable(),
     }
 }
 

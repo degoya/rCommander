@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AgentIdentity, AgentSourceKind, ArchiveInfo, BackupReport, Connection, ConnectionFolder,
     ConnectionId, ConnectionKind, ConnectionTree, Drive, EngineError, ErrorLogEntry, ExecOutput,
-    HostKeyAnswer, ImportReport, LoginScriptDeletion, LoginScriptId, LoginScriptInfo,
-    PanelTerminal, QuickFilter, RestoreReport, RetentionStatus, SearchHit, SearchStats,
-    SessionPrefs, SessionStatus, SessionTestReport, SettingValue, SortOrder, SshConfigReport,
-    TerminalInfo, TreeItem, VaultStatus,
+    HostKeyAnswer, ImportReport, LoginScriptDeletion, LoginScriptId, LoginScriptInfo, QuickFilter,
+    RestoreReport, RetentionStatus, SearchHit, SearchStats, SessionPrefs, SessionStatus,
+    SessionTestReport, SettingValue, SortOrder, SshConfigReport, TerminalInfo, TreeItem,
+    VaultStatus,
     compare::FileComparison,
     flat::FlatView,
     properties::{DirSize, PathUsage, PropertiesReport},
@@ -28,11 +28,13 @@ use crate::{
 mod file_digest;
 mod panel_id;
 mod selection;
+mod snapshot;
 
 pub use file_digest::FileDigest;
 pub use panel_id::{CursorView, ListMode, PanelId, PanelView};
 pub use selection::Selection;
 pub(crate) use selection::{by_name, unlisted};
+pub use snapshot::PanelSnapshot;
 
 /// What a panel shows: a directory, its entries in display order, the cursor and the selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,8 +53,11 @@ pub struct PanelState {
     pub view: PanelView,
     /// The order of the entries; kept when the panel moves to another directory.
     pub sort: SortOrder,
-    /// Full or brief; kept when the panel moves to another directory.
+    /// Full, brief, a column set or the comments; kept when the panel moves to another
+    /// directory, unless a column set's folder mask switches it (RC-100-90).
     pub mode: ListMode,
+    /// How the mode was chosen and the folder's comments while the mode shows them (RC-100-90).
+    pub columns: crate::columns::PanelColumns,
     /// Whether the entries include hidden and system ones (one switch for both panels).
     pub show_hidden: bool,
     /// The selection before the last file operation, which Num / brings back.
@@ -72,6 +77,9 @@ pub struct PanelState {
     /// The run of a listing still arriving (RC-060-02): `entries` are what came so far, and more
     /// follow (`commands/panel_listing.rs`); `None` once the listing is complete.
     pub listing: Option<u64>,
+    /// The folder's git marks and branch once git answered (RC-100-97); kept while the panel
+    /// reads the same folder again, until the new answer.
+    pub git: Option<Arc<crate::git::GitView>>,
 }
 
 impl PanelState {
@@ -90,6 +98,7 @@ impl PanelState {
             view: PanelView::Files,
             sort: SortOrder::default(),
             mode: ListMode::default(),
+            columns: crate::columns::PanelColumns::default(),
             show_hidden: false,
             remembered: Selection::default(),
             filter: QuickFilter::default(),
@@ -97,13 +106,14 @@ impl PanelState {
             archive: None,
             dir_sizes: BTreeMap::new(),
             listing: None,
+            git: None,
         }
     }
 
     /// The state after this one when the panel shows `path` with `entries`, listed in `sort`
     /// order with `show_hidden`: view, sort, mode and the remembered selection stay, and the
-    /// quick filter in the same directory. Entries listed in another order than the panel has by
-    /// now are sorted again.
+    /// quick filter and the comments in the same directory. Entries listed in another order than
+    /// the panel has by now are sorted again.
     pub(crate) fn next(
         &self,
         path: VfsPath,
@@ -114,15 +124,21 @@ impl PanelState {
         if sort != self.sort {
             sort_entries(&mut entries, self.sort, names_for(&path));
         }
+        let same_folder = path == self.path;
         let mut next = Self {
             view: self.view,
             sort: self.sort,
             mode: self.mode,
+            columns: self.columns.next(same_folder),
             show_hidden,
             remembered: self.remembered.clone(),
             ..Self::showing(path, entries)
         };
+        if same_folder {
+            next.git.clone_from(&self.git);
+        }
         next.carry_filter(self);
+        next.order_by_comments();
         next
     }
 
@@ -137,31 +153,10 @@ impl PanelState {
     pub fn index_of(&self, name: &str) -> Option<usize> {
         self.entries.iter().position(|entry| entry.name == name)
     }
-
-    pub(crate) fn snapshot(&self, panel: PanelId, active: bool) -> PanelSnapshot {
-        PanelSnapshot {
-            panel,
-            active,
-            path: self.path.clone(),
-            cursor: self.cursor_entry().map(|entry| CursorView {
-                index: self.cursor,
-                name: entry.name.clone(),
-            }),
-            selection: self.selection.clone(),
-            entry_count: self.entries.len(),
-            view: self.view,
-            sort: self.sort,
-            mode: self.mode,
-            show_hidden: self.show_hidden,
-            filter: self.filter.pattern.clone(),
-            flat: self.flat.clone(),
-            terminal: None,
-            loading: self.listing.is_some(),
-        }
-    }
 }
 
-/// The entries of `path` in `sort` order; hidden and system entries only with `show_hidden`.
+/// The entries of `path` in `sort` order; hidden and system entries only with `show_hidden`, never
+/// what the ignore list hides.
 pub(crate) async fn list_sorted(
     vfs: &Arc<dyn Vfs>,
     path: &VfsPath,
@@ -172,6 +167,8 @@ pub(crate) async fn list_sorted(
     if !show_hidden {
         entries.retain(|entry| !is_hidden(entry));
     }
+    // The ignore list hides whatever the hidden-files switch says (RC-100-92).
+    crate::ignore_list::retain_shown(path, &mut entries);
     sort_entries(&mut entries, sort, names_for(path));
     Ok(entries)
 }
@@ -180,40 +177,6 @@ pub(crate) async fn list_sorted(
 /// hidden or the system attribute, which Total Commander's switch covers together.
 pub(crate) fn is_hidden(entry: &Entry) -> bool {
     entry.hidden || entry.attributes.windows.is_some_and(|flags| flags.system)
-}
-
-/// A panel as a command reports it: everything but the entries themselves.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PanelSnapshot {
-    pub panel: PanelId,
-    /// Whether keyboard input goes to this panel.
-    pub active: bool,
-    pub path: VfsPath,
-    /// The entry under the cursor; `None` in an empty directory.
-    pub cursor: Option<CursorView>,
-    /// The selected names, sorted; the panel's own set, not a copy of it.
-    pub selection: Selection,
-    pub entry_count: usize,
-    /// The file list or the terminal.
-    pub view: PanelView,
-    /// The order of the entries.
-    pub sort: SortOrder,
-    /// Full or brief.
-    pub mode: ListMode,
-    /// Whether hidden and system entries are listed.
-    pub show_hidden: bool,
-    /// The quick filter in force; `entry_count` counts only what it shows.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub filter: Option<String>,
-    /// The flat view the panel shows, if any: what it lists and whether it is still reading.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub flat: Option<FlatView>,
-    /// For a panel showing its terminal, in `panel.get_state`: the shell's folder and prompt.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub terminal: Option<PanelTerminal>,
-    /// The listing is still arriving: `entry_count` counts what came so far (RC-060-02).
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub loading: bool,
 }
 
 /// What a command answers.
@@ -281,8 +244,7 @@ pub enum Outcome {
     Retention { tables: Vec<RetentionStatus> },
     /// A checked backup of the database: its file and size.
     DatabaseBackup(BackupReport),
-    /// A checked backup staged to replace the database at the next start, and the backup of
-    /// the state it replaces.
+    /// A checked backup staged to replace the database at the next start; the old one backed up.
     RestoreStaged(RestoreReport),
     /// A job of the operations queue, as accepted or after the command.
     Job(Box<JobSnapshot>),
@@ -324,13 +286,21 @@ pub enum Outcome {
     ConfigExported(crate::exchange::ExportReport),
     /// What an import of such an export planned (`dry_run`) or did.
     ConfigImported(crate::exchange::ExchangeReport),
-    /// One page of a search: its hits in walk order, the cursor of the next page (`None` on
-    /// the last one) and how far the walk got.
+    /// A search page: hits in walk order, the next page's cursor (`None` at the end), the walk.
     SearchResults {
         hits: Vec<SearchHit>,
         next_cursor: Option<String>,
         stats: SearchStats,
     },
+    /// A page of duplicate groups (RC-100-98), in the order of the first criterion; the next
+    /// page's cursor (`None` at the end) and the walk.
+    DuplicateGroups {
+        groups: Vec<crate::search::DuplicateGroup>,
+        next_cursor: Option<String>,
+        stats: SearchStats,
+    },
+    /// What a folder holds, by size (RC-100-98): its subfolders to a depth and its largest files.
+    DiskUsage(Box<crate::disk_usage::DiskUsageReport>),
     /// Two files compared by content.
     FileComparison(FileComparison),
     /// Two directories compared, with the proposed synchronization.
@@ -352,8 +322,7 @@ pub enum Outcome {
     FileText(TextWindow),
     /// A window of a file as hex rows.
     FileHex(HexWindow),
-    /// The drive bar's entries: drives, portable devices, WSL distributions, servers, in this
-    /// order.
+    /// The drive bar's entries: drives, devices, WSL distributions, servers, in this order.
     Drives { drives: Vec<Drive> },
     /// Settings with their values: every one, or the one read or changed.
     Settings { settings: Vec<SettingValue> },
@@ -370,6 +339,8 @@ pub enum Outcome {
         dir: VfsPath,
         job: Box<JobSnapshot>,
     },
+    /// The names of a multi-rename's entries after the latest run: the next step's sources.
+    RenameNextStep { names: Vec<String> },
     /// The multi-rename presets by name, and the rule of the last run.
     RenamePresets {
         presets: Vec<crate::RenamePreset>,
@@ -420,11 +391,14 @@ pub enum Outcome {
         panel: PanelId,
         tabs: Vec<crate::TabView>,
     },
-    /// The active tab's folder history, oldest first, and the index of the folder shown.
+    /// The active tab's folder history, oldest first, and the index of the folder shown; and
+    /// the most visited folders, most first (RC-100-92), which `history.open_frequent` opens.
     History {
         panel: PanelId,
         entries: Vec<VfsPath>,
         current: usize,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        frequent: Vec<crate::tabs::FrequentFolder>,
     },
     /// The directory hotlist in menu order: each hotlist folder before what it holds.
     Hotlist { items: Vec<crate::HotlistEntry> },
@@ -489,11 +463,33 @@ pub enum Outcome {
     Workspaces(Box<crate::WorkspacesOutcome>),
     /// The inventory sources, a sync or its preview, a source saved (`inventory.*`, RC-100-39).
     Inventory(Box<crate::inventory::InventoryOutcome>),
-}
-
-impl Outcome {
-    /// The outcome naming one job.
-    pub(crate) fn job(snapshot: JobSnapshot) -> Self {
-        Self::Job(Box::new(snapshot))
-    }
+    /// A connection's port forwards with their state, or every running one (RC-110-03).
+    Forwards(Box<crate::ForwardsOutcome>),
+    /// What a `column_sets.*` command answers (RC-100-90).
+    ColumnSets(Box<crate::ColumnSetsOutcome>),
+    /// What a `usercmd.*` or `start_menu.*` command answers (RC-100-86).
+    UserCommands(Box<crate::UserCommandsOutcome>),
+    /// The git marks and branch a panel knows (`panel.git_status`, RC-100-97); `None` without
+    /// an answer of git (switched off, no repository, not yet answered).
+    GitStatus {
+        panel: PanelId,
+        git: Option<Box<crate::git::GitView>>,
+    },
+    /// The server files being edited through copies, oldest first (`remote_edit.*`, RC-110-01).
+    RemoteEdits { edits: Vec<crate::RemoteEditInfo> },
+    /// The saved file filters by name (`filters.*`, RC-100-92).
+    FileFilters {
+        saved: Vec<crate::commands::file_filters::SavedFilter>,
+    },
+    /// A selection read from a file or a text (RC-100-92): the panel after it, how many names
+    /// it selected and how many it named that the panel does not list.
+    SelectionLoaded {
+        panel: PanelSnapshot,
+        selected: usize,
+        missing: usize,
+    },
+    /// The selection written to a file (RC-100-92): where, and how many names.
+    SelectionWritten { path: VfsPath, names: usize },
+    /// What a `button_bar.*` command answers (RC-100-87).
+    ButtonBars(Box<crate::ButtonBarsOutcome>),
 }

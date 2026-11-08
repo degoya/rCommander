@@ -12,6 +12,15 @@
 //! still arriving are left alone. `panels.refresh_on_focus` switches it all off. No MCP: this is
 //! the window's behaviour, an agent has `panel.refresh`.
 //!
+//! The file watcher (RC-110-02) hears of the focus too ([`Engine::set_foreground`]): with
+//! `panels.watch_background` off it reads nothing while another program is in front. A panel
+//! whose system watcher has reported nothing since it was last read is not read on the return
+//! ([`Engine::watch_quiet`], [`Shown::quiet`]): its folder is as shown, and a large one costs
+//! nothing on every Alt+Tab.
+//!
+//! [`Engine::set_foreground`]: rc_engine::Engine::set_foreground
+//! [`Engine::watch_quiet`]: rc_engine::Engine::watch_quiet
+//!
 //! The same focus events keep a modal dialog modal on Linux and macOS (RC-080-73): a focus that
 //! lands on a window under the open question or modal dialog goes back to it
 //! (`dialog_windows/front.rs`). Windows keeps the focus off a locked window itself.
@@ -59,6 +68,11 @@ impl Refocus {
             false
         }
     }
+
+    /// Whether one of the app's windows has the keyboard, as far as the system said.
+    pub fn front(&self) -> bool {
+        self.focused.is_some()
+    }
 }
 
 /// The two settings, as read when the app came back.
@@ -90,6 +104,8 @@ pub struct Shown<'a> {
     pub plain: bool,
     /// No listing still arriving: a refresh would read the folder a second time.
     pub settled: bool,
+    /// Watched by the system, and nothing reported since it was last read (RC-110-02).
+    pub quiet: bool,
 }
 
 impl<'a> From<&'a PanelState> for Shown<'a> {
@@ -99,6 +115,7 @@ impl<'a> From<&'a PanelState> for Shown<'a> {
             files: state.view == PanelView::Files,
             plain: state.flat.is_none(),
             settled: state.listing.is_none(),
+            quiet: false,
         }
     }
 }
@@ -111,6 +128,7 @@ pub fn refreshes(shown: Shown<'_>, network: bool, switches: Switches) -> bool {
         && shown.files
         && shown.plain
         && shown.settled
+        && !shown.quiet
         && shown.path.backend == BackendId::Local
         && (switches.network || !network)
 }
@@ -132,7 +150,11 @@ impl App {
     pub(in crate::app) fn refocused(&mut self, id: window::Id, focused: bool) -> Vec<Effect> {
         let now = Instant::now();
         let mut effects = self.modal_focus(id, focused, now);
-        if !self.dialog_windows.refocus.seen(id, focused, now) {
+        let back = self.dialog_windows.refocus.seen(id, focused, now);
+        // The watcher reads in the background only with `panels.watch_background` (RC-110-02).
+        self.engine
+            .set_foreground(self.dialog_windows.refocus.front());
+        if !back {
             return effects;
         }
         let Some(db) = self.db.clone() else {
@@ -170,7 +192,11 @@ impl App {
             .filter(|&panel| {
                 let state = &self.pane(panel).state;
                 let network = on_network(&state.path, &self.drive_bar.drives);
-                refreshes(Shown::from(state), network, switches)
+                let shown = Shown {
+                    quiet: self.engine.watch_quiet(panel),
+                    ..Shown::from(state)
+                };
+                refreshes(shown, network, switches)
             })
             .map(|panel| Effect::Dispatch(panel, vec![Command::Refresh { panel: Some(panel) }]))
             .collect()

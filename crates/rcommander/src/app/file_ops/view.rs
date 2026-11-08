@@ -128,7 +128,8 @@ pub(super) fn dialog_card<'a>(dialog: &'a Dialog, tokens: &'static Tokens) -> Ca
     let title = match (dialog.kind, dialog.single.is_some()) {
         (FileDialog::Copy, true) => t!("ops.copy_one", name = name),
         (FileDialog::Copy, false) => t!("ops.copy_many", count = count),
-        (FileDialog::CopyHere, _) => t!("ops.copy_here", name = name),
+        (FileDialog::CopyHere, true) => t!("ops.copy_here", name = name),
+        (FileDialog::CopyHere, false) => t!("ops.copy_here_many", count = count),
         (FileDialog::Move, true) => t!("ops.move_one", name = name),
         (FileDialog::Move, false) => t!("ops.move_many", count = count),
         (FileDialog::Mkdir, _) => t!("ops.mkdir").to_owned(),
@@ -137,7 +138,7 @@ pub(super) fn dialog_card<'a>(dialog: &'a Dialog, tokens: &'static Tokens) -> Ca
         (FileDialog::Delete, false) => t!("ops.delete_many", count = count),
         (FileDialog::DeletePermanent, true) => t!("ops.delete_one_permanent", name = name),
         (FileDialog::DeletePermanent, false) => t!("ops.delete_many_permanent", count = count),
-        (FileDialog::Rename, _) => String::new(),
+        (FileDialog::Rename, _) => t!("ops.rename_many", count = count),
     };
     // The title names the file: it wraps rather than leave the card.
     let title = fit::prose(title).font(theme::UI_FONT_STRONG);
@@ -279,6 +280,7 @@ pub(super) fn kind_title(kind: &JobKind) -> &'static str {
         JobKind::Combine { .. } => t!("ops.title.combine"),
         JobKind::Pack { .. } => t!("ops.title.pack"),
         JobKind::Extract { .. } => t!("ops.title.extract"),
+        JobKind::ArchiveUpdate { .. } => t!("ops.title.archive_update"),
         _ => t!("ops.title.other"),
     }
 }

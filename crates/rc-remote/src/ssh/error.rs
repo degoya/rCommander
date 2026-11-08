@@ -4,7 +4,12 @@
 //! is free text from the other side. No variant holds a secret; a host key is public.
 
 use crate::{
-    HOST_KEY_CHANGED, HOST_KEY_REVOKED, HOST_KEY_UNKNOWN, KeyError, OfferedKey, PrivateKeyError,
+    CertificateError, HOST_KEY_CHANGED, HOST_KEY_REVOKED, HOST_KEY_UNKNOWN, KeyError, OfferedKey,
+    PrivateKeyError,
+    certificate::{
+        SSH_CERTIFICATE_EXPIRED, SSH_CERTIFICATE_INVALID, SSH_CERTIFICATE_KEY_MISMATCH,
+        SSH_CERTIFICATE_NOT_YET_VALID, SSH_CERTIFICATE_PRINCIPAL,
+    },
     ssh::{AuthKind, Stage},
 };
 
@@ -79,6 +84,9 @@ pub enum SshError {
     Credential(#[from] CredentialError),
     #[error(transparent)]
     Key(#[from] PrivateKeyError),
+    /// The key's certificate was not sent or was refused, for a reason it tells (RC-060-09).
+    #[error(transparent)]
+    Certificate(#[from] CertificateError),
     #[error("the SSH server accepted none of the methods tried ({})", list(.tried))]
     AuthFailed { tried: Vec<AuthKind> },
     #[error("the SSH connection was lost")]
@@ -104,6 +112,11 @@ impl SshError {
         "key_format_unknown",
         "key_passphrase_needed",
         "key_passphrase_wrong",
+        SSH_CERTIFICATE_INVALID,
+        SSH_CERTIFICATE_KEY_MISMATCH,
+        SSH_CERTIFICATE_EXPIRED,
+        SSH_CERTIFICATE_NOT_YET_VALID,
+        SSH_CERTIFICATE_PRINCIPAL,
         SSH_AUTH_FAILED,
         CONNECTION_LOST,
         SSH_PROTOCOL,
@@ -131,6 +144,7 @@ impl SshError {
                 PrivateKeyError::PassphraseNeeded => "key_passphrase_needed",
                 PrivateKeyError::PassphraseWrong => "key_passphrase_wrong",
             },
+            Self::Certificate(error) => error.code(),
             Self::AuthFailed { .. } => SSH_AUTH_FAILED,
             Self::ConnectionLost => CONNECTION_LOST,
             Self::Protocol { .. } => SSH_PROTOCOL,

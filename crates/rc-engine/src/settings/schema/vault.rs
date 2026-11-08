@@ -1,11 +1,13 @@
 //! The vault's rows: when it locks by itself, whether the Windows credential manager is a secret
-//! source, and whether connections take their secrets from shared credentials. All are
-//! protected: no agent may keep the vault open longer (RC-080-11), open another store of secrets
-//! (RC-100-37) or send a credential's secrets elsewhere (RC-050-12).
+//! source, whether connections take their secrets from shared credentials, and whether a PAM
+//! system's checkout reason is kept. All are protected: no agent may keep the vault open longer
+//! (RC-080-11), open another store of secrets (RC-100-37), send a credential's secrets elsewhere
+//! (RC-050-12) or keep a reason the person gave for one checkout (RC-100-38).
 
 use super::{SettingKind, SettingPage, SettingSpec};
 use crate::{
-    SHARED_CREDENTIALS_KEY, secret_sources::WINCRED_SOURCE_KEY,
+    SHARED_CREDENTIALS_KEY,
+    secret_sources::{CHECKOUT_KEEP_REASON_KEY, WINCRED_SOURCE_KEY},
     session_lock::LOCK_ON_SESSION_LOCK_KEY,
 };
 
@@ -70,6 +72,18 @@ pub(super) const SHARED_CREDENTIALS: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.vault.shared_credentials",
     help: "setting.vault.shared_credentials.help",
+    protected: true,
+    restart: false,
+};
+
+/// Whether the reason given for a PAM system's checkout is kept for the connection's later
+/// checkouts until rCommander ends; off, one checkout uses it up (RC-100-38).
+pub(super) const CHECKOUT_KEEP_REASON: SettingSpec = SettingSpec {
+    key: CHECKOUT_KEEP_REASON_KEY,
+    page: SettingPage::Vault,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.vault.checkout_keep_reason",
+    help: "setting.vault.checkout_keep_reason.help",
     protected: true,
     restart: false,
 };

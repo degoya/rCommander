@@ -87,6 +87,15 @@ impl ReadGuard {
             })
     }
 
+    /// The guard for paths that are no paths of the machine - the entries of an archive a search
+    /// looks into (RC-100-93): judged by their names alone, never followed on the disk.
+    pub(crate) fn by_name(self) -> Self {
+        Self {
+            local: false,
+            ..self
+        }
+    }
+
     /// [`ReadGuard::refuses`] from an async path: on the local backend the links followed and the
     /// database probe touch the file system - a network drive, perhaps - so they run on the
     /// blocking pool, not on a thread of the runtime.

@@ -6,8 +6,10 @@
 //! (`login_scripts.rs`), the panels' folder tabs with their history (`tabs.rs`), the directory
 //! hotlist (`hotlist.rs`), the FTPS certificates a person trusted (`tls_certificates.rs`), the
 //! transfer jobs that have not ended, to resume after a restart (`transfer_jobs.rs`), the
-//! transfer lists a person saved (`saved_queues.rs`), the own colour themes (`themes.rs`) and the
-//! workspaces (`workspaces.rs`).
+//! transfer lists a person saved (`saved_queues.rs`), the own colour themes (`themes.rs`), the
+//! workspaces (`workspaces.rs`), the column sets of the file list (`column_sets.rs`), the own
+//! commands with the Start menu (`user_commands.rs`, `start_menu.rs`) and the button bars
+//! (`button_bars.rs`).
 //!
 //! Writes are serialized: one dedicated connection behind a mutex does every write, and a small
 //! pool serves reads. SQLite allows one writer at a time anyway; taking turns in the process
@@ -36,13 +38,17 @@
 //! beside the database and swapped in before the next open ([`apply_pending_restore`]).
 
 mod backup;
+mod button_bars;
+mod column_sets;
 pub mod connections;
 mod diagnostics;
+mod dir_frequent;
 mod error;
 mod error_log;
 mod hotlist;
 pub mod inventory;
 mod known_hosts;
+mod location;
 pub mod login_scripts;
 mod mcp_audit_log;
 mod plugins;
@@ -58,10 +64,12 @@ mod secret_sources;
 mod secrets;
 mod session_prefs;
 mod settings;
+mod start_menu;
 mod tabs;
 mod themes;
 mod tls_certificates;
 mod transfer_jobs;
+mod user_commands;
 mod vault;
 mod workspaces;
 
@@ -83,17 +91,25 @@ use sqlx::{
 };
 use tokio::sync::{Mutex, MutexGuard};
 
+use private_dir::Modes;
+
 pub use backup::{
     BACKUP_DIR, BackupError, BackupReport, KEEP_RANGE as BACKUP_KEEP_RANGE, backup_file,
     backup_file_name, is_database_file_name, prune_backups, write_private_file,
 };
+pub use button_bars::{
+    ButtonBarStoreError, MAX_BUTTON_BAR_NAME, MAX_BUTTON_BAR_SPEC, MAX_BUTTON_BARS, StoredButtonBar,
+};
+pub use column_sets::StoredColumnSet;
 pub use diagnostics::{SWEEP_INTERVAL, install_diagnostics, install_diagnostics_with};
+pub use dir_frequent::{FREQUENT_HALF_LIFE_SECS, FrequentDir, decayed as frequent_decayed};
 pub use error::{DbError, Result};
 pub use error_log::{ERROR_LOG_MAX_PAGE, ERROR_LOG_PAGE, ErrorLogEntry, ErrorLogQuery, LogLevel};
 pub use hotlist::{
     HOTLIST_MAX_DEPTH, HOTLIST_MAX_NAME, HotlistError, HotlistItem, HotlistPatch, NewHotlistItem,
 };
 pub use known_hosts::{HASHED_PREFIX, KnownHost, KnownHostSource, KnownHostsImport, NewKnownHost};
+pub use location::{DataLocation, LocationCell, data_dir, is_portable, location, set_location};
 pub use mcp_audit_log::{
     MCP_AUDIT_ARGUMENTS_MAX_BYTES, MCP_AUDIT_MAX_PAGE, MCP_AUDIT_MAX_SESSIONS,
     MCP_AUDIT_NAME_MAX_BYTES, McpAuditEntry, NewMcpAuditEntry, cut_to_bytes,
@@ -115,14 +131,21 @@ pub use revoked_host_keys::{NewRevokedHostKey, RevokedHostKey};
 pub use saved_queues::SavedQueue;
 pub use secret_sources::{MAX_SOURCE_ENTRY_ID_CHARS, MAX_SOURCE_LABEL_CHARS, SecretSourceRef};
 pub use secrets::{
-    CREDENTIALS_TABLE, SECRETS_ROW_ID, SECRETS_TABLE, SecretFlags, SecretKind, SecretOwner,
-    StoredKey,
+    CREDENTIALS_TABLE, CertificateValidity, KeyCertificate, SECRETS_ROW_ID, SECRETS_TABLE,
+    SecretFlags, SecretKind, SecretOwner, StoredKey,
 };
 pub use session_prefs::StoredSessionPrefs;
+pub use start_menu::{
+    MAX_START_MENU_ITEMS, START_MENU_MAX_DEPTH, StartMenuRecord, StoredStartMenuItem,
+};
 pub use tabs::{StoredTab, StoredVisit};
 pub use themes::StoredTheme;
 pub use tls_certificates::{NewTrustedCertificate, TrustedCertificate};
 pub use transfer_jobs::StoredTransfer;
+pub use user_commands::{
+    CommandFields, MAX_USER_COMMAND_FIELD, MAX_USER_COMMANDS, StoredUserCommand, UserCommandRecord,
+    UserCommandStoreError,
+};
 pub use vault::{RekeyError, SECRET_COLUMNS, SecretColumn, VaultMeta, VaultRemoval};
 pub use workspaces::{StoredWorkspace, WorkspacePatch};
 
@@ -157,7 +180,8 @@ impl Db {
     /// Opens (or creates) the database file at `path`, creating its directory - owner-only on
     /// Unix, and the platform's data folder made so when it is there already (RC-080-42) - and
     /// applies every pending migration. On Unix the file and SQLite's files beside it are
-    /// owner-only too (`0600`, RC-080-68).
+    /// owner-only too (`0600`, RC-080-68). In a portable copy's folder the modes are only tried:
+    /// a file system without them is a warning in the error log, not a failure (RC-100-95).
     ///
     /// # Errors
     ///
@@ -165,20 +189,29 @@ impl Db {
     /// migration fails.
     pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
+        let location = location().ok();
+        let data_dir = location.as_ref().map(DataLocation::dir);
+        // A portable copy's folder may be on a stick whose file system keeps no Unix modes
+        // (RC-100-95): there they are tried, and a failure is a warning in the error log.
+        let modes = match &location {
+            Some(DataLocation::Portable(dir)) if path.parent() == Some(dir.as_path()) => {
+                Modes::BestEffort
+            }
+            _ => Modes::Enforced,
+        };
+        let mut kept = true;
         if let Some(parent) = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
         {
-            let data_dir = Self::default_path().ok();
-            let data_dir = data_dir.as_deref().and_then(Path::parent);
-            private_dir::create_private_dir(parent, data_dir)
+            kept = private_dir::create_private_dir(parent, data_dir, modes)
                 .await
                 .map_err(|source| DbError::CreateDir {
                     path: parent.to_path_buf(),
                     source,
                 })?;
         }
-        private_dir::secure_database_files(path)
+        kept &= private_dir::secure_database_files(path, modes)
             .await
             .map_err(|source| DbError::Permissions {
                 path: path.to_path_buf(),
@@ -189,7 +222,11 @@ impl Db {
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Wal)
             .synchronous(SqliteSynchronous::Normal);
-        Self::connect(options, Some(path.into())).await
+        let db = Self::connect(options, Some(path.into())).await?;
+        if !kept {
+            db.warn_modes_not_kept().await;
+        }
+        Ok(db)
     }
 
     /// A private database in memory, migrated like a file: for tests and a headless run that
@@ -204,16 +241,14 @@ impl Db {
         Self::connect(SqliteConnectOptions::from_str("sqlite::memory:")?, None).await
     }
 
-    /// `rcommander.db` in the platform's data directory (on Windows
-    /// `%APPDATA%\degoya\rCommander\data`).
+    /// `rcommander.db` in the process's data folder ([`location`]): the platform's (on Windows
+    /// `%APPDATA%\degoya\rCommander\data`), or a portable copy's `data/` (RC-100-95).
     ///
     /// # Errors
     ///
     /// [`DbError::NoDataDir`] when the platform reports no home directory.
     pub fn default_path() -> Result<PathBuf> {
-        directories::ProjectDirs::from("de", "degoya", "rCommander")
-            .map(|dirs| dirs.data_dir().join(DB_FILE))
-            .ok_or(DbError::NoDataDir)
+        location().map(|location| location.database())
     }
 
     /// The database file; `None` for a database in memory.

@@ -7,6 +7,10 @@
 //! when their method's turn comes. Nothing here stores, logs or prints a secret; the log names
 //! the method that got in and, for a key, its fingerprint.
 //!
+//! [`SshSession::connect_via`] sets a session up through another one, a jump host (RC-110-03):
+//! a `direct-tcpip` channel carries it, and [`SshSession::open_direct_tcpip`] is also what a local
+//! port forward opens per connection.
+//!
 //! The session is one TCP connection that carries every channel (SFTP, terminal, command);
 //! [`open_pty_shell`] turns a channel into the byte stream a terminal or a login script drives,
 //! [`exec_command`] runs one command on a channel and collects its output (RC-060-04).
@@ -93,9 +97,11 @@ pub trait Credentials: Send + Sync {
     }
 }
 
-/// A private key's text and its passphrase, as long as the login needs them.
+/// A private key's text and its passphrase, as long as the login needs them, with the OpenSSH
+/// user certificate a CA signed for it (RC-060-09) - public, its `-cert.pub` line.
 #[derive(Debug)]
 pub struct KeyMaterial {
     pub key: SecretString,
     pub passphrase: Option<SecretString>,
+    pub certificate: Option<String>,
 }

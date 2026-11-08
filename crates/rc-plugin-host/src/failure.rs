@@ -64,6 +64,9 @@ pub mod codes {
     pub const PLUGIN_SECRET_TARGET_NOT_ALLOWED: &str = "plugin_secret_target_not_allowed";
     /// An inventory answered more hosts than the host takes (`MAX_HOSTS`, 10 000).
     pub const PLUGIN_INVENTORY_TOO_LARGE: &str = "plugin_inventory_too_large";
+    /// A compare plugin answered more changes than the host takes (`MAX_CHANGES`, 10 000;
+    /// RC-100-41).
+    pub const PLUGIN_COMPARE_TOO_LARGE: &str = "plugin_compare_too_large";
 }
 
 /// Longest trap reason kept as a parameter: one line, never a backtrace.

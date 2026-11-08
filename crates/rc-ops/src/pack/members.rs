@@ -37,7 +37,7 @@ impl Runner {
     /// The members of a group: what each item becomes in the archive. Items that cannot go in
     /// (a link the format cannot store, a special file, a name taken twice) are listed as
     /// failures.
-    pub(super) fn members(
+    pub(crate) fn members(
         &mut self,
         group: &Group,
         settings: &PackSettings,
@@ -104,7 +104,7 @@ impl Runner {
 
     /// The packed items without those that grew while they were packed (`write.rs`): only their
     /// counted size went in, so each is a failure and a move to the archive keeps it.
-    pub(super) fn without_grown(&mut self, items: Vec<Item>, grown: &[PathBuf]) -> Vec<Item> {
+    pub(crate) fn without_grown(&mut self, items: Vec<Item>, grown: &[PathBuf]) -> Vec<Item> {
         if grown.is_empty() {
             return items;
         }

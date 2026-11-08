@@ -13,7 +13,7 @@ fn attrs(mode: FileMode, permissions: u32, size: u64) -> FileAttributes {
         size: Some(size),
         permissions: Some(mode.bits() | permissions),
         mtime: Some(1_700_000_000),
-        atime: Some(1_700_000_000),
+        atime: Some(1_700_000_100),
         ..FileAttributes::default()
     }
 }
@@ -49,6 +49,11 @@ fn a_file_carries_size_time_mode_and_the_dot_file_is_hidden() {
     assert_eq!(
         file.modified,
         Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000))
+    );
+    assert_eq!(
+        file.accessed,
+        Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_100)),
+        "the server's atime is the last access"
     );
     assert_eq!(file.attributes.mode, Some(0o644));
     assert!(!file.attributes.readonly);

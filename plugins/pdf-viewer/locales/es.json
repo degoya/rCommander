@@ -1,0 +1,10 @@
+{
+  "name": "Visor de PDF",
+  "description": "Muestra el texto de un PDF página a página, y su título, autor, fechas, páginas y versión como árbol.",
+  "codes": {
+    "01a1b720-fdd6-75dd-a577-079e819e4742.too_large": "El PDF supera 64 MiB y no se lee.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.damaged": "El archivo no es un PDF legible.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.password_required": "El PDF está protegido con contraseña; rCommander no puede mostrarlo.",
+    "01a1b720-fdd6-75dd-a577-079e819e4742.encryption": "El PDF está cifrado de una forma que este visor no puede leer."
+  }
+}

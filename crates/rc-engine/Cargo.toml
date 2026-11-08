@@ -20,7 +20,13 @@ async-trait.workspace = true
 chrono.workspace = true
 directories.workspace = true
 encoding_rs.workspace = true
+# The EXIF of photos: the image view's EXIF tree and `file.properties` (RC-100-99).
+kamadak-exif.workspace = true
+# The panels' file watcher (`watch/native.rs`, RC-110-02).
+notify.workspace = true
 open.workspace = true
+# Certificates and keys taken apart and checked for the built-in viewer (`viewer::cert`, RC-110-08).
+rc-cert = { path = "../rc-cert" }
 rc-checksum = { path = "../rc-checksum" }
 rc-db = { path = "../rc-db" }
 rc-ops = { path = "../rc-ops" }
@@ -29,7 +35,11 @@ rc-ops = { path = "../rc-ops" }
 # records and its failures.
 rc-plugin-api = { path = "../rc-plugin-api" }
 rc-plugin-host = { path = "../rc-plugin-host" }
+# The selection and list files of the panels (RC-100-92): UTF-16 and ANSI read as rename lists are.
+rc-plugin-text.workspace = true
 rc-plugin-types = { path = "../rc-plugin-types" }
+# The external compare tool starts without a console window (RC-100-94).
+rc-process = { path = "../rc-process" }
 rc-remote = { path = "../rc-remote" }
 rc-rename = { path = "../rc-rename" }
 rc-term = { path = "../rc-term" }
@@ -51,7 +61,14 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+# The host and port of an inventory's HTTPS address, for its certificate trust (RC-100-40).
+url.workspace = true
 zeroize.workspace = true
+
+[target.'cfg(not(windows))'.dependencies]
+# Whether the process of an unpacked or edited copy still runs (`unpacked.rs`): signal 0, which
+# macOS answers too (it has no `/proc`); the crate and its `signal` feature are rc-term's already.
+nix = { workspace = true, features = ["signal"] }
 
 # The drive letters and their kinds (`drives/windows.rs`); Total Commander's registry key
 # (`import/total_commander_path/windows.rs`).
@@ -62,14 +79,20 @@ winsafe.workspace = true
 # RC-010-16): the WNet functions, which winsafe does not wrap; the version already in the tree.
 # The session lock and suspend notices (`session_lock/windows.rs`, RC-080-11): a hidden window,
 # its message loop and the WTS registration. The credential manager as a secret source
-# (`secret_sources/wincred/windows.rs`, RC-100-37).
+# (`secret_sources/wincred/windows.rs`, RC-100-37). Everything's IPC: a message-only window and
+# WM_COPYDATA (`search/everything/windows.rs`, RC-100-93).
+# `ShellExecuteExW` for a start as administrator (`commands/elevate/windows.rs`, RC-100-86; its
+# struct needs the registry's HKEY).
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_NetworkManagement_WNet",
     "Win32_Security_Credentials",
+    "Win32_System_DataExchange",
     "Win32_System_LibraryLoader",
     "Win32_System_RemoteDesktop",
+    "Win32_System_Registry",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

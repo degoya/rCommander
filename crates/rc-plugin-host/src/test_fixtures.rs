@@ -219,3 +219,36 @@ timeout_milliseconds = 1000
 pub(crate) fn inventory_manifest(http: bool) -> PluginManifest {
     parse_manifest(inventory_manifest_text(http, "").as_bytes()).expect("a valid manifest")
 }
+
+/// A compare plugin's manifest (RC-100-41) claiming `.json` and `.csv`, with `extra` appended.
+pub(crate) fn compare_manifest_text(extra: &str) -> String {
+    format!(
+        r#"
+manifest_version = 1
+plugin_type = "compare"
+api_version = "{api}"
+id = "019d0000-0000-7000-8000-0000000000d1"
+name = "Test compare"
+version = "1.0.0"
+key_id = "example-release-v1"
+public_key = "{PUBLIC_KEY}"
+
+[match]
+extensions = ["json", "csv"]
+max_size = 1000
+
+[metadata]
+description = "A compare plugin the host's tests run."
+author = "rCommander"
+
+[limits]
+timeout_milliseconds = 1000
+{extra}"#,
+        api = rc_plugin_api::API_VERSION,
+    )
+}
+
+/// [`compare_manifest_text`] parsed.
+pub(crate) fn compare_manifest() -> PluginManifest {
+    parse_manifest(compare_manifest_text("").as_bytes()).expect("a valid manifest")
+}

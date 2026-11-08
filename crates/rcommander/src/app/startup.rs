@@ -90,8 +90,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     .theme(App::theme)
     .subscription(App::subscription)
     .default_font(theme::UI_FONT)
-    // The buttons' icons (RC-080-07), compiled in.
+    // The buttons' icons (RC-080-07) and the symbol collection (RC-110-10), compiled in.
     .font(theme::icon::FONT_BYTES)
+    .font(theme::symbols::FONT_BYTES)
     .run();
     tracing::debug!("iced ended");
     // A window that never opened (a second start among them, RC-100-67) ends without a word on
@@ -146,6 +147,14 @@ async fn prepare() -> Result<Setup, EngineError> {
         // Warn and error lines into the error log, the console on stderr; the watch for a lost
         // graphics device beside them.
         rc_db::install_diagnostics_with(db, crate::gpu_loss::layer());
+    }
+    // A portable marker this start passed over (RC-100-95): the data stays in the profile.
+    if let Some(code) = crate::portable::refusal() {
+        tracing::warn!(
+            code,
+            "the portable marker beside the program was passed over"
+        );
+        notice = notice.or_else(|| Some(t!("status.portable_ignored", reason = error_text(code))));
     }
     // The Mac's look and its Cmd key (RC-100-49), before the first text and the first key; then
     // the accent colour, found off the UI thread.
@@ -213,6 +222,11 @@ async fn prepare() -> Result<Setup, EngineError> {
                 );
             }
         }
+        // The server copies the last run kept with a change, each asked about (RC-110-01).
+        let kept = engine.restore_remote_edits().await;
+        if kept > 0 {
+            tracing::info!(kept, "server copies kept at the last quit are offered");
+        }
         // The saved transfer lists marked "restore at start", loaded and stopped (RC-010-15).
         match engine.restore_queue_lists().await {
             Ok(loaded) if !loaded.is_empty() => {
@@ -258,6 +272,8 @@ async fn prepare() -> Result<Setup, EngineError> {
     };
     // The window answers the MCP calls that ask; from before the server starts (RC-010-13).
     engine.attach_window();
+    // The panels' file watcher, after the settings it reads are there (RC-110-02).
+    engine.start_watching();
     let (server, mcp) = match &db {
         Some(db) => {
             let instance_file = rc_mcp::instance::default_path().ok();
@@ -369,6 +385,8 @@ impl App {
         app.info = setup.info;
         app.mcp_questions = app.engine.mcp_questions();
         app.mcp_grants = app.engine.mcp_grants();
+        // The server copies a last run kept with a change, offered now (RC-110-01).
+        app.read_remote_edits();
         // `RC_THEME=dark|light` overrides the setting (screenshots of both looks).
         let choice = match std::env::var("RC_THEME").as_deref() {
             Ok("dark") => ThemeChoice::Dark,
@@ -377,7 +395,8 @@ impl App {
         };
         // The system's mode is asked for in any case: the dialog can switch to it later.
         let _ = app.set_theme(choice);
-        let icons = app.load_icon_mode();
+        // The file icons, and the thumbnails' settings, which start their loads (RC-100-89).
+        let icons = Task::batch([app.load_icon_mode(), app.thumbnail_settings_task()]);
         let fkey_bar = app.file_ops_settings_task();
         let stripes = app.stripes_task();
         // What F10 does (RC-080-17).
@@ -386,8 +405,8 @@ impl App {
         let queue = app.queue_own_task();
         // Whether the large dialogs open in windows of their own (RC-080-15).
         let dialogs = app.dialog_windows_task();
-        // The column widths and the panel divider (RC-010-20).
-        let widths = app.resize_task();
+        // The column widths and the panel divider (RC-010-20), the folder trees (RC-100-88).
+        let widths = Task::batch([app.resize_task(), app.tree_settings_task()]);
         // Whether a plain click clears the marks (RC-010-02).
         let clicks = app.click_clears_task();
         // Whether Enter checks a checksum file (RC-020-10).
@@ -407,6 +426,12 @@ impl App {
         // The workspaces: the palette's rows, the menu, an active one's themes (RC-100-68);
         // the one to start with applied.
         let workspaces = app.workspaces_task();
+        // The own commands and the Start menu: the palette's rows and the Start menu (RC-100-86).
+        let user_commands = app.user_commands_task();
+        // The internal associations the context menu offers (RC-100-91).
+        let associations = app.associations_task();
+        // The button bars and their settings (RC-100-87).
+        let button_bar = app.button_bar_task();
         let start = setup
             .workspace
             .map(|id| app.apply_workspace_now(id))
@@ -442,6 +467,9 @@ impl App {
                 terminal_copy,
                 cmdline,
                 workspaces,
+                user_commands,
+                associations,
+                button_bar,
                 start,
             ]),
         )

@@ -29,7 +29,7 @@ pub(crate) fn chosen(key: &str, only: Option<&[String]>, default: bool) -> bool 
 }
 
 /// A folder path as a map key: its names in ASCII lower case.
-fn path_key(names: &[String]) -> Vec<String> {
+pub(super) fn path_key(names: &[String]) -> Vec<String> {
     names.iter().map(|name| name.to_ascii_lowercase()).collect()
 }
 

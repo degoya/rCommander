@@ -3,7 +3,8 @@
 //! As in Total Commander, `cd` is the window's own: `cd <path>` (also `chdir`, `cd..`, `cd\`,
 //! cmd's `cd /d <path>`, a quoted path) moves the active panel, and a drive alone (`d:`, or
 //! `cd d:`) changes to the folder the panel last showed on that drive - no process starts. Every
-//! other line runs in the system's shell in the panel's folder (`commands/command_line.rs`).
+//! other line runs in the system's shell in the panel's folder (`commands/command_line.rs`); with
+//! `*` in front it runs as administrator (RC-100-86, Windows only, `commands/elevate.rs`).
 //!
 //! A line is checked at the boundary ([`check`]): blank, longer than [`MAX_LINE`] characters, or
 //! holding a control character (a line break would start a second command) is refused, and no
@@ -37,6 +38,9 @@ pub enum Parsed<'a> {
     Cd(String),
     /// Anything else: a command for the system's shell, trimmed.
     Run(&'a str),
+    /// `*<line>`: the line for the system's shell as administrator, trimmed (Total Commander
+    /// 11.57); empty for a `*` alone.
+    RunElevated(&'a str),
 }
 
 /// `line` trimmed, when it may run.
@@ -62,6 +66,9 @@ pub fn check(line: &str) -> Result<&str, EngineError> {
 #[must_use]
 pub fn parse(line: &str) -> Parsed<'_> {
     let line = line.trim();
+    if let Some(elevated) = line.strip_prefix('*') {
+        return Parsed::RunElevated(elevated.trim());
+    }
     if let Some(letter) = drive_letter(line) {
         return Parsed::Drive(letter);
     }
@@ -123,12 +130,13 @@ fn unquote(text: &str) -> &str {
         .trim()
 }
 
-/// A folder as this system writes it: `cd \` means the root on Linux and macOS too.
+/// A folder as this system writes it: `cd \` means the root on Linux and macOS too; the known
+/// `%VAR%` filled in, as Total Commander's `cd %LOCALAPPDATA%` does (RC-100-92).
 fn native(target: &str) -> String {
     if !cfg!(windows) && target == "\\" {
         "/".to_owned()
     } else {
-        target.to_owned()
+        crate::user_commands::expand_variables(target)
     }
 }
 

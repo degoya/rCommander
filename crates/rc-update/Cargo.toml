@@ -49,6 +49,11 @@ tracing.workspace = true
 url.workspace = true
 zip.workspace = true
 
+# Whether a portable copy's drive is a network one (RC-100-95, `portable_mode.rs`):
+# `GetDriveTypeW` through winsafe's safe wrapper.
+[target.'cfg(windows)'.dependencies]
+winsafe.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 

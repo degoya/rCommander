@@ -186,3 +186,65 @@ fn save_secret(id: ConnectionId, change: SecretChange) -> Command {
         credential: None,
     })
 }
+
+/// A zip file storing `entries` (name, bytes) without compression, written byte by byte: the
+/// archive inside an archive the search must not enter (RC-100-93).
+pub(crate) fn stored_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = !0_u32;
+        for &byte in bytes {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = if crc & 1 == 0 {
+                    crc >> 1
+                } else {
+                    (crc >> 1) ^ 0xEDB8_8320
+                };
+            }
+        }
+        !crc
+    }
+    let small = |n: usize| u32::try_from(n).expect("a small zip");
+    let short = |n: usize| u16::try_from(n).expect("a short name");
+    // 2024-01-01 00:00 as MS-DOS date and time.
+    let (time, date) = (0_u16, 0x5821_u16);
+    let (mut zip, mut central) = (Vec::new(), Vec::new());
+    for (name, data) in entries {
+        let offset = small(zip.len());
+        let crc = crc32(data);
+        let mut common = Vec::new();
+        for half in [20_u16, 0, 0, time, date] {
+            common.extend_from_slice(&half.to_le_bytes());
+        }
+        for word in [crc, small(data.len()), small(data.len())] {
+            common.extend_from_slice(&word.to_le_bytes());
+        }
+        common.extend_from_slice(&short(name.len()).to_le_bytes());
+        common.extend_from_slice(&0_u16.to_le_bytes());
+        zip.extend_from_slice(&0x0403_4b50_u32.to_le_bytes());
+        zip.extend_from_slice(&common);
+        zip.extend_from_slice(name.as_bytes());
+        zip.extend_from_slice(data);
+        central.extend_from_slice(&0x0201_4b50_u32.to_le_bytes());
+        central.extend_from_slice(&20_u16.to_le_bytes());
+        central.extend_from_slice(&common);
+        // No comment, disk 0, no internal or external attributes, then the local header.
+        for half in [0_u16, 0, 0] {
+            central.extend_from_slice(&half.to_le_bytes());
+        }
+        central.extend_from_slice(&0_u32.to_le_bytes());
+        central.extend_from_slice(&offset.to_le_bytes());
+        central.extend_from_slice(name.as_bytes());
+    }
+    let (start, size) = (small(zip.len()), small(central.len()));
+    zip.extend_from_slice(&central);
+    zip.extend_from_slice(&0x0605_4b50_u32.to_le_bytes());
+    let count = short(entries.len());
+    for half in [0_u16, 0, count, count] {
+        zip.extend_from_slice(&half.to_le_bytes());
+    }
+    zip.extend_from_slice(&size.to_le_bytes());
+    zip.extend_from_slice(&start.to_le_bytes());
+    zip.extend_from_slice(&0_u16.to_le_bytes());
+    zip
+}

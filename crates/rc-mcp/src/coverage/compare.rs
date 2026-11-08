@@ -3,6 +3,14 @@
 use super::Coverage;
 
 pub(super) const ROWS: &[(&str, Coverage)] = &[
+    (
+        "compare.apply_blocks",
+        Coverage::Covered("files_compare_apply"),
+    ),
+    (
+        "compare.by_content",
+        Coverage::Omitted("starts the compare program a person configured, at the window"),
+    ),
     ("compare.dirs", Coverage::Covered("dirs_compare")),
     ("compare.files", Coverage::Covered("files_compare")),
     (

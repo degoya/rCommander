@@ -39,13 +39,15 @@ impl Engine {
     /// else the directory it last showed on the drive, else the drive's root - each one that is
     /// gone is passed over. A drive letter is asked first, at most [`crate::DETAIL_TIMEOUT`]: one
     /// that does not answer leaves the panel where it is, after a network drive that answered
-    /// "not ready" was connected again where Windows remembers it.
+    /// "not ready" was connected again where Windows remembers it. A panel showing its tree
+    /// shows its files on the new drive, as a click on a drive button does in Total Commander.
     pub(crate) async fn change_drive(
         &self,
         panel: Option<PanelId>,
         wanted: &str,
     ) -> Result<Outcome, EngineError> {
-        self.change_drive_to(panel, wanted, false).await
+        let outcome = self.change_drive_to(panel, wanted, false).await?;
+        Ok(self.leave_tree(outcome))
     }
 
     /// [`Engine::change_drive`]; `typed` for `d:` in the command line, where a panel already on

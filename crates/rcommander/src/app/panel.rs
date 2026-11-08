@@ -9,19 +9,20 @@
 //! the engine's cursor is on the first entry.
 //!
 //! The full view shows one row per entry; the brief view fills columns top to bottom, as many as
-//! the panel is wide, and scrolls by whole columns. Either way only the rows in
-//! [`Pane::visible_range`] are ever built into widgets; that is the whole virtualisation, and it
-//! keeps a 100 000-entry folder as cheap to draw as a 30-entry one.
+//! the panel is wide, and scrolls by whole columns; the thumbnails (RC-100-89, `grid.rs`) fill
+//! lines of tiles left to right and scroll by whole lines - the full view is their case of one
+//! tile a line. Either way only the rows in [`Pane::visible_range`] are ever built into widgets;
+//! that is the whole virtualisation, and it keeps a 100 000-entry folder as cheap to draw as a
+//! 30-entry one.
 //!
 //! Pure data and arithmetic, no iced types, so all of it is tested without a window.
 
+mod grid;
 mod summary;
 
 use std::{ops::Range, sync::Arc};
 
-use rc_engine::{
-    Command, CursorStep, CursorTarget, Entry, ListMode, PanelId, PanelState, extension,
-};
+use rc_engine::{Command, CursorStep, Entry, ListMode, PanelId, PanelState, extension};
 
 pub use summary::Summary;
 
@@ -36,6 +37,8 @@ pub struct Pane {
     page_rows: usize,
     /// The columns of the brief view that fit.
     columns: usize,
+    /// The tiles of the thumbnails that fit side by side.
+    tiles: usize,
     /// The list's measured width; 0 until the first measure.
     width: f32,
     /// Whether the cursor stands on the `..` row (when there is one).
@@ -64,6 +67,7 @@ impl Pane {
             top: 0,
             page_rows: 1,
             columns: 1,
+            tiles: 1,
             width: 0.0,
             error: None,
             follow_notice: None,
@@ -167,9 +171,14 @@ impl Pane {
         self.page_rows
     }
 
-    /// The columns on screen: those that fit in the brief view, one in the full view.
+    /// The columns on screen: those that fit in the brief view, the tiles of a line in the
+    /// thumbnails, one in the full view.
     pub fn columns(&self) -> usize {
-        if self.brief() { self.columns } else { 1 }
+        if self.brief() {
+            self.columns
+        } else {
+            self.line()
+        }
     }
 
     /// Whether the entry of `row` is selected; the `..` row never is.
@@ -213,12 +222,13 @@ impl Pane {
     }
 
     /// The rows on screen. In the full view one more than fits, so a partly visible last row is
-    /// drawn too; in the brief view the columns that fit, filled from the top.
+    /// drawn too, in the thumbnails one more line; in the brief view the columns that fit, filled
+    /// from the top.
     pub fn visible_range(&self) -> Range<usize> {
         let shown = if self.brief() {
             self.page_rows * self.columns
         } else {
-            self.page_rows + 1
+            (self.page_rows + 1) * self.line()
         };
         let end = (self.top + shown).min(self.rows());
         self.top.min(end)..end
@@ -242,45 +252,48 @@ impl Pane {
         self.ensure_visible();
     }
 
-    /// The mouse wheel: moves the view by `lines`, not the cursor; the brief view by a column.
+    /// The mouse wheel: moves the view by `lines`, not the cursor; the brief view by a column,
+    /// the thumbnails by lines of tiles.
     pub fn scroll(&mut self, lines: isize) {
         if self.brief() {
             let top_column = (self.top / self.page_rows).saturating_add_signed(lines.signum());
             self.top = top_column.min(self.last_top_column()) * self.page_rows;
         } else {
-            let max_top = self.rows().saturating_sub(self.page_rows);
-            self.top = self.top.saturating_add_signed(lines).min(max_top);
+            let line = self.line();
+            let top = (self.top / line).saturating_add_signed(lines);
+            self.top = top.min(self.max_top() / line) * line;
         }
     }
 
-    /// The furthest first row: the last page's in the full view, the last columns' in the brief
-    /// view.
+    /// The furthest first row: the last page's in the full view and the thumbnails, the last
+    /// columns' in the brief view.
     pub fn max_top(&self) -> usize {
         if self.brief() {
             self.last_top_column() * self.page_rows
         } else {
-            self.rows().saturating_sub(self.page_rows)
+            let line = self.line();
+            self.rows().div_ceil(line).saturating_sub(self.page_rows) * line
         }
     }
 
     /// The scroll bar (RC-010-23): the view from row `top`, not past the last page; the brief
-    /// view from the start of the column `top` falls in. The cursor stays where it is.
+    /// view from the start of the column `top` falls in, the thumbnails from the start of its
+    /// line. The cursor stays where it is.
     pub fn scroll_to(&mut self, top: usize) {
         let top = top.min(self.max_top());
-        self.top = if self.brief() {
-            top - top % self.page_rows
+        let stride = if self.brief() {
+            self.page_rows
         } else {
-            top
+            self.line()
         };
+        self.top = top - top % stride;
     }
 
     /// A key's command as the `..` row and the brief view's columns change it; `None` when the
     /// step stays in the window (onto or off the `..` row) and the engine has nothing to do.
     pub fn through_parent_row(&mut self, command: Command) -> Option<Command> {
-        if let Command::MoveCursor {
-            panel,
-            step: step @ (CursorStep::Left | CursorStep::Right),
-        } = command
+        if let Command::MoveCursor { panel, step } = command
+            && (self.thumbnails() || matches!(step, CursorStep::Left | CursorStep::Right))
         {
             return self.column_step(panel, step);
         }
@@ -371,34 +384,6 @@ impl Pane {
         command
     }
 
-    /// Left and Right: a column back or on in the brief view, `..` counted as a row; nothing in
-    /// the full view.
-    fn column_step(&mut self, panel: Option<PanelId>, step: CursorStep) -> Option<Command> {
-        if !self.brief() || self.state.entries.is_empty() {
-            return None;
-        }
-        let row = self.cursor_row();
-        let target = match step {
-            CursorStep::Left => row.saturating_sub(self.page_rows),
-            _ => (row + self.page_rows).min(self.rows() - 1),
-        };
-        if target == row {
-            return None;
-        }
-        self.on_parent = self.has_parent_row() && target == 0;
-        self.parent_asked = self.on_parent;
-        Some(match self.entry_index(target) {
-            Some(index) if !self.on_parent => Command::SetCursor {
-                panel,
-                target: CursorTarget::Index(index),
-            },
-            _ => Command::MoveCursor {
-                panel,
-                step: CursorStep::First,
-            },
-        })
-    }
-
     /// A click on `row`: the cursor goes there. The entry to put the engine's cursor on, which
     /// is the first one for the `..` row; `None` in a directory without entries.
     pub fn point_at(&mut self, row: usize) -> Option<usize> {
@@ -430,7 +415,7 @@ impl Pane {
     }
 
     /// Scrolls just enough to show the cursor, and never past the last page; the brief view by
-    /// whole columns.
+    /// whole columns, the thumbnails by whole lines.
     fn ensure_visible(&mut self) {
         let cursor = self.cursor_row();
         if self.brief() {
@@ -445,12 +430,14 @@ impl Pane {
             self.top = top_column.min(self.last_top_column()) * rows;
             return;
         }
-        if cursor < self.top {
-            self.top = cursor;
-        } else if cursor >= self.top + self.page_rows {
-            self.top = cursor + 1 - self.page_rows;
+        let line = self.line();
+        let (cursor, mut top) = (cursor / line, self.top / line);
+        if cursor < top {
+            top = cursor;
+        } else if cursor >= top + self.page_rows {
+            top = cursor + 1 - self.page_rows;
         }
-        self.top = self.top.min(self.rows().saturating_sub(self.page_rows));
+        self.top = top.min(self.max_top() / line) * line;
     }
 }
 

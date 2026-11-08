@@ -1,5 +1,6 @@
-//! rCommander's bundled viewer for markup (RC-100-83): reStructuredText, LaTeX and BibTeX,
-//! coloured like an editor (`highlighted`), for files of any size the viewer accepts.
+//! rCommander's bundled viewer for markup (RC-100-83): reStructuredText, LaTeX, BibTeX and
+//! TaskPaper to-do lists (RC-110-07), coloured like an editor (`highlighted`), for files of any
+//! size the viewer accepts.
 //!
 //! What the host promises a viewer, and how this one is built on it (`docs/plugins.md`, "Viewer
 //! (WLX)") - the C-family viewer's design (RC-100-82), with a lexer per format:

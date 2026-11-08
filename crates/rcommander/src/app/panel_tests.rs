@@ -13,6 +13,7 @@ fn entry(name: &str, kind: EntryKind) -> Entry {
         size: 0,
         modified: None,
         created: None,
+        accessed: None,
         attributes: Attributes::default(),
         hidden: false,
         owner: None,
@@ -42,7 +43,9 @@ fn state_at(path: &str, count: usize, cursor: usize) -> PanelState {
         flat: None,
         archive: None,
         dir_sizes: Default::default(),
+        columns: Default::default(),
         listing: None,
+        git: None,
     }
 }
 

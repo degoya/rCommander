@@ -99,14 +99,20 @@ pub fn format_order(order: &[AuthKind]) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case")]
 pub enum AuthUsed {
-    /// A key of an agent, by its fingerprint.
+    /// A key of an agent, by its fingerprint; with the key id of the certificate that signed
+    /// the login in, when one did (RC-060-09).
     Agent {
         source: AgentSourceKind,
         fingerprint: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        certificate: Option<String>,
     },
-    /// The connection's private key, by its fingerprint.
+    /// The connection's private key, by its fingerprint; with its certificate's key id, as for
+    /// an agent's key.
     Key {
         fingerprint: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        certificate: Option<String>,
     },
     Password,
     /// The password, answering the server's `keyboard-interactive` prompt.
@@ -157,6 +163,10 @@ pub struct SessionOptions {
     /// A `keyboard-interactive` question this matches is answered with the one-time code of the
     /// connection's seed (RC-060-08); [`DEFAULT_PROMPT`] unless the connection sets its own.
     pub totp_prompt: Pattern,
+    /// Whether OpenSSH user certificates are used (RC-060-09): the one stored with the key, and
+    /// those an agent holds. Off, an agent's certificates are passed over and a key logs in
+    /// alone.
+    pub use_certificates: bool,
 }
 
 /// [`DEFAULT_PROMPT`], compiled.
@@ -177,6 +187,7 @@ impl Default for SessionOptions {
             agent_fingerprint: None,
             own_key: None,
             max_agent_keys: DEFAULT_MAX_AGENT_KEYS,
+            use_certificates: true,
             totp_prompt: default_totp_prompt(),
         }
     }

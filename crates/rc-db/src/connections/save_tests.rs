@@ -27,6 +27,7 @@ fn key() -> StoredKey {
         comment: Some("me@box".into()),
         stored: true,
         public_key: "ssh-ed25519 AAAA".into(),
+        certificate: None,
     }
 }
 

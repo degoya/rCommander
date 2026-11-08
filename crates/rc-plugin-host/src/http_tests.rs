@@ -168,7 +168,7 @@ const TOKEN: &str = "canary-token-5521";
 fn entered(address: &str) -> HttpGrant {
     let address = url::Url::parse(address).expect("an address");
     let secrets = vec![("api_token".to_owned(), secrecy::SecretString::from(TOKEN))];
-    HttpGrant::entered(&address, secrets, 1024, Duration::from_secs(5)).expect("a client")
+    HttpGrant::entered(&address, secrets, None, 1024, Duration::from_secs(5)).expect("a client")
 }
 
 /// A server on a free loopback port that answers one connection with the request it read as the

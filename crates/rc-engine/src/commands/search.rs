@@ -1,4 +1,5 @@
-//! `files.search`, paged, and the streaming search the find-files dialog runs.
+//! `files.search`, paged, and the streaming search the find-files dialog runs - which alone may
+//! take its candidates from Everything (RC-100-93).
 
 use std::{
     hash::{Hash, Hasher},
@@ -9,13 +10,15 @@ use std::{
 
 use rc_vfs::{BackendId, Vfs, VfsError};
 use tokio::sync::mpsc;
+use tracing::warn;
 
 use super::panel::resolve_path;
 use crate::recover::LockOrRecover as _;
 use crate::{
     Engine, EngineError, Outcome, PanelId, read_guard,
     search::{
-        SearchCancel, SearchEvent, SearchHit, SearchQuery, Walk,
+        Finder, SearchCancel, SearchEvent, SearchHit, SearchQuery, Walk,
+        everything::{self, Everything, EverythingError},
         pages::{PageKey, Pages},
     },
 };
@@ -107,7 +110,7 @@ impl Engine {
                     SearchCancel::default(),
                 )
                 .guarded(guard);
-                (walk, Vec::new(), 0)
+                (self.with_archive_limits(walk).await, Vec::new(), 0)
             }
         };
         let mut first_of_next = None;
@@ -138,6 +141,16 @@ impl Engine {
         })
     }
 
+    /// `walk` opening archives as the engine opens them, with `archive.decoder_memory_mib`, when
+    /// it enters any.
+    async fn with_archive_limits(&self, walk: Walk) -> Walk {
+        if !walk.enters_archives() {
+            return walk;
+        }
+        self.read_archive_limits().await;
+        walk.with_archive_limits(self.inner.archives.limits())
+    }
+
     fn search_pages(&self) -> std::sync::MutexGuard<'_, SearchPages> {
         self.inner
             .search_pages
@@ -156,14 +169,57 @@ impl Engine {
         paths: &[String],
         query: &SearchQuery,
     ) -> Result<SearchHandle, EngineError> {
+        self.start_search_with(panel, paths, query, None).await
+    }
+
+    /// [`Engine::start_search`], the candidates asked of `everything` when one is given and
+    /// can be asked (RC-100-93): start folders on the machine's own drives, masks it takes, no
+    /// archives searched. Everything that does not answer leaves the search to walk the folders
+    /// as without it; a stop while it is asked ends the search.
+    ///
+    /// # Errors
+    ///
+    /// As [`Engine::start_search`].
+    pub async fn start_search_with(
+        &self,
+        panel: Option<PanelId>,
+        paths: &[String],
+        query: &SearchQuery,
+        everything: Option<Arc<dyn Everything>>,
+    ) -> Result<SearchHandle, EngineError> {
         let (vfs, backend, roots) = self.search_roots(panel, paths).await?;
         let cancel = SearchCancel::default();
         // Taken here: the task the walk runs in below does not inherit the dispatch's guard.
         let guard = read_guard::current(&backend);
-        let mut walk =
-            Walk::new(vfs, backend, roots, query.compile()?, cancel.clone()).guarded(guard);
+        let asked = everything
+            .filter(|_| {
+                !query.archives
+                    && backend == BackendId::Local
+                    && roots.iter().all(|root| everything::indexed(root))
+            })
+            .and_then(|everything| {
+                everything::expression(query, &roots).map(|search| (everything, search))
+            });
+        let finder = query
+            .duplicates
+            .map(|duplicates| Finder::new(Arc::clone(&vfs), duplicates, cancel.clone(), guard));
+        let walk = Walk::new(vfs, backend, roots, query.compile()?, cancel.clone()).guarded(guard);
+        let mut walk = self.with_archive_limits(walk).await;
         let (sender, events) = mpsc::channel(EVENT_BUFFER);
+        let asking = cancel.clone();
         tokio::spawn(async move {
+            if let Some((everything, search)) = asked {
+                match everything::ask(everything, search, asking).await {
+                    Ok(candidates) => walk = walk.over_candidates(candidates),
+                    // The walk finishes as cancelled at its first step.
+                    Err(EverythingError::Cancelled) => {}
+                    Err(error) => warn!(%error, "the search walks the folders without Everything"),
+                }
+            }
+            if let Some(finder) = finder {
+                stream_duplicates(finder, walk, sender).await;
+                return;
+            }
             while let Some(event) = walk.next().await {
                 if sender.send(event).await.is_err() {
                     break;
@@ -177,7 +233,7 @@ impl Engine {
     /// when `paths` is empty) and checked to be folders - on their own backend: a drive named
     /// from a server's panel is the machine's (RC-080-42). One search walks one backend, so
     /// start folders on two are refused.
-    async fn search_roots(
+    pub(super) async fn search_roots(
         &self,
         panel: Option<PanelId>,
         paths: &[String],
@@ -225,9 +281,28 @@ impl Engine {
     }
 }
 
+/// A duplicate search streamed (RC-100-98): its progress as it goes, then its groups, then the
+/// end.
+async fn stream_duplicates(finder: Finder, walk: Walk, sender: mpsc::Sender<SearchEvent>) {
+    let report = finder.streaming(sender.clone()).run(walk).await;
+    for group in report.groups {
+        if sender.send(SearchEvent::Duplicates(group)).await.is_err() {
+            return;
+        }
+    }
+    let finished = SearchEvent::Finished {
+        stats: report.stats,
+        cancelled: report.cancelled,
+    };
+    let _ = sender.send(finished).await;
+}
+
 /// The offset a cursor carries and the id of its kept walk, if it belongs to the search of
 /// `fingerprint`. A cursor without an id (an older one) is good too.
-fn cursor_of(cursor: &str, fingerprint: u64) -> Result<(usize, Option<u64>), EngineError> {
+pub(super) fn cursor_of(
+    cursor: &str,
+    fingerprint: u64,
+) -> Result<(usize, Option<u64>), EngineError> {
     let mut parts = cursor.split('-');
     let offset = parts.next().and_then(|offset| offset.parse().ok());
     let print = parts
@@ -247,7 +322,7 @@ fn cursor_of(cursor: &str, fingerprint: u64) -> Result<(usize, Option<u64>), Eng
 
 /// A hash of the start folders and the query that stays the same from run to run (FNV-1a;
 /// the std hasher is seeded per process).
-fn fingerprint(roots: &[PathBuf], query: &SearchQuery) -> u64 {
+pub(super) fn fingerprint(roots: &[PathBuf], query: &SearchQuery) -> u64 {
     let mut hasher = Fnv(0xcbf2_9ce4_8422_2325);
     roots.hash(&mut hasher);
     query.hash(&mut hasher);

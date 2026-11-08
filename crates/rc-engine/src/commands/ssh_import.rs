@@ -136,13 +136,12 @@ impl Engine {
                 _ => {}
             }
         }
-        Ok(Outcome::SshConfigImported(ssh_config_apply::report(
-            shown,
-            dry_run,
-            &found,
-            &candidates,
-            result,
-        )))
+        let mut report = ssh_config_apply::report(shown, dry_run, &found, &candidates, result);
+        // The jump hosts and the forwards, once every host is written (RC-110-03).
+        if !dry_run {
+            self.link_imported(&found, &mut report).await?;
+        }
+        Ok(Outcome::SshConfigImported(report))
     }
 }
 

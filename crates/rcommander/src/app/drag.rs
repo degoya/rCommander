@@ -106,6 +106,11 @@ pub enum DragMsg {
     FileDropped(PathBuf),
     /// The drop is complete; where the pointer stands, where the system says.
     Settled(Option<Pointer>),
+    /// The drop beside every button bar (RC-100-87): on to the panels.
+    Landed {
+        paths: Vec<PathBuf>,
+        pointer: Option<Pointer>,
+    },
     /// The answer to the size question: fetch, or not.
     Fetch(bool),
     /// The session's temporary folder was made, or could not be.
@@ -262,6 +267,13 @@ impl App {
             }
             DragMsg::Settled(pointer) => {
                 let paths = std::mem::take(&mut self.drag.dropped);
+                // A button of a bar under the pointer takes the drop first (RC-100-87).
+                if let Some(effects) = self.button_drop(&paths, pointer) {
+                    return effects;
+                }
+                return self.on_drag(DragMsg::Landed { paths, pointer });
+            }
+            DragMsg::Landed { paths, pointer } => {
                 if let Some(effects) = self.own_dropped(&paths, pointer) {
                     return effects;
                 }
@@ -355,6 +367,12 @@ impl App {
             }
         }
         Vec::new()
+    }
+
+    /// A drag of the panel's own entries that a button of a bar took (RC-100-87): no panel gets
+    /// its drop.
+    pub(super) fn forget_own_drag(&mut self) {
+        self.drag.own = None;
     }
 
     /// Files from another program into the folder of `panel`: the queue copies them (moves them

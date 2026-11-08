@@ -69,6 +69,8 @@ pub(super) fn patch_of(draft: &ConnectionDraft) -> ConnectionPatch {
         ftp_encoding: draft.ftp_encoding,
         theme_light: clear(&draft.theme_light),
         theme_dark: clear(&draft.theme_dark),
+        // The jump host is set by its mark once every row is written (RC-110-03).
+        jump_id: None,
     }
 }
 

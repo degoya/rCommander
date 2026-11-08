@@ -1,22 +1,22 @@
 use chrono::NaiveDate;
 
 use super::{
-    Change, Conflict, CounterSettings, MAX_RULE_TEXT, PlanInput, RenamePlan, RenameRule,
-    RenameSource, plan, split_name,
+    Change, Conflict, CounterSettings, MAX_RULE_TEXT, PlanInput, RenameContext, RenamePlan,
+    RenameRule, RenameSource, plan, split_name,
 };
 use crate::case::CaseMode;
 use crate::error::{MaskField, PatternErrorKind, RenameError};
 use crate::names::{FsRules, InvalidName};
 use crate::replace::SearchReplace;
 
-fn file(name: &str) -> RenameSource {
+pub(super) fn file(name: &str) -> RenameSource {
     RenameSource {
-        name: name.to_owned(),
         modified: NaiveDate::from_ymd_opt(2024, 3, 9).and_then(|date| date.and_hms_opt(14, 5, 0)),
+        ..RenameSource::named(name)
     }
 }
 
-fn rule(name_mask: &str, extension_mask: &str) -> RenameRule {
+pub(super) fn rule(name_mask: &str, extension_mask: &str) -> RenameRule {
     RenameRule {
         name_mask: name_mask.to_owned(),
         extension_mask: extension_mask.to_owned(),
@@ -30,18 +30,29 @@ fn planned(
     fs: FsRules,
     rule: &RenameRule,
 ) -> Result<RenamePlan, RenameError> {
+    planned_with(sources, existing, fs, rule, &RenameContext::default())
+}
+
+pub(super) fn planned_with(
+    sources: &[RenameSource],
+    existing: &[&str],
+    fs: FsRules,
+    rule: &RenameRule,
+    context: &RenameContext,
+) -> Result<RenamePlan, RenameError> {
     let existing: Vec<String> = existing.iter().map(|name| (*name).to_owned()).collect();
     let input = PlanInput {
         dir: r"C:\photos",
         sources,
         existing: &existing,
         fs,
+        context,
     };
     plan(&input, rule)
 }
 
 /// `(old, new, change, conflict)` of every item.
-fn lines(plan: &RenamePlan) -> Vec<(&str, &str, Change, Option<Conflict>)> {
+pub(super) fn lines(plan: &RenamePlan) -> Vec<(&str, &str, Change, Option<Conflict>)> {
     plan.items
         .iter()
         .map(|item| {

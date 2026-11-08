@@ -1,0 +1,13 @@
+{
+  "name": "Office viewer",
+  "description": "Shows the text of Word, Excel and PowerPoint documents (docx, xlsx, pptx), and their properties, sheets and slides as a tree.",
+  "codes": {
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.setting.sheet_rows": "Rows shown per sheet",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_many_entries": "The document has more than 10,000 parts and is not read.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_large": "A part of the document unpacks to more than 64 MiB and is not read.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_compressed": "A part of the document unpacks to more than 500 times its packed size and is not read.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.too_deep": "A part of the document nests its content too deeply to be read.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.damaged": "The document is damaged, encrypted or packed in a way the viewer cannot read.",
+    "01a1b720-fdc2-7718-851e-092f28c86d2f.not_office": "The file is a zip archive, but not a Word, Excel or PowerPoint document."
+  }
+}

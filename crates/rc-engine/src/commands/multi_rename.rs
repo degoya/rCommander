@@ -19,9 +19,13 @@
 //! (each one listed once, at most [`MAX_NESTED_DIRS`]), and an undo looks the nested names of
 //! its run up one by one, since the folder's listing does not show them. A run that went through
 //! leaves its rule as the one last used (`multi_rename_presets.rs`).
+//!
+//! The request brings what only the window knows (RC-100-96): the clipboard's text for `[X]`, the
+//! moments of `[T2]` and `[T3]` - the time of the call where it gives none - and the local date
+//! and time formats. The undo and the next step are `multi_rename_undo.rs`.
 
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     path::Path,
     sync::{
         Arc,
@@ -34,8 +38,8 @@ use async_trait::async_trait;
 use rc_db::{Db, DbError};
 use rc_ops::{ErrorPolicy, JobKind, JobOptions, JobSpec, OpsError, StepJournal};
 use rc_rename::{
-    Change, FsRules, PlanInput, RenameError, RenamePlan, RenameRule, RenameSource, RenameStep,
-    SUBFOLDER_SEPARATOR, nested_path,
+    Change, FsRules, PlanInput, RenameContext, RenameError, RenamePlan, RenameRule, RenameSource,
+    RenameStep, SUBFOLDER_SEPARATOR, nested_path,
 };
 use rc_vfs::{BackendId, Capabilities, Vfs, VfsPath};
 use serde::{Deserialize, Serialize};
@@ -56,13 +60,16 @@ pub struct MultiRenameRequest {
     /// Entries of the folder, in the order the counter counts them. Empty: in the panel's own
     /// folder its selection in panel order, else the entry under its cursor.
     pub names: Vec<String>,
-    /// Masks, case, search and replace, counter.
+    /// Masks, case, search and replace, counter - or a list of names.
     pub rule: RenameRule,
+    /// The clipboard's text, the dialog's moments and the local formats the placeholders read;
+    /// a moment not given is the time of the call.
+    pub context: RenameContext,
 }
 
 /// The claim on starting a multi-rename run ([`Engine::claim_rename`]); released when dropped,
 /// on every way out of the command.
-struct RenameClaim<'a>(&'a AtomicBool);
+pub(super) struct RenameClaim<'a>(&'a AtomicBool);
 
 impl Drop for RenameClaim<'_> {
     fn drop(&mut self) {
@@ -78,7 +85,7 @@ struct Planned {
 
 /// The naming rules of `dir`'s file system: the platform's for local folders, Unix lengths for
 /// the others, upper and lower case as the backend reports it.
-fn fs_rules(dir: &VfsPath, capabilities: Capabilities) -> FsRules {
+pub(super) fn fs_rules(dir: &VfsPath, capabilities: Capabilities) -> FsRules {
     let base = if dir.backend == BackendId::Local {
         FsRules::native()
     } else {
@@ -142,21 +149,32 @@ async fn nested_entries(vfs: &dyn Vfs, dir: &Path, plan: &RenamePlan) -> Vec<Str
     names
 }
 
-/// The plan of `rule` for `sources` in `dir`.
+/// The plan of `request`'s rule for `sources` in `dir`.
 fn plan_in(
     dir: &str,
     sources: &[RenameSource],
     existing: &[String],
     fs: FsRules,
-    rule: &RenameRule,
+    request: (&RenameRule, &RenameContext),
 ) -> Result<RenamePlan, RenameError> {
+    let (rule, context) = request;
     let input = PlanInput {
         dir,
         sources,
         existing,
         fs,
+        context,
     };
     rc_rename::plan(&input, rule)
+}
+
+/// `context` with the moments it leaves open at `now`: what `[T2]` and `[T3]` read for an agent.
+fn with_moments(context: &RenameContext, now: SystemTime) -> RenameContext {
+    let now = rc_rename::local_time(now);
+    let mut context = context.clone();
+    context.opened_at.get_or_insert(now);
+    context.changed_at.get_or_insert(now);
+    context
 }
 
 /// A new run's tag, also the middle of its temporary names: the time in microseconds, in hex.
@@ -179,7 +197,7 @@ fn dir_key(dir: &VfsPath) -> Result<String, EngineError> {
 
 /// Which way a rename job moves the marks of its run.
 #[derive(Debug, Clone, Copy)]
-enum Direction {
+pub(super) enum Direction {
     /// Step `index` of the run is carried out.
     Apply,
     /// The undo's step `index` reversed the run's step `applied - 1 - index`.
@@ -187,10 +205,10 @@ enum Direction {
 }
 
 /// A rename job's journal: the marks of its run in the undo log.
-struct Journal {
-    db: Db,
-    run: String,
-    direction: Direction,
+pub(super) struct Journal {
+    pub(super) db: Db,
+    pub(super) run: String,
+    pub(super) direction: Direction,
 }
 
 #[async_trait]
@@ -255,78 +273,19 @@ impl Engine {
         let outcome = self
             .submit_rename(run, dir, schedule.steps, (journal, rollback))
             .await?;
-        // Offered again as "last used"; a rule that cannot be stored is only missing there.
+        // Offered again as "last used" - without a name list, which belongs to these entries
+        // only; a rule that cannot be stored is only missing there.
+        let rule = RenameRule {
+            names: None,
+            ..request.rule.clone()
+        };
         if let Err(error) = last
-            .set(super::multi_rename_presets::LAST_RULE_KEY, &request.rule)
+            .set(super::multi_rename_presets::LAST_RULE_KEY, &rule)
             .await
         {
             tracing::warn!(%error, "the last multi-rename rule was not stored");
         }
         Ok(outcome)
-    }
-
-    /// `multi_rename.undo`: the latest run reversed as far as it got.
-    pub(crate) async fn multi_rename_undo(&self) -> Result<Outcome, EngineError> {
-        let db = self.db()?.clone();
-        let _claim = self.claim_rename()?;
-        let logged = db
-            .latest_rename_run()
-            .await?
-            .ok_or(EngineError::RenameNothingToUndo)?;
-        if !logged.is_complete() {
-            return Err(EngineError::RenameUndoIncomplete);
-        }
-        let dir: VfsPath =
-            serde_json::from_str(&logged.dir).map_err(|_| EngineError::RenameUndoIncomplete)?;
-        let vfs = self.vfs(&dir)?;
-        let mut present: Vec<String> = vfs
-            .list(&dir.path)
-            .await?
-            .into_iter()
-            .map(|entry| entry.name)
-            .collect();
-        // Names the run moved into subfolders are not in the listing: each is looked up.
-        let nested: BTreeSet<&str> = logged
-            .steps
-            .iter()
-            .flat_map(|step| [step.from.as_str(), step.to.as_str()])
-            .filter(|name| name.contains(SUBFOLDER_SEPARATOR))
-            .collect();
-        for name in nested {
-            if vfs.stat(&nested_path(&dir.path, name)).await.is_ok() {
-                present.push(name.to_owned());
-            }
-        }
-        let fs = fs_rules(&dir, vfs.capabilities());
-        let marked = logged.marked();
-        let steps: Vec<RenameStep> = logged
-            .steps
-            .into_iter()
-            .map(|step| RenameStep {
-                from: step.from,
-                to: step.to,
-            })
-            .collect();
-        let applied = rc_rename::applied_count(&steps, marked, &present, &fs);
-        if applied == 0 {
-            return Err(EngineError::RenameNothingToUndo);
-        }
-        let undo = rc_rename::undo_steps(&steps[..applied]);
-        let mismatches = rc_rename::check_undo(&undo, &present, &fs);
-        if !mismatches.is_empty() {
-            return Err(EngineError::RenameUndoMismatch { mismatches });
-        }
-        if applied != marked {
-            // A crash between a rename and its mark: the log follows the folder.
-            db.set_rename_marks(&logged.run, applied).await?;
-        }
-        let journal = Journal {
-            db,
-            run: logged.run.clone(),
-            direction: Direction::Undo { applied },
-        };
-        self.submit_rename(logged.run, dir, undo, (journal, false))
-            .await
     }
 
     /// The plan of `request` against a fresh listing of its folder.
@@ -362,16 +321,20 @@ impl Engine {
             sources.push(RenameSource {
                 name: entry.name.clone(),
                 modified: entry.modified.map(rc_rename::local_time),
+                size: Some(entry.size),
+                is_dir: entry.is_dir_like(),
             });
         }
         let mut existing: Vec<String> = entries.iter().map(|entry| entry.name.clone()).collect();
         let dir_text = dir.path.to_string_lossy();
         let fs = fs_rules(&dir, vfs.capabilities());
-        let mut plan = plan_in(&dir_text, &sources, &existing, fs, &request.rule)?;
+        let context = with_moments(&request.context, SystemTime::now());
+        let rule = (&request.rule, &context);
+        let mut plan = plan_in(&dir_text, &sources, &existing, fs, rule)?;
         let nested = nested_entries(vfs.as_ref(), &dir.path, &plan).await;
         if !nested.is_empty() {
             existing.extend(nested);
-            plan = plan_in(&dir_text, &sources, &existing, fs, &request.rule)?;
+            plan = plan_in(&dir_text, &sources, &existing, fs, rule)?;
         }
         Ok(Planned { dir, plan })
     }
@@ -382,7 +345,7 @@ impl Engine {
     /// atomically and held until the caller's job is in the queue, where the job's own state
     /// takes over (set before its end is announced), so two calls at the same moment never both
     /// start.
-    fn claim_rename(&self) -> Result<RenameClaim<'_>, EngineError> {
+    pub(super) fn claim_rename(&self) -> Result<RenameClaim<'_>, EngineError> {
         let flag = &self.inner.rename_claim;
         if flag
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -406,7 +369,7 @@ impl Engine {
     /// Queues `steps` in `dir` as one rename job journaled into `run`. A failing step stops it:
     /// the steps after it rely on it; with `rollback` the job reverses its steps done when that
     /// leaves entries under temporary names. At once or queued ([`Engine::tool_list`]).
-    async fn submit_rename(
+    pub(super) async fn submit_rename(
         &self,
         run: String,
         dir: VfsPath,
@@ -438,3 +401,7 @@ mod tests;
 #[cfg(test)]
 #[path = "multi_rename_rollback_tests.rs"]
 mod rollback_tests;
+
+#[cfg(test)]
+#[path = "multi_rename_context_tests.rs"]
+mod context_tests;

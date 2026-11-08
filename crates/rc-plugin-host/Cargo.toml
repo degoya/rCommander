@@ -37,6 +37,9 @@ rc-rename = { path = "../rc-rename" }
 # `http` of a secret source: plain HTTP to its granted loopback port (RC-100-33); of an
 # inventory: HTTPS to the address the person entered (RC-100-39), hence rustls.
 reqwest = { workspace = true, features = ["rustls"] }
+# The engine's TLS for an inventory's address, handed to reqwest as it is (RC-100-40): the
+# system roots, then the certificate the person trusted (RC-070-02). reqwest's own rustls.
+rustls.workspace = true
 # The value `secrets.get` answers, zeroized when dropped (RC-100-33).
 secrecy.workspace = true
 semver.workspace = true

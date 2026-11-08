@@ -8,15 +8,16 @@ use crate::{
 impl Engine {
     /// `panel.move_cursor`: a step from where the cursor stands. A page is one row less than
     /// the window last reported ([`Engine::set_page_rows`]), so one row stays in view; a column
-    /// of the brief view is all of them.
+    /// of the brief view is all of them. In the thumbnails a row is the tiles of one line
+    /// ([`Engine::set_page_tiles`]), and Left and Right step one tile.
     pub(crate) fn move_cursor(&self, panel: Option<PanelId>, step: CursorStep) -> Outcome {
         let id = self.resolve(panel);
         let snapshot = {
             let mut state = self.state();
             let active = state.active == id;
-            let (page, column) = state.paging(id);
+            let paging = state.paging(id);
             let panel = state.panel_mut(id);
-            panel.cursor = stepped(panel.cursor, panel.entries.len(), page, column, step);
+            panel.cursor = paging.stepped(panel.cursor, panel.entries.len(), step);
             panel.snapshot(id, active)
         };
         self.publish(EngineEvent::Panel {
@@ -113,44 +114,89 @@ pub(crate) fn stepped(
     column: usize,
     step: CursorStep,
 ) -> usize {
-    let Some(last) = len.checked_sub(1) else {
-        return 0;
-    };
-    reach(cursor, len, page, column, step).clamp(0, last as isize) as usize
+    Paging {
+        page,
+        column,
+        line: 1,
+    }
+    .stepped(cursor, len, step)
 }
 
-/// Where `step` leads from `cursor` before it is held to the entries: before the first one or
-/// past the last when the step is cut short.
-pub(crate) fn reach(
-    cursor: usize,
-    len: usize,
-    page: usize,
-    column: usize,
-    step: CursorStep,
-) -> isize {
-    let (cursor, page, column) = (cursor as isize, page as isize, column as isize);
-    match step {
-        CursorStep::Up => cursor - 1,
-        CursorStep::Down => cursor + 1,
-        CursorStep::PageUp => cursor - page,
-        CursorStep::PageDown => cursor + page,
-        CursorStep::First => 0,
-        CursorStep::Last => len as isize - 1,
-        CursorStep::Left => cursor - column,
-        CursorStep::Right => cursor + column,
+/// How far the steps of a panel go, in entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Paging {
+    /// Page up and down.
+    pub page: usize,
+    /// Left and right: a column of the brief view, one tile of the thumbnails, none in a view
+    /// with columns.
+    pub column: usize,
+    /// Up and down: one entry, or a line of tiles in the thumbnails.
+    pub line: usize,
+}
+
+impl Paging {
+    /// `cursor` moved by `step` among `len` entries; 0 when there are none.
+    pub(crate) fn stepped(self, cursor: usize, len: usize, step: CursorStep) -> usize {
+        let Some(last) = len.checked_sub(1) else {
+            return 0;
+        };
+        self.reach(cursor, len, step).clamp(0, last as isize) as usize
+    }
+
+    /// Where `step` leads from `cursor` before it is held to the entries: before the first one
+    /// or past the last when the step is cut short.
+    pub(crate) fn reach(self, cursor: usize, len: usize, step: CursorStep) -> isize {
+        let (cursor, page, column, line) = (
+            cursor as isize,
+            self.page as isize,
+            self.column as isize,
+            self.line as isize,
+        );
+        match step {
+            CursorStep::Up => cursor - line,
+            CursorStep::Down => cursor + line,
+            CursorStep::PageUp => cursor - page,
+            CursorStep::PageDown => cursor + page,
+            CursorStep::First => 0,
+            CursorStep::Last => len as isize - 1,
+            CursorStep::Left => cursor - column,
+            CursorStep::Right => cursor + column,
+        }
     }
 }
 
 impl crate::State {
-    /// A page and a column of panel `id`, in entries: one row less than fits, so one row stays
-    /// in view, and every row that fits in the brief view, none in the full view.
-    pub(crate) fn paging(&self, id: PanelId) -> (usize, usize) {
+    /// The steps of panel `id`: a page is one row less than fits, so one row stays in view; a
+    /// column is every row that fits in the brief view, none in a view with columns. In the
+    /// thumbnails a row is a line of tiles: up and down go a line, left and right a tile, a page
+    /// is its lines of tiles less one.
+    pub(crate) fn paging(&self, id: PanelId) -> Paging {
         let rows = self.page_rows[id.index()];
-        let column = match self.panel(id).mode {
-            ListMode::Brief => rows,
-            ListMode::Full => 0,
-        };
-        (rows.saturating_sub(1).max(1), column)
+        let page = rows.saturating_sub(1).max(1);
+        let mode = self.panel(id).mode;
+        if mode == ListMode::Thumbnails {
+            let tiles = self.page_tiles[id.index()].max(1);
+            return Paging {
+                page: page * tiles,
+                column: 1,
+                line: tiles,
+            };
+        }
+        let column = if mode.has_columns() { 0 } else { rows };
+        Paging {
+            page,
+            column,
+            line: 1,
+        }
+    }
+}
+
+impl Engine {
+    /// How many tiles of `panel`'s thumbnails fit side by side, what a line of the grid is
+    /// (RC-100-89). A layout fact the window reports, as [`Engine::set_page_rows`]: no command, no
+    /// event.
+    pub fn set_page_tiles(&self, panel: PanelId, tiles: usize) {
+        self.state().page_tiles[panel.index()] = tiles.max(1);
     }
 }
 

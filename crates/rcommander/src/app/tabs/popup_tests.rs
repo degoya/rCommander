@@ -78,6 +78,8 @@ fn a_tab_menu_offers_lock_copy_and_close() {
             Some(PopupAction::LockTab(TabId(4))),
             Some(PopupAction::CopyTab(TabId(4))),
             Some(PopupAction::CloseTab(TabId(4))),
+            Some(PopupAction::RenameTab(TabId(4))),
+            Some(PopupAction::CloseAllTabs),
         ]
     );
     assert!(popup.rows.iter().all(|row| row.key.is_none()));
@@ -90,7 +92,7 @@ fn a_tab_menus_entries_show_their_commands_keys() {
         (command == "tabs.close").then(|| "Ctrl+W".to_owned())
     });
     let keys: Vec<Option<&str>> = popup.rows.iter().map(|row| row.key.as_deref()).collect();
-    assert_eq!(keys, [None, None, Some("Ctrl+W")]);
+    assert_eq!(keys, [None, None, Some("Ctrl+W"), None, None]);
 }
 
 fn tab(id: u64, title: &str, locked: bool, active: bool) -> TabView {
@@ -99,6 +101,7 @@ fn tab(id: u64, title: &str, locked: bool, active: bool) -> TabView {
         title: title.to_owned(),
         path: dir(title),
         locked,
+        renamed: false,
         active,
     }
 }

@@ -54,6 +54,12 @@ fn new_tab(tab: &TabSpec, (sort, mode): (SortOrder, ListMode)) -> Tab {
         mode: tab.mode.unwrap_or(mode),
         locked: tab.locked,
         cursor: None,
+        // Checked with the spec (`spec.rs`); blank is the folder's name.
+        title: tab
+            .title
+            .as_deref()
+            .and_then(|title| crate::tabs::checked_title(title).ok().flatten()),
+        file_filter: crate::FileFilter::All,
     }
 }
 

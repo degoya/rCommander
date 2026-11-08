@@ -32,16 +32,42 @@ fn every_error_has_a_listed_code() {
         RenameError::Regex {
             message: "x".to_owned(),
         },
+        RenameError::NameList {
+            max_names: 1,
+            max_bytes: 1,
+        },
+        RenameError::ClipboardEmpty,
+        RenameError::ReplaceWildcards,
         RenameError::Conflicts { count: 1 },
         RenameError::Unschedulable,
+        RenameError::MaskCollision {
+            first: "a".to_owned(),
+            second: "b".to_owned(),
+            name: "x".to_owned(),
+        },
+        RenameError::MaskUnchanged {
+            name: "a".to_owned(),
+        },
+        RenameError::MaskChain {
+            entry: "a".to_owned(),
+            name: "b".to_owned(),
+        },
+        RenameError::MaskIntoArchive,
     ];
     for sample in &samples {
         match sample {
             RenameError::TooLong { .. }
             | RenameError::Mask { .. }
             | RenameError::Regex { .. }
+            | RenameError::NameList { .. }
+            | RenameError::ClipboardEmpty
+            | RenameError::ReplaceWildcards
             | RenameError::Conflicts { .. }
-            | RenameError::Unschedulable => {}
+            | RenameError::Unschedulable
+            | RenameError::MaskCollision { .. }
+            | RenameError::MaskUnchanged { .. }
+            | RenameError::MaskChain { .. }
+            | RenameError::MaskIntoArchive => {}
         }
     }
     let codes: Vec<&str> = samples.iter().map(RenameError::code).collect();

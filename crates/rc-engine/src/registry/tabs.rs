@@ -20,6 +20,11 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         summary: "Close a tab of a panel, the active one by default; the last tab stays",
     },
     CommandSpec {
+        id: "tabs.close_all",
+        class: CommandClass::Read,
+        summary: "Close every tab of a panel but the active one; locked tabs stay unless included",
+    },
+    CommandSpec {
         id: "tabs.copy_to_other",
         class: CommandClass::Read,
         summary: "Copy a tab of a panel to the end of the other panel's tabs",
@@ -50,6 +55,11 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         summary: "Open a folder in a new tab: the panel's own, the one under the cursor, or a path; in this or the other panel",
     },
     CommandSpec {
+        id: "tabs.rename",
+        class: CommandClass::Read,
+        summary: "Give a tab its own name, kept in every folder it shows; a blank name shows the folder's again",
+    },
+    CommandSpec {
         id: "tabs.select",
         class: CommandClass::Read,
         summary: "Show a tab of a panel by its id",
@@ -69,6 +79,25 @@ macro_rules! commands {
             "tabs.lock" => LockTab(LockTabRequest),
             "tabs.copy_to_other" => CopyTabToOther(TabRequest),
             "tabs.move" => MoveTab(MoveTabRequest),
+            /// Total Commander's "Rename tab": at most 64 characters, no control characters;
+            /// blank or none shows the folder's name again (RC-100-92).
+            "tabs.rename" => RenameTab {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                /// The active tab when `None`.
+                #[serde(default)]
+                tab: Option<crate::TabId>,
+                #[serde(default)]
+                title: Option<String>,
+            },
+            /// Total Commander's `cm_CloseAllTabs`: the active tab stays, the locked ones too
+            /// unless `include_locked` (RC-100-92).
+            "tabs.close_all" => CloseAllTabs {
+                #[serde(default)]
+                panel: Option<PanelId>,
+                #[serde(default)]
+                include_locked: bool,
+            },
             "panel.swap" => SwapPanels(SwapRequest),
             "panel.transfer" => TransferDir(TransferDirRequest),
         } }

@@ -146,6 +146,7 @@ impl RcMcpServer {
             + Self::wsl_router()
             + Self::agent_router()
             + Self::files_search_router()
+            + Self::duplicates_router()
             + Self::files_read_router()
             + Self::compare_router()
             + Self::checksum_router()
@@ -161,6 +162,7 @@ impl RcMcpServer {
             + Self::flat_router()
             + Self::archives_router()
             + Self::archive_ops_router()
+            + Self::archive_update_router()
             + Self::properties_router()
             + Self::plugins_router()
             + Self::favourites_router()
@@ -170,6 +172,13 @@ impl RcMcpServer {
             + Self::update_router()
             + Self::theme_router()
             + Self::workspaces_router()
+            + Self::forwards_router()
+            + Self::column_sets_router()
+            + Self::user_commands_router()
+            + Self::git_status_router()
+            + Self::remote_edit_router()
+            + Self::panel_lists_router()
+            + Self::button_bars_router()
     }
 
     /// The names of every tool, sorted: what the coverage test holds the table against.

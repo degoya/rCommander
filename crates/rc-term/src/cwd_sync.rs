@@ -77,6 +77,9 @@ pub(crate) struct Changes {
     pub prompt: bool,
     /// A waiting `cd`, typed now.
     pub write: Option<Vec<u8>>,
+    /// The shell marked its prompt after a line the person entered: a command has ended, and
+    /// what it did to the folders may show (RC-110-02). A `cd` the app typed is no such line.
+    pub returned: bool,
 }
 
 /// The folder and prompt of one session.
@@ -97,6 +100,8 @@ pub(crate) struct CwdSync {
     prompt: PromptState,
     /// Something was typed since the last Enter.
     dirty: bool,
+    /// A line was entered since the last prompt mark ([`Changes::returned`]).
+    entered: bool,
     /// The panel folder a `cd` waits to go to.
     pending: Option<PathBuf>,
     status: Option<FollowStatus>,
@@ -115,6 +120,7 @@ impl CwdSync {
             reported: None,
             prompt: PromptState::Unknown,
             dirty: false,
+            entered: false,
             pending: None,
             status: None,
         }
@@ -195,6 +201,7 @@ impl CwdSync {
             }
             Some(OscEvent::Prompt(PromptMark::PromptStart | PromptMark::InputStart)) => {
                 changes.prompt |= self.set_prompt(PromptState::AtPrompt);
+                changes.returned |= std::mem::take(&mut self.entered);
                 if let Some(target) = self.pending.take() {
                     let before = self.status;
                     let (_, line) = self.attempt(target);
@@ -218,6 +225,7 @@ impl CwdSync {
             match byte {
                 b'\r' | b'\n' => {
                     self.dirty = false;
+                    self.entered = true;
                     if self.prompt == PromptState::AtPrompt {
                         self.prompt = PromptState::Running;
                     }

@@ -1,8 +1,9 @@
 //! The small questions in windows of their own (RC-080-23, owner 2026-10-19: the small questions
 //! too, as in Total Commander): the MCP call's confirmation, a host key, a certificate, the offer
-//! to remove the unused vault, quitting while jobs run, the unlock prompt a connection asked for
-//! alone, an archive's password, the question before a large fetch and the confirmation before a
-//! synchronization. While `appearance.dialog_windows` is on each is a window of the system with
+//! to remove the unused vault, quitting while jobs run, a server file edited through a copy
+//! (RC-110-01), the unlock prompt a connection asked for alone, an archive's password, the
+//! question before a large fetch, the confirmation before a synchronization and the parameters
+//! of a program asked before it starts (`?`, RC-100-86). While `appearance.dialog_windows` is on each is a window of the system with
 //! its title, its place (`window.dialog.<name>`) and the app's icon; off, they stay the cards they
 //! were (`dialog_windows.rs`, `question_layers`).
 //!
@@ -31,6 +32,7 @@ use super::{DialogWindow, own::is_input};
 use crate::{
     app::{
         App, Effect, Message, archive_ops, archive_ops::ArchiveDialog, connections, mcp_confirm,
+        user_commands::ASK_FIELD,
     },
     i18n::t,
     theme::{Tokens, layout},
@@ -47,6 +49,9 @@ pub enum Question {
     Certificate,
     /// The last secret went: remove the master password too (RC-050-03)?
     VaultOffer,
+    /// A server file edited through a copy: upload a save, a change on the server, a write in
+    /// place, a change kept at the last quit, Done on a changed copy (RC-110-01).
+    RemoteEdit,
     /// Quitting while jobs run or wait (RC-080-17).
     Quit,
     /// The unlock prompt a connection asked for alone (RC-050-03).
@@ -57,22 +62,26 @@ pub enum Question {
     LargeFetch,
     /// The confirmation before a synchronization runs (RC-020-04).
     SyncConfirm,
+    /// A program's parameters before it starts (`?`, RC-100-86).
+    AskParams,
 }
 
 impl Question {
     /// Every question, the top one first - the order their cards take the keys in
     /// (`intercepts.rs`): a call or a connection waits for a person, the person's own questions
     /// come after.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 11] = [
         Self::Mcp,
         Self::HostKey,
         Self::Certificate,
         Self::VaultOffer,
         Self::Quit,
+        Self::RemoteEdit,
         Self::Unlock,
         Self::ArchivePassword,
         Self::LargeFetch,
         Self::SyncConfirm,
+        Self::AskParams,
     ];
 
     /// Whether the main window takes no input while it is open: every question but the
@@ -90,10 +99,12 @@ impl Question {
             Self::Certificate => "window.dialog.certificate",
             Self::VaultOffer => "window.dialog.vault_offer",
             Self::Quit => "window.dialog.quit",
+            Self::RemoteEdit => "window.dialog.remote_edit",
             Self::Unlock => "window.dialog.vault_unlock",
             Self::ArchivePassword => "window.dialog.archive_password",
             Self::LargeFetch => "window.dialog.large_fetch",
             Self::SyncConfirm => "window.dialog.sync_confirm",
+            Self::AskParams => "window.dialog.user_command_params",
         }
     }
 
@@ -105,10 +116,12 @@ impl Question {
             Self::Certificate => Size::new(layout::MEDIUM_DIALOG_WIDTH, 520.0),
             Self::VaultOffer => Size::new(layout::SMALL_DIALOG_WIDTH, 200.0),
             Self::Quit => Size::new(layout::SMALL_DIALOG_WIDTH, 180.0),
+            Self::RemoteEdit => Size::new(layout::SMALL_DIALOG_WIDTH, 220.0),
             Self::Unlock => Size::new(layout::SMALL_DIALOG_WIDTH, 300.0),
             Self::ArchivePassword => Size::new(layout::SMALL_DIALOG_WIDTH, 280.0),
             Self::LargeFetch => Size::new(layout::SMALL_DIALOG_WIDTH, 220.0),
             Self::SyncConfirm => Size::new(layout::SMALL_DIALOG_WIDTH, 320.0),
+            Self::AskParams => Size::new(layout::SMALL_DIALOG_WIDTH, 220.0),
         }
     }
 
@@ -120,10 +133,12 @@ impl Question {
             Self::Certificate => Size::new(520.0, 380.0),
             Self::VaultOffer => Size::new(400.0, 170.0),
             Self::Quit => Size::new(400.0, 150.0),
+            Self::RemoteEdit => Size::new(420.0, 180.0),
             Self::Unlock => Size::new(420.0, 240.0),
             Self::ArchivePassword => Size::new(420.0, 220.0),
             Self::LargeFetch => Size::new(400.0, 180.0),
             Self::SyncConfirm => Size::new(420.0, 240.0),
+            Self::AskParams => Size::new(400.0, 180.0),
         }
     }
 
@@ -136,10 +151,12 @@ impl Question {
             Self::Mcp => Some(mcp_confirm::DENY_ID),
             Self::Unlock => Some(connections::VAULT_FIELD),
             Self::ArchivePassword => Some(archive_ops::PASSWORD_FIELD),
+            Self::AskParams => Some(ASK_FIELD),
             Self::HostKey
             | Self::Certificate
             | Self::VaultOffer
             | Self::Quit
+            | Self::RemoteEdit
             | Self::LargeFetch
             | Self::SyncConfirm => None,
         }
@@ -166,6 +183,7 @@ impl App {
             Question::Certificate => self.cert_trust.shown().is_some(),
             Question::VaultOffer => self.vault_offer,
             Question::Quit => self.quit.asking.is_some(),
+            Question::RemoteEdit => self.quit.remote.asks(),
             Question::Unlock => self
                 .connections
                 .as_ref()
@@ -177,6 +195,7 @@ impl App {
                 .sync
                 .as_ref()
                 .is_some_and(|dialog| dialog.confirm.is_some()),
+            Question::AskParams => self.user_commands.ask.is_some(),
         }
     }
 
@@ -212,6 +231,7 @@ impl App {
             Question::Certificate => self.cert_trust_intercept(message),
             Question::VaultOffer => self.vault_offer_intercept(message),
             Question::Quit => self.quit_intercept(message),
+            Question::RemoteEdit => self.remote_edit_intercept(message),
             Question::Unlock => self.connections_intercept(message),
             Question::ArchivePassword => match message {
                 Message::Key(chord) => Some(self.archive_key(chord)),
@@ -219,6 +239,7 @@ impl App {
             },
             Question::LargeFetch => self.drag_intercept(message),
             Question::SyncConfirm => self.compare_intercept(message),
+            Question::AskParams => self.ask_intercept(message),
         };
         Some(taken.unwrap_or_default())
     }
@@ -242,6 +263,7 @@ impl App {
             },
             Question::VaultOffer => (self.vault_offer_body(), false),
             Question::Quit => (self.quit_body(), false),
+            Question::RemoteEdit => (self.remote_edit_body(), false),
             Question::Unlock => (
                 self.connections
                     .as_ref()
@@ -257,6 +279,7 @@ impl App {
             ),
             Question::LargeFetch => (self.drag_question_body(tokens), false),
             Question::SyncConfirm => (self.sync_confirm_body(), false),
+            Question::AskParams => (self.ask_body(), false),
         };
         body.map(|body| layout::warning_window_body(body, warning, tokens))
             .into_iter()
@@ -271,6 +294,7 @@ impl App {
             Question::Certificate => self.cert_trust_title().unwrap_or_default(),
             Question::VaultOffer => t!("vault_offer.title"),
             Question::Quit => t!("quit.title"),
+            Question::RemoteEdit => self.remote_edit_title().unwrap_or_default(),
             Question::Unlock => self
                 .connections
                 .as_ref()
@@ -279,6 +303,7 @@ impl App {
             Question::ArchivePassword => t!("archive_ops.password_title"),
             Question::LargeFetch => t!("drag.fetch_title"),
             Question::SyncConfirm => t!("sync.confirm_title"),
+            Question::AskParams => t!("user_commands.ask.title"),
         };
         title.to_owned()
     }

@@ -17,6 +17,10 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         "panel.context_menu",
         Coverage::Omitted("GUI only: shell menu"),
     ),
+    (
+        "panel.cycle_separate_tree",
+        Coverage::Omitted("writes only panels.separate_tree; settings_set does the same"),
+    ),
     ("panel.deselect_all", Coverage::Covered("panel_select")),
     (
         "panel.deselect_by_mask",
@@ -29,6 +33,7 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         ),
     ),
     ("panel.get_state", Coverage::Covered("get_panel_state")),
+    ("panel.git_status", Coverage::Covered("panel_git_status")),
     ("panel.invert_selection", Coverage::Covered("panel_select")),
     ("panel.list_dir", Coverage::Covered("list_dir")),
     (
@@ -68,10 +73,23 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
     ("panel.set_cursor", Coverage::Covered("set_cursor")),
     ("panel.set_view", Coverage::Covered("panel_set_view")),
     ("panel.show_files", Coverage::Covered("show_files")),
+    ("panel.show_tree", Coverage::Covered("panel_show_tree")),
     ("panel.sort", Coverage::Covered("panel_sort")),
     (
         "panel.switch_active",
         Coverage::Covered("switch_active_panel"),
+    ),
+    (
+        "panel.thumbnail_zoom",
+        Coverage::Omitted("writes only thumbnails.size; settings_set does the same"),
+    ),
+    (
+        "panel.toggle_auto_columns",
+        Coverage::Omitted("settings_set with columns.auto_switch does the same"),
+    ),
+    (
+        "panel.toggle_comments",
+        Coverage::Omitted("panel_set_view with comments does the same"),
     ),
     (
         "panel.toggle_cursor_selection",
@@ -90,5 +108,9 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         Coverage::Omitted(
             "a toggle depends on what the window shows; terminal_open, terminal_show and show_files name the result",
         ),
+    ),
+    (
+        "panel.toggle_watch",
+        Coverage::Omitted("settings_set changes panels.watch"),
     ),
 ];

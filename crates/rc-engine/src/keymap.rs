@@ -19,12 +19,14 @@
 //! character the layout decides can be bound by where it sits, `Ctrl+[Semicolon]` (RC-100-48,
 //! `physical.rs`). A key the person adds for a colour theme is a row of no standard name,
 //! `theme:<mode>:<id>` (RC-100-55, `theme_keys.rs`), and one for a workspace `workspace:<id>`
-//! (RC-100-68, `workspace_keys.rs`).
+//! (RC-100-68, `workspace_keys.rs`); an own command binds as itself, `em_<name>`, and a Start
+//! menu entry as `start:<id>` (RC-100-86, `user_command_keys.rs`).
 
 mod edit;
 mod overrides;
 mod physical;
 mod theme_keys;
+mod user_command_keys;
 mod workspace_keys;
 
 use std::{fmt, str::FromStr};
@@ -36,6 +38,9 @@ pub use self::edit::{KeymapRow, Lock, Refusal};
 pub use self::overrides::{MAX_OVERRIDE_TEXT, MAX_OVERRIDES, Override, Overrides};
 pub use self::physical::{PHYSICAL_KEYS, physical_code};
 pub use self::theme_keys::{MAX_THEME_KEY_ID, THEME_KEY_PREFIX, theme_key, theme_key_name};
+pub use self::user_command_keys::{
+    MAX_START_KEY_DIGITS, START_KEY_PREFIX, own_command_key, start_key, start_key_name,
+};
 pub use self::workspace_keys::{
     MAX_WORKSPACE_KEY_DIGITS, WORKSPACE_KEY_PREFIX, workspace_key, workspace_key_name,
 };
@@ -176,7 +181,8 @@ impl fmt::Display for Chord {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyContext {
-    /// While the active panel shows its file list; a terminal gets the key itself.
+    /// While the active panel shows its file list or its folder tree; a terminal gets the key
+    /// itself.
     #[default]
     Files,
     /// Whatever the active panel shows.
@@ -184,10 +190,11 @@ pub enum KeyContext {
 }
 
 impl KeyContext {
-    /// Whether a binding of this context applies to a panel showing `view`.
+    /// Whether a binding of this context applies to a panel showing `view`: a folder tree takes
+    /// the file list's keys it does not use itself (the window's tree, RC-100-88).
     #[must_use]
     pub fn applies(self, view: PanelView) -> bool {
-        self == Self::Always || view == PanelView::Files
+        self == Self::Always || view != PanelView::Terminal
     }
 }
 

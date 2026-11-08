@@ -12,6 +12,7 @@ fn hit(n: usize) -> SearchHit {
             size: 1,
             modified: None,
             created: None,
+            accessed: None,
             attributes: rc_vfs::Attributes::default(),
             hidden: false,
             owner: None,
@@ -91,4 +92,53 @@ fn the_list_shows_as_many_hits_as_its_height_holds() {
     assert_eq!(list.page(), 5);
     list.set_page(0);
     assert_eq!(list.page(), 1);
+}
+
+fn group(size: u64, names: &[usize]) -> rc_engine::search::DuplicateGroup {
+    rc_engine::search::DuplicateGroup {
+        size,
+        files: names
+            .iter()
+            .map(|&n| {
+                let hit = hit(n);
+                rc_engine::search::DuplicateFile {
+                    path: hit.path,
+                    entry: hit.entry,
+                    hard_link: false,
+                }
+            })
+            .collect(),
+    }
+}
+
+/// A duplicate result shows a line before each group; the cursor on it is on no hit, and the
+/// hits remember their group for "Feed to listbox".
+#[test]
+fn groups_show_a_line_each_and_remember_their_files() {
+    let mut list = Results::default();
+    assert!(list.push_group(group(10, &[1, 2])));
+    assert!(list.push_group(group(20, &[3, 4, 5])));
+    assert!(list.is_duplicates());
+    assert_eq!(
+        (list.len(), list.row_count(), list.group_count()),
+        (5, 7, 2)
+    );
+    assert_eq!(list.group_numbers(), [0, 0, 1, 1, 1]);
+    assert_eq!(list.row(0), Some(Row::Group { size: 10, count: 2 }));
+    assert_eq!(list.row(3), Some(Row::Group { size: 20, count: 3 }));
+    assert_eq!(
+        list.current(),
+        None,
+        "the cursor starts on the first group's line"
+    );
+    list.step(1);
+    assert_eq!(
+        list.current().map(|hit| hit.entry.name.as_str()),
+        Some("f1.txt")
+    );
+    list.step(100);
+    assert_eq!(list.cursor(), 6);
+    list.clear();
+    assert!(!list.is_duplicates());
+    assert!(list.group_numbers().is_empty());
 }

@@ -40,6 +40,10 @@ impl App {
         if let Some(effects) = self.vault_offer_intercept(message) {
             return Some(effects);
         }
+        // The question for a program's parameters (`?`, RC-100-86).
+        if let Some(effects) = self.ask_intercept(message) {
+            return Some(effects);
+        }
         // F10's quit and its question (RC-080-17).
         if let Some(effects) = self.quit_intercept(message) {
             return Some(effects);
@@ -96,6 +100,24 @@ impl App {
         {
             return Some(effects);
         }
+        // The own commands' window, as the workspaces' (RC-100-86).
+        if self.reaches(DialogWindow::Commands, message)
+            && let Some(effects) = self.user_commands_intercept(message)
+        {
+            return Some(effects);
+        }
+        // The disk-usage window, as find files (RC-100-98).
+        if self.reaches(DialogWindow::DiskUsage, message)
+            && let Some(effects) = self.tools_intercept(message)
+        {
+            return Some(effects);
+        }
+        // The button bars' window, as the own commands' (RC-100-87).
+        if self.reaches(DialogWindow::ButtonBar, message)
+            && let Some(effects) = self.button_bar_window_intercept(message)
+        {
+            return Some(effects);
+        }
         if let Some(effects) = self.viewer_intercept(message) {
             return Some(effects);
         }
@@ -123,6 +145,10 @@ impl App {
             return Some(effects);
         }
         if let Some(effects) = self.drag_intercept(message) {
+            return Some(effects);
+        }
+        // A bar's menu, or a bar with the keyboard (RC-100-87).
+        if let Some(effects) = self.button_bar_intercept(message) {
             return Some(effects);
         }
         if let Some(effects) = self.queue_window_intercept(message) {

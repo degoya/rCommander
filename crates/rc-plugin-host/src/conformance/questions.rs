@@ -1,6 +1,7 @@
 //! One behavioural question per plugin kind (`docs/plugins.md`, "SDK"): stage 1 asks the viewer
 //! `viewer_empty_source`, contract 0.3.0 the secret source `secrets_no_service` (RC-100-33),
-//! contract 0.4.0 the inventory `inventory_no_service` (RC-100-39).
+//! contract 0.4.0 the inventory `inventory_no_service` (RC-100-39), contract 0.6.0 the compare
+//! plugin `compare_identical` (RC-100-41).
 //!
 //! Copied and adapted from rDownloader's `crates/rd-plugin-host/src/conformance/questions.rs` at
 //! commit 26c8592a6 (RD-1280-19): instantiating a component proves its exports line up with its
@@ -20,8 +21,8 @@ use rc_plugin_types::Failure;
 
 use super::Built;
 use crate::{
-    BytesSource, InventoryPlugin, MemorySink, PluginManifest, SecretsPlugin, ViewerPlugin,
-    failure::codes,
+    BytesSource, ComparePlugin, InventoryPlugin, MemorySink, PluginManifest, SecretsPlugin,
+    ViewerPlugin, failure::codes,
 };
 
 /// The codes of a call that did not answer, or answered against the rules: the plugin trapped,
@@ -62,6 +63,43 @@ pub(super) async fn ask(built: &Built, manifest: &PluginManifest) -> Answer {
                     a refusal, not a crash",
             result: no_inventory(inventory).await,
         },
+        Built::Compare(compare) => Answer {
+            id: "compare_identical",
+            about: "The compare plugin finds no change between two identical empty files of a \
+                    type it claims: status and compare end in an answer without changes or a \
+                    refusal, not a crash",
+            result: identical(compare, manifest).await,
+        },
+    }
+}
+
+/// `status`, then `compare` of two empty files named like one the manifest claims: an answer
+/// listing a change between two identical files is wrong.
+async fn identical(compare: &ComparePlugin, manifest: &PluginManifest) -> Result<(), String> {
+    judge_empty_source("status", compare.status().await.map(|_| ()))?;
+    let name = manifest.matching.extensions.first().map_or_else(
+        || {
+            manifest
+                .matching
+                .names
+                .iter()
+                .find(|name| !name.contains('*'))
+                .cloned()
+                .unwrap_or_else(|| "conformance".to_owned())
+        },
+        |ext| format!("conformance.{ext}"),
+    );
+    let source =
+        || -> Arc<dyn crate::SourceReader> { Arc::new(BytesSource::new(&name, Vec::new())) };
+    let compared = compare
+        .compare(source(), source(), Arc::new(AtomicBool::new(false)))
+        .await;
+    match compared {
+        Ok(comparison) if !comparison.is_equal() => Err(format!(
+            "`compare` found {} changes between two identical files",
+            comparison.summary.total()
+        )),
+        other => judge_empty_source("compare", other.map(|_| ())),
     }
 }
 

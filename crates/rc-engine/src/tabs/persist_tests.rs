@@ -200,6 +200,8 @@ fn a_row_that_does_not_read_is_no_tab() {
         location: "not json".into(),
         sort: String::new(),
         mode: String::new(),
+        title: None,
+        file_filter: "null".to_owned(),
         history: Vec::new(),
     };
     assert_eq!(tab_from_row(&row), None);
@@ -311,5 +313,32 @@ async fn selecting_a_tab_whose_archive_is_gone_shows_the_archive_folder() {
     assert_eq!(
         engine.panel(PanelId::Left).path,
         VfsPath::local(root.path())
+    );
+}
+
+#[test]
+fn a_tab_keeps_the_thumbnails_and_an_unknown_mode_reads_as_full() {
+    let path = VfsPath::local("/photos");
+    let row = |mode: &str| StoredTab {
+        panel: "left".into(),
+        position: 0,
+        active: true,
+        locked: false,
+        location: serde_json::to_string(&path).expect("json"),
+        sort: String::new(),
+        mode: mode.into(),
+        title: None,
+        file_filter: "null".to_owned(),
+        history: Vec::new(),
+    };
+    let stored = serde_json::to_string(&ListMode::Thumbnails).expect("json");
+    assert_eq!(stored, "\"thumbnails\"");
+    let tab = tab_from_row(&row(&stored)).expect("a tab");
+    assert_eq!(tab.mode, ListMode::Thumbnails);
+    let tab = tab_from_row(&row("\"mosaic\"")).expect("a tab");
+    assert_eq!(
+        tab.mode,
+        ListMode::Full,
+        "an older build reads a newer mode as full"
     );
 }

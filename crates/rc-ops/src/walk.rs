@@ -209,6 +209,10 @@ impl Runner {
                 };
                 // Reversed, so the stack hands them out by name.
                 children.sort_by(|a, b| b.name.cmp(&a.name));
+                // What the panels' ignore list hides stays where it is, uncounted (`ignore.rs`).
+                if let Some(ignore) = &self.ignore {
+                    children.retain(|child| !ignore.ignores(&at, child));
+                }
                 for child in children {
                     // A name a join would turn into a way out (`../x`, `/abs`) fails here: the
                     // entry is neither read nor written anywhere.

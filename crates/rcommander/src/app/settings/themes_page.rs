@@ -13,13 +13,18 @@
 //! RC-100-43 become a Custom theme on the way ([`adopt_colours`]). The themes of the connections'
 //! panels and whether they apply (RC-100-51, `theme/themes/connections.rs`) are read with them,
 //! again after every change of the connection tree; so are the WSL distributions' themes
-//! (RC-100-56), which the tab's own section edits on Windows (`wsl.rs`).
+//! (RC-100-56), which the tab's own section edits on Windows (`wsl.rs`). Each row of the list
+//! names the environments that use its theme, and its context menu uses the theme for one of them
+//! or presses one of the row's buttons (RC-110-09, `usage.rs`, `menu.rs`).
 
 mod actions;
 mod editor;
 mod editor_view;
 mod file;
 mod labels;
+mod menu;
+mod menu_view;
+mod usage;
 mod view;
 mod wsl;
 
@@ -33,6 +38,8 @@ use rc_engine::settings::{
 use serde_json::Value;
 
 pub use self::editor::EditorMsg;
+pub(super) use self::menu::SCROLL_ID;
+pub(super) use self::menu_view::with_menu;
 pub(super) use self::view::view;
 use super::{SettingsMessage, wrap};
 use crate::{
@@ -126,6 +133,8 @@ pub struct ThemesPage {
     editor: Option<editor::Editor>,
     /// The WSL distributions the drive bar found, for the section of their themes (RC-100-56).
     distros: Vec<String>,
+    /// The context menu of a theme's row (RC-110-09).
+    menu: Option<menu::ThemeMenu>,
 }
 
 impl ThemesPage {
@@ -133,6 +142,11 @@ impl ThemesPage {
     fn marked(&self) -> Option<&Theme> {
         let state = self.state.as_ref()?;
         state.theme(self.selected.as_deref()?)
+    }
+
+    /// Closes the row's context menu: the dialog turned to another page or tab.
+    pub(super) fn close_menu(&mut self) {
+        self.menu = None;
     }
 
     /// Whether a mode draws with the theme `id`.
@@ -180,6 +194,8 @@ pub enum ThemesMsg {
     Conflict(ConflictChoice),
     Answered(Box<Answer>),
     Editor(EditorMsg),
+    /// The context menu of a theme's row (RC-110-09).
+    Menu(menu::MenuMsg),
 }
 
 /// The message of the tab.
@@ -216,6 +232,8 @@ impl App {
         if let Some(page) = self.settings.as_mut().map(|dialog| &mut dialog.themes) {
             let dark = self.dark;
             page.distros = distros;
+            // The menu's entries are of the themes before.
+            page.menu = None;
             let keep = page
                 .selected
                 .as_ref()
@@ -234,6 +252,7 @@ impl App {
             ThemesMsg::Read(read) => self.themes_read(*read),
             ThemesMsg::Editor(message) => self.theme_editor_message(message),
             ThemesMsg::Answered(answer) => self.themes_answered(*answer),
+            ThemesMsg::Menu(message) => self.theme_menu_message(message),
             other => self.themes_action(other),
         }
     }

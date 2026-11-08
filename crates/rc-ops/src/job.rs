@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ConflictChoice, ExtractSettings, JobReport, OpsError, PackSettings, Progress, Question,
-    staging::is_remote,
+    UpdateSettings, staging::is_remote,
 };
 
 /// A job's number, unique for the life of one queue.
@@ -107,6 +107,22 @@ pub enum JobKind {
         #[serde(default)]
         name: Option<String>,
     },
+    /// Changes the archive file `archive` (a local zip, 7z or plain tar, RC-110-05): drops the
+    /// entries whose format indices are `remove` - each folder's entries below it listed too -
+    /// and packs `add` into the folder `under` inside it (`/` its root). Never in place: the new
+    /// archive is written beside the old one, checked, and only then renamed onto it, so a
+    /// failure, a cancel or a crash leaves the old one whole. Not kept across a restart.
+    ArchiveUpdate {
+        archive: VfsPath,
+        #[serde(default)]
+        add: Vec<VfsPath>,
+        #[serde(default)]
+        under: String,
+        #[serde(default)]
+        remove: Vec<u64>,
+        #[serde(default)]
+        settings: UpdateSettings,
+    },
 }
 
 impl JobKind {
@@ -153,6 +169,7 @@ impl JobKind {
             Self::ChecksumCreate { dir, .. } => Some(dir),
             Self::ChecksumVerify { .. } => None,
             Self::Split { target, .. } | Self::Combine { target, .. } => Some(target),
+            Self::ArchiveUpdate { archive, .. } => Some(archive),
         }
     }
 }

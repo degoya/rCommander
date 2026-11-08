@@ -380,6 +380,7 @@ fn kind_label(kind: &JobKind) -> &'static str {
         JobKind::Rename { .. } => t!("queue.kind.rename"),
         JobKind::Extract { .. } => t!("queue.kind.extract"),
         JobKind::Pack { .. } => t!("queue.kind.pack"),
+        JobKind::ArchiveUpdate { .. } => t!("queue.kind.archive_update"),
         _ => t!("queue.kind.other"),
     }
 }

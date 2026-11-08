@@ -196,3 +196,61 @@ async fn f3_inside_an_archive_opens_lister_on_the_entry() {
     let text = b"# Readme\n\nInside an archive.\n";
     assert_eq!(window.size(), u64::try_from(text.len()).expect("small"));
 }
+
+/// F3 (or Shift+F3 with `cursor_only`) on the active panel as the keymap runs it.
+async fn f3(harness: &mut Harness, cursor_only: bool) {
+    let command = Command::OpenExternal {
+        panel: None,
+        path: None,
+        program: rc_engine::ExternalProgram::Viewer,
+        create: false,
+        cursor_only,
+    };
+    harness
+        .app
+        .engine()
+        .dispatch(command)
+        .await
+        .expect("announced");
+    harness.settle().await;
+}
+
+/// `a.txt`, `b.txt` and `c.txt`, the first and the last marked, the cursor on `a.txt`.
+async fn marked_tree() -> (TempDir, Harness) {
+    let root = harness::tree(&[("a.txt", "a\n"), ("b.txt", "b\n"), ("c.txt", "c\n")]);
+    let mut harness = Harness::headless(root.path()).await;
+    let select = Command::SelectByMask(rc_engine::MaskRequest {
+        panel: None,
+        mask: Some("a.txt;c.txt".into()),
+    });
+    harness.app.engine().dispatch(select).await.expect("marked");
+    harness.settle().await;
+    // `..`, then `a.txt`.
+    harness.press("ArrowDown").await;
+    (root, harness)
+}
+
+/// RC-100-91: F3 with marked files - N and P go through the marked ones only, as in Total
+/// Commander's Lister.
+#[tokio::test]
+async fn f3_with_marked_files_steps_through_them_only() {
+    let (root, mut harness) = marked_tree().await;
+    f3(&mut harness, false).await;
+    let at = |name: &str| Some(VfsPath::local(root.path().join(name)));
+    assert_eq!(top_path(&harness), at("a.txt"));
+    harness.press("N").await;
+    assert_eq!(top_path(&harness), at("c.txt"), "b.txt is not marked");
+    harness.press("P").await;
+    assert_eq!(top_path(&harness), at("a.txt"));
+}
+
+/// RC-100-91: Shift+F3 shows the file under the cursor alone; N and P stay on it.
+#[tokio::test]
+async fn shift_f3_shows_only_the_file_under_the_cursor() {
+    let (root, mut harness) = marked_tree().await;
+    f3(&mut harness, true).await;
+    let a = Some(VfsPath::local(root.path().join("a.txt")));
+    assert_eq!(top_path(&harness), a);
+    harness.press("N").await;
+    assert_eq!(top_path(&harness), a, "nothing else is loaded");
+}

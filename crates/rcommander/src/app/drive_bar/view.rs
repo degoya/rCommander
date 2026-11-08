@@ -45,9 +45,10 @@ pub(in crate::app) fn above_panels<'a>(
     app: &'a App,
     tokens: &'static Tokens,
 ) -> Vec<Element<'a, Message>> {
+    // `appearance.drive_bar` hides the drive buttons, never the drive lines (RC-100-87).
     match app.drive_bar.layout {
-        DriveBarLayout::Shared => vec![bar(app, None, tokens)],
-        DriveBarLayout::PerPanel => Vec::new(),
+        DriveBarLayout::Shared if app.button_bar.settings.drive_bar => vec![bar(app, None, tokens)],
+        DriveBarLayout::Shared | DriveBarLayout::PerPanel => Vec::new(),
     }
 }
 
@@ -58,7 +59,7 @@ pub(in crate::app) fn above_panel<'a>(
     tokens: &'static Tokens,
 ) -> Vec<Element<'a, Message>> {
     let mut parts = Vec::with_capacity(2);
-    if app.drive_bar.layout == DriveBarLayout::PerPanel {
+    if app.drive_bar.layout == DriveBarLayout::PerPanel && app.button_bar.settings.drive_bar {
         parts.push(bar(app, Some(side), tokens));
     }
     parts.push(line::drive_line(app, side, tokens));
@@ -308,7 +309,7 @@ pub(super) fn small<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> 
 }
 
 /// A drive button: filled when it is the panel's current drive.
-pub(super) fn button_style(tokens: &Tokens, current: bool) -> container::Style {
+pub(in crate::app) fn button_style(tokens: &Tokens, current: bool) -> container::Style {
     container::Style {
         background: Some(Background::Color(if current {
             tokens.cursor_fill
@@ -326,7 +327,7 @@ pub(super) fn button_style(tokens: &Tokens, current: bool) -> container::Style {
 }
 
 /// The drive menu and the tooltips: a raised card.
-pub(super) fn card_style(tokens: &Tokens) -> container::Style {
+pub(in crate::app) fn card_style(tokens: &Tokens) -> container::Style {
     container::Style {
         background: Some(Background::Color(tokens.surface)),
         border: Border::default()

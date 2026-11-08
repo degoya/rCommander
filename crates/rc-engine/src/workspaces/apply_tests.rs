@@ -30,6 +30,7 @@ fn tab(path: &Path, locked: bool) -> TabSpec {
         sort: None,
         mode: None,
         locked,
+        title: None,
     }
 }
 
@@ -187,6 +188,7 @@ async fn a_deleted_server_is_left_out_with_a_note_and_the_rest_applies() {
         sort: None,
         mode: None,
         locked: false,
+        title: None,
     }];
     let id = save(&engine, "Nas", spec, None).await;
     engine
@@ -388,3 +390,35 @@ mod with_a_shell {
 
 #[path = "apply_switch_tests.rs"]
 mod switching;
+
+/// RC-100-92: a tab's own name goes into a workspace and comes back with it; a bad one is refused.
+#[tokio::test]
+async fn a_workspace_carries_tab_names() {
+    let (root, engine) = test_support::engine_with_db(&[("a/", ""), ("b/", ""), ("c/", "")]).await;
+    let mut spec = two_panels(root.path());
+    spec.left.tabs[0].title = Some("Alpha".into());
+    let id = save(&engine, "Named", spec.clone(), None).await;
+    assert!(apply(&engine, id).await.is_empty());
+    let titles: Vec<(String, bool)> = engine
+        .tabs(PanelId::Left)
+        .into_iter()
+        .map(|tab| (tab.title, tab.renamed))
+        .collect();
+    assert_eq!(
+        titles,
+        [("Alpha".to_owned(), true), ("b".to_owned(), false)]
+    );
+    spec.left.tabs[0].title = Some("x".repeat(65));
+    let request = CreateWorkspaceRequest {
+        name: "Bad".into(),
+        spec,
+        theme_light: None,
+        theme_dark: None,
+    };
+    assert!(
+        engine
+            .dispatch(Command::CreateWorkspace(request))
+            .await
+            .is_err()
+    );
+}

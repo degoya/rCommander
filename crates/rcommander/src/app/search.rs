@@ -11,18 +11,30 @@
 //! again, the start folder set to the panel's. The masks searched are kept, newest first, in
 //! one setting (`search.history`), as the mask prompt keeps its own.
 //!
+//! "Find duplicate files" (RC-100-98) lists the groups of a duplicate search, a line before each;
+//! "Feed to listbox" gives the panel each file's group, and Num+ there selects the copies.
+//!
+//! "Search archives" searches the archives on the machine's own drives like folders; its hits go
+//! to their archive and are fed as Total Commander feeds them (`feed.rs`). "Everything" (or
+//! `ev:` before the masks) takes the candidates from Everything's index where it runs (Windows,
+//! RC-100-93); the dialog looks for it at each opening, and `search.everything` hides the box.
+//!
 //! While the dialog is open it has the keyboard and the mouse; the panels get nothing.
 
+mod feed;
 mod form;
 mod results;
 mod stream;
 mod view;
 
 use iced::Task;
+use rc_db::Db;
 use rc_engine::{
-    Chord, Command, CursorTarget, EngineEvent, PanelId, SearchCancel, SearchEvent, SearchStats,
-    VfsPath, search::KindFilter,
+    Chord, EngineEvent, PanelId, SearchCancel, SearchEvent, SearchStats, VfsPath,
+    search::{KindFilter, everything},
+    settings::{SEARCH_ARCHIVES_DEFAULT_KEY, SEARCH_EVERYTHING_KEY, stored_bool},
 };
+use rc_vfs::BackendId;
 
 pub(super) use self::view::{body, flat_badge, overlay};
 pub use self::{
@@ -55,6 +67,25 @@ pub enum Run {
     Failed(String),
 }
 
+/// Everything as the dialog found it when it opened.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Everything {
+    /// Not offered: not Windows, or `search.everything` is off.
+    #[default]
+    Hidden,
+    /// Offered, but not running (or older than 1.4): the box is off.
+    Missing,
+    Ready,
+}
+
+/// What the dialog reads when it opens: the settings and whether Everything runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Setup {
+    /// `search.archives_default`: the box's state at the first opening.
+    pub archives: bool,
+    pub everything: Everything,
+}
+
 /// The dialog, open or closed with its last search kept.
 #[derive(Debug)]
 pub struct SearchDialog {
@@ -69,6 +100,11 @@ pub struct SearchDialog {
     pub invalid: Option<Field>,
     /// Masks searched, newest first.
     pub history: Vec<String>,
+    /// Whether the panel is on the machine's own file systems: archives are searched there only.
+    pub local: bool,
+    pub everything: Everything,
+    /// The first [`Setup`] came: the settings' defaults are in the form.
+    configured: bool,
     /// The first start folder of the last search, absolute: the folder fed hits are shown in.
     root: Option<String>,
     /// Numbers the searches, so a late batch of an earlier one is dropped.
@@ -79,7 +115,7 @@ pub struct SearchDialog {
 }
 
 impl SearchDialog {
-    fn new(panel: PanelId, start: String) -> Self {
+    fn new(panel: PanelId, start: String, local: bool) -> Self {
         Self {
             open: true,
             panel,
@@ -89,6 +125,9 @@ impl SearchDialog {
             run: Run::Idle,
             invalid: None,
             history: Vec::new(),
+            local,
+            everything: Everything::Hidden,
+            configured: false,
             root: None,
             generation: 0,
             cancel: None,
@@ -98,6 +137,19 @@ impl SearchDialog {
 
     pub fn running(&self) -> bool {
         matches!(self.run, Run::Running { .. })
+    }
+
+    /// Whether Start asks Everything: it runs, and its box or `ev:` asks for it.
+    pub fn uses_everything(&self) -> bool {
+        self.everything == Everything::Ready && self.form.wants_everything()
+    }
+
+    fn set_up(&mut self, setup: Setup) {
+        self.everything = setup.everything;
+        if !self.configured {
+            self.configured = true;
+            self.form.archives = setup.archives;
+        }
     }
 
     fn stop(&mut self) {
@@ -121,21 +173,28 @@ impl SearchDialog {
                     self.run = Run::Failed(error_text(code));
                     self.cancel = None;
                 }
-                Update::Event(SearchEvent::Hit(hit)) => {
-                    if !self.results.push(hit) {
-                        self.stop();
+                Update::Event(event) => match *event {
+                    SearchEvent::Hit(hit) => {
+                        if !self.results.push(hit) {
+                            self.stop();
+                        }
                     }
-                }
-                Update::Event(SearchEvent::Progress { dir, stats }) => {
-                    if self.running() {
-                        self.run = Run::Running { dir, stats };
+                    SearchEvent::Progress { dir, stats } => {
+                        if self.running() {
+                            self.run = Run::Running { dir, stats };
+                        }
                     }
-                }
-                Update::Event(SearchEvent::Skipped { .. }) => {}
-                Update::Event(SearchEvent::Finished { stats, cancelled }) => {
-                    self.run = Run::Finished { stats, cancelled };
-                    self.cancel = None;
-                }
+                    SearchEvent::Duplicates(group) => {
+                        if !self.results.push_group(group) {
+                            self.stop();
+                        }
+                    }
+                    SearchEvent::Skipped { .. } => {}
+                    SearchEvent::Finished { stats, cancelled } => {
+                        self.run = Run::Finished { stats, cancelled };
+                        self.cancel = None;
+                    }
+                },
             }
         }
     }
@@ -147,7 +206,8 @@ pub enum Update {
     Started(SearchCancel),
     /// The error code of a search that did not start.
     Failed(&'static str),
-    Event(SearchEvent),
+    /// Boxed: a hit is far larger than the other updates.
+    Event(Box<SearchEvent>),
 }
 
 /// What the dialog's controls and its search say.
@@ -162,6 +222,8 @@ pub enum SearchMsg {
     Recall(String),
     /// The kept masks, read at the first open.
     History(Vec<String>),
+    /// The settings and Everything, read at each opening.
+    Setup(Setup),
     Start,
     Stop,
     Close,
@@ -198,24 +260,33 @@ impl App {
     /// Opens the dialog for `panel`: a new one on the panel's folder, or the last one with its
     /// hits, now starting in the panel's folder.
     fn open_search(&mut self, panel: PanelId) -> Vec<Effect> {
-        let start = self.pane(panel).state.path.path.display().to_string();
+        let location = &self.pane(panel).state.path;
+        let start = location.path.display().to_string();
+        let local = location.backend == BackendId::Local;
+        let db = self.db.clone();
+        let setup = Effect::Task(Task::perform(set_up(db.clone()), |setup| {
+            Message::Search(SearchMsg::Setup(setup))
+        }));
         if let Some(dialog) = self.search.as_mut() {
             dialog.open = true;
             if !dialog.running() {
                 dialog.panel = panel;
                 dialog.form.start = start;
+                dialog.local = local;
             }
             // In a window of its own, Alt+F7 brings it to the front (RC-080-15).
-            return self.dialog_window_front(super::dialog_windows::DialogWindow::Search);
+            let mut effects = self.dialog_window_front(super::dialog_windows::DialogWindow::Search);
+            effects.push(setup);
+            return effects;
         }
-        self.search = Some(SearchDialog::new(panel, start));
-        let Some(db) = self.db.clone() else {
-            return Vec::new();
+        self.search = Some(SearchDialog::new(panel, start, local));
+        let Some(db) = db else {
+            return vec![setup];
         };
         let load = Task::perform(async move { mru::SEARCH.load(&db).await }, |history| {
             Message::Search(SearchMsg::History(history))
         });
-        vec![Effect::Task(load)]
+        vec![Effect::Task(load), setup]
     }
 
     pub(super) fn on_search(&mut self, message: SearchMsg) -> Vec<Effect> {
@@ -235,6 +306,7 @@ impl App {
             SearchMsg::Kind(kind) => dialog.form.kind = kind,
             SearchMsg::Recall(mask) => dialog.form.name = mask,
             SearchMsg::History(history) => dialog.history = mru::SEARCH.sanitized(history),
+            SearchMsg::Setup(setup) => dialog.set_up(setup),
             SearchMsg::Start => return self.start_find(),
             SearchMsg::Stop => dialog.stop(),
             SearchMsg::Close => self.close_search(),
@@ -317,11 +389,13 @@ impl App {
         dialog.cancel = None;
         dialog.stop_wanted = false;
         mru::SEARCH.remember(&mut dialog.history, dialog.form.name.trim());
+        let everything = dialog.uses_everything().then(everything::system).flatten();
         let search = stream::search(
             self.engine.clone(),
             dialog.panel,
             paths,
             query,
+            everything,
             dialog.generation,
         );
         let mut effects = vec![Effect::Task(search)];
@@ -340,65 +414,29 @@ impl App {
             dialog.open = false;
         }
     }
+}
 
-    /// "Go to file": the panel shows the hit's folder, the cursor on the hit; the dialog closes.
-    fn go_to_hit(&mut self) -> Vec<Effect> {
-        let Some(dialog) = self.search.as_ref() else {
-            return Vec::new();
-        };
-        let panel = dialog.panel;
-        let Some(hit) = dialog.results.current() else {
-            return Vec::new();
-        };
-        let (Some(folder), Some(name)) = (hit.path.parent(), hit.path.path.file_name()) else {
-            return Vec::new();
-        };
-        let mut commands = self.activating(panel);
-        commands.push(Command::Navigate {
-            panel: Some(panel),
-            path: folder.path.display().to_string(),
-        });
-        commands.push(Command::SetCursor {
-            panel: Some(panel),
-            target: CursorTarget::Name(name.to_string_lossy().into_owned()),
-        });
-        self.close_search();
-        vec![Effect::Dispatch(panel, commands)]
-    }
-
-    /// "Feed to listbox": every hit flat in the panel, in the first start folder.
-    fn feed_hits(&mut self) -> Vec<Effect> {
-        let Some(dialog) = self
-            .search
-            .as_ref()
-            .filter(|dialog| !dialog.results.is_empty())
-        else {
-            return Vec::new();
-        };
-        let panel = dialog.panel;
-        let paths = dialog
-            .results
-            .hits()
-            .iter()
-            .map(|hit| hit.path.path.display().to_string())
-            .collect();
-        let mut commands = self.activating(panel);
-        commands.push(Command::FeedPaths {
-            panel: Some(panel),
-            root: dialog.root.clone(),
-            paths,
-        });
-        self.close_search();
-        vec![Effect::Dispatch(panel, commands)]
-    }
-
-    /// The command that makes `panel` the active one, unless it is.
-    fn activating(&self, panel: PanelId) -> Vec<Command> {
-        if panel == self.active {
-            Vec::new()
-        } else {
-            vec![Command::SwitchActivePanel { panel: Some(panel) }]
+/// The settings the dialog starts from and whether Everything runs, read off the window's
+/// thread.
+async fn set_up(db: Option<Db>) -> Setup {
+    let (archives, offered) = match &db {
+        Some(db) => (
+            stored_bool(db, SEARCH_ARCHIVES_DEFAULT_KEY).await,
+            stored_bool(db, SEARCH_EVERYTHING_KEY).await,
+        ),
+        None => (false, true),
+    };
+    let everything = if !cfg!(windows) || !offered {
+        Everything::Hidden
+    } else {
+        match everything::detect().await {
+            Some(version) if everything::answers(version) => Everything::Ready,
+            _ => Everything::Missing,
         }
+    };
+    Setup {
+        archives,
+        everything,
     }
 }
 

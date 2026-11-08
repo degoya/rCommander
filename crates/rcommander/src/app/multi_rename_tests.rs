@@ -143,7 +143,7 @@ async fn every_input_previews_and_a_conflict_blocks_start() {
     );
     assert!(dialog(&harness).can_start());
 
-    type_in(&mut harness, Field::NameMask, "pic[X]").await;
+    type_in(&mut harness, Field::NameMask, "pic[Q]").await;
     let Preview::Failed(error) = &dialog(&harness).preview else {
         panic!("a mask error");
     };

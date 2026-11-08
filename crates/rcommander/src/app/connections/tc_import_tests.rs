@@ -88,6 +88,7 @@ fn every_code_the_page_shows_has_a_text() {
         "ftp_ini_not_found",
         "value_too_long",
         "dir_menu_redirected",
+        "start_menu_keys",
     ] {
         codes.push(("tc_import.warning", warning.to_owned()));
     }

@@ -12,6 +12,7 @@
 mod support;
 
 mod archive_test;
+mod archive_update;
 mod batch;
 mod checksum;
 mod conflicts;

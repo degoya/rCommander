@@ -91,8 +91,22 @@ impl Engine {
         let vfs = self.open_vfs(&path, self.announces_locked_vault()).await?;
         // Listed before the lock is taken: the state never waits on a file system. A listing
         // that runs long is shown with what arrived, the rest follows (`panel_listing.rs`).
-        let (entries, arriving) = self.first_entries(&vfs, &path, sort, show_hidden).await?;
+        let (path, (entries, arriving)) =
+            match self.first_entries(&vfs, &path, sort, show_hidden).await {
+                Ok(listed) => (path, listed),
+                // A compatibility junction that denies listing shows its target, as in Total
+                // Commander (`denied_link.rs`, RC-100-92).
+                Err(error) => match self.denied_link_target(&path, &error).await {
+                    Some(target) => {
+                        let listed = self.first_entries(&vfs, &target, sort, show_hidden).await?;
+                        (target, listed)
+                    }
+                    None => return Err(error),
+                },
+            };
         let archive = self.archive_info(&path).await;
+        // The column set a folder mask gives the folder (RC-100-90).
+        let rule = self.folder_rule(&path).await;
         let drive = drive_key(&path, &self.inner.drives.roots());
         // Going up puts the cursor on the folder just left (an archive left at its root: the
         // archive file).
@@ -109,6 +123,7 @@ impl Engine {
             let active = state.active == id;
             let panel = state.panel_mut(id);
             let mut next = panel.next(path, entries, sort, show_hidden);
+            rule.apply(&mut next);
             next.archive = archive;
             next.listing = arriving.as_ref().map(Arriving::run);
             if let Some(index) = wanted.as_deref().and_then(|name| next.index_of(name)) {
@@ -120,6 +135,8 @@ impl Engine {
             state.tabs.visited(id, &snapshot.path);
             (snapshot, placed)
         };
+        // The most visited folders (RC-100-92).
+        self.count_visit(&snapshot.path);
         self.publish(EngineEvent::Panel {
             panel: id,
             change: PanelChange::Navigated,
@@ -127,6 +144,7 @@ impl Engine {
         if let Some(arriving) = arriving {
             arriving.follow(self.clone(), id, Placing { wanted, placed });
         }
+        self.columns_follow(id, false).await;
         // A panel that shows its terminal takes the shell along (RC-040-04).
         self.terminal_follows_panel(id).await;
         Ok(Outcome::Panel(snapshot))
@@ -155,6 +173,8 @@ impl Engine {
             return outcome;
         }
         let (path, sort, show_hidden) = self.listing_of(id);
+        // A tree shows the folder's sub-folders as they are now too (RC-100-88).
+        self.inner.tree.stale(&path);
         let vfs = self.open_vfs(&path, self.announces_locked_vault()).await?;
         let entries = list_sorted(&vfs, &path, sort, show_hidden).await?;
         let archive = self.archive_info(&path).await;
@@ -183,6 +203,8 @@ impl Engine {
             panel: id,
             change: PanelChange::Navigated,
         });
+        // The comments are read again with the folder (F2, a comment set; RC-100-90).
+        self.columns_follow(id, true).await;
         Ok(Outcome::Panel(snapshot))
     }
 

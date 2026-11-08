@@ -14,6 +14,7 @@
 //! vault; an import reads and checks the whole file - size, format, version, the seal, every
 //! field - before it compares one row, and writes nothing on a refusal.
 
+mod connections_part;
 mod error;
 mod format;
 mod report;
@@ -23,9 +24,9 @@ mod themes;
 pub use error::ExchangeError;
 pub use format::{
     ConnectionsPart, Content, EXTENSION, ExportFile, ExportSecret, ExportedCertificate,
-    ExportedConnection, ExportedHostKey, ExportedHotlistItem, ExportedScript, ExportedScriptSecret,
-    ExportedSetting, ExportedTab, FORMAT, FORMAT_VERSION, HotlistPart, MAX_FILE_BYTES, MAX_ITEMS,
-    MAX_TEXT, SOURCE_PREFIX, SealedFile, TrustPart, hex,
+    ExportedConnection, ExportedForward, ExportedHostKey, ExportedHotlistItem, ExportedMark,
+    ExportedScript, ExportedScriptSecret, ExportedSetting, ExportedTab, FORMAT, FORMAT_VERSION,
+    HotlistPart, MAX_FILE_BYTES, MAX_ITEMS, MAX_TEXT, SOURCE_PREFIX, SealedFile, TrustPart, hex,
 };
 pub use report::{ExchangePart, ExchangeReport, ExchangeRow, ExportParts, ExportReport, RowStatus};
 pub use sources::ExportedSource;

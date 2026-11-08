@@ -60,7 +60,11 @@ fn block_memory<'a>(coders: impl Iterator<Item = (&'a [u8], &'a [u8])>) -> u64 {
 }
 
 /// Checked before `block` is decoded.
-pub(crate) fn check_block(block: &Block, limits: &ArchiveLimits, path: &Path) -> Result<()> {
+///
+/// # Errors
+///
+/// `archive_decoder_memory` when its coders set aside more than the limits allow.
+pub fn check_block(block: &Block, limits: &ArchiveLimits, path: &Path) -> Result<()> {
     let coders = block
         .coders
         .iter()
@@ -70,7 +74,12 @@ pub(crate) fn check_block(block: &Block, limits: &ArchiveLimits, path: &Path) ->
 
 /// Checked before `Archive::read`: the coders of an encoded header, found where sevenz-rust2
 /// will look for it. A file that is no 7z, or has a plain header, is left to sevenz-rust2.
-pub(crate) fn check_header<R: Read + Seek>(
+///
+/// # Errors
+///
+/// The file does not read, an encoded header does not parse, or it asks for more decoder
+/// memory than the limits allow.
+pub fn check_header<R: Read + Seek>(
     reader: &mut R,
     limits: &ArchiveLimits,
     path: &Path,

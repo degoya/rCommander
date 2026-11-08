@@ -25,10 +25,11 @@
 //! packed as the file they lead to, as chosen.
 
 mod members;
-mod sevenz;
-mod tar;
-mod write;
-mod zip;
+// The writers and the feed are shared with the archive update (`update/`, RC-110-05).
+pub(crate) mod sevenz;
+pub(crate) mod tar;
+pub(crate) mod write;
+pub(crate) mod zip;
 
 use std::{
     path::{Path, PathBuf},
@@ -141,9 +142,9 @@ impl Default for PackSettings {
 }
 
 /// One archive to write: where, and the items that go in.
-struct Group {
-    dest: PathBuf,
-    items: Vec<Item>,
+pub(crate) struct Group {
+    pub(crate) dest: PathBuf,
+    pub(crate) items: Vec<Item>,
 }
 
 /// The source an item belongs to: the first part of its path below the sources' directory.
@@ -264,7 +265,7 @@ impl Runner {
     }
 
     /// The sources themselves, without what folders hold.
-    async fn plan_flat(&mut self, sources: &[VfsPath]) -> Result<Vec<Item>, Stop> {
+    pub(crate) async fn plan_flat(&mut self, sources: &[VfsPath]) -> Result<Vec<Item>, Stop> {
         let mut items = Vec::new();
         for source in sources {
             self.checkpoint().await?;
@@ -384,7 +385,7 @@ impl Runner {
     }
 
     /// "Move to archive": the packed files go, then each folder of theirs that is left empty.
-    async fn delete_packed(&mut self, packed: &[Item]) -> Result<(), Stop> {
+    pub(crate) async fn delete_packed(&mut self, packed: &[Item]) -> Result<(), Stop> {
         let src = Arc::clone(&self.src);
         for item in packed.iter().filter(|item| item.is_file()) {
             self.checkpoint().await?;

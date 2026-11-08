@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::{
-    IGNORED, INVENTORY, PluginKind, SECRETS, SIGNING_KEY_FILE, VIEWER, scaffold, slug,
+    COMPARE, IGNORED, INVENTORY, PluginKind, SECRETS, SIGNING_KEY_FILE, VIEWER, scaffold, slug,
     write_gitignore,
 };
 
@@ -17,10 +17,11 @@ fn template_dir(kind: &str) -> PathBuf {
 type Files = &'static [(&'static str, &'static str)];
 
 /// Every template folder with its embedded files.
-const TEMPLATES: [(&str, Files); 3] = [
+const TEMPLATES: [(&str, Files); 4] = [
     ("viewer", VIEWER),
     ("secrets", SECRETS),
     ("inventory", INVENTORY),
+    ("compare", COMPARE),
 ];
 
 fn files_under(root: &Path, directory: &Path, found: &mut Vec<String>) {
@@ -153,6 +154,11 @@ fn a_scaffold_packages_verifies_and_passes_conformance_unchanged() {
         "netbox_hosts",
         &rc_plugin_host::test_support::current_inventory_component(),
     );
+    passes_conformance(
+        PluginKind::Compare,
+        "properties_compare",
+        &rc_plugin_host::test_support::current_compare_component(),
+    );
 }
 
 fn passes_conformance(kind: PluginKind, name: &str, component: &[u8]) {
@@ -228,4 +234,23 @@ fn an_inventory_scaffold_keeps_no_placeholder() {
     }
     let manifest = std::fs::read_to_string(out.join("manifest.toml")).expect("manifest");
     assert!(manifest.contains("plugin_type = \"inventory\""));
+}
+
+#[test]
+fn a_compare_scaffold_keeps_no_placeholder() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let out = temp.path().join("properties-compare");
+    let made = scaffold(PluginKind::Compare, &out, None).expect("scaffold");
+    for (path, _) in COMPARE {
+        let text = std::fs::read_to_string(out.join(path)).expect("a scaffolded file");
+        assert!(!text.contains("{{"), "{path} keeps a placeholder");
+        assert!(
+            !text.contains("REPLACE_WITH_YOUR"),
+            "{path} keeps a placeholder"
+        );
+    }
+    let manifest = std::fs::read_to_string(out.join("manifest.toml")).expect("manifest");
+    assert!(manifest.contains("plugin_type = \"compare\""));
+    let lib = std::fs::read_to_string(out.join("src/lib.rs")).expect("lib.rs");
+    assert!(lib.contains(&format!("\"{}.duplicate_key\"", made.id)));
 }

@@ -5,6 +5,7 @@ macro_rules! arms {
     ($next:ident, $state:tt, $self:ident, { $($done:tt)* }) => {
         $next! { $state, $self, { $($done)*
             Command::MultiRenameApply(request) => $self.multi_rename_apply(&request).await,
+            Command::MultiRenameNextStep { names } => $self.multi_rename_next_step(names).await,
             Command::MultiRenameOpenDialog { panel } => Ok($self.multi_rename_dialog(panel)),
             Command::MultiRenamePresetDelete { name } => $self.delete_rename_preset(&name).await,
             Command::MultiRenamePresetList => $self.rename_presets().await,

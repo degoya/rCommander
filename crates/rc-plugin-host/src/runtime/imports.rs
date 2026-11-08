@@ -8,7 +8,8 @@
 //! has no capability a viewer may hold, so a viewer imports `host`, `types`, `source` and `sink`,
 //! and `settings` when its manifest declares `[[settings]]` (RC-100-14), and nothing else. A
 //! secret source imports `host`, `types`, `settings` as a viewer does, and `http` when granted
-//! `net_http` (RC-100-33); an inventory likewise (RC-100-39).
+//! `net_http` (RC-100-33); an inventory likewise (RC-100-39). A compare plugin (RC-100-41) reads
+//! the two files of its call through `source` and writes nothing, so it has no `sink`.
 
 use crate::manifest::{NET_HTTP, PluginManifest, PluginType};
 
@@ -45,8 +46,12 @@ pub(crate) fn allowed_imports(manifest: &PluginManifest) -> Vec<String> {
     let mut allowed = BASE_IMPORTS.to_vec();
     // The source a viewer reads and the sink it writes are what a viewer is, not a grant: both
     // are handles the host opened for the call at hand, so neither names a file.
-    if manifest.plugin_type == PluginType::Viewer {
-        allowed.extend(["rcommander:plugin/source", "rcommander:plugin/sink"]);
+    match manifest.plugin_type {
+        PluginType::Viewer => {
+            allowed.extend(["rcommander:plugin/source", "rcommander:plugin/sink"]);
+        }
+        PluginType::Compare => allowed.push("rcommander:plugin/source"),
+        _ => {}
     }
     if settings_granted(manifest) {
         allowed.push(SETTINGS);

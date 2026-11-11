@@ -28,6 +28,12 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
   { id = "RUSTSEC-2026-0371", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
   { id = "RUSTSEC-2026-0372", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
+  # SQLite before 3.54 (bundled by libsqlite3-sys 0.37 through sqlx-sqlite 0.9.0) can return
+  # uninitialised page-cache memory for a crafted database plus `-wal` pair. No sqlx release
+  # allows libsqlite3-sys 0.39 (sqlx-sqlite 0.9.0 pins <0.38). rCommander opens only its own
+  # rcommander.db and, on restore, a backup the person picked. Leaves with the sqlx release on
+  # libsqlite3-sys >= 0.39 (RC-110-18).
+  { id = "RUSTSEC-2026-0459", reason = "no sqlx release on libsqlite3-sys >= 0.39; only the own database and its backups are opened (RC-110-18)" },
 ]
 
 [licenses]

@@ -226,6 +226,23 @@ async fn internal_rows_run_through_the_registry_or_the_window() {
     );
 }
 
+/// RC-110-15: an own command with Total Commander's `cm_VisButtonBar` - in an imported
+/// `usercmd.ini` or a button - shows and hides the button bar, though no key runs it.
+#[tokio::test]
+async fn cm_vis_button_bar_toggles_the_button_bar() {
+    let (_root, engine) = test_support::engine_with_db(&[]).await;
+    let db = engine.db().expect("a database").clone();
+    let key = crate::BarKind::ButtonBar.setting_key();
+    assert!(crate::settings::stored_bool(&db, key).await);
+    save(&engine, "em_bar", rows("cm_VisButtonBar")).await;
+    run(&engine, "em_bar").await.expect("ran");
+    assert!(!crate::settings::stored_bool(&db, key).await);
+    save(&engine, "em_bar2", rows("cm_VisButtonBar2")).await;
+    run(&engine, "em_bar2").await.expect("ran");
+    let vertical = crate::BarKind::VerticalButtonBar.setting_key();
+    assert!(crate::settings::stored_bool(&db, vertical).await);
+}
+
 /// Over MCP a start as administrator, a question, parameters of the caller, a row stricter
 /// than `Exec` and a window row are refused - whatever the gate judged before.
 #[tokio::test]

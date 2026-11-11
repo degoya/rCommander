@@ -27,9 +27,9 @@ use crate::{
 /// A backend that forwards to [`Forward::inner`]: a test overrides only the calls it changes
 /// and is a [`Vfs`] through the blanket implementation.
 ///
-/// Only the calls a backend must implement forward, with [`Vfs::list_batches`] and
-/// [`Vfs::open_read_at`] overridable on top; both default to what [`Vfs`]'s defaults do, over
-/// this backend's own `list` and `open_read`. Every other provided call keeps [`Vfs`]'s default
+/// Only the calls a backend must implement forward, with [`Vfs::list_batches`],
+/// [`Vfs::open_read_at`] and [`Vfs::open_write_sized`] overridable on top; each defaults to what
+/// [`Vfs`]'s default does, over this backend's own `list`, `open_read` and `open_write`. Every other provided call keeps [`Vfs`]'s default
 /// - a wrapper is exactly the hand-written forward it replaces.
 ///
 /// Implement it by path (`impl rc_vfs::testing::Forward for ...`) without importing it: with
@@ -68,6 +68,14 @@ pub trait Forward: Send + Sync {
     }
     async fn open_write(&self, path: &Path, mode: WriteMode) -> Result<WriteStream> {
         self.inner().open_write(path, mode).await
+    }
+    async fn open_write_sized(
+        &self,
+        path: &Path,
+        mode: WriteMode,
+        _size: u64,
+    ) -> Result<WriteStream> {
+        Forward::open_write(self, path, mode).await
     }
     async fn mkdir(&self, path: &Path, recursive: bool) -> Result<()> {
         self.inner().mkdir(path, recursive).await
@@ -114,6 +122,14 @@ impl<T: Forward> Vfs for T {
     }
     async fn open_write(&self, path: &Path, mode: WriteMode) -> Result<WriteStream> {
         Forward::open_write(self, path, mode).await
+    }
+    async fn open_write_sized(
+        &self,
+        path: &Path,
+        mode: WriteMode,
+        size: u64,
+    ) -> Result<WriteStream> {
+        Forward::open_write_sized(self, path, mode, size).await
     }
     async fn mkdir(&self, path: &Path, recursive: bool) -> Result<()> {
         Forward::mkdir(self, path, recursive).await

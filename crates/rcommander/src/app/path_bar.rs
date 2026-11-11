@@ -2,8 +2,9 @@
 //! beside them a free space whose click turns the bar into a text field for a path to go to.
 //! Inside an archive the segments run through the archive file (`archive_view.rs`). A directory
 //! on a server starts with its location, `sftp://<connection name>/` or `ftp://<connection
-//! name>/` (RC-070-03), and is separated by `/` on every platform. The segments are in the
-//! file list's chosen font (RC-010-17).
+//! name>/` (RC-070-03), one on a portable device with `device://<device name>/` (RC-110-16),
+//! and is separated by `/` on every platform. The segments are in the file list's chosen font
+//! (RC-010-17).
 
 use std::path::{Component, Path, PathBuf};
 
@@ -11,7 +12,7 @@ use iced::{
     Element, Length,
     widget::{Space, column, container, mouse_area, row, text, text_input},
 };
-use rc_engine::{FTP_SCHEME, PanelId, SFTP_SCHEME, VfsPath};
+use rc_engine::{DEVICE_SCHEME, FTP_SCHEME, PanelId, SFTP_SCHEME, VfsPath};
 use rc_vfs::BackendId;
 
 use super::{
@@ -59,7 +60,8 @@ pub fn remote_breadcrumb(prefix: &str, path: &Path) -> Vec<(String, PathBuf)> {
 
 impl App {
     /// A panel's directory as text: the path here, `sftp://<name>/<path>` or
-    /// `ftp://<name>/<path>` on a server - what the path prompt starts with and takes back.
+    /// `ftp://<name>/<path>` on a server, `device://<name>/<path>` on a portable device - what
+    /// the path prompt and the copy dialog start with and the engine takes back.
     pub(super) fn location_text(&self, path: &VfsPath) -> String {
         match self.remote_prefix(path) {
             Some(prefix) => {
@@ -75,20 +77,42 @@ impl App {
     }
 
     /// `sftp://<connection name>` or `ftp://<connection name>` for a location on a server, by the
-    /// drive bar's name for it; `None` on this machine.
+    /// drive bar's name for it; `device://<device name>` on a portable device's own backend
+    /// (RC-110-16), its id where several devices share the name; `None` on this machine.
     pub(super) fn remote_prefix(&self, path: &VfsPath) -> Option<String> {
-        let (scheme, connection_id) = match path.backend {
-            BackendId::Sftp { connection_id } => (SFTP_SCHEME, connection_id),
-            BackendId::Ftp { connection_id } => (FTP_SCHEME, connection_id),
+        let (scheme, id, fallback) = match &path.backend {
+            BackendId::Sftp { connection_id } => (
+                SFTP_SCHEME,
+                format!("server:{connection_id}"),
+                connection_id.to_string(),
+            ),
+            BackendId::Ftp { connection_id } => (
+                FTP_SCHEME,
+                format!("server:{connection_id}"),
+                connection_id.to_string(),
+            ),
+            BackendId::Device { device } => {
+                (DEVICE_SCHEME, format!("device:{device}"), device.clone())
+            }
             _ => return None,
         };
-        let id = format!("server:{connection_id}");
-        let name = self
-            .drive_bar
-            .drives
+        let drives = &self.drive_bar.drives;
+        let label = drives
             .iter()
             .find(|drive| drive.id == id)
-            .map_or_else(|| connection_id.to_string(), |drive| drive.label.clone());
+            .map(|drive| &drive.label);
+        let shared = |label: &String| {
+            drives
+                .iter()
+                .filter(|drive| drive.id.starts_with("device:") && &drive.label == label)
+                .count()
+                > 1
+        };
+        let name = match label {
+            Some(label) if scheme == DEVICE_SCHEME && shared(label) => fallback,
+            Some(label) => label.clone(),
+            None => fallback,
+        };
         Some(format!("{scheme}{name}"))
     }
 

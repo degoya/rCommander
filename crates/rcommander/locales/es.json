@@ -3502,10 +3502,7 @@
   "setting.buttonbar.vertical": "Barra entre los paneles",
   "setting.buttonbar.vertical.help": "El id de la barra que muestra la barra vertical; 0 muestra la primera.",
   "setting.buttonbar.icon_size": "Tamaño de los símbolos de los botones",
-  "setting.buttonbar.icon_size.help": "El lado del símbolo de un botón, en píxeles.",
-  "setting.buttonbar.icon_size.16": "16 píxeles",
-  "setting.buttonbar.icon_size.24": "24 píxeles",
-  "setting.buttonbar.icon_size.32": "32 píxeles",
+  "setting.buttonbar.icon_size.help": "El lado del símbolo de un botón, en píxeles: de 16 a 48, como en el diálogo Cambiar barra de botones de Total Commander.",
   "setting.appearance.drive_bar": "Mostrar los botones de unidades",
   "setting.appearance.drive_bar.help": "La barra de botones de unidades sobre los paneles; la línea de la unidad se queda.",
   "setting.appearance.command_line": "Mostrar la línea de comandos",
@@ -3725,5 +3722,15 @@
   "symbol_picker.no_tooltip": "Sin descripción emergente: el botón nombra su comando.",
   "symbol_picker.keys": "Las flechas se mueven en la cuadrícula (Arriba y Abajo también desde la búsqueda), Inicio y Fin van al primero y al último, Intro toma el símbolo, Tab cambia entre búsqueda, categorías y cuadrícula, Escape vuelve al formulario.",
   "symbol_picker.ok": "Aceptar",
-  "symbol_picker.cancel": "Cancelar"
+  "symbol_picker.cancel": "Cancelar",
+  "setting.buttonbar.button_padding": "Espacio alrededor de los símbolos de los botones",
+  "setting.buttonbar.button_padding.help": "El espacio entre el símbolo de un botón y su marco, en píxeles por cada lado: de 0 a 12. El botón crece con él; Total Commander ajusta el tamaño del botón aparte del tamaño del símbolo.",
+  "setting.buttonbar.flat": "Botones planos",
+  "setting.buttonbar.flat.help": "Los botones de ambas barras sin marco ni relleno; el puntero y el teclado siguen mostrando el botón en el que están (Iconos planos de Total Commander).",
+  "button_bar.menu.icon_size": "Tamaño de los símbolos",
+  "button_bar.menu.size": "{size} píxeles",
+  "button_bar.menu.other_size": "Otro...",
+  "button_bar.menu.flat": "Botones planos",
+  "button_bar.menu.hide": "Ocultar la barra de botones",
+  "button_bar.menu.hide_vertical": "Ocultar la barra de botones vertical"
 }

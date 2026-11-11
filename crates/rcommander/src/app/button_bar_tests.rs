@@ -1,6 +1,6 @@
 //! The bars through the app's `update()`: which bar shows where, a click and the keyboard run a
-//! button, a sub-bar opens as a menu, a button's menu deletes it, a drop runs a program's button
-//! with the files or - with Shift - makes a new button.
+//! button, a sub-bar opens as a menu, the context menu deletes a button, sets the look and hides
+//! the bar, a drop runs a program's button with the files or - with Shift - makes a new button.
 
 use rc_engine::{
     BarButton, BarItem, BarPlace, BarSpec, ButtonAction, ButtonBar, Command, CommandKind,
@@ -8,7 +8,7 @@ use rc_engine::{
 };
 
 use super::*;
-use crate::app::harness::Harness;
+use crate::{app::harness::Harness, i18n::t};
 
 fn rows(row: &str) -> BarItem {
     BarItem::Button(BarButton {
@@ -97,6 +97,8 @@ fn each_place_shows_the_bar_its_setting_names_or_the_first() {
     assert!(ui.shown(BarPlace::Horizontal).is_none());
     assert!(concerns("appearance.status_bar"));
     assert!(concerns("buttonbar.icon_size"));
+    assert!(concerns("buttonbar.flat"));
+    assert!(concerns("buttonbar.button_padding"));
     assert!(!concerns("appearance.theme"));
 }
 
@@ -193,14 +195,102 @@ async fn the_buttons_menu_deletes_it() {
     let id = saved(&harness, "Two", vec![rows("view_full"), rows("view_brief")]).await;
     shown(&mut harness, id).await;
     harness
-        .send(wrap(BbMsg::Context(BarPlace::Horizontal, 0)))
+        .send(wrap(BbMsg::Context(BarPlace::Horizontal, Some(0))))
         .await;
-    let menu = harness.app.button_bar.menu.clone().expect("open");
-    assert_eq!(menu.kind, MenuKind::Button { bar: id, button: 0 });
-    harness.send(wrap(BbMsg::Menu(MenuMsg::Pick(1)))).await;
+    let menu = harness.app.button_bar.context.clone().expect("open");
+    assert_eq!((menu.bar, menu.button), (id, Some(0)));
+    harness.send(wrap(BbMsg::Ctx(CtxMsg::Pick(1)))).await;
+    assert!(harness.app.button_bar.context.is_none(), "closed");
     let bars = harness.app.engine().button_bars().await.expect("read");
     let stored = bars.iter().find(|bar| bar.id == id).expect("there");
     assert_eq!(stored.spec.items, vec![rows("view_brief")]);
+}
+
+/// RC-110-15: beside the buttons the menu has the bar's entries only; Flat buttons and a size
+/// are stored at once, Hide bar switches the bar off - also the vertical one, from the keyboard.
+#[tokio::test]
+async fn the_bars_menu_sets_the_look_and_hides_the_bar() {
+    let root = tempfile::tempdir().expect("temp dir");
+    // The engine's database, kept here: the window's own handle is set only by its start.
+    let db = rc_db::Db::open_in_memory().await.expect("db");
+    let mut harness = Harness::on_db(root.path(), db.clone()).await;
+    let id = saved(
+        &harness,
+        "Look",
+        vec![rows("view_full"), BarItem::Separator],
+    )
+    .await;
+    shown(&mut harness, id).await;
+    // A separator is beside the buttons.
+    harness
+        .send(wrap(BbMsg::Context(BarPlace::Horizontal, Some(1))))
+        .await;
+    let menu = harness.app.button_bar.context.clone().expect("open");
+    assert_eq!(menu.button, None);
+    let shown_items = menu.items(&harness.app.button_bar.settings);
+    let flat = shown_items
+        .iter()
+        .position(|item| item.label == t!("button_bar.menu.flat"))
+        .expect("Flat buttons");
+    harness.send(wrap(BbMsg::Ctx(CtxMsg::Pick(flat)))).await;
+    assert!(rc_engine::settings::stored_bool(&db, rc_engine::settings::FLAT_KEY).await);
+
+    // Symbol size opens its sizes in the same card; 48 is stored as a number.
+    harness
+        .send(wrap(BbMsg::Context(BarPlace::Horizontal, None)))
+        .await;
+    harness.press("End").await;
+    harness.press("ArrowUp").await;
+    harness.press("ArrowUp").await;
+    harness.press("ArrowRight").await;
+    let menu = harness.app.button_bar.context.clone().expect("still open");
+    assert_eq!(menu.level, context::Level::Sizes);
+    harness.press("End").await;
+    harness.press("ArrowUp").await;
+    harness.press("Enter").await;
+    assert!(harness.app.button_bar.context.is_none());
+    assert_eq!(
+        rc_engine::settings::stored_setting(&db, rc_engine::settings::ICON_SIZE_KEY).await,
+        Some(serde_json::json!(48))
+    );
+
+    // The vertical bar from the keyboard: Shift+F10 on its button, the last entry hides it.
+    let settings = BarSettings {
+        vertical: true,
+        vertical_bar: id,
+        ..harness.app.button_bar.settings
+    };
+    harness.send(wrap(BbMsg::Settings(settings))).await;
+    let vertical = rc_engine::BarKind::VerticalButtonBar.setting_key();
+    harness
+        .app
+        .engine()
+        .dispatch(Command::SetSetting {
+            key: vertical.into(),
+            value: serde_json::json!(true),
+        })
+        .await
+        .expect("shown");
+    harness
+        .send(Message::Engine(EngineEvent::ButtonBarFocus {
+            bar: BarPlace::Vertical,
+        }))
+        .await;
+    harness.press("Shift+F10").await;
+    let menu = harness.app.button_bar.context.clone().expect("open");
+    assert_eq!((menu.place, menu.button), (BarPlace::Vertical, Some(0)));
+    harness.press("End").await;
+    harness.press("Enter").await;
+    assert!(harness.app.button_bar.focus.is_none(), "the bar went");
+    assert!(!rc_engine::settings::stored_bool(&db, vertical).await);
+    // Escape closes an open menu, and a panel's key stays in it.
+    harness
+        .send(wrap(BbMsg::Context(BarPlace::Horizontal, None)))
+        .await;
+    harness.press("F5").await;
+    assert!(harness.app.button_bar.context.is_some());
+    harness.press("Escape").await;
+    assert!(harness.app.button_bar.context.is_none());
 }
 
 #[tokio::test]

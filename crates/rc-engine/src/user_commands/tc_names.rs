@@ -2,11 +2,12 @@
 //! them (RC-100-86): an own command or a Start menu entry imported from `usercmd.ini` or
 //! `wincmd.ini`, or typed as Total Commander users write them, may name `cm_Copy` where
 //! rCommander's row is `copy`. Total Commander compares the names without regard to case, and so
-//! does [`row_of`]. A name missing here is no error until it runs: the import keeps it with a
+//! does [`row_of`]. A row is one of the standard keymap or, for a command Total Commander gives
+//! no key either, a bar's row of the command palette (`toggle_bar.button_bar`, RC-110-15). A name missing here is no error until it runs: the import keeps it with a
 //! note, and running it answers `user_command_unknown_row`.
 
-/// Each Total Commander name in lower case with the keymap row (`keymap/default.json`) that does
-/// what it does, sorted by the name.
+/// Each Total Commander name in lower case with the keymap row (`keymap/default.json`), or the
+/// bar's palette row, that does what it does, sorted by the name.
 pub const TC_NAMES: &[(&str, &str)] = &[
     ("cm_addfilenametocmdline", "cmdline_insert_name"),
     ("cm_addpathandfilenametocmdline", "cmdline_insert_path"),
@@ -83,6 +84,10 @@ pub const TC_NAMES: &[(&str, &str)] = &[
     ("cm_unpackfiles", "archive.extract"),
     ("cm_unselectcurrentextension", "deselect_extension"),
     ("cm_verifychecksums", "checksum_verify"),
+    // No key runs these in Total Commander either: the rows of the palette and the View menu
+    // (`BarKind::toggle_row`, RC-110-15).
+    ("cm_visbuttonbar", "toggle_bar.button_bar"),
+    ("cm_visbuttonbar2", "toggle_bar.vertical_button_bar"),
 ];
 
 /// The keymap row Total Commander's `name` (`cm_Copy`, any case) runs in rCommander; `None` for

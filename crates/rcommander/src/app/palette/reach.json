@@ -258,5 +258,7 @@
   { "command": "button_bar.run", "via": "button_bar.focus", "how": "a click on a button, or Enter on it after Alt+Shift+F11 or Alt+Shift+F12; files dropped on a program's button" },
   { "command": "button_bar.manager", "palette": true },
   { "command": "view.toggle_bar", "listed": "a row per bar of the window, such as Show/hide the button bar - also the View menu" },
-  { "command": "panel.thumbnail_zoom", "via": "panel.set_view", "how": "Ctrl and the mouse wheel over the thumbnails view (Ctrl+Shift+F1) zoom its tiles; Total Commander has no key for it either" }
+  { "command": "panel.thumbnail_zoom", "via": "panel.set_view", "how": "Ctrl and the mouse wheel over the thumbnails view (Ctrl+Shift+F1) zoom its tiles; Total Commander has no key for it either" },
+  { "command": "view.toggle_button_bar", "listed": "the row Show/hide the button bar - also the View menu's Button bar, the bar's context menu, and Total Commander's cm_VisButtonBar in an own command or a button, which a key of the Shortcuts tab can run; Total Commander has no key for it either" },
+  { "command": "view.toggle_vertical_button_bar", "listed": "the row Show/hide the vertical button bar - also the View menu's Vertical button bar, the bar's context menu, and Total Commander's cm_VisButtonBar2 in an own command or a button; Total Commander has no key for it either" }
 ]

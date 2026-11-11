@@ -22,4 +22,4 @@ description = "Compares two key=value files by key, whatever their order."
 author = "Your name"
 license = "MIT"
 # The first rCommander release that accepts this plugin's `api_version`.
-min_app_version = "0.21.0"
+min_app_version = "0.22.0"

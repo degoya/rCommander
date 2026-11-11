@@ -225,8 +225,8 @@ impl Streams {
 }
 
 /// The archive as read, with the block of each entry that has a stream. `BlockDecoder`
-/// (sevenz-rust2 0.24.2) walks every entry from a block's first to its last, the folders and
-/// empty files between them included, so the archive is kept whole: its stream map (with the
+/// (sevenz-rust2 since 0.24.2) walks every entry from a block's first to its last, the folders
+/// and empty files between them included, so the archive is kept whole: its stream map (with the
 /// library's own end of each block) stays true to its entries. (0.23 stopped short of a block's
 /// last streams when a folder lay in between; a filtered copy of the archive worked around it,
 /// and would now break the library's end index.)

@@ -3502,10 +3502,7 @@
   "setting.buttonbar.vertical": "Barre entre les panneaux",
   "setting.buttonbar.vertical.help": "L'identifiant de la barre affichée verticalement ; 0 affiche la première.",
   "setting.buttonbar.icon_size": "Taille des symboles des boutons",
-  "setting.buttonbar.icon_size.help": "Le côté du symbole d'un bouton, en pixels.",
-  "setting.buttonbar.icon_size.16": "16 pixels",
-  "setting.buttonbar.icon_size.24": "24 pixels",
-  "setting.buttonbar.icon_size.32": "32 pixels",
+  "setting.buttonbar.icon_size.help": "Le côté du symbole d'un bouton, en pixels : de 16 à 48, comme dans la boîte Modifier la barre de boutons de Total Commander.",
   "setting.appearance.drive_bar": "Afficher les boutons de lecteurs",
   "setting.appearance.drive_bar.help": "La barre des boutons de lecteurs au-dessus des panneaux ; la ligne du lecteur reste.",
   "setting.appearance.command_line": "Afficher la ligne de commande",
@@ -3725,5 +3722,15 @@
   "symbol_picker.no_tooltip": "Pas d'info-bulle : le bouton nomme sa commande.",
   "symbol_picker.keys": "Les flèches se déplacent dans la grille (Haut et Bas aussi depuis la recherche), Début et Fin vont au premier et au dernier, Entrée prend le symbole, Tab passe entre recherche, catégories et grille, Échap revient au formulaire.",
   "symbol_picker.ok": "OK",
-  "symbol_picker.cancel": "Annuler"
+  "symbol_picker.cancel": "Annuler",
+  "setting.buttonbar.button_padding": "Espace autour des symboles des boutons",
+  "setting.buttonbar.button_padding.help": "L'espace entre le symbole d'un bouton et son cadre, en pixels de chaque côté : de 0 à 12. Le bouton grandit avec lui ; Total Commander règle la taille du bouton à part de celle du symbole.",
+  "setting.buttonbar.flat": "Boutons plats",
+  "setting.buttonbar.flat.help": "Les boutons des deux barres sans cadre ni fond ; le pointeur et le clavier montrent toujours le bouton où ils se trouvent (Icônes plates de Total Commander).",
+  "button_bar.menu.icon_size": "Taille des symboles",
+  "button_bar.menu.size": "{size} pixels",
+  "button_bar.menu.other_size": "Autre...",
+  "button_bar.menu.flat": "Boutons plats",
+  "button_bar.menu.hide": "Masquer la barre de boutons",
+  "button_bar.menu.hide_vertical": "Masquer la barre de boutons verticale"
 }

@@ -1,13 +1,17 @@
 //! A file read off a device as a stream: the session's blocking download feeds a bounded channel
 //! of chunks, the caller reads them as an [`AsyncRead`]. The download runs at most a few chunks
 //! ahead of the reader and stops once the reader is dropped; a download that ends short of the
-//! file's size is an error, never a quiet end.
+//! file's size is an error, never a quiet end. While a reader lives it counts as an open download
+//! of its device, which streams no upload beside it (`upload.rs`).
 
 use std::{
     io,
     path::Path,
     pin::Pin,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     task::{Context, Poll, ready},
 };
 
@@ -24,6 +28,22 @@ const DEPTH: usize = 4;
 
 type Message = io::Result<Vec<u8>>;
 
+/// One open download in its device's count, until it is dropped.
+struct Open(Arc<AtomicUsize>);
+
+impl Open {
+    fn new(count: Arc<AtomicUsize>) -> Self {
+        count.fetch_add(1, Ordering::SeqCst);
+        Self(count)
+    }
+}
+
+impl Drop for Open {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 /// The reader's end.
 struct PipeReader {
     rx: mpsc::Receiver<Message>,
@@ -33,6 +53,7 @@ struct PipeReader {
     /// The file's size: a download that closes short of it failed.
     expected: u64,
     done: bool,
+    _open: Open,
 }
 
 impl PipeReader {
@@ -85,15 +106,17 @@ impl AsyncRead for PipeReader {
     }
 }
 
-/// The file `id` of `size` bytes at `path`, downloaded by `session` on a blocking thread. Answers
-/// once the first chunk, the end or the error is there, so a file that cannot be read fails
-/// here, typed.
+/// The file `id` of `size` bytes at `path`, downloaded by `session` on a blocking thread and
+/// counted in `open` while its reader lives. Answers once the first chunk, the end or the error
+/// is there, so a file that cannot be read fails here, typed.
 pub(super) async fn download(
     session: Arc<dyn Session>,
     id: String,
     size: u64,
     path: &Path,
+    open: Arc<AtomicUsize>,
 ) -> Result<ReadStream> {
+    let open = Open::new(open);
     let (tx, rx) = mpsc::channel::<Message>(DEPTH);
     let failed = tx.clone();
     let owned = path.to_path_buf();
@@ -111,6 +134,7 @@ pub(super) async fn download(
         received: 0,
         expected: size,
         done: false,
+        _open: open,
     };
     let first = reader.rx.recv().await;
     reader

@@ -77,6 +77,8 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "buttonbar.horizontal",
             "buttonbar.vertical",
             "buttonbar.icon_size",
+            "buttonbar.button_padding",
+            "buttonbar.flat",
             "appearance.drive_bar",
             "appearance.command_line",
             "appearance.status_bar",

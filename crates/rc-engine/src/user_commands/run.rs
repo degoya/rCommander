@@ -431,11 +431,15 @@ enum RowCommand {
     Window(String),
 }
 
-/// The standard keymap's row `name`.
+/// The standard keymap's row `name`, or a bar's palette row (`toggle_bar.button_bar`), which no
+/// key runs (RC-110-15).
 fn row_command(name: &str) -> Option<RowCommand> {
     let standard = Keymap::shared_standard();
     if let Some(binding) = standard.bindings().iter().find(|b| b.name == name) {
         return Some(RowCommand::Binding(Box::new(binding.command.clone())));
+    }
+    if let Some(bar) = crate::BarKind::of_toggle_row(name) {
+        return Some(RowCommand::Binding(Box::new(bar.toggle_command())));
     }
     standard
         .window()

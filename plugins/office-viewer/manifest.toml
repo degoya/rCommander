@@ -6,7 +6,7 @@ plugin_type = "viewer"
 api_version = "0.6.0"
 id = "01a1b720-fdc2-7718-851e-092f28c86d2f"
 name = "Office viewer"
-version = "0.1.0"
+version = "0.1.1"
 
 [match]
 # Word, Excel and PowerPoint as Office Open XML, with and without macros; `probe` takes a zip

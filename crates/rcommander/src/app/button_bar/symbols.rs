@@ -2,7 +2,8 @@
 //! size. A `.png`, `.ico`, `.bmp`, `.gif`, `.jpg` or `.webp` is decoded everywhere, as the
 //! viewer decodes a picture: at most [`MAX_FILE_BYTES`] of it, at most [`MAX_SIDE`] pixels a
 //! side, scaled to the bars' size. On Windows an `.exe`, a `.dll` or an `.ico` gives the icon at
-//! its index (`ExtractIconExW`, `app/icons`), any other file its own icon as Explorer shows it -
+//! its index at the bars' size, scaled from its next larger image (`SHDefExtractIconW`,
+//! `app/icons`, RC-110-15), any other file its own icon as Explorer shows it -
 //! also a program's button without a symbol of its own, by its program. An own command's button
 //! without one shows the own command's symbol, read again whenever the own commands are. A
 //! symbol that does not read is asked for once a run; its button shows its text. A symbol of the
@@ -173,9 +174,7 @@ fn read(key: &SymbolKey) -> Option<Rgba> {
     {
         // A program, a library or an icon by its index; any other file its own icon.
         let windows_icon = picture_format(path).is_none_or(|format| format == ImageFormat::Ico);
-        if windows_icon
-            && let Some(pixels) = crate::app::icons::symbol(path, key.index, key.size > 16)
-        {
+        if windows_icon && let Some(pixels) = crate::app::icons::symbol(path, key.index, key.size) {
             return Some(pixels);
         }
     }

@@ -1,18 +1,21 @@
 //! `files.stat`, the FTP test `connections.test` calls, and how a written location becomes a [`VfsPath`]: a
-//! path of the panel's backend, `ftp://<connection name>/<path>` on an FTP connection or
-//! `sftp://<connection name>/<path>` on an SSH one (`crate::remote`).
+//! path of the panel's backend, `ftp://<connection name>/<path>` on an FTP connection,
+//! `sftp://<connection name>/<path>` on an SSH one (`crate::remote`) or
+//! `device://<device name>/<path>` on a portable device (`commands/devices.rs`).
 
 use rc_vfs::{BackendId, VfsPath};
 
 use super::panel::resolve_path;
 use crate::{
     ConnectionId, Engine, EngineError, Outcome, PanelId,
-    remote::{sftp::strip_sftp_scheme, split_location, strip_ftp_scheme},
+    drives::devices::DEVICE_SCHEME,
+    remote::{sftp::strip_sftp_scheme, split_location, strip_ftp_scheme, strip_scheme},
 };
 
 impl Engine {
     /// `target` as a location: `ftp://<name>/<path>` (or `ftps://`) on that FTP connection,
-    /// `sftp://<name>/<path>` on that SSH connection ([`Engine::locate_sftp`]), anything else
+    /// `sftp://<name>/<path>` on that SSH connection ([`Engine::locate_sftp`]),
+    /// `device://<name>/<path>` on that portable device ([`Engine::locate_device`]), anything else
     /// resolved against `current` ([`resolve_path`]). `ftp://<name>` alone is the connection's
     /// start directory, or where its login starts ([`Engine::ftp_start`]).
     ///
@@ -27,6 +30,9 @@ impl Engine {
     ) -> Result<VfsPath, EngineError> {
         if let Some(rest) = strip_sftp_scheme(target) {
             return self.locate_sftp(rest).await;
+        }
+        if let Some(rest) = strip_scheme(target, DEVICE_SCHEME) {
+            return self.locate_device(rest).await;
         }
         let Some(rest) = strip_ftp_scheme(target) else {
             return Ok(resolve_path(current, target));

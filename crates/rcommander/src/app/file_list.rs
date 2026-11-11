@@ -32,7 +32,7 @@ use super::{
 };
 use crate::{
     i18n::t,
-    theme::{self, Tokens, fonts},
+    theme::{self, Tokens, fit, fonts},
 };
 
 mod columns;
@@ -234,10 +234,8 @@ fn status_text<'a>(pane: &'a Pane, tokens: &'static Tokens) -> Element<'a, Messa
     } else {
         t!("panel.hidden_off")
     };
-    let message = cell(message, theme::UI_FONT)
-        .size(theme::STATUS_SIZE)
-        .color(color)
-        .width(Length::Fill);
+    // Cut at its end in the room the branch and the switch leave; they stay whole (RC-110-17).
+    let message = fit::status_message(message, theme::STATUS_SIZE, color, tokens);
     let toggle = mouse_area(
         cell(hidden, theme::UI_FONT)
             .size(theme::STATUS_SIZE)

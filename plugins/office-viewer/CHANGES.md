@@ -1,5 +1,13 @@
 # Changes
 
+## 0.1.1
+
+Built with quick-xml 0.42, which checks every part of a document for valid UTF-8: a part with a
+stray byte that is not UTF-8 - in a tag, an attribute or a comment, not only in the text - is now
+reported as damaged instead of being shown with that piece left out. Office always writes UTF-8,
+so a document Word, Excel or PowerPoint saved shows as before. Built against plugin contract
+0.6.0.
+
 ## 0.1.0
 
 The first release: the text of Word documents, workbooks and presentations (`docx`, `docm`,

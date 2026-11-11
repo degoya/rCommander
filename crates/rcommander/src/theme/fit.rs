@@ -1,9 +1,9 @@
 //! Text that stays in its container (`docs/design.md`, "Text never leaves its container"): one
 //! line that never wraps, prose and help lines that wrap, a path shortened in the middle to the
-//! width it is given, and the one-line cells and rows of a dialog's table, each with the whole
-//! value in a tooltip.
+//! width it is given, the one-line cells and rows of a dialog's table and a status line's message
+//! cut at its end, each with the whole value in a tooltip.
 
-use std::time::Duration;
+use std::{borrow::Cow, time::Duration};
 
 use iced::{
     Alignment, Color, Element, Font, Length,
@@ -12,9 +12,13 @@ use iced::{
 
 use super::{
     ROW_HEIGHT, TEXT_SIZE, Tokens, UI_FONT, dialog,
-    ellipsis::{estimate_width, middle_ellipsis},
+    ellipsis::{end_ellipsis_by, estimate_width, middle_ellipsis},
     striped_row,
 };
+
+/// How wide a tooltip holding a long text gets before it wraps: a status line's whole message
+/// (RC-110-17).
+pub const TIP_WIDTH: f32 = 420.0;
 
 /// One line at [`TEXT_SIZE`] in the interface font that never wraps: a label, a title, a value.
 pub fn line<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
@@ -143,6 +147,57 @@ pub fn cut<'a, Message: 'a>(
     .width(Length::FillPortion(portion))
     .height(Length::Shrink)
     .into()
+}
+
+/// A status line's message (RC-110-17): one line at `size` in `color` in the width the line's
+/// other parts leave it (they keep theirs), cut at its end with an ellipsis when it does not
+/// fit - a message is a sentence, its start says what matters. Only then the whole message shows
+/// in a tooltip above the line, wrapped at [`TIP_WIDTH`]. The container clips what the estimate
+/// of the width missed.
+pub fn status_message<'a, Message: 'a>(
+    value: impl Into<String>,
+    size: f32,
+    color: Color,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    let value = value.into();
+    responsive(move |room| {
+        let (shown, full) = status_parts(&value, room.width, size);
+        let shown = container(line(shown).size(size).color(color))
+            .width(Length::Fill)
+            .clip(true);
+        match full {
+            Some(full) => wrapped_tip(shown, full, tokens),
+            None => shown.into(),
+        }
+    })
+    .width(Length::Fill)
+    .height(Length::Shrink)
+    .into()
+}
+
+/// What a status line shows of `value` in `width` at `size` and its tooltip: the whole value and
+/// none, or its start with an ellipsis and the whole value.
+fn status_parts(value: &str, width: f32, size: f32) -> (String, Option<String>) {
+    match end_ellipsis_by(value, width, |part| estimate_width(part, size)) {
+        Cow::Borrowed(_) => (value.to_owned(), None),
+        Cow::Owned(shown) => (shown, Some(value.to_owned())),
+    }
+}
+
+/// [`tip`] for a long text: above `content`, since a status line sits at the bottom of its
+/// panel or window, wrapped at [`TIP_WIDTH`] (a word longer than that by glyph).
+fn wrapped_tip<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    full: String,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    let full = container(label_or_glyph(full)).max_width(TIP_WIDTH);
+    Tooltip::new(content, full, tooltip::Position::Top)
+        .gap(4)
+        .padding(6)
+        .style(move |_| dialog(tokens))
+        .into()
 }
 
 /// Whether `value` at [`TEXT_SIZE`] is wider than `width` by the estimate (which errs wide).

@@ -40,4 +40,12 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         "view.toggle_bar",
         Coverage::Omitted("agents switch a bar with settings_set"),
     ),
+    (
+        "view.toggle_button_bar",
+        Coverage::Omitted("agents switch a bar with settings_set"),
+    ),
+    (
+        "view.toggle_vertical_button_bar",
+        Coverage::Omitted("agents switch a bar with settings_set"),
+    ),
 ];

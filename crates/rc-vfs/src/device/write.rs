@@ -1,13 +1,13 @@
-//! A file written onto a device. MTP takes a file whole and wants its size before the first
-//! byte, which a stream does not know: the bytes go into an anonymous temporary file of this
-//! machine first (deleted by the system when closed), and `shutdown` hands it to the device in
-//! one upload. Nothing is on the device before that; a stream dropped before or during the
-//! upload stops it, and a stopped upload leaves nothing behind. A file it replaces is deleted only
-//! once the new one is complete.
+//! A file written onto a device whose size is not known before its first byte. MTP takes a file
+//! whole and wants its size first: the bytes go into an anonymous temporary file of this machine
+//! (deleted by the system when closed), and `shutdown` hands it to the device in one upload.
+//! Nothing is on the device before that; a stream dropped before or during the upload stops it,
+//! and a stopped upload leaves nothing behind. A file it replaces is deleted only once the new one
+//! is complete. With the size known, the file is streamed instead (`upload.rs`, RC-110-16).
 
 use std::{
     future::Future,
-    io::{self, Seek, SeekFrom},
+    io::{self, Read, Seek, SeekFrom},
     path::PathBuf,
     pin::Pin,
     sync::{
@@ -38,13 +38,16 @@ pub(super) struct Target {
 }
 
 impl Target {
-    /// Uploads the `size` bytes of `file`, then deletes the file it replaces.
-    fn upload(self, mut file: std::fs::File, size: u64, cancel: Arc<AtomicBool>) -> Result<()> {
-        file.seek(SeekFrom::Start(0))
-            .map_err(|error| VfsError::from_io(error, &self.path))?;
+    /// Uploads the `size` bytes of `source`, then deletes the file it replaces.
+    pub(super) fn upload(
+        self,
+        source: Box<dyn Read + Send>,
+        size: u64,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<()> {
         let object = self
             .session
-            .upload(&self.folder, &self.name, size, Box::new(file), cancel)
+            .upload(&self.folder, &self.name, size, source, cancel)
             .map_err(|error| error.on(&self.path))?;
         if let Some(old) = &self.replaced
             && let Err(error) = self.session.delete(old, false)
@@ -110,12 +113,15 @@ impl SpoolWriter {
         let target = self.target.take().ok_or_else(closed)?;
         let cancel = Arc::clone(&self.cancel);
         Ok(tokio::task::spawn_blocking(move || {
-            target.upload(file, size, cancel)
+            let mut file = file;
+            file.seek(SeekFrom::Start(0))
+                .map_err(|error| VfsError::from_io(error, &target.path))?;
+            target.upload(Box::new(file), size, cancel)
         }))
     }
 }
 
-fn closed() -> io::Error {
+pub(super) fn closed() -> io::Error {
     io::Error::new(io::ErrorKind::BrokenPipe, "the device file is closed")
 }
 

@@ -181,9 +181,10 @@ pub fn entries(keymap: &Keymap, rows: &[ReachRow], network: bool) -> Vec<Entry> 
         String::new(),
         Action::CenterDivider,
     ));
-    // Each bar of the window shown or hidden, the View menu's entries too (RC-100-87).
+    // Each bar of the window shown or hidden, the View menu's entries too (RC-100-87); the
+    // button bars by Total Commander's cm_VisButtonBar and cm_VisButtonBar2 (RC-110-15).
     for bar in BarKind::ALL {
-        let toggle = Box::new(Command::ToggleBar { bar });
+        let toggle = Box::new(bar.toggle_command());
         entries.push(entry(&toggle_name(bar), String::new(), Action::Run(toggle)));
     }
     if network {
@@ -202,14 +203,19 @@ pub fn entries(keymap: &Keymap, rows: &[ReachRow], network: bool) -> Vec<Entry> 
     entries
 }
 
-/// The command whose palette rows the bars of the window make (`reach.json`'s `listed`).
+/// The commands whose palette rows the bars of the window make (`reach.json`'s `listed`).
 #[cfg(test)]
-pub const TOGGLE_LISTED: &[&str] = &["view.toggle_bar"];
+pub const TOGGLE_LISTED: &[&str] = &[
+    "view.toggle_bar",
+    "view.toggle_button_bar",
+    "view.toggle_vertical_button_bar",
+];
 
-/// The name of the row that shows or hides `bar`: `toggle_bar.<bar>`, its words
-/// `keys.toggle_bar.<bar>` and in the menu bar `menubar.toggle_bar.<bar>`.
+/// The name of the row that shows or hides `bar`: `toggle_bar.<bar>` (the engine's, which
+/// Total Commander's names map to), its words `keys.toggle_bar.<bar>` and in the menu bar
+/// `menubar.toggle_bar.<bar>`.
 pub fn toggle_name(bar: BarKind) -> String {
-    format!("toggle_bar.{}", bar.as_str())
+    bar.toggle_row()
 }
 
 fn entry(name: &str, keys: String, action: Action) -> Entry {

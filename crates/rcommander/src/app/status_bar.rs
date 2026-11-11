@@ -6,7 +6,7 @@
 //! bar (RC-080-18).
 
 use iced::{
-    Element, Length,
+    Element,
     widget::{Space, row, text},
 };
 
@@ -20,8 +20,9 @@ use crate::{
     },
 };
 
-/// One quiet line: a start-up notice (or else the latest news) on the left, the waiting MCP
-/// questions, the calls allowed for a session and the MCP server on the right.
+/// One quiet line: a start-up notice (or else the latest news) on the left, cut at its end with
+/// the whole text in a tooltip when it does not fit; the waiting MCP questions, the calls allowed
+/// for a session and the MCP server on the right, always whole.
 pub(super) fn status_bar<'a>(app: &'a App, tokens: &'static Tokens) -> Element<'a, Message> {
     let mcp = match &app.mcp {
         McpStatus::Off => t!("status.mcp_off").to_owned(),
@@ -34,10 +35,8 @@ pub(super) fn status_bar<'a>(app: &'a App, tokens: &'static Tokens) -> Element<'
         (None, None) => ("", tokens.text_secondary),
     };
     row![
-        line(left)
-            .size(theme::STATUS_SIZE)
-            .color(color)
-            .width(Length::Fill),
+        // Cut at its end in the room the parts on the right leave (RC-110-17).
+        fit::status_message(left, theme::STATUS_SIZE, color, tokens),
         super::update_ui::notice(app, tokens),
         super::mcp_confirm::status(&app.mcp_questions, tokens),
         super::mcp_confirm::grants(&app.mcp_grants, tokens),

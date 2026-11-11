@@ -1,7 +1,11 @@
 use super::*;
 
 fn texts(xml: &str) -> Result<String, Failure> {
-    let mut reader = Xml::new(xml.as_bytes(), 8);
+    texts_of(xml.as_bytes())
+}
+
+fn texts_of(xml: &[u8]) -> Result<String, Failure> {
+    let mut reader = Xml::new(xml, 8);
     let mut out = String::new();
     loop {
         match reader.next()? {
@@ -56,5 +60,28 @@ fn attributes_by_local_name_with_and_without_prefix() {
             assert_eq!(attr(&start, b"missing"), None);
         }
         _ => panic!("an empty tag"),
+    }
+}
+
+#[test]
+fn a_utf8_bom_is_skipped() {
+    let text = texts_of(b"\xEF\xBB\xBF<a>x</a>").expect("text");
+    assert_eq!(text, "x");
+}
+
+/// quick-xml 0.42 checks every event for UTF-8 (RC-110-12): a stray byte in a name, an attribute
+/// or a comment, which 0.41 passed by, makes the part damaged as one in the text always did.
+#[test]
+fn a_byte_that_is_not_utf8_is_damaged_wherever_it_is() {
+    let parts: [&[u8]; 5] = [
+        b"<a>x\xFFy</a>",
+        b"<a t=\"\xFF\">x</a>",
+        b"<a\xFF>x</a\xFF>",
+        b"<a><!-- \xFF -->x</a>",
+        b"\xFF\xFE<\x00a\x00/\x00>\x00",
+    ];
+    for part in parts {
+        let failure = texts_of(part).expect_err("damaged");
+        assert_eq!(failure.code.as_deref(), Some(code::DAMAGED), "{part:?}");
     }
 }

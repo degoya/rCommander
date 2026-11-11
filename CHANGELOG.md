@@ -5,6 +5,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-11
+
+### Added
+
+- **Button bar: context menu, free size, flat buttons, room around the symbols** (RC-110-15): a
+  right click on a button or beside the buttons, or Shift+F10 and the context-menu key in a bar
+  with the keyboard, opens the bar's menu - the file list's kind: Change..., Delete and Insert
+  button... on a button, Edit bar..., Symbol size (16, 24, 32, 48, Other... to the settings),
+  Flat buttons, Hide bar (`button_bar/context.rs`). `buttonbar.icon_size` is a number from 16 to
+  48 (the text "16"/"24"/"32" of 0.21 reads as the number, also from a config export),
+  `buttonbar.button_padding` (0-12, 5) and `buttonbar.flat` (off) act on both bars at once
+  (`button_bar/layout.rs`); on Windows a program's or library's icon is read at the bars' size
+  (`SHDefExtractIconW`). New commands `view.toggle_button_bar` and
+  `view.toggle_vertical_button_bar`, run by the palette's and the View menu's rows and by Total
+  Commander's `cm_VisButtonBar` and `cm_VisButtonBar2` (`tc_names`), without a default key; MCP
+  `omitted` (settings_set).
+
+### Changed
+
+- **sevenz-rust2 0.25** (RC-110-11): 0.24.2 to 0.25.0, which takes `lzma-rust2` 0.25, so the
+  second `lzma-rust2` (0.23.0) leaves the tree. The library bounds every 7z entry by its stated
+  size and refuses one that ends early, as `archive_damaged` like before; an archive update no
+  longer writes such an entry short into the new 7z but fails and keeps the old one. No API
+  change for `rc-vfs` and `rc-ops`; its new decoder memory limit is not used, `sevenz_memory`
+  still checks first.
+- **quick-xml 0.42 in the Office viewer** (RC-110-12): `plugins/office-viewer` (0.1.1) reads its
+  XML parts with quick-xml 0.42, which checks every event for UTF-8 - a part with a byte that is
+  not UTF-8 in a name, an attribute or a comment is now damaged, as one in the text always was.
+  `wayland-scanner` (build-time only) keeps 0.41, a second version in `Cargo.lock`.
+- **Dependencies before 0.22.0**: the semver-compatible updates `const-oid` 0.10.3, `crc32fast`
+  1.5.5, `crypto-bigint` 0.7.11, `itoa` 1.0.19, `notify-types` 2.3.0, `rustls-pki-types` 1.16.0,
+  `syn` 3.0.10, `uuid` 1.29.2, `webpki-root-certs` 1.0.12 and `zip` 9.5.1 (`Cargo.lock` only;
+  `cargo deny` clean, `third-party.json` regenerated).
+
+### Fixed
+
+- **Debug build on Windows overflowed its stack at the start**: the Windows binaries link with
+  an 8 MiB main-thread stack (`/STACK:8388608` in `.cargo/config.toml`) instead of the default
+  1 MiB, which the unoptimized `rcommander.exe` overflowed before its window opened.
+- **Long messages in the status lines** (RC-110-17): a panel's status line and the window's
+  status bar cut a message too long for the room the parts on their right leave at its end with
+  `…` (`theme::fit::status_message`), so it no longer runs under the git branch, the hidden-files
+  switch or the MCP status; the whole message shows in a tooltip, wrapped, only when it was cut.
+- **Progress while copying onto a portable device** (RC-110-16): on Windows a file copied onto a
+  phone over WPD/MTP is no longer spooled into a temporary file and then uploaded in one silent
+  piece after the progress had already reached its end. The queue states the source file's size
+  (`Vfs::open_write_sized`, new; the default is `open_write`, `TimeoutFs` and
+  `testing::Forward` forward it), and `DeviceFs` starts the upload at once and feeds it from a
+  bounded channel of four blocks (`device/upload.rs`): the job's progress is the upload's, a
+  cancel takes effect per block, no temporary file is made, and a stream that ends short of or
+  past its size, fails or is dropped is reverted on the device. A file written without a size,
+  or while a download of the same device is open (a copy within one phone, which shares the
+  device's one thread), is spooled as before. The upload takes the device's turn like any call.
+  Linux (gvfs) is unchanged.
+- **A phone as the copy target landed on the local drive** (RC-110-16): on Windows the copy
+  dialog offered a phone panel's folder as a bare path (`\Internal storage\Download\`), which the
+  engine read against the source panel's drive - F5 copied into `D:\Internal storage\Download`,
+  creating it, and the next F5 found the file "already there" while the phone had nothing. A
+  location on a portable device is now written `device://<device name>/<path>` (the drive bar's
+  name, the device's id where two devices share it; `DEVICE_SCHEME`, `location_text`), in the
+  path bar, the path prompt and the copy dialog, and `Engine::locate` reads it back onto that
+  device (`locate_device`, opening it first unless a session is registered;
+  `drive_not_found` for no device or several of that name, or with
+  `drives.portable_devices` off). MCP's `ops_copy`/`ops_move` take it as a source or target.
+  The fault dated from RC-100-61.
+
 ## [0.21.0] - 2026-11-08
 
 ### Added

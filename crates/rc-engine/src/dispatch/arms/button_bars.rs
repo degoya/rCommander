@@ -25,6 +25,10 @@ macro_rules! arms {
                 $self.save_button_bar(id, &name, &spec).await
             }
             Command::ToggleBar { bar } => $self.toggle_bar(bar).await,
+            Command::ToggleButtonBar {} => $self.toggle_bar(crate::BarKind::ButtonBar).await,
+            Command::ToggleVerticalButtonBar {} => {
+                $self.toggle_bar(crate::BarKind::VerticalButtonBar).await
+            }
         } }
     };
 }

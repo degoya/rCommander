@@ -181,6 +181,31 @@ async fn toggle_bar_turns_its_setting_over() {
     assert!(stored_bool(&db, BarKind::VerticalButtonBar.setting_key()).await);
 }
 
+/// RC-110-15: `view.toggle_button_bar` and `view.toggle_vertical_button_bar`, Total Commander's
+/// `cm_VisButtonBar` and `cm_VisButtonBar2`, turn the two bars' settings over.
+#[tokio::test]
+async fn the_button_bars_toggle_by_their_own_commands() {
+    let (_root, engine) = test_support::engine_with_db(&[]).await;
+    let db = engine.db().expect("a database").clone();
+    let shown = |bar: BarKind| {
+        let db = db.clone();
+        async move { stored_bool(&db, bar.setting_key()).await }
+    };
+    assert!(shown(BarKind::ButtonBar).await, "on at the start");
+    engine
+        .dispatch(Command::ToggleButtonBar {})
+        .await
+        .expect("switched");
+    assert!(!shown(BarKind::ButtonBar).await);
+    assert!(!shown(BarKind::VerticalButtonBar).await, "off at the start");
+    engine
+        .dispatch(Command::ToggleVerticalButtonBar {})
+        .await
+        .expect("switched");
+    assert!(shown(BarKind::VerticalButtonBar).await);
+    assert!(!shown(BarKind::ButtonBar).await, "the other bar stays");
+}
+
 #[tokio::test]
 async fn a_bar_file_is_imported_with_its_sub_bars() {
     let (root, engine) = test_support::engine_with_db(&[]).await;

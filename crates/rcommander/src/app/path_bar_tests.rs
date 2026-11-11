@@ -107,3 +107,57 @@ fn the_active_path_changes_its_colour_and_keeps_its_font() {
     assert_eq!(other_font, list.font);
     assert_ne!(active_colour, other_colour);
 }
+
+/// A phone's folder is offered as `device://<name>/...`, so the copy dialog's target keeps the
+/// phone instead of naming a folder on the other panel's drive (RC-110-16); the device's id
+/// stands in for a name two devices share.
+#[tokio::test]
+async fn a_device_location_is_written_with_its_name_or_its_id() {
+    use rc_engine::{Drive, DriveGroup, DriveKind, DriveState, VfsPath};
+    use rc_vfs::BackendId;
+
+    use crate::app::{Message, drive_bar::DriveMessage, harness::Harness};
+
+    let root = tempfile::tempdir().expect("temp dir");
+    let mut harness = Harness::headless(root.path()).await;
+    let phone = |id: &str| Drive {
+        id: format!("device:{id}"),
+        group: DriveGroup::Devices,
+        kind: DriveKind::Device,
+        label: "Pixel 8".to_owned(),
+        root: Some(VfsPath {
+            backend: BackendId::Device { device: id.into() },
+            path: "/".into(),
+        }),
+        state: DriveState::Unknown,
+        volume: None,
+        space: None,
+        folder: Vec::new(),
+        favourite: false,
+        folder_buttons: Vec::new(),
+        remote: None,
+    };
+    let at = |id: &str, path: &str| VfsPath {
+        backend: BackendId::Device { device: id.into() },
+        path: path.into(),
+    };
+    harness
+        .send(Message::Drive(DriveMessage::Listed(Ok(vec![phone("p1")]))))
+        .await;
+    assert_eq!(
+        harness
+            .app
+            .location_text(&at("p1", "/Internal storage/Download")),
+        "device://Pixel 8/Internal storage/Download"
+    );
+    harness
+        .send(Message::Drive(DriveMessage::Listed(Ok(vec![
+            phone("p1"),
+            phone("p2"),
+        ]))))
+        .await;
+    assert_eq!(
+        harness.app.location_text(&at("p2", "/Internal storage")),
+        "device://p2/Internal storage"
+    );
+}

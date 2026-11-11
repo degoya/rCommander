@@ -334,5 +334,7 @@ asks by.
 | `button_bar.run` | exec (gui_only when it gets files or parameters from the caller, or its command starts as administrator, asks for its parameters or runs a row stricter than exec) | `button_bars_run` | Run a button of a bar for a panel: its program, internal rows or own command; files dropped on a program's button follow its parameters |
 | `button_bar.save` | gui_only | omitted: GUI only: human decision | Save a button bar: its name and buttons, each a command or a sub-bar, or a separator |
 | `view.toggle_bar` | read | omitted: agents switch a bar with settings_set | Show or hide a bar of the window: the button bar, the vertical one, the drive bar, the command line, the status bar or the function-key bar |
+| `view.toggle_button_bar` | read | omitted: agents switch a bar with settings_set | Show or hide the button bar above the panels (Total Commander's cm_VisButtonBar) |
+| `view.toggle_vertical_button_bar` | read | omitted: agents switch a bar with settings_set | Show or hide the vertical button bar between the panels (Total Commander's cm_VisButtonBar2) |
 
-324 commands: 215 covered, 109 omitted.
+326 commands: 215 covered, 111 omitted.

@@ -3,7 +3,9 @@
 //! `usercmd.save`); running a button is `Exec`, and `GuiOnly` with files or parameters of the
 //! caller's, or when its command starts as administrator, asks for its parameters (`?`) or runs a
 //! row stricter than `Exec` (`ESCALATIONS`, `Engine::effective_class`). `view.toggle_bar` shows
-//! or hides a bar of the window by its setting; `button_bar.focus` gives a bar the keyboard.
+//! or hides a bar of the window by its setting, `view.toggle_button_bar` and
+//! `view.toggle_vertical_button_bar` the two button bars as Total Commander's `cm_VisButtonBar`
+//! and `cm_VisButtonBar2` (RC-110-15); `button_bar.focus` gives a bar the keyboard.
 
 use super::{CommandClass, CommandSpec};
 
@@ -64,6 +66,16 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         class: CommandClass::Read,
         summary: "Show or hide a bar of the window: the button bar, the vertical one, the drive bar, the command line, the status bar or the function-key bar",
     },
+    CommandSpec {
+        id: "view.toggle_button_bar",
+        class: CommandClass::Read,
+        summary: "Show or hide the button bar above the panels (Total Commander's cm_VisButtonBar)",
+    },
+    CommandSpec {
+        id: "view.toggle_vertical_button_bar",
+        class: CommandClass::Read,
+        summary: "Show or hide the vertical button bar between the panels (Total Commander's cm_VisButtonBar2)",
+    },
 ];
 
 /// This group's [`super::Command`] variants, each after its id: `command.rs` gathers the
@@ -104,6 +116,10 @@ macro_rules! commands {
             "button_bar.focus" => FocusButtonBar { bar: BarPlace },
             /// The bar's setting turned over.
             "view.toggle_bar" => ToggleBar { bar: BarKind },
+            /// `appearance.button_bar` turned over (RC-110-15).
+            "view.toggle_button_bar" => ToggleButtonBar {},
+            /// `appearance.vertical_button_bar` turned over.
+            "view.toggle_vertical_button_bar" => ToggleVerticalButtonBar {},
         } }
     };
 }

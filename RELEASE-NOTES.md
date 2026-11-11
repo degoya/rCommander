@@ -11,6 +11,13 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.22.0
+
+- Right-click the button bar for its own menu: change or delete a button, edit the bar, pick the symbol size, switch to flat buttons or hide the bar.
+- Button bar symbols now take any size from 16 to 48 pixels, with adjustable room around them and an optional flat look, for both bars.
+- Copying onto a phone shows its real progress while the file goes over, and the copy dialog keeps the phone as the target instead of a folder on your disk.
+- Long messages in the status lines are cut at their end and shown whole in a tooltip, instead of running under the parts beside them.
+
 ## 0.21.0
 
 - Your own commands, a Start menu and button bars as in Total Commander: import .bar files, drop files on a button, run as administrator; bar buttons show icons with tooltips, and your own commands take a symbol of their own or one from a built-in collection.

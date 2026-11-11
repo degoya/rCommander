@@ -2,8 +2,9 @@
 //! the arrows along the bar (Left and Right above the panels, Up and Down between them), Home and
 //! End, Enter runs the button at the cursor, the arrow across the bar (Down, Right between the
 //! panels) or Space opens its sub-bar - or runs it -, Shift+F10 and the context-menu key the
-//! button's menu, Escape and Tab back to the panel. Separators are passed over. Every other key
-//! stays in the bar: a panel's key does nothing while a bar has the keyboard.
+//! bar's context menu for the button (`context.rs`), Escape and Tab back to the panel.
+//! Separators are passed over. Every other key stays in the bar: a panel's key does nothing while
+//! a bar has the keyboard.
 
 use rc_engine::{BarItem, BarPlace, Chord};
 
@@ -94,7 +95,7 @@ impl App {
             }
             // A sub-bar opens, a command runs, either way.
             BarKey::Press | BarKey::Open => self.press_bar_item(focus.place, focus.index),
-            BarKey::Context => self.open_button_menu(focus.place, focus.index),
+            BarKey::Context => self.open_bar_context(focus.place, Some(focus.index)),
             BarKey::Leave => {
                 self.button_bar.focus = None;
                 Vec::new()

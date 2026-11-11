@@ -44,6 +44,7 @@ mod pipe;
 #[cfg(windows)]
 mod windows;
 // The thread of a device's COM objects; it runs on Windows only and is tested everywhere.
+mod upload;
 #[cfg_attr(
     not(windows),
     allow(dead_code, reason = "only the WPD session runs on a worker")

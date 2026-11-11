@@ -1,5 +1,6 @@
 //! A device in memory for the tests: objects by id under storages, what a real one answers by
-//! id, and switches for what it cannot do, for being unplugged and for counting its listings.
+//! id, and switches for what it cannot do, for being unplugged, for counting its listings and
+//! for holding an upload before its first byte.
 
 use std::{
     collections::BTreeMap,
@@ -40,6 +41,12 @@ pub(crate) struct FakeDevice {
     /// Calls waiting out their stall right now, and the most there ever were at once.
     running: AtomicUsize,
     pub(crate) most_at_once: AtomicUsize,
+    /// While set, an upload waits before it reads its first byte: a device slower than the copy.
+    pub(crate) hold: AtomicBool,
+    /// Bytes the uploads have read from their sources so far.
+    pub(crate) uploaded: AtomicU64,
+    /// Uploads that have ended, kept or not.
+    pub(crate) uploads_ended: AtomicUsize,
 }
 
 impl FakeDevice {
@@ -67,6 +74,9 @@ impl FakeDevice {
             stall: AtomicU64::new(0),
             running: AtomicUsize::new(0),
             most_at_once: AtomicUsize::new(0),
+            hold: AtomicBool::new(false),
+            uploaded: AtomicU64::new(0),
+            uploads_ended: AtomicUsize::new(0),
         })
     }
 
@@ -118,6 +128,41 @@ impl FakeDevice {
         let object = Self::object(&id, &node);
         nodes.insert(id, node);
         Ok(object)
+    }
+
+    /// What an upload of `size` bytes reads from `source`, block by block as WPD's does: `cancel`
+    /// is looked at before each block, a failing read fails it, and so does another size.
+    fn receive(
+        &self,
+        source: &mut dyn Read,
+        size: u64,
+        cancel: &AtomicBool,
+    ) -> DeviceResult<Vec<u8>> {
+        self.here()?;
+        while self.hold.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let mut data = Vec::new();
+        let mut block = vec![0_u8; 16 * 1024];
+        loop {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(DeviceError::Cancelled);
+            }
+            let read = match source.read(&mut block) {
+                Ok(0) => break,
+                Ok(read) => read,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(DeviceError::Io(error)),
+            };
+            data.extend_from_slice(&block[..read]);
+            self.uploaded.fetch_add(read as u64, Ordering::SeqCst);
+        }
+        if data.len() as u64 != size {
+            return Err(DeviceError::Io(std::io::Error::other(
+                "the upload is not of its stated size",
+            )));
+        }
+        Ok(data)
     }
 }
 
@@ -182,18 +227,9 @@ impl Session for FakeDevice {
         mut source: Box<dyn Read + Send>,
         cancel: Arc<AtomicBool>,
     ) -> DeviceResult<Object> {
-        self.here()?;
-        let mut data = Vec::new();
-        source.read_to_end(&mut data).map_err(DeviceError::Io)?;
-        if cancel.load(Ordering::SeqCst) {
-            return Err(DeviceError::Cancelled);
-        }
-        if data.len() as u64 != size {
-            return Err(DeviceError::Io(std::io::Error::other(
-                "the upload is not of its stated size",
-            )));
-        }
-        self.add(folder, name, false, data)
+        let uploaded = self.receive(source.as_mut(), size, &cancel);
+        self.uploads_ended.fetch_add(1, Ordering::SeqCst);
+        self.add(folder, name, false, uploaded?)
     }
 
     fn create_folder(&self, parent: &str, name: &str) -> DeviceResult<Object> {

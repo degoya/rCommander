@@ -1,6 +1,6 @@
 use rc_engine::{BarButton, BarItem, BarPlace, BarSpec, ButtonAction, CommandRef};
 
-use super::{BUTTON_ENTRIES, MenuKind, OpenMenu, item_rows, step};
+use super::{MenuKind, OpenMenu, item_rows, step};
 
 fn button() -> BarItem {
     BarItem::Button(BarButton {
@@ -29,14 +29,9 @@ fn a_menu_lists_the_items_from_its_first_and_passes_separators() {
 
 #[test]
 fn a_menu_opens_unanchored_until_its_button_is_measured() {
-    let mut menu = OpenMenu::new(
-        MenuKind::Button { bar: 1, button: 0 },
-        BarPlace::Horizontal,
-        0,
-    );
+    let mut menu = OpenMenu::new(MenuKind::Items { bar: 1, from: 0 }, BarPlace::Horizontal, 0);
     assert!(menu.under.is_none());
     menu.anchor(None);
     assert!(menu.under.is_some(), "under the bar's start without bounds");
     assert_eq!(menu.kind.bar(), 1);
-    assert_eq!(BUTTON_ENTRIES.len(), 4);
 }

@@ -165,7 +165,7 @@ pub use connections::{
 };
 pub use drives::{
     DETAIL_TIMEOUT, Drive, DriveGroup, DriveKind, DriveSpace, DriveState, NETWORK_DRIVES,
-    NetworkDriveError, drive_of, suggest_letter,
+    NetworkDriveError, devices::DEVICE_SCHEME, drive_of, suggest_letter,
 };
 pub use error::EngineError;
 pub use event::{EngineEvent, PanelChange, TerminalChange};

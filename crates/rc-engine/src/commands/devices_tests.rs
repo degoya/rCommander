@@ -172,3 +172,90 @@ async fn a_gvfs_phone_is_its_folder_on_the_local_backend() {
     assert_eq!(engine.panel(PanelId::Left).path, VfsPath::local(&mount));
     assert_eq!(hub.opened.load(Ordering::SeqCst), 1, "mounted first");
 }
+
+/// `device://<name>/<path>` as a panel on this machine reads it: the phone's folder, never a
+/// folder of that name on the local drive (RC-110-16).
+#[tokio::test]
+async fn a_device_location_names_the_phone_from_a_local_panel() {
+    let start = TempDir::new().expect("tempdir");
+    let hub = hub(wpd_phone(), phone_files().await);
+    let engine = engine(&hub, start.path()).await;
+    drives(&engine).await;
+    let local = VfsPath::local(start.path());
+    let located = engine
+        .locate(&local, "device://Pixel 8/Internal storage/DCIM")
+        .await
+        .expect("the phone's folder");
+    assert_eq!(located.backend, wpd_phone().root.backend);
+    let names: Vec<_> = located.path.components().collect();
+    assert_eq!(
+        names,
+        Path::new("/Internal storage/DCIM")
+            .components()
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        hub.opened.load(Ordering::SeqCst),
+        1,
+        "opened for the location"
+    );
+    let root = engine
+        .locate(&local, "device://Pixel 8")
+        .await
+        .expect("the phone's root");
+    assert_eq!(root, wpd_phone().root);
+    assert_eq!(
+        hub.opened.load(Ordering::SeqCst),
+        1,
+        "its session is used again"
+    );
+}
+
+#[tokio::test]
+async fn a_device_location_without_such_a_device_is_refused() {
+    let start = TempDir::new().expect("tempdir");
+    let hub = hub(wpd_phone(), phone_files().await);
+    let engine = engine(&hub, start.path()).await;
+    drives(&engine).await;
+    let refused = engine
+        .locate(
+            &VfsPath::local(start.path()),
+            "device://Pixel 9/Internal storage",
+        )
+        .await;
+    assert_eq!(
+        refused.expect_err("no such phone").code(),
+        "drive_not_found"
+    );
+}
+
+/// Two phones of one name: the name reaches neither, each one's id reaches it.
+#[tokio::test]
+async fn a_shared_device_name_is_refused_and_the_id_reaches_the_phone() {
+    let start = TempDir::new().expect("tempdir");
+    let hub = hub(wpd_phone(), phone_files().await);
+    let twin = r"\\?\usb#vid_18d1&pid_4ee1#2";
+    let mut second = wpd_phone();
+    second.id = twin.to_owned();
+    second.root.backend = BackendId::Device {
+        device: twin.to_owned(),
+    };
+    hub.devices.lock().expect("devices").push(second);
+    let engine = engine(&hub, start.path()).await;
+    drives(&engine).await;
+    let local = VfsPath::local(start.path());
+    let refused = engine
+        .locate(&local, "device://Pixel 8/Internal storage")
+        .await;
+    assert_eq!(refused.expect_err("ambiguous").code(), "drive_not_found");
+    let located = engine
+        .locate(&local, &format!("device://{twin}/Internal storage"))
+        .await
+        .expect("by its id");
+    assert_eq!(
+        located.backend,
+        BackendId::Device {
+            device: twin.to_owned()
+        }
+    );
+}

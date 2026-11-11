@@ -2,7 +2,7 @@
 name = "rc-plugin-office-viewer"
 description = "rCommander's bundled Office viewer plugin: the text and properties of Word, Excel and PowerPoint documents (OOXML)"
 # The plugin's own version (manifest.toml, CHANGES.md), not the workspace's.
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 # Plugins are MIT, as rDownloader's (docs/plugins.md, "SDK").
@@ -16,7 +16,7 @@ publish = false
 # needs wit-bindgen on wasm32 only, against `crates/rc-plugin-api/wit`.
 [dependencies]
 flate2.workspace = true
-quick-xml = { version = "0.41", default-features = false }
+quick-xml = { version = "0.42", default-features = false }
 
 # The tests write their packages with zip's writer, natively only.
 [dev-dependencies]

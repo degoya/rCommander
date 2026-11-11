@@ -180,6 +180,18 @@ impl Vfs for TimeoutFs {
         Ok(Box::new(self.timed(stream, path)))
     }
 
+    async fn open_write_sized(
+        &self,
+        path: &Path,
+        mode: WriteMode,
+        size: u64,
+    ) -> Result<WriteStream> {
+        let stream = self
+            .request(path, self.inner.open_write_sized(path, mode, size))
+            .await?;
+        Ok(Box::new(self.timed(stream, path)))
+    }
+
     async fn mkdir(&self, path: &Path, recursive: bool) -> Result<()> {
         self.request(path, self.inner.mkdir(path, recursive)).await
     }

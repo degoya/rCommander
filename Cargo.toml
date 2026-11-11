@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer", "plugins/hcl-viewer", "plugins/schema-viewer", "plugins/script-viewer", "plugins/markup-viewer", "plugins/office-viewer", "plugins/media-viewer", "plugins/pdf-viewer"]
 
 [workspace.package]
-version = "0.21.0"
+version = "0.22.0"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.99"
@@ -142,7 +142,7 @@ bzip2 = "0.6"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 lzma-rust2 = { version = "0.25", default-features = false, features = ["encoder", "std", "xz"] }
 ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
-sevenz-rust2 = { version = "0.24", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd"] }
+sevenz-rust2 = { version = "0.25", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd"] }
 tar = { version = "0.4", default-features = false }
 zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate-flate2", "deflate64"] }
 # The registry reads behind WSL detection (rc-vfs, Windows only); already in the tree via

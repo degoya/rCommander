@@ -100,7 +100,9 @@ impl Engine {
                 rows.push(row);
                 continue;
             };
-            let mut value = match spec.check(&entry.value) {
+            // An export of 0.21 keeps `buttonbar.icon_size` as text (RC-110-15).
+            let imported = crate::settings::number_of_text(spec, entry.value.clone());
+            let mut value = match spec.check(&imported) {
                 Ok(value) if seen.insert(spec.key) => value,
                 Ok(_) => {
                     row.status = refused("exchange_file_invalid");

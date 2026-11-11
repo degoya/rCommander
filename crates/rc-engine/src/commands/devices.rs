@@ -5,13 +5,21 @@
 //! panels and the queue as a server's is; a gvfs mount on Linux, whose folder is on the local
 //! backend. A device that shares no storage (Android until "File transfer" is chosen, a locked
 //! phone) is `device_unavailable`, not an empty folder: the window says what to do on the phone.
+//! A device's location is written `device://<name>/<path>` (RC-110-16), so a target typed or
+//! offered in a dialog keeps its device instead of being read against the other panel's drive.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Component, PathBuf},
+    sync::Arc,
+};
 
 use rc_ops::Backend;
-use rc_vfs::{VfsError, VfsPath};
+use rc_vfs::{BackendId, VfsError, VfsPath};
 
-use crate::{Drive, Engine, EngineError, drives::devices, settings::PORTABLE_DEVICES_KEY};
+use crate::{
+    Drive, Engine, EngineError, drives::devices, remote::split_location,
+    settings::PORTABLE_DEVICES_KEY,
+};
 
 impl Engine {
     /// The portable devices of the drive bar; none with `drives.portable_devices` off, when the
@@ -47,6 +55,39 @@ impl Engine {
             .into());
         }
         Ok(device.root)
+    }
+
+    /// `device://<name>/<path>` (`rest`, without the scheme): the place below the root of the
+    /// device `name` names ([`devices::DeviceList::named`]), opened first unless a session of it
+    /// is registered already (RC-110-16). Without the path it is the device's root.
+    ///
+    /// # Errors
+    ///
+    /// `drives.portable_devices` is off, or no device or several have the name
+    /// (`drive_not_found`); what [`Engine::device_start`] fails with.
+    pub(crate) async fn locate_device(&self, rest: &str) -> Result<VfsPath, EngineError> {
+        let (name, below) = split_location(rest);
+        let not_found = || EngineError::DriveNotFound {
+            drive: name.to_owned(),
+        };
+        if !self.setting_on(PORTABLE_DEVICES_KEY).await {
+            return Err(not_found());
+        }
+        let list = self.inner.drives.devices();
+        list.list().await;
+        let device = list.named(name).ok_or_else(not_found)?;
+        let open = matches!(device.root.backend, BackendId::Device { .. })
+            && self.vfs(&device.root).is_ok();
+        let mut located = if open {
+            device.root
+        } else {
+            self.device_start(&devices::drive_id(&device.id)).await?
+        };
+        let names = below.iter().flat_map(|path| path.components());
+        located
+            .path
+            .extend(names.filter(|part| matches!(part, Component::Normal(_))));
+        Ok(located)
     }
 }
 

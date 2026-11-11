@@ -29,7 +29,8 @@ pub use schema::associations::{
 };
 pub use schema::backup::BACKUP_KEEP_KEY;
 pub use schema::button_bar::{
-    BUTTON_BAR_KEY, COMMAND_LINE_KEY, DRIVE_BAR_KEY, HORIZONTAL_BAR_KEY, ICON_SIZE_KEY,
+    BUTTON_BAR_KEY, BUTTON_PADDING_KEY, COMMAND_LINE_KEY, DEFAULT_BUTTON_PADDING, DRIVE_BAR_KEY,
+    FLAT_KEY, HORIZONTAL_BAR_KEY, ICON_SIZE_KEY, MAX_BUTTON_PADDING, MAX_ICON_SIZE, MIN_ICON_SIZE,
     STATUS_BAR_KEY, VERTICAL_BAR_KEY, VERTICAL_BUTTON_BAR_KEY,
 };
 pub use schema::checksum::CHECKSUM_ENTER_KEY;
@@ -220,11 +221,13 @@ fn parsed(key: &str, text: Option<&String>) -> Result<Option<Value>, DbError> {
     .transpose()
 }
 
-/// What a stored value comes to: itself when valid, the default with a warning otherwise.
+/// What a stored value comes to: itself when valid, the default with a warning otherwise. A
+/// whole number stored as text reads as the number for an `Int` row: a choice of numbers that
+/// became a number (`buttonbar.icon_size` until 0.21, RC-110-15) keeps what was chosen.
 fn effective(spec: &SettingSpec, stored: Result<Option<Value>, DbError>) -> Value {
     match stored {
         Ok(None) => spec.default_value(),
-        Ok(Some(value)) => match spec.check(&value) {
+        Ok(Some(value)) => match spec.check(&number_of_text(spec, value)) {
             Ok(value) => value,
             Err(reason) => {
                 tracing::warn!(
@@ -243,6 +246,15 @@ fn effective(spec: &SettingSpec, stored: Result<Option<Value>, DbError>) -> Valu
             );
             spec.default_value()
         }
+    }
+}
+
+/// `value` as the number its text names for an `Int` row - a stored value, or an export of a
+/// version that kept the row as a choice -; else unchanged.
+pub(crate) fn number_of_text(spec: &SettingSpec, value: Value) -> Value {
+    match (&spec.kind, value.as_str().map(str::parse::<i64>)) {
+        (SettingKind::Int { .. }, Some(Ok(number))) => Value::from(number),
+        _ => value,
     }
 }
 

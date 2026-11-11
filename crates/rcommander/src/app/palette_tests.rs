@@ -62,6 +62,22 @@ fn the_palette_lists_every_way_in() {
         named(&entries, "unmap_network_drive").action,
         Action::Open(Surface::Network(DriveAction::UnmapNetwork))
     );
+    // RC-110-15: the button bars' rows run Total Commander's cm_VisButtonBar and
+    // cm_VisButtonBar2, the other bars `view.toggle_bar`.
+    assert_eq!(
+        named(&entries, "toggle_bar.button_bar").action,
+        Action::Run(Box::new(Command::ToggleButtonBar {}))
+    );
+    assert_eq!(
+        named(&entries, "toggle_bar.vertical_button_bar").action,
+        Action::Run(Box::new(Command::ToggleVerticalButtonBar {}))
+    );
+    assert_eq!(
+        named(&entries, "toggle_bar.status_bar").action,
+        Action::Run(Box::new(Command::ToggleBar {
+            bar: rc_engine::BarKind::StatusBar
+        }))
+    );
     let elsewhere = super::entries(&Keymap::standard(), &reach::standard(), false);
     assert!(
         elsewhere

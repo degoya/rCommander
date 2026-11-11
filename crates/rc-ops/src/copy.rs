@@ -6,7 +6,8 @@
 //! does not complete - cancelled, failed, or not verifying - is removed from the target. On a
 //! server and on this machine's disks the file is written under a part name and renamed when
 //! complete (`staging.rs`), also out of an archive (RC-080-37); into other backends it is
-//! written in place.
+//! written in place - onto a portable device with its size stated first, so the device streams
+//! it and the progress is its upload's (RC-110-16).
 //!
 //! A copy to or from a server goes through `<name>.rcpart` on the target, also onto a local disk -
 //! a download that broke off must leave its part to be continued - and survives a lost
@@ -380,6 +381,19 @@ impl Runner {
         Ok(())
     }
 
+    /// The size a portable device wants before a file's first byte (RC-110-16), so it streams
+    /// the file instead of keeping it whole first: the source file's as it is now, not as the
+    /// walk listed it, so a file that changed since - and its retry - still copies. `None` onto
+    /// any other target, for a link, or when the source cannot say; the device then keeps it.
+    async fn size_first(&self, item: &Item) -> Option<u64> {
+        let onto_device = matches!(self.dst_id, Some(BackendId::Device { .. }));
+        if !onto_device || !matches!(item.entry.kind, EntryKind::File) {
+            return None;
+        }
+        let now = self.src.stat(&item.path).await.ok()?;
+        matches!(now.kind, EntryKind::File).then_some(now.size)
+    }
+
     /// Renames (moving within one backend) or streams the file to `dest`; whatever is left of
     /// a copy that did not complete is removed.
     pub(crate) async fn copy_one(
@@ -414,10 +428,12 @@ impl Runner {
         let part = self.staged.then(|| part_path(dest));
         let written = part.as_deref().unwrap_or(dest);
         let pair = self.one_ftp_pair().await?;
+        let size = self.size_first(item).await;
         let reader = self.src.open_read(&item.path).await?;
-        let opened = match &part {
-            Some(part) => open_part(self.dst.as_ref(), part).await,
-            None => self.dst.open_write(written, mode).await,
+        let opened = match (&part, size) {
+            (Some(part), _) => open_part(self.dst.as_ref(), part).await,
+            (None, Some(size)) => self.dst.open_write_sized(written, mode, size).await,
+            (None, None) => self.dst.open_write(written, mode).await,
         };
         let writer = opened.map_err(|error| self.target_refused(error, written))?;
         let hasher = blake3::Hasher::new();

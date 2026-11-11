@@ -3,7 +3,8 @@
 # Builds rcommander.exe for Windows from WSL (cargo-xwin), copies it to
 # %LOCALAPPDATA%\rcommander-dev\ and starts it there through WSL interop, detached. Windows does
 # not run an .exe from the WSL file system reliably (and SmartScreen and file locks behave
-# differently there), hence the copy.
+# differently there), hence the copy. Where WSL mounts C: read-only, it builds, prints the
+# PowerShell command of scripts/run-windows.ps1 (the copy and start on the Windows side) and exits 1.
 #
 # Usage:
 #   scripts/run-windows.sh                  # debug build
@@ -62,7 +63,12 @@ if [[ -z "$localappdata" || "$localappdata" == "%LOCALAPPDATA%" ]]; then
     exit 1
 fi
 destination="$(wslpath -u "$localappdata")/rcommander-dev"
-mkdir -p "$destination"
+if ! mkdir -p "$destination" 2> /dev/null || [[ ! -w "$destination" ]]; then
+    # WSL mounts C: read-only: Windows copies and starts it (scripts/run-windows.ps1).
+    echo "!! $destination is read-only from WSL; built, not started. Start it from PowerShell:" >&2
+    echo "powershell -NoProfile -ExecutionPolicy Bypass -File \"$(wslpath -w "$ROOT/scripts/run-windows.ps1")\" -Binary \"$(wslpath -w "$binary")\"${*:+ $*}" >&2
+    exit 1
+fi
 install -m 755 "$binary" "$destination/rcommander.exe"
 windows_exe="$(wslpath -w "$destination/rcommander.exe")"
 echo "==> starting $windows_exe $*"

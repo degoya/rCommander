@@ -110,6 +110,20 @@ pub trait Vfs: Send + Sync {
     /// Opens a file for writing; `mode` decides what happens to an existing one.
     async fn open_write(&self, path: &Path, mode: WriteMode) -> Result<WriteStream>;
 
+    /// Opens a file for writing, like [`Vfs::open_write`], whose final size of `size` bytes is
+    /// known before the first one (RC-110-16). A backend that must announce a file's size before
+    /// its bytes - a portable device over MTP - streams it as it is written instead of keeping it
+    /// whole first; such a stream fails a write past `size` and a `shutdown` short of it, and the
+    /// file is not kept. The default is [`Vfs::open_write`], which ignores the size.
+    async fn open_write_sized(
+        &self,
+        path: &Path,
+        mode: WriteMode,
+        _size: u64,
+    ) -> Result<WriteStream> {
+        self.open_write(path, mode).await
+    }
+
     /// Creates a directory; `recursive` creates missing parents too and accepts one that
     /// already exists.
     async fn mkdir(&self, path: &Path, recursive: bool) -> Result<()>;

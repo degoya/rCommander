@@ -87,14 +87,15 @@ impl From<ErrorArg> for ErrorPolicy {
 #[derive(Deserialize, schemars::JsonSchema)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct TransferParams {
-    /// Entries: absolute, relative to the panel's directory, or on an SSH connection as
-    /// sftp://<connection name>/<path>. Omitted or empty: the panel's selection, else the entry
-    /// under its cursor.
+    /// Entries: absolute, relative to the panel's directory, on an SSH connection as
+    /// sftp://<connection name>/<path>, or on a portable device as device://<device name>/<path>.
+    /// Omitted or empty: the panel's selection, else the entry under its cursor.
     #[serde(default)]
     pub sources: Vec<String>,
     /// The directory to put them into (created when missing): absolute, relative to the other
-    /// panel's directory, or sftp://<connection name>/<path>. Omitted: the other panel's
-    /// directory.
+    /// panel's directory, sftp://<connection name>/<path>, or device://<device name>/<path> on a
+    /// portable device (the drive bar's name, its id where two share it). Omitted: the other
+    /// panel's directory.
     #[serde(default)]
     pub target: Option<String>,
     /// The panel the sources are in; the active one when omitted.

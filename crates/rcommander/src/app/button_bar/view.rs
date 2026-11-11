@@ -6,25 +6,28 @@
 //! Windows a program's own icon. Only a button with no icon at all shows text - its tooltip, else
 //! its command's name (an own command's tooltip, a program's file name) - in the middle cut to
 //! [`MAX_TEXT`] (`theme::ellipsis`); the tooltip always names it in full. A sub-bar's button
-//! carries `▾`. The button at the keyboard's cursor has the accent's border. What the bar has no room for goes behind `»`, as in the drive bar
-//! (`docs/design.md`, Bars): nothing is cut off unseen.
+//! carries `▾`. The button at the keyboard's cursor has the accent's border. What the bar has no
+//! room for goes behind `»`, as in the drive bar (`docs/design.md`, Bars): nothing is cut off
+//! unseen. The buttons' measures and look - the room around the symbol, flat or framed - are
+//! `layout.rs`'s (RC-110-15); a right click beside the buttons opens the bar's context menu. The
+//! menus are drawn by `menu_view.rs`.
 
 use iced::{
     Alignment, Element, Length,
     advanced::widget::Id,
     mouse::Interaction,
     widget::{
-        Column, Row, Space, column, container,
+        Column, Row, Space, container,
         image::{Handle, Image},
-        mouse_area, pin, responsive, rule, stack, text,
+        mouse_area, responsive, text,
         tooltip::{self, Tooltip},
     },
 };
 use rc_engine::{BarButton, BarItem, BarPlace, ButtonAction, ButtonBar, CommandKind};
 
 use super::{
-    BbMsg, MenuKind, MenuMsg, OpenMenu, glyphs,
-    menu::{BUTTON_ENTRIES, ButtonEntry},
+    BbMsg, glyphs,
+    layout::{self, Measures},
     symbols, wrap,
 };
 use crate::{
@@ -41,8 +44,6 @@ use crate::{
 const SMALL: f32 = 12.0;
 /// The widest a button's text gets before its middle is cut.
 pub const MAX_TEXT: f32 = 120.0;
-/// A button's padding on each side, plus its border.
-const PADDING: f32 = 5.0 + 1.0;
 /// The space between two items.
 const SPACING: f32 = 3.0;
 /// A separator's room.
@@ -51,8 +52,6 @@ const GAP: f32 = 8.0;
 const SUB_ARROW: &str = "\u{25be}";
 /// The overflow button.
 const MORE: &str = "\u{bb}";
-/// The widest a menu gets.
-const MENU_WIDTH: f32 = 280.0;
 
 /// The container id of the bar at `place`, which a drop is measured against.
 pub fn bar_id(place: BarPlace) -> Id {
@@ -113,7 +112,7 @@ pub fn label_of(button: &BarButton, app: &App) -> String {
 }
 
 /// The symbol of `button` at the bars' size, once read.
-fn symbol<'a>(button: &BarButton, app: &'a App) -> Option<Element<'a, Message>> {
+pub(super) fn symbol<'a>(button: &BarButton, app: &'a App) -> Option<Element<'a, Message>> {
     let size = f32::from(app.button_bar.settings.icon_size);
     // An internal command's glyph, in the button's text colour of either theme.
     if let Some(icon) = glyphs::of(button) {
@@ -168,7 +167,7 @@ fn face<'a>(button: &BarButton, app: &'a App, room: f32) -> Element<'a, Message>
     parts.into()
 }
 
-fn small<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
+pub(super) fn small<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
     text(content)
         .size(SMALL)
         .font(theme::UI_FONT)
@@ -191,7 +190,7 @@ fn item_width(item: &BarItem, app: &App) -> f32 {
             } else {
                 0.0
             };
-            inner + arrow + 2.0 * PADDING
+            Measures::of(&app.button_bar.settings).button(inner + arrow)
         }
     }
 }
@@ -200,9 +199,7 @@ fn item_width(item: &BarItem, app: &App) -> f32 {
 fn item_height(item: &BarItem, app: &App) -> f32 {
     match item {
         BarItem::Separator => GAP,
-        BarItem::Button(_) => {
-            f32::from(app.button_bar.settings.icon_size).max(SMALL + 4.0) + 2.0 * PADDING
-        }
+        BarItem::Button(_) => Measures::of(&app.button_bar.settings).vertical_height(SMALL + 4.0),
     }
 }
 
@@ -234,22 +231,28 @@ fn item<'a>(
             BarPlace::Vertical => Space::new().height(GAP).into(),
         };
     };
-    let focused = app
-        .button_bar
-        .focus
-        .is_some_and(|focus| focus.place == place && focus.index == index);
+    let at = |focus: Option<super::BarFocus>| {
+        focus.is_some_and(|focus| focus.place == place && focus.index == index)
+    };
+    let focused = at(app.button_bar.focus);
+    let hovered = at(app.button_bar.hover);
+    let settings = &app.button_bar.settings;
+    let measures = Measures::of(settings);
     let room = match place {
         BarPlace::Horizontal => MAX_TEXT,
-        BarPlace::Vertical => f32::from(app.button_bar.settings.icon_size).max(24.0),
+        BarPlace::Vertical => measures.icon.max(layout::MIN_VERTICAL_FACE),
     };
+    let flat = settings.flat;
     let boxed = container(face(button, app, room))
         .id(item_id(place, index))
-        .padding(PADDING - 1.0)
-        .style(move |_| button_style(tokens, focused));
+        .padding(measures.padding)
+        .style(move |_| layout::button_style(tokens, flat, focused, hovered));
     // focus-ring: pointer only (the bar is no dialog: Alt+Shift+F11 and F12 give it the keys)
     let pressed = mouse_area(boxed)
         .on_press(wrap(BbMsg::Press(place, index)))
-        .on_right_press(wrap(BbMsg::Context(place, index)))
+        .on_right_press(wrap(BbMsg::Context(place, Some(index))))
+        .on_enter(wrap(BbMsg::Hover(place, index, true)))
+        .on_exit(wrap(BbMsg::Hover(place, index, false)))
         .interaction(Interaction::Pointer);
     with_tooltip(pressed.into(), label_of(button, app), tokens)
 }
@@ -303,18 +306,25 @@ pub fn horizontal<'a>(app: &'a App, tokens: &'static Tokens) -> Option<Element<'
         container(line).width(Length::Fill).clip(true).into()
     })
     .height(Length::Shrink);
-    Some(
-        container(line)
-            .id(bar_id(BarPlace::Horizontal))
-            .width(Length::Fill)
-            .into(),
-    )
+    let bar = container(line)
+        .id(bar_id(BarPlace::Horizontal))
+        .width(Length::Fill);
+    Some(beside_buttons(bar.into(), BarPlace::Horizontal))
+}
+
+/// `bar` taking a right click beside its buttons: the bar's context menu (RC-110-15). A
+/// button's own right click is the button's.
+fn beside_buttons(bar: Element<'_, Message>, place: BarPlace) -> Element<'_, Message> {
+    // focus-ring: pointer only (the bar is no dialog: its keys open the menu, Shift+F10)
+    mouse_area(bar)
+        .on_right_press(wrap(BbMsg::Context(place, None)))
+        .into()
 }
 
 /// The vertical button bar between the panels; `None` while it is off or has no bar to show.
 pub fn vertical<'a>(app: &'a App, tokens: &'static Tokens) -> Option<Element<'a, Message>> {
     let bar = app.button_bar.shown(BarPlace::Vertical)?;
-    let width = f32::from(app.button_bar.settings.icon_size).max(24.0) + 2.0 * PADDING;
+    let width = Measures::of(&app.button_bar.settings).vertical_width();
     let line = responsive(move |size| {
         let heights: Vec<f32> = bar
             .spec
@@ -333,109 +343,11 @@ pub fn vertical<'a>(app: &'a App, tokens: &'static Tokens) -> Option<Element<'a,
         }
         container(line).height(Length::Fill).clip(true).into()
     });
-    Some(
-        container(line)
-            .id(bar_id(BarPlace::Vertical))
-            .width(width)
-            .height(Length::Fill)
-            .into(),
-    )
-}
-
-/// `base` with the open menu over it once its button is measured; a click beside it closes it.
-pub fn with_menu<'a>(
-    app: &'a App,
-    base: Element<'a, Message>,
-    tokens: &'static Tokens,
-) -> Element<'a, Message> {
-    let Some(menu) = app.button_bar.menu.as_ref() else {
-        return base;
-    };
-    let Some(under) = menu.under else {
-        return base;
-    };
-    let card = container(menu_rows(app, menu, tokens))
-        .padding(4)
-        .width(MENU_WIDTH)
-        .style(move |_| card_style(tokens));
-    let x = under.x;
-    let y = under.y + under.height + 2.0;
-    // focus-ring: pointer only (the layer beside the menu that closes it)
-    let layer = mouse_area(pin(card).x(x).y(y).width(Length::Fill).height(Length::Fill))
-        .on_press(wrap(BbMsg::Menu(MenuMsg::Close)))
-        .on_right_press(wrap(BbMsg::Menu(MenuMsg::Close)));
-    stack![base, layer].into()
-}
-
-/// The rows of `menu`: a bar's items with their faces and words, or the button's entries.
-fn menu_rows<'a>(app: &'a App, menu: &OpenMenu, tokens: &'static Tokens) -> Element<'a, Message> {
-    let mut rows = Column::new().spacing(1);
-    match menu.kind {
-        MenuKind::Items { bar, from } => {
-            let Some(bar) = app.button_bar.bar(bar) else {
-                return rows.into();
-            };
-            for (index, item) in bar.spec.items.iter().enumerate().skip(from) {
-                let Some(button) = item.button() else {
-                    rows = rows.push(rule::horizontal(1));
-                    continue;
-                };
-                let words = label_of(button, app);
-                let cut = ellipsis::middle_ellipsis(&words, MENU_WIDTH - 60.0, theme::TEXT_SIZE)
-                    .into_owned();
-                let line = Row::new()
-                    .push(
-                        container(symbol(button, app).unwrap_or_else(|| Space::new().into()))
-                            .width(32),
-                    )
-                    .push(small(cut))
-                    .spacing(6)
-                    .align_y(Alignment::Center);
-                rows = rows.push(menu_row(line.into(), index, menu.cursor == index, tokens));
-            }
-        }
-        MenuKind::Button { .. } => {
-            for (index, entry) in BUTTON_ENTRIES.iter().enumerate() {
-                let words = match entry {
-                    ButtonEntry::Change => t!("button_bar.menu.change"),
-                    ButtonEntry::Delete => t!("button_bar.menu.delete"),
-                    ButtonEntry::Insert => t!("button_bar.menu.insert"),
-                    ButtonEntry::EditBar => t!("button_bar.menu.edit_bar"),
-                };
-                rows = rows.push(menu_row(
-                    small(words).into(),
-                    index,
-                    menu.cursor == index,
-                    tokens,
-                ));
-            }
-        }
-    }
-    column![rows].into()
-}
-
-/// One row of a menu, filled at the cursor, `row` picked by a click.
-fn menu_row<'a>(
-    content: Element<'a, Message>,
-    row: usize,
-    current: bool,
-    tokens: &'static Tokens,
-) -> Element<'a, Message> {
-    let boxed = container(content)
-        .padding([3, 8])
-        .width(Length::Fill)
-        .style(move |_| {
-            if current {
-                button_style(tokens, true)
-            } else {
-                container::Style::default()
-            }
-        });
-    // focus-ring: pointer only (a row of the menu, which the arrows run)
-    mouse_area(boxed)
-        .on_press(wrap(BbMsg::Menu(MenuMsg::Pick(row))))
-        .interaction(Interaction::Pointer)
-        .into()
+    let bar = container(line)
+        .id(bar_id(BarPlace::Vertical))
+        .width(width)
+        .height(Length::Fill);
+    Some(beside_buttons(bar.into(), BarPlace::Vertical))
 }
 
 #[cfg(test)]

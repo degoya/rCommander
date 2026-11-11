@@ -13,12 +13,18 @@
 //! What MTP has not, this backend refuses before the device is asked: appending, setting times
 //! or attributes, moving between folders, creating or removing a storage, files in the device's
 //! root - and whatever the device says it does not do ([`super::Abilities`]): writing,
-//! creating folders, deleting, renaming. A file is written through a temporary file and handed to
-//! the device whole (`write.rs`).
+//! creating folders, deleting, renaming. A file whose size the caller states is streamed onto the
+//! device as it is written (`upload.rs`, RC-110-16); one of unknown size - or one written while a
+//! download of the same device is open, which holds the device's one thread - goes through a
+//! temporary file and is handed to the device whole (`write.rs`). The queue opens a file's source
+//! before its target, so a copy within one device is the latter.
 
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{
+        Arc, Mutex, MutexGuard,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant, SystemTime},
 };
 
@@ -28,8 +34,7 @@ use super::{
     DeviceResult, Object, Session,
     cache::{CAPACITY, Lookup, ObjectCache, same_name},
     names::{entry, find, names, path_of, unsupported},
-    pipe,
-    write::{self, Target},
+    pipe, upload, write,
 };
 use crate::recover::LockOrRecover as _;
 use crate::recover::LogPanic as _;
@@ -45,6 +50,8 @@ pub struct DeviceFs {
     timeouts: Timeouts,
     /// Held by the call on the device's blocking thread until it returns.
     turn: Arc<tokio::sync::Mutex<()>>,
+    /// Downloads whose reader is open now (`pipe.rs`).
+    downloads: Arc<AtomicUsize>,
 }
 
 /// What a path names: the device itself, or one of its objects.
@@ -79,6 +86,7 @@ impl DeviceFs {
             cache: Arc::new(Mutex::new(ObjectCache::new(capacity))),
             timeouts,
             turn: Arc::default(),
+            downloads: Arc::default(),
         }
     }
 
@@ -286,7 +294,8 @@ impl Vfs for DeviceFs {
     async fn open_read(&self, path: &Path) -> Result<ReadStream> {
         match self.resolve(&names(path)?, path).await? {
             (Node::Object(object), _) if !object.folder => {
-                pipe::download(Arc::clone(&self.session), object.id, object.size, path).await
+                let (session, open) = (Arc::clone(&self.session), Arc::clone(&self.downloads));
+                pipe::download(session, object.id, object.size, path, open).await
             }
             _ => Err(VfsError::IsADirectory {
                 path: path.to_path_buf(),
@@ -295,48 +304,22 @@ impl Vfs for DeviceFs {
     }
 
     async fn open_write(&self, path: &Path, mode: WriteMode) -> Result<WriteStream> {
-        if mode == WriteMode::Append {
-            return Err(unsupported(path, "appending to a file on a device"));
+        write::spool(self.target(path, mode).await?)
+    }
+
+    async fn open_write_sized(
+        &self,
+        path: &Path,
+        mode: WriteMode,
+        size: u64,
+    ) -> Result<WriteStream> {
+        let target = self.target(path, mode).await?;
+        if self.downloads.load(Ordering::SeqCst) > 0 {
+            // A download of this device holds its one thread until its reader takes the bytes:
+            // an upload streamed now would wait behind it for bytes that come from that reader.
+            return write::spool(target);
         }
-        if !self.session.abilities().write {
-            return Err(unsupported(path, "writing files to this device"));
-        }
-        let mut names = names(path)?;
-        let name = names.pop().ok_or_else(|| VfsError::IsADirectory {
-            path: path.to_path_buf(),
-        })?;
-        if names.is_empty() {
-            return Err(VfsError::InvalidPath {
-                path: path.to_path_buf(),
-                reason: "a file goes into one of the device's storages",
-            });
-        }
-        let (parent, at) = self.folder(&names, path).await?;
-        let replaced = match self.existing(&parent, &at, &name).await? {
-            Some(object) if object.folder => {
-                return Err(VfsError::IsADirectory {
-                    path: path.to_path_buf(),
-                });
-            }
-            Some(_) if mode == WriteMode::CreateNew => {
-                return Err(VfsError::AlreadyExists {
-                    path: path.to_path_buf(),
-                });
-            }
-            Some(object) => Some(object.id),
-            None => None,
-        };
-        let Node::Object(folder) = parent else {
-            return Err(unsupported(path, "files in the device's root"));
-        };
-        write::spool(Target {
-            session: Arc::clone(&self.session),
-            cache: Arc::clone(&self.cache),
-            folder: folder.id,
-            path: at.join(&name),
-            name,
-            replaced,
-        })
+        Ok(upload::stream(target, size, Arc::clone(&self.turn)))
     }
 
     async fn mkdir(&self, path: &Path, recursive: bool) -> Result<()> {
@@ -478,6 +461,9 @@ impl Vfs for DeviceFs {
         }
     }
 }
+
+#[path = "fs_target.rs"]
+mod target;
 
 #[cfg(test)]
 #[path = "fs_tests.rs"]

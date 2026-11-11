@@ -1,11 +1,13 @@
 //! The decoder memory a 7z asks for, checked before sevenz-rust2 decodes anything (RC-080-35).
 //!
-//! sevenz-rust2 0.24 has no memory limit a caller can set (its `MAX_MEM_LIMIT_KB` is
-//! `usize::MAX / 1024`), and its LZMA reader checks none at all: the dictionary a coder's
-//! properties state is set aside when the first byte is decoded. So the coders are read here
-//! first - those of an encoded header from the raw header bytes, before `Archive::read`
-//! decodes it; those of a content block from the parsed archive, before the block is read - and
-//! a dictionary over [`ArchiveLimits::max_decoder_memory`] is `archive_decoder_memory`.
+//! sevenz-rust2's default limit is none (`MAX_MEM_LIMIT_KB` is `usize::MAX / 1024`): the
+//! dictionary a coder's properties state is set aside when the first byte is decoded. So the
+//! coders are read here first - those of an encoded header from the raw header bytes, before
+//! `Archive::read` decodes it; those of a content block from the parsed archive, before the block
+//! is read - and a dictionary over [`ArchiveLimits::max_decoder_memory`] is
+//! `archive_decoder_memory`. The per-dictionary limit 0.25 added (`read_with_memory_limit`,
+//! `BlockDecoder::new_with_memory_limit`, RC-110-11) would refuse the same coders at the same
+//! limit, later, and is not used.
 
 use std::{
     io::{self, Read, Seek, SeekFrom},

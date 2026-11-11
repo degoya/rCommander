@@ -37,8 +37,8 @@ use windows_sys::Win32::{
     },
     UI::{
         Shell::{
-            ExtractIconExW, SHFILEINFOW, SHGFI_ICON, SHGFI_SMALLICON, SHGFI_USEFILEATTRIBUTES,
-            SHGetFileInfoW,
+            ExtractIconExW, SHDefExtractIconW, SHFILEINFOW, SHGFI_ICON, SHGFI_SMALLICON,
+            SHGFI_USEFILEATTRIBUTES, SHGetFileInfoW,
         },
         WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO},
     },
@@ -162,6 +162,33 @@ pub fn extracted(path: &Path, index: i32, large: bool) -> Option<Rgba> {
     chosen?.rgba()
 }
 
+/// The icon at `index` of `path` - an `.exe`, a `.dll` or an `.ico` - at `side` pixels, a
+/// button's symbol at the bars' size (RC-110-15): the shell scales the file's next larger image
+/// down to it, so a symbol stays sharp at 40 or 48 pixels as at 16, 24 or 32, as Total Commander
+/// loads an unusual size. A negative index is a resource id. `None` when the file holds no such
+/// icon.
+pub fn extracted_at(path: &Path, index: i32, side: u32) -> Option<Rgba> {
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    // The low word is the large icon's side; the high word, the small one's, stays 0: not asked.
+    let side = side.clamp(1, MAX_SIDE);
+    let mut icon: HICON = null_mut();
+    // SAFETY: `wide` is NUL-terminated and outlives the call; `icon` is a writable HICON for the
+    // large icon, and the small one's pointer is null, which the call allows. The handle it
+    // returns belongs to the caller, which the guard below destroys.
+    let result = unsafe { SHDefExtractIconW(wide.as_ptr(), index, 0, &mut icon, null_mut(), side) };
+    // Only a handle the call gave is guarded: a null one is never destroyed.
+    let icon = if icon.is_null() {
+        None
+    } else {
+        Some(Icon(icon))
+    };
+    // S_OK; S_FALSE says the file has no such icon.
+    if result != 0 {
+        return None;
+    }
+    icon?.rgba()
+}
+
 /// The small icon of the file at `path` itself, as Explorer shows it: a program's own.
 pub fn file_icon(path: &Path) -> Option<Rgba> {
     shell_icon(path.as_os_str(), None)
@@ -172,8 +199,8 @@ struct Icon(HICON);
 
 impl Drop for Icon {
     fn drop(&mut self) {
-        // SAFETY: the handle came from SHGetFileInfoW with SHGFI_ICON or from ExtractIconExW,
-        // and is destroyed once.
+        // SAFETY: the handle came from SHGetFileInfoW with SHGFI_ICON, from ExtractIconExW or
+        // from SHDefExtractIconW, and is destroyed once.
         unsafe { DestroyIcon(self.0) };
     }
 }

@@ -28,6 +28,10 @@ use crate::recover::LogPanic as _;
 /// How long opening a device may take: a phone asked for its first session, gvfs mounting.
 pub(crate) const OPEN_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// `device://<name>/<path>`: how a location on a portable device is shown and written, the name
+/// the drive bar's - or the device's id where several share one (RC-110-16).
+pub const DEVICE_SCHEME: &str = "device://";
+
 /// The drive bar's id of the device `device`: `device:<its id>`.
 pub(crate) fn drive_id(device: &str) -> String {
     format!("device:{device}")
@@ -129,6 +133,20 @@ impl DeviceList {
             .iter()
             .find(|device| drive_id(&device.id) == drive)
             .cloned()
+    }
+
+    /// The device a `device://` location names, as last listed: the one with the id `name`, else
+    /// the only one called `name`; `None` for none or several.
+    pub(crate) fn named(&self, name: &str) -> Option<PortableDevice> {
+        let known = self.known();
+        if let Some(device) = known.iter().find(|device| device.id == name) {
+            return Some(device.clone());
+        }
+        let mut called = known.iter().filter(|device| device.name == name);
+        match (called.next(), called.next()) {
+            (Some(device), None) => Some(device.clone()),
+            _ => None,
+        }
     }
 
     /// Makes `device` reachable (a WPD session, a gvfs mount) on a blocking thread, within

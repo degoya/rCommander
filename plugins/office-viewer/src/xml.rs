@@ -3,6 +3,9 @@
 //! entities and character references resolved, and nothing else expanded - a DOCTYPE's own
 //! entities stay unexpanded, so no entity bomb can grow. Nesting deeper than the limit fails
 //! with `too_deep`; the parser keeps no stack of its own, so that is the only depth there is.
+//! A part is read as UTF-8 (a UTF-8 BOM is skipped): since quick-xml 0.42 every event is checked,
+//! so a byte that is not UTF-8 anywhere in the part - a name, an attribute, a comment - makes it
+//! damaged, as a part in UTF-16 always was.
 
 use std::borrow::Cow;
 use std::io::{BufReader, Read};
@@ -65,8 +68,8 @@ impl<R: Read> Xml<R> {
                 self.depth = self.depth.saturating_sub(1);
                 Ev::End(end)
             }
-            Event::Text(text) => Ev::Text(text.xml10_content().map_err(|_| damaged())?),
-            Event::CData(data) => Ev::Text(data.decode().map_err(|_| damaged())?),
+            Event::Text(text) => Ev::Text(text.xml10_content()),
+            Event::CData(data) => Ev::Text(data.into_inner()),
             Event::GeneralRef(reference) => {
                 if reference.is_char_ref() {
                     match reference.resolve_char_ref() {
@@ -74,8 +77,7 @@ impl<R: Read> Xml<R> {
                         _ => Ev::Other,
                     }
                 } else {
-                    let name = reference.decode().map_err(|_| damaged())?;
-                    match resolve_predefined_entity(&name) {
+                    match resolve_predefined_entity(&reference) {
                         Some(text) => Ev::Text(Cow::Borrowed(text)),
                         None => Ev::Other,
                     }
@@ -89,12 +91,12 @@ impl<R: Read> Xml<R> {
 
 /// The local name of a start or empty tag.
 pub(crate) fn local<'x>(start: &'x BytesStart<'_>) -> &'x [u8] {
-    start.local_name().into_inner()
+    start.local_name().into_inner().as_bytes()
 }
 
 /// The local name of an end tag.
 pub(crate) fn local_end<'x>(end: &'x BytesEnd<'_>) -> &'x [u8] {
-    end.local_name().into_inner()
+    end.local_name().into_inner().as_bytes()
 }
 
 /// The value of the attribute whose local name is `name` and that has no prefix.
@@ -115,7 +117,7 @@ fn find_attr(start: &BytesStart<'_>, name: &[u8], prefixed: bool) -> Option<Stri
         .flatten()
         .find(|attribute| {
             attribute.key.prefix().is_some() == prefixed
-                && attribute.key.local_name().into_inner() == name
+                && attribute.key.local_name().into_inner().as_bytes() == name
         })
         .and_then(|attribute| {
             attribute

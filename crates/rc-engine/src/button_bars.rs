@@ -53,6 +53,9 @@ pub enum BarPlace {
     Vertical,
 }
 
+/// The start of a bar's row name, [`BarKind::toggle_row`].
+const TOGGLE_ROW_PREFIX: &str = "toggle_bar.";
+
 /// A bar of the window the View menu shows or hides (`view.toggle_bar`), each a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -100,6 +103,32 @@ impl BarKind {
             Self::StatusBar => "status_bar",
             Self::FunctionKeyBar => "function_key_bar",
         }
+    }
+
+    /// The command that shows or hides it: Total Commander's `cm_VisButtonBar` and
+    /// `cm_VisButtonBar2` for the button bars (RC-110-15), `view.toggle_bar` for the others.
+    #[must_use]
+    pub fn toggle_command(self) -> crate::Command {
+        match self {
+            Self::ButtonBar => crate::Command::ToggleButtonBar {},
+            Self::VerticalButtonBar => crate::Command::ToggleVerticalButtonBar {},
+            bar => crate::Command::ToggleBar { bar },
+        }
+    }
+
+    /// The name of the row that shows or hides it, the command palette's and the View menu's:
+    /// `toggle_bar.<bar>`. No key runs it (Total Commander has none); a Total Commander name
+    /// maps to it (`user_commands::tc_names`).
+    #[must_use]
+    pub fn toggle_row(self) -> String {
+        format!("{TOGGLE_ROW_PREFIX}{}", self.as_str())
+    }
+
+    /// The bar whose row [`Self::toggle_row`] is `name`.
+    #[must_use]
+    pub fn of_toggle_row(name: &str) -> Option<Self> {
+        let bar = name.strip_prefix(TOGGLE_ROW_PREFIX)?;
+        Self::ALL.into_iter().find(|kind| kind.as_str() == bar)
     }
 }
 
@@ -188,6 +217,8 @@ pub(crate) fn one_of_each() -> Vec<crate::Command> {
         Command::ToggleBar {
             bar: BarKind::StatusBar,
         },
+        Command::ToggleButtonBar {},
+        Command::ToggleVerticalButtonBar {},
     ]
 }
 

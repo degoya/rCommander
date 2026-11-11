@@ -1,7 +1,8 @@
 # The Windows binary links the C runtime statically, so it runs without the Visual C++
-# redistributable installed.
+# redistributable installed. Its main thread gets 8 MiB of stack instead of Windows' 1 MiB: the
+# debug build overflowed 1 MiB before the window opened.
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "target-feature=+crt-static"]
+rustflags = ["-C", "target-feature=+crt-static", "-C", "link-arg=/STACK:8388608"]
 
 # Linux on 64-bit ARM is cross-compiled from x64 (scripts/package-linux.sh --arch arm64) with
 # Debian's gcc-aarch64-linux-gnu.

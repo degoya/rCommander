@@ -3502,10 +3502,7 @@
   "setting.buttonbar.vertical": "Bar between the panels",
   "setting.buttonbar.vertical.help": "The id of the bar the vertical button bar shows; 0 shows the first.",
   "setting.buttonbar.icon_size": "Size of the button symbols",
-  "setting.buttonbar.icon_size.help": "The side of a button's symbol, in pixels.",
-  "setting.buttonbar.icon_size.16": "16 pixels",
-  "setting.buttonbar.icon_size.24": "24 pixels",
-  "setting.buttonbar.icon_size.32": "32 pixels",
+  "setting.buttonbar.icon_size.help": "The side of a button's symbol, in pixels: 16 to 48, as in Total Commander's Change button bar dialog.",
   "setting.appearance.drive_bar": "Show the drive buttons",
   "setting.appearance.drive_bar.help": "The bar of drive buttons above the panels; the drive line under it stays.",
   "setting.appearance.command_line": "Show the command line",
@@ -3725,5 +3722,15 @@
   "symbol_picker.no_tooltip": "No tooltip: the button names its command.",
   "symbol_picker.keys": "Arrows move in the grid (Up and Down from the search too), Home and End go to the first and the last, Enter takes the symbol, Tab moves between search, categories and grid, Escape goes back to the form.",
   "symbol_picker.ok": "OK",
-  "symbol_picker.cancel": "Cancel"
+  "symbol_picker.cancel": "Cancel",
+  "setting.buttonbar.button_padding": "Room around the button symbols",
+  "setting.buttonbar.button_padding.help": "The space between a button's symbol and its frame, in pixels on each side: 0 to 12. The button grows with it; Total Commander sets the button's size apart from the symbol's.",
+  "setting.buttonbar.flat": "Flat buttons",
+  "setting.buttonbar.flat.help": "The buttons of both bars without frame and fill; the pointer and the keyboard still show the button they are on (Total Commander's Flat icons).",
+  "button_bar.menu.icon_size": "Symbol size",
+  "button_bar.menu.size": "{size} pixels",
+  "button_bar.menu.other_size": "Other...",
+  "button_bar.menu.flat": "Flat buttons",
+  "button_bar.menu.hide": "Hide button bar",
+  "button_bar.menu.hide_vertical": "Hide vertical button bar"
 }

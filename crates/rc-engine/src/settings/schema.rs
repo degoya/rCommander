@@ -171,6 +171,8 @@ pub const SETTINGS: &[SettingSpec] = &[
     button_bar::HORIZONTAL_BAR,
     button_bar::VERTICAL_BAR,
     button_bar::ICON_SIZE,
+    button_bar::BUTTON_PADDING,
+    button_bar::FLAT,
     button_bar::DRIVE_BAR,
     button_bar::COMMAND_LINE,
     button_bar::STATUS_BAR,

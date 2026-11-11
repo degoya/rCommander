@@ -3,23 +3,31 @@
 //! vertical one between the panels (`appearance.vertical_button_bar`, off), each showing the bar
 //! its setting names (`buttonbar.horizontal`, `buttonbar.vertical`; 0 or a bar gone: the first).
 //! A button runs its command for the active panel (`button_bar.run`), or opens its sub-bar as a
-//! menu under it (`menu.rs`); a right click or Shift+F10 opens the button's own menu - Change,
-//! Delete, Insert button, Edit bar. Alt+Shift+F11 and Alt+Shift+F12 give a bar the keyboard
-//! (`keys.rs`). Files dropped on a button that starts a program are handed to it, Shift and a
-//! drop on a bar make a new button of the file (`drop.rs`). The symbols are read off the window's
-//! thread (`symbols.rs`); a button that runs rCommander's commands without one shows a glyph of
-//! the app's icon font (`glyphs.rs`), and only a button with no icon at all shows text.
-//! The bars are edited in their window (`window.rs`, `DialogWindow::ButtonBar`).
+//! menu under it (`menu.rs`); a right click on a button or beside the buttons, or Shift+F10 and
+//! the context-menu key in a bar with the keyboard, open the bar's context menu - the file list's
+//! kind of menu: Change, Delete and Insert on a button, Edit bar, the symbol size, flat buttons,
+//! hiding the bar (`context.rs`, RC-110-15). Alt+Shift+F11 and Alt+Shift+F12 give a bar the
+//! keyboard (`keys.rs`). Files dropped on a button that starts a program are handed to it, Shift
+//! and a drop on a bar make a new button of the file (`drop.rs`). The symbols are read off the
+//! window's thread (`symbols.rs`); a button that runs rCommander's commands without one shows a
+//! glyph of the app's icon font (`glyphs.rs`), and only a button with no icon at all shows text.
+//! The bars are edited in their window (`window.rs`, `DialogWindow::ButtonBar`). The buttons'
+//! measures and look follow `buttonbar.icon_size`, `buttonbar.button_padding` and
+//! `buttonbar.flat` on both bars (`layout.rs`).
 //!
 //! The window keeps no bar of its own: the list is the engine's (`button_bar.list`), read at the
 //! start and again after every `ButtonBarsChanged`; the settings are read at the start and after
 //! a change of one of them, which also shows or hides the drive bar, the command line and the
 //! status bar (Configuration > Layout in Total Commander, `view.toggle_bar` from the View menu).
 
+mod context;
+mod context_view;
 mod drop;
 mod glyphs;
 mod keys;
+mod layout;
 mod menu;
+mod menu_view;
 mod symbols;
 mod view;
 mod window;
@@ -29,15 +37,18 @@ use rc_engine::{
     BarItem, BarPlace, ButtonAction, ButtonBar, ButtonBarId, ButtonBarsOutcome, Command, Engine,
     EngineEvent, Outcome,
     settings::{
-        BUTTON_BAR_KEY, COMMAND_LINE_KEY, DRIVE_BAR_KEY, HORIZONTAL_BAR_KEY, ICON_SIZE_KEY,
-        STATUS_BAR_KEY, VERTICAL_BAR_KEY, VERTICAL_BUTTON_BAR_KEY, stored_bool, stored_setting,
+        BUTTON_BAR_KEY, BUTTON_PADDING_KEY, COMMAND_LINE_KEY, DEFAULT_BUTTON_PADDING,
+        DRIVE_BAR_KEY, FLAT_KEY, HORIZONTAL_BAR_KEY, ICON_SIZE_KEY, STATUS_BAR_KEY,
+        VERTICAL_BAR_KEY, VERTICAL_BUTTON_BAR_KEY, stored_bool, stored_setting,
     },
 };
 
+pub use self::context::{BarMenu, CtxMsg};
 pub use self::drop::Target;
 pub use self::menu::{MenuKind, MenuMsg, OpenMenu};
+pub(super) use self::menu_view::with_menu;
 pub use self::symbols::SymbolKey;
-pub(super) use self::view::{horizontal, vertical, with_menu};
+pub(super) use self::view::{horizontal, vertical};
 #[cfg(test)]
 pub use self::window::Import;
 pub use self::window::{BarWindow, NAME_FIELD, WinMsg, body as window_body};
@@ -56,6 +67,10 @@ pub struct BarSettings {
     pub vertical_bar: ButtonBarId,
     /// `buttonbar.icon_size`, in pixels.
     pub icon_size: u16,
+    /// `buttonbar.button_padding`: the room around a symbol, in pixels on each side.
+    pub padding: u16,
+    /// `buttonbar.flat`: buttons without a frame.
+    pub flat: bool,
     /// `appearance.drive_bar`.
     pub drive_bar: bool,
     /// `appearance.command_line`.
@@ -73,6 +88,8 @@ impl Default for BarSettings {
             horizontal_bar: 0,
             vertical_bar: 0,
             icon_size: 24,
+            padding: DEFAULT_BUTTON_PADDING as u16,
+            flat: false,
             drive_bar: true,
             command_line: true,
             status_bar: true,
@@ -81,12 +98,14 @@ impl Default for BarSettings {
 }
 
 /// The keys of the settings the bars read.
-const KEYS: [&str; 8] = [
+const KEYS: [&str; 10] = [
     BUTTON_BAR_KEY,
     VERTICAL_BUTTON_BAR_KEY,
     HORIZONTAL_BAR_KEY,
     VERTICAL_BAR_KEY,
     ICON_SIZE_KEY,
+    BUTTON_PADDING_KEY,
+    FLAT_KEY,
     DRIVE_BAR_KEY,
     COMMAND_LINE_KEY,
     STATUS_BAR_KEY,
@@ -104,13 +123,17 @@ pub struct BarFocus {
     pub index: usize,
 }
 
-/// The bars, the keyboard in them, the open menu, the symbols and the window.
+/// The bars, the keyboard in them, the open menus, the symbols and the window.
 #[derive(Debug, Default)]
 pub struct ButtonBarUi {
     pub bars: Vec<ButtonBar>,
     pub settings: BarSettings,
     pub focus: Option<BarFocus>,
     pub menu: Option<OpenMenu>,
+    /// The bar's context menu (RC-110-15).
+    pub context: Option<BarMenu>,
+    /// The button under the pointer, which a flat button shows.
+    pub hover: Option<BarFocus>,
     pub symbols: symbols::Symbols,
     pub window: Option<BarWindow>,
 }
@@ -149,8 +172,12 @@ pub enum BbMsg {
     Symbols(Vec<(SymbolKey, Option<Rgba>)>),
     /// A click on the item at this place of the bar.
     Press(BarPlace, usize),
-    /// A right click on it: the button's menu.
-    Context(BarPlace, usize),
+    /// A right click on the item at this place, or beside the items (`None`): the context menu.
+    Context(BarPlace, Option<usize>),
+    /// The context menu's place, pointer and picks.
+    Ctx(CtxMsg),
+    /// The pointer came over the item at this place, or left it (`false`).
+    Hover(BarPlace, usize, bool),
     /// `»`: the items from this one on, which the bar has no room for, as a menu.
     More(BarPlace, usize),
     /// The button the menu opens under was measured.
@@ -204,16 +231,26 @@ impl App {
                 let id = |value: Option<serde_json::Value>| {
                     value.and_then(|value| value.as_i64()).unwrap_or(0)
                 };
-                let size = stored_setting(&db, ICON_SIZE_KEY)
-                    .await
-                    .and_then(|value| value.as_str().and_then(|text| text.parse::<u16>().ok()))
-                    .unwrap_or(24);
+                // A number in its bounds: the engine reads 0.21's text "24" as 24.
+                let number = |value: Option<serde_json::Value>, default: u16| {
+                    value
+                        .and_then(|value| value.as_u64())
+                        .and_then(|number| u16::try_from(number).ok())
+                        .unwrap_or(default)
+                };
+                let size = number(stored_setting(&db, ICON_SIZE_KEY).await, 24);
+                let padding = number(
+                    stored_setting(&db, BUTTON_PADDING_KEY).await,
+                    DEFAULT_BUTTON_PADDING as u16,
+                );
                 BarSettings {
                     horizontal: stored_bool(&db, BUTTON_BAR_KEY).await,
                     vertical: stored_bool(&db, VERTICAL_BUTTON_BAR_KEY).await,
                     horizontal_bar: id(stored_setting(&db, HORIZONTAL_BAR_KEY).await),
                     vertical_bar: id(stored_setting(&db, VERTICAL_BAR_KEY).await),
                     icon_size: size,
+                    padding,
+                    flat: stored_bool(&db, FLAT_KEY).await,
                     drive_bar: stored_bool(&db, DRIVE_BAR_KEY).await,
                     command_line: stored_bool(&db, COMMAND_LINE_KEY).await,
                     status_bar: stored_bool(&db, STATUS_BAR_KEY).await,
@@ -248,6 +285,9 @@ impl App {
             }
             _ => return None,
         };
+        if self.button_bar.context.is_some() {
+            return Some(self.bar_context_key(chord));
+        }
         if self.button_bar.menu.is_some() {
             return Some(self.on_bar_menu(MenuMsg::Key(chord.clone())));
         }
@@ -265,6 +305,7 @@ impl App {
             return Vec::new();
         };
         ui.menu = None;
+        ui.context = None;
         ui.focus = Some(BarFocus { place, index });
         Vec::new()
     }
@@ -296,7 +337,17 @@ impl App {
                 self.button_bar.focus = None;
                 self.press_bar_item(place, index)
             }
-            BbMsg::Context(place, index) => self.open_button_menu(place, index),
+            BbMsg::Context(place, index) => self.open_bar_context(place, index),
+            BbMsg::Ctx(message) => self.on_bar_context(message),
+            BbMsg::Hover(place, index, over) => {
+                let at = BarFocus { place, index };
+                if over {
+                    self.button_bar.hover = Some(at);
+                } else if self.button_bar.hover == Some(at) {
+                    self.button_bar.hover = None;
+                }
+                Vec::new()
+            }
             BbMsg::More(place, from) => self.open_more(place, from),
             BbMsg::Anchored(bounds) => {
                 if let Some(menu) = self.button_bar.menu.as_mut() {
@@ -331,6 +382,22 @@ impl App {
         {
             ui.menu = None;
         }
+        // The context menu of a bar that is gone or hidden, or of a button no more there.
+        if let Some(open) = &ui.context {
+            let fits = ui.shown(open.place).is_some_and(|bar| {
+                bar.id == open.bar
+                    && open.button.is_none_or(|at| {
+                        bar.spec
+                            .items
+                            .get(at)
+                            .is_some_and(|item| item.button().is_some())
+                    })
+            });
+            if !fits {
+                ui.context = None;
+            }
+        }
+        ui.hover = None;
     }
 
     /// The item at `index` of the bar at `place`: a command runs for the active panel, a sub-bar

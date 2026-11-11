@@ -3502,10 +3502,7 @@
   "setting.buttonbar.vertical": "Leiste zwischen den Fenstern",
   "setting.buttonbar.vertical.help": "Die Id der Leiste, die die senkrechte Buttonleiste zeigt; 0 zeigt die erste.",
   "setting.buttonbar.icon_size": "Größe der Knopfsymbole",
-  "setting.buttonbar.icon_size.help": "Die Seitenlänge eines Knopfsymbols in Pixeln.",
-  "setting.buttonbar.icon_size.16": "16 Pixel",
-  "setting.buttonbar.icon_size.24": "24 Pixel",
-  "setting.buttonbar.icon_size.32": "32 Pixel",
+  "setting.buttonbar.icon_size.help": "Die Seitenlänge eines Knopfsymbols in Pixeln: 16 bis 48, wie im Dialog Buttonbar ändern von Total Commander.",
   "setting.appearance.drive_bar": "Laufwerksknöpfe anzeigen",
   "setting.appearance.drive_bar.help": "Die Leiste der Laufwerksknöpfe über den Fenstern; die Laufwerkszeile darunter bleibt.",
   "setting.appearance.command_line": "Befehlszeile anzeigen",
@@ -3725,5 +3722,15 @@
   "symbol_picker.no_tooltip": "Kein Tooltip: der Knopf nennt seinen Befehl.",
   "symbol_picker.keys": "Die Pfeile bewegen im Raster (Auf und Ab auch aus der Suche), Pos1 und Ende gehen zum ersten und letzten, Enter übernimmt das Symbol, Tab wechselt zwischen Suche, Kategorien und Raster, Escape geht zurück zum Formular.",
   "symbol_picker.ok": "OK",
-  "symbol_picker.cancel": "Abbrechen"
+  "symbol_picker.cancel": "Abbrechen",
+  "setting.buttonbar.button_padding": "Abstand um die Knopfsymbole",
+  "setting.buttonbar.button_padding.help": "Der Raum zwischen dem Symbol eines Knopfs und seinem Rahmen, in Pixeln auf jeder Seite: 0 bis 12. Der Knopf wächst mit; Total Commander stellt die Knopfgröße getrennt von der Symbolgröße ein.",
+  "setting.buttonbar.flat": "Flache Knöpfe",
+  "setting.buttonbar.flat.help": "Die Knöpfe beider Leisten ohne Rahmen und Fläche; Mauszeiger und Tastatur zeigen weiter, auf welchem Knopf sie stehen (Flache Icons in Total Commander).",
+  "button_bar.menu.icon_size": "Symbolgröße",
+  "button_bar.menu.size": "{size} Pixel",
+  "button_bar.menu.other_size": "Andere...",
+  "button_bar.menu.flat": "Flache Knöpfe",
+  "button_bar.menu.hide": "Buttonleiste ausblenden",
+  "button_bar.menu.hide_vertical": "Senkrechte Buttonleiste ausblenden"
 }

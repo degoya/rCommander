@@ -152,6 +152,99 @@ async fn a_block_over_the_decoder_memory_is_refused() {
     );
 }
 
+/// A stored (COPY) 7z, built byte by byte: one solid block of `a.txt` ("aaaaa") and `b.txt`
+/// ("bbbbb"), whose header states `b.txt` as `stated` bytes - the block's unpack size follows, its
+/// data stays ten bytes. 7-Zip tests `stated` 6 as "Data Error : b.txt".
+fn stored_7z(stated: u8) -> Vec<u8> {
+    fn crc(bytes: &[u8]) -> u32 {
+        let mut crc = flate2::Crc::new();
+        crc.update(bytes);
+        crc.sum()
+    }
+    let (a, b) = (b"aaaaa", b"bbbbb");
+    let names: Vec<u8> = ["a.txt", "b.txt"]
+        .iter()
+        .flat_map(|name| name.encode_utf16().chain([0]).flat_map(u16::to_le_bytes))
+        .collect();
+    let mut header = vec![
+        0x01, // kHeader
+        0x04, // kMainStreamsInfo
+        0x06,
+        0x00,
+        0x01,
+        0x09,
+        10,
+        0x00, // kPackInfo: at 0, one stream of 10 bytes
+        0x07,
+        0x0B,
+        0x01,
+        0x00, // kUnPackInfo, kFolder: one block, not external
+        0x01,
+        0x01,
+        0x00, // one coder, id size 1: COPY
+        0x0C,
+        5 + stated,
+        0x00, // kCodersUnPackSize
+        0x08,
+        0x0D,
+        0x02,
+        0x09,
+        5, // kSubStreamsInfo: two, the first 5 bytes, the last the rest
+        0x0A,
+        0x01, // kCRC, all defined
+    ];
+    header.extend(crc(a).to_le_bytes());
+    header.extend(crc(b).to_le_bytes());
+    header.extend([0x00, 0x00]); // kEnd of the sub-streams, of the streams
+    let name_size = u8::try_from(names.len() + 1).expect("short names");
+    header.extend([0x05, 0x02, 0x11, name_size, 0x00]); // kFilesInfo: two, kName, not external
+    header.extend(&names);
+    header.extend([0x00, 0x00]); // kEnd of the files, of the header
+    let mut start = Vec::new();
+    start.extend(10_u64.to_le_bytes()); // the next header's offset after the packed data
+    start.extend((header.len() as u64).to_le_bytes());
+    start.extend(crc(&header).to_le_bytes());
+    let mut archive = b"7z\xBC\xAF\x27\x1C\x00\x04".to_vec();
+    archive.extend(crc(&start).to_le_bytes());
+    archive.extend(start);
+    archive.extend(a);
+    archive.extend(b);
+    archive.extend(header);
+    archive
+}
+
+/// sevenz-rust2 0.25 (RC-110-11): a kept entry of a block encoded again whose data ends before
+/// its stated size fails the update; 0.24 handed it out as complete, unchecked, and the new
+/// archive kept it short. The same archive with a true size updates.
+#[tokio::test]
+async fn a_kept_entry_shorter_than_stated_fails_the_update() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let old = dir.path().join("a.7z");
+    fs::write(&old, stored_7z(5)).expect("write");
+    let update = job(Kind::SevenZ, &old, &[0], Vec::new());
+    let temp = update.temp.clone();
+    run(update).await.expect("the true archive updates");
+    assert_eq!(
+        files(&temp).await,
+        [("b.txt".to_owned(), b"bbbbb".to_vec())]
+    );
+    fs::remove_file(&temp).expect("remove");
+
+    let before = stored_7z(6);
+    fs::write(&old, &before).expect("write");
+    let error = run(job(Kind::SevenZ, &old, &[0], Vec::new()))
+        .await
+        .expect_err("a short entry is no entry");
+    assert!(
+        error.to_string().contains("shorter than declared size"),
+        "{error}"
+    );
+    assert!(
+        fs::read(&old).expect("read") == before,
+        "the old archive stays"
+    );
+}
+
 /// Acceptance: an encrypted 7z - its content or its header - is not changed.
 #[test]
 fn an_encrypted_7z_is_refused() {

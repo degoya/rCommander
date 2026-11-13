@@ -5,6 +5,12 @@
 //! fails the first is undone, so the entry keeps its old name. Where the undo fails too, the
 //! failure names the temporary name the entry stays under (`rename_undo_failed`), and a retry
 //! goes on from there (RC-080-37).
+//!
+//! No step replaces an entry (RC-110-22): a backend says for all of its paths whether case
+//! counts, and a folder below it may tell case apart all the same (a WSL share on Windows, an
+//! NTFS folder flagged case-sensitive, an APFS volume that distinguishes). There `Makefile` beside
+//! `makefile` is another file, so each step is a [`Vfs::rename_no_replace`]: the taken target is
+//! `already_exists`, the entry goes back to its old name and the other file stays.
 
 use std::{
     path::{Path, PathBuf},
@@ -30,15 +36,27 @@ const TRIES: u32 = 16;
 /// Tells the temporary names of one process apart.
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
+/// Whether `source` and `target` are one entry written in another case: different paths that
+/// fold to the same one, where case does not count. A WSL distribution's folder tells case apart
+/// whatever its backend says (`rc_vfs::case_sensitive_at`), so a rename there is an ordinary
+/// one with the ordinary conflict question.
+fn only_case(backend_case_sensitive: bool, source: &Path, target: &Path) -> bool {
+    !rc_vfs::case_sensitive_at(backend_case_sensitive, source)
+        && source != target
+        && fold(source, false) == fold(target, false)
+}
+
 impl Runner {
     /// Whether moving `source` to `target` only changes the case of its path on a backend
     /// where case does not count.
     pub(crate) fn changes_case_only(&self, source: &VfsPath, target: &VfsPath) -> bool {
         source.backend == target.backend
             && source.backend == self.src_id
-            && !self.src.capabilities().case_sensitive
-            && source.path != target.path
-            && fold(&source.path, false) == fold(&target.path, false)
+            && only_case(
+                self.src.capabilities().case_sensitive,
+                &source.path,
+                &target.path,
+            )
     }
 
     /// Renames `source` to `target`, which differs only in case, through a temporary name.
@@ -85,7 +103,8 @@ impl Runner {
 
 /// `from` to a temporary name, then to `to`; back to `from` when the second step fails. Where the
 /// undo fails too, the entry stays at the temporary name, kept in `parked`, and the next call
-/// goes on from there.
+/// goes on from there. No step renames onto an existing entry - not the undo either, whose old
+/// name something else may have taken meanwhile.
 async fn two_steps(
     vfs: &dyn Vfs,
     from: &Path,
@@ -96,15 +115,15 @@ async fn two_steps(
         Some(temp) => temp,
         None => {
             let temp = free_temp_name(vfs, from).await?;
-            vfs.rename(from, &temp).await?;
+            vfs.rename_no_replace(from, &temp).await?;
             temp
         }
     };
-    let Err(error) = vfs.rename(&temp, to).await else {
+    let Err(error) = vfs.rename_no_replace(&temp, to).await else {
         return Ok(());
     };
     // The entry goes back to its old name; the error to report is the second step's.
-    if vfs.rename(&temp, from).await.is_ok() {
+    if vfs.rename_no_replace(&temp, from).await.is_ok() {
         return Err(error.into());
     }
     *parked = Some(temp.clone());

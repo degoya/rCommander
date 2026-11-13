@@ -37,7 +37,7 @@ use crate::{
 
 mod exit;
 
-pub(super) use exit::leave;
+pub(super) use exit::{QUIT_LIMIT, leave, within};
 
 /// What the window starts with; cloned into iced's start function.
 #[derive(Clone)]
@@ -417,6 +417,8 @@ impl App {
         let text_zoom = app.text_zoom_task();
         // Whether a plugin document's text shows its colours (RC-100-10).
         let token_colors = app.token_colors_task();
+        // How long Quick View waits for the cursor on a server (RC-110-28).
+        let quick_pause = app.quick_pause_task();
         // Whether tabs are dragged and the menus show their keys (RC-010-24).
         let tabs = app.tabs_settings_task();
         // How the terminals copy their selection (RC-040-07).
@@ -463,6 +465,7 @@ impl App {
                 access_keys,
                 text_zoom,
                 token_colors,
+                quick_pause,
                 tabs,
                 terminal_copy,
                 cmdline,

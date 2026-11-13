@@ -9,13 +9,12 @@
 #                                  # (at the pinned version), the script tests, gitleaks,
 #                                  # git diff --check, the job layout, the file length,
 #                                  # cargo deny --offline check, the migration pins,
-#                                  # set-version.sh --check, licenses.sh --offline --check,
-#                                  # mcp-coverage.sh --check,
-#                                  # keyboard-reference.sh --check,
-#                                  # settings-reference.sh --check, the plugin SDK's checks
-#                                  # (check-sdk-templates.sh, wit-reference.sh --check,
-#                                  # plugin-manifest-defaults.sh --check),
-#                                  # icon-font.sh --check; no lock
+#                                  # set-version.sh --check, check-sdk-templates.sh and
+#                                  # the --check form of every generator in
+#                                  # scripts/lib/generators.sh (licences, MCP coverage,
+#                                  # keyboard, settings and contract reference, plugin
+#                                  # manifests, symbol font; scripts/regen.sh writes
+#                                  # them); no lock
 #   scripts/check.sh --rust        # clippy over the workspace (-D warnings), every test
 #                                  # (--no-fail-fast: every failing test is named), and clippy
 #                                  # for wasm32-unknown-unknown over the plugins and the crates
@@ -23,7 +22,11 @@
 #   scripts/check.sh --windows     # cargo xwin clippy for x86_64-pc-windows-msvc (-D warnings),
 #                                  # all targets, then the libraries alone with the features
 #                                  # they ship with; in target/lanes/windows
-#   scripts/check.sh --full        # all three (also the default without a mode)
+#   scripts/check.sh --full        # all three (also the default without a mode), then the
+#                                  # stage `fuzz-build`: scripts/fuzz.sh --build, the fuzz
+#                                  # targets of fuzz/ compiled on their pinned nightly and not
+#                                  # run (RC-110-33); a skip, named, on a machine without that
+#                                  # nightly or cargo-fuzz
 #
 # A green --full on a clean tree leaves a stamp, HEAD's commit in `$(git rev-parse --git-path
 # rc-check-full)` of that checkout (per worktree); `scripts/worktree.sh finish` warns when the
@@ -32,7 +35,8 @@
 #
 # A tool a preflight stage needs (shellcheck, gitleaks, cargo-deny) that is not installed, or a
 # ShellCheck other than the version scripts/lib/tool-versions.sh pins, is a visible skip under
-# --preflight and a failure under --full, the gate.
+# --preflight and a failure under --full, the gate. ~/.local/bin, where the pinned ShellCheck is
+# installed, is put on PATH here (rc_user_tools_path), whatever the caller's shell had.
 #
 # Logs: one directory per run, $RC_CHECK_LOGS/<time>-<pid>/ (default RC_CHECK_LOGS is
 # /tmp/claude-<uid>/check-<checkout>), one log per stage plus `failures` and `summary`.
@@ -62,6 +66,10 @@ esac
 source "$ROOT/scripts/lib/jobs.sh"
 # shellcheck source=lib/tool-versions.sh
 source "$ROOT/scripts/lib/tool-versions.sh"
+# shellcheck source=lib/generators.sh
+source "$ROOT/scripts/lib/generators.sh"
+# The pinned shellcheck of ~/.local/bin, also from a shell started without the profile.
+rc_user_tools_path
 if [[ "$mode" != --preflight ]]; then
     # shellcheck source=lib/lock.sh
     source "$ROOT/scripts/lib/lock.sh"
@@ -148,12 +156,26 @@ run_shellcheck() {
     shellcheck -x -P SCRIPTDIR "${files[@]}"
 }
 
+# The script tests, RC_JOBS at a time (RC-110-33; 32 s one after the other): each works in a
+# scratch directory of its own, its output and exit kept per test in the run's log directory and
+# printed here in the tests' order once all have ended.
 script_tests() {
-    local test status=0
+    local test name status=0 out="$LOGS/script-tests"
+    mkdir -p "$out"
+    # shellcheck disable=SC2016  # $1 and $2 are the inner shell's
+    printf '%s\0' scripts/tests/*.sh | xargs -0 -r -P "$JOBS" -I '{}' bash -c '
+        name="$(basename "$1" .sh)"
+        bash "$1" > "$2/$name.log" 2>&1
+        echo "$?" > "$2/$name.exit"' _ '{}' "$out" || true
     for test in scripts/tests/*.sh; do
         [[ -e "$test" ]] || continue
+        name="$(basename "$test" .sh)"
         echo "==> $test"
-        bash "$test" || status=1
+        cat "$out/$name.log" 2> /dev/null || true
+        if [[ "$(cat "$out/$name.exit" 2> /dev/null)" != 0 ]]; then
+            echo "!! $test failed (exit $(cat "$out/$name.exit" 2> /dev/null || echo "not run"))"
+            status=1
+        fi
     done
     return "$status"
 }
@@ -194,16 +216,20 @@ diff_check() {
 # crates/rcommander/tests/repo_lints/file_length.rs, whose lists are empty. It reads the
 # plugins and the SDK too, so a wave agent who compiles nothing still sees a long plugin file.
 file_length() {
-    local file lines status=0
-    while IFS= read -r -d '' file; do
-        lines="$(wc -l < "$file")"
-        if [[ "$lines" -gt "$LIMIT" ]]; then
-            echo "$file: $lines lines (limit $LIMIT; split it)"
-            status=1
-        fi
-    done < <(find crates plugins sdk scripts -path '*/target' -prune -o -type f \
-        \( -name '*.rs' -o -name '*.sh' -o -name '*.py' \) -print0 2> /dev/null)
-    return "$status"
+    local long
+    # One `wc` over all files, not one per file (RC-110-33; 6 s before): its lines are
+    # `<count> <path>`, and `total` once per batch of xargs.
+    long="$(find crates plugins sdk scripts -path '*/target' -prune -o -type f \
+        \( -name '*.rs' -o -name '*.sh' -o -name '*.py' \) -print0 2> /dev/null \
+        | xargs -0 -r wc -l \
+        | awk -v limit="$LIMIT" '{
+            count = $1
+            sub(/^ *[0-9]+ /, "")
+            if ($0 != "total" && count > limit) print $0 ": " count " lines (limit " limit "; split it)"
+        }')"
+    [[ -z "$long" ]] && return 0
+    printf '%s\n' "$long"
+    return 1
 }
 
 # Every migration matches its pin in crates/rc-db/migrations.sha384 and has one: what
@@ -263,14 +289,14 @@ preflight() {
     fi
     stage migration-pins migration_pins
     stage version scripts/set-version.sh --check
-    stage licenses scripts/licenses.sh --offline --check
-    stage mcp-coverage scripts/mcp-coverage.sh --check
-    stage keyboard-reference scripts/keyboard-reference.sh --check
-    stage settings-reference scripts/settings-reference.sh --check
     stage sdk-templates scripts/check-sdk-templates.sh
-    stage wit-reference scripts/wit-reference.sh --check
-    stage manifest-defaults scripts/plugin-manifest-defaults.sh --check
-    stage symbol-font scripts/icon-font.sh --check
+    # The generated files' --check forms: the rows of scripts/lib/generators.sh, regen.sh's list.
+    local row arguments
+    for row in "${RC_GENERATORS[@]}"; do
+        rc_generator_fields "$row"
+        read -r -a arguments <<< "$gen_check"
+        stage "$gen_name" "$gen_script" "${arguments[@]}"
+    done
 }
 
 rust() {
@@ -314,6 +340,22 @@ windows() {
         -- -D warnings
 }
 
+# The fuzz targets, built only (RC-110-33): fuzz/ is a workspace of its own on a pinned nightly,
+# which neither clippy nor the tests compile, so a parser's changed signature broke a target
+# unseen until the nightly run. A machine without the nightly or cargo-fuzz skips the stage, and
+# the skip counts as every other one does: the run stays green and says so, a --full leaves no
+# stamp. The build directory is fuzz.sh's own (target/fuzz/build), shared with its runs.
+fuzz_build() {
+    echo "==> fuzz"
+    local toolchain="${RC_FUZZ_TOOLCHAIN:-$RC_FUZZ_NIGHTLY}"
+    if [[ "$(rustup toolchain list 2> /dev/null)" == *"$toolchain"* ]] \
+        && cargo "+$toolchain" fuzz --version > /dev/null 2>&1; then
+        stage fuzz-build scripts/fuzz.sh --build
+    else
+        skip fuzz-build "$toolchain or cargo-fuzz is not installed (docs/development.md)"
+    fi
+}
+
 # The stamp of a green --full, for scripts/worktree.sh finish: only when the tree was clean from
 # the start, HEAD is the commit it started on and nothing changed the tree on the way.
 write_stamp() {
@@ -339,6 +381,7 @@ case "$mode" in
         preflight
         rust
         windows
+        fuzz_build
         ;;
 esac
 

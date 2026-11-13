@@ -6,6 +6,8 @@
 //! change. `panel.cancel_dir_sizes` stops it; a new listing of the panel drops the results, and
 //! the first result for a folder the panel no longer lists ends the run.
 
+use std::sync::Arc;
+
 use rc_vfs::EntryKind;
 use tokio_util::sync::CancellationToken;
 
@@ -58,10 +60,11 @@ impl Engine {
             if let Some(token) = state.counting[id.index()].take() {
                 token.cancel();
             }
-            state
-                .panel_mut(id)
-                .dir_sizes
-                .retain(|_, size| *size != DirSize::Counting);
+            let sizes = &mut state.panel_mut(id).dir_sizes;
+            // Nothing counting: the map stays the one every copy of the state shares.
+            if sizes.values().any(|size| *size == DirSize::Counting) {
+                Arc::make_mut(sizes).retain(|_, size| *size != DirSize::Counting);
+            }
         }
         self.announce_sizes(id);
         Outcome::Panel(self.snapshot(Some(id)))
@@ -72,11 +75,14 @@ impl Engine {
         let names: Vec<String> = {
             let mut state = self.state();
             let sizes = &mut state.panel_mut(id).dir_sizes;
-            let mut fresh = Vec::with_capacity(names.len());
-            for name in names {
-                if sizes.get(&name) != Some(&DirSize::Counting) {
+            let fresh: Vec<String> = names
+                .into_iter()
+                .filter(|name| sizes.get(name) != Some(&DirSize::Counting))
+                .collect();
+            if !fresh.is_empty() {
+                let sizes = Arc::make_mut(sizes);
+                for name in &fresh {
                     sizes.insert(name.clone(), DirSize::Counting);
-                    fresh.push(name);
                 }
             }
             fresh
@@ -118,9 +124,10 @@ impl Engine {
                     if panel.path != dir || !panel.dir_sizes.contains_key(&name) {
                         return;
                     }
+                    let sizes = Arc::make_mut(&mut panel.dir_sizes);
                     match counted {
-                        Ok(usage) => panel.dir_sizes.insert(name, DirSize::Bytes(usage.bytes)),
-                        Err(_) => panel.dir_sizes.remove(&name),
+                        Ok(usage) => sizes.insert(name, DirSize::Bytes(usage.bytes)),
+                        Err(_) => sizes.remove(&name),
                     };
                 }
                 engine.announce_sizes(id);

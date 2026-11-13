@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 use crate::RcMcpServer;
+use crate::confirm::CODE_ARGUMENT;
 use crate::test_support::Fixture;
 
 struct Setup {
@@ -88,6 +89,38 @@ async fn the_tool_accepts_no_path() {
         .map(|properties| properties.keys().cloned().collect::<Vec<_>>())
         .unwrap_or_default();
     assert_eq!(properties, ["confirmation"]);
+}
+
+/// The code argument is the one every tool takes (`confirm::argument`), and a call that carries
+/// one is not refused as an unknown argument (RC-110-23).
+#[tokio::test]
+async fn the_code_argument_is_the_shared_one_and_is_accepted() {
+    let setup = setup().await;
+    let tools = setup.client.list_all_tools().await.expect("tools");
+    let schema_of = |name: &str| {
+        tools
+            .iter()
+            .find(|tool| tool.name == name)
+            .and_then(|tool| tool.input_schema.get("properties"))
+            .and_then(|properties| properties.get(CODE_ARGUMENT))
+            .cloned()
+            .unwrap_or_else(|| panic!("{name} takes the code"))
+    };
+    assert_eq!(schema_of("db_backup"), schema_of("ops_delete"));
+
+    let result = setup
+        .client
+        .call_tool(request(&json!({ (CODE_ARGUMENT): "000000" })))
+        .await
+        .expect("call");
+    let text = result
+        .content
+        .first()
+        .and_then(|content| content.as_text())
+        .map(|text| text.text.clone())
+        .expect("text");
+    let answer: Value = serde_json::from_str(&text).expect("json");
+    assert_eq!(answer["kind"], "database_backup", "{answer}");
 }
 
 /// A restore replaces every setting and secret: no tool offers one, and a path of its own for a

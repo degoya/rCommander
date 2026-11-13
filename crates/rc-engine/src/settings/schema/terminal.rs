@@ -46,6 +46,11 @@ pub const COPY_ON_SELECT_KEY: &str = "terminal.copy_on_select";
 /// the program (owner's report 2026-10-25: Claude Code took it for an image paste).
 pub const PASTE_CTRL_V_KEY: &str = "terminal.paste_ctrl_v";
 
+/// A right click that copied nothing pastes the clipboard, as in Windows Terminal (Windows
+/// only; RC-110-28). Off, a right click never pastes. A program that asked for the mouse gets
+/// the right click either way.
+pub const PASTE_RIGHT_CLICK_KEY: &str = "terminal.paste_right_click";
+
 /// A program in a terminal may put text on the clipboard (OSC 52), as Claude Code does with what
 /// it selected; reading the clipboard that way stays refused (alacritty's `Osc52::OnlyCopy`).
 pub const OSC52_COPY_KEY: &str = "terminal.osc52_copy";
@@ -98,6 +103,16 @@ pub(super) const PASTE_CTRL_V: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.terminal.paste_ctrl_v",
     help: "setting.terminal.paste_ctrl_v.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const PASTE_RIGHT_CLICK: SettingSpec = SettingSpec {
+    key: PASTE_RIGHT_CLICK_KEY,
+    page: SettingPage::Terminal,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.terminal.paste_right_click",
+    help: "setting.terminal.paste_right_click.help",
     protected: false,
     restart: false,
 };

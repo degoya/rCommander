@@ -55,6 +55,7 @@ page of groups at a time; `panel_feed_paths` with groups shows such a result in 
 
 A path on another machine's network share (\\server\share) is refused with network_path in every
 tool unless a network drive the person mapped reaches it; WSL distributions are no network shares.
+The tabs and start folders in a workspace's spec are held to the same rule.
 
 `settings_get` reads rCommander's settings (theme, start folders, default shell, ...) with their
 types and bounds; `settings_set` changes one - the MCP and vault settings (switch, port, token,
@@ -71,7 +72,8 @@ tabs, the file list or a terminal, the active panel, the divider, a theme per mo
 `workspaces_get` one of them. `workspaces_create`, `workspaces_capture` (what the panels show now),
 `workspaces_update`, `workspaces_rename`, `workspaces_move` and `workspaces_delete` keep them;
 `workspaces_apply` makes the panels show one and may start shells, so it is confirmed like
-`terminal_open`.
+`terminal_open`: the person is shown the workspace's name, tabs and terminal, and a workspace
+changed while they read fails with workspace_changed.
 
 `column_sets_list` reads the column sets - Total Commander's custom columns: each a name, its
 columns (field, title, width, alignment) and the folder masks that switch a panel entering a

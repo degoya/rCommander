@@ -12,6 +12,13 @@
 # repository with it - never touching the clone's `.git`. The commit is "Release <version>",
 # authored by the git identity of this repository, and tagged v<version>.
 #
+# One export works in the clone at a time (a lock in its .git, lib/public.sh), and before a push
+# the committed tree is compared with the one staged (RC-110-31). The release chain stages the
+# release before its tag (`--ref HEAD`, no --push) and pushes after it: a second call finds the
+# tag with exactly this tree and only pushes. A tag staged here that never reached the public
+# repository is replaced when the tree changed since; one the public repository has is never
+# moved.
+#
 # Nothing leaves this machine without --push, and every push is the owner's word: the public
 # repository is what strangers read, so publishing it is a step somebody takes on purpose, not a
 # side effect of exporting. No push here is a force push but --branch's, on a ci/ branch.
@@ -43,6 +50,8 @@
 # Environment:
 #   RC_PUBLIC_DIR     the local clone (default: ~/projects/rCommander-public)
 #   RC_PUBLIC_REMOTE  where to clone it from when missing (default: git@github.com:degoya/rCommander.git)
+#   RC_PUBLIC_LOCK_WAIT  seconds to wait for another export in the same clone (default: 600)
+#   RC_PUBLIC_FETCH_PAUSE  seconds between the three tries of the clone's fetch (default: 10)
 #   GITLEAKS          the gitleaks binary (default: `gitleaks` on PATH; nothing else is looked for)
 #
 set -euo pipefail
@@ -55,7 +64,6 @@ cd "$ROOT"
 PUBLIC_DIR="${RC_PUBLIC_DIR:-$HOME/projects/rCommander-public}"
 PUBLIC_REMOTE="${RC_PUBLIC_REMOTE:-git@github.com:degoya/rCommander.git}"
 PUBLIC_MAIN="main"
-EXCLUDE_LIST="$ROOT/scripts/public-exclude.txt"
 
 VERSION=""
 REF=""
@@ -69,7 +77,7 @@ while [[ $# -gt 0 ]]; do
         --ref) REF="${2:?--ref needs a ref}"; shift 2 ;;
         --branch) BRANCH="${2:?--branch needs a branch name}"; shift 2 ;;
         --skip-push-ci) SKIP_PUSH_CI=1; shift ;;
-        -h|--help) sed -n '2,47p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown argument: $1" >&2; exit 2 ;;
         *)
             [[ -z "$VERSION" ]] || { echo "unexpected argument: $1" >&2; exit 2; }
@@ -81,7 +89,7 @@ if [[ -z "$VERSION" ]]; then
     echo "usage: scripts/export-public.sh <version> [--push] [--ref <ref>] [--branch ci/<name> [--skip-push-ci]]" >&2
     exit 2
 fi
-if ! rc_public_version "$VERSION"; then
+if ! rc_release_version "$VERSION"; then
     echo "not a release version: $VERSION (X.Y.Z, or X.Y.Z-beta.N for a pre-release)" >&2
     exit 2
 fi
@@ -111,10 +119,26 @@ rc_public_find_author "$ROOT"
 # --- the tree --------------------------------------------------------------------------------
 
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/rc-public-export.XXXXXX")"
-trap 'rm -rf "$STAGE"' EXIT
+LISTS="$(mktemp -d "${TMPDIR:-/tmp}/rc-public-lists.XXXXXX")"
+trap 'rm -rf "$STAGE" "$LISTS"' EXIT
 
 echo "==> exporting $REF (${COMMIT:0:12}) to a staging tree"
 git archive --format=tar "$COMMIT" | tar -x -C "$STAGE"
+
+# What is left out and which names are private is the exported commit's own word (RC-110-33): the
+# lists of the working tree belong to whatever is checked out, which need not be $REF. A commit
+# from before a list existed takes the working tree's, and says so.
+for list in public-exclude.txt public-names.txt public-names-allow.txt; do
+    if [[ -f "$STAGE/scripts/$list" ]]; then
+        cp "$STAGE/scripts/$list" "$LISTS/$list"
+    elif [[ -f "$ROOT/scripts/$list" ]]; then
+        echo "    note: $REF has no scripts/$list; taking the working tree's"
+        cp "$ROOT/scripts/$list" "$LISTS/$list"
+    fi
+done
+EXCLUDE_LIST="$LISTS/public-exclude.txt"
+[[ -f "$EXCLUDE_LIST" ]] || { echo "no scripts/public-exclude.txt in $REF or the working tree" >&2; exit 1; }
+export RC_PUBLIC_LISTS="$LISTS"
 
 rc_public_exclude "$STAGE" "$EXCLUDE_LIST"
 
@@ -151,7 +175,7 @@ fi
 rc_public_replace_tree "$PUBLIC_DIR" "$STAGE"
 
 commit_as() {
-    git -C "$PUBLIC_DIR" -c user.name="$AUTHOR_NAME" -c user.email="$AUTHOR_EMAIL" "$@"
+    pub -c user.name="$AUTHOR_NAME" -c user.email="$AUTHOR_EMAIL" "$@"
 }
 
 if [[ -n "$BRANCH" ]]; then
@@ -159,6 +183,7 @@ if [[ -n "$BRANCH" ]]; then
     [[ "$SKIP_PUSH_CI" -eq 0 ]] || message+=" [skip ci]"
     commit_as commit --quiet --allow-empty -m "$message"
     echo "==> committed $(pub rev-parse --short HEAD) on $BRANCH; pushing it"
+    rc_public_verify_push HEAD
     pub push --force origin "$BRANCH"
     pub checkout --quiet "$PUBLIC_MAIN" 2> /dev/null || true
     echo "==> pushed $BRANCH"
@@ -171,6 +196,13 @@ if pub rev-parse --verify --quiet "refs/tags/$TAG" > /dev/null; then
     if pub diff --cached --quiet "$TAG"; then
         pub reset --quiet --hard
         echo "==> $TAG is already exported with exactly this tree"
+    elif rc_public_unpublished "$TAG" "$PUBLIC_MAIN"; then
+        # Staged before the release's tag, then the release's tree changed: the staged commit
+        # never left this machine, so it is replaced, not followed by a second "Release".
+        pub tag -d "$TAG" > /dev/null
+        commit_as commit --quiet --amend --allow-empty -m "Release $VERSION"
+        commit_as tag -a "$TAG" -m "Release $VERSION"
+        echo "==> $TAG was staged here with another tree and never pushed; replaced by $(pub rev-parse --short HEAD)"
     else
         pub reset --quiet --hard
         echo "$TAG already exists in the public repository with a different tree" >&2
@@ -183,6 +215,7 @@ else
 fi
 
 if [[ "$DO_PUSH" -eq 1 ]]; then
+    rc_public_verify_push "$TAG"
     pub push origin "$PUBLIC_MAIN"
     pub push origin "$TAG"
     echo "==> pushed $PUBLIC_MAIN and $TAG to $PUBLIC_REMOTE"

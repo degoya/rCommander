@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer", "plugins/hcl-viewer", "plugins/schema-viewer", "plugins/script-viewer", "plugins/markup-viewer", "plugins/office-viewer", "plugins/media-viewer", "plugins/pdf-viewer"]
 
 [workspace.package]
-version = "0.22.0"
+version = "0.23.1"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.99"
@@ -38,6 +38,8 @@ encoding_rs = "0.8"
 embed-resource = "3.0.11"
 filetime = "0.2"
 futures-util = "0.3"
+# Lower-case hex of bytes, once for the workspace (RC-110-30); in the tree already through russh.
+hex = "0.4"
 hmac = "0.13"
 # rc-term-widget (forked from iced_term 0.8, ADR 0001) is built against iced 0.14 and its core
 # and graphics crates; bump the three together. `image-without-codecs`: the viewer's image widget

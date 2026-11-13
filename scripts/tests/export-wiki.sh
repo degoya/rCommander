@@ -24,7 +24,8 @@ source "$ROOT/scripts/tests/lib/expect.sh"
 TOOLS="$SCRATCH/tools"
 mkdir -p "$TOOLS/scripts/lib"
 cp "$ROOT/scripts/export-wiki.sh" "$TOOLS/scripts/"
-cp "$ROOT/scripts/lib/public.sh" "$ROOT/scripts/lib/public-links.py" "$ROOT/scripts/lib/public-names.py" \
+cp "$ROOT/scripts/lib/public.sh" "$ROOT/scripts/lib/release-tag.sh" \
+    "$ROOT/scripts/lib/public-links.py" "$ROOT/scripts/lib/public-names.py" \
     "$TOOLS/scripts/lib/"
 HOST="private.example""-host.test"
 printf '%s\n' 'docs/' > "$TOOLS/scripts/public-exclude.txt"

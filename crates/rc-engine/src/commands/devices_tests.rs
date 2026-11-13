@@ -5,13 +5,15 @@ use std::{
 };
 
 use rc_db::Db;
-use rc_vfs::{BackendId, MemoryFs, PortableDevice, Vfs, VfsPath};
+use rc_ops::JobOptions;
+use rc_vfs::{BackendId, MemoryFs, PortableDevice, Vfs, VfsPath, WriteMode};
 use tempfile::TempDir;
+use tokio::io::AsyncWriteExt as _;
 
 use crate::{
     Command, DriveGroup, DriveKind, Engine, EngineError, Outcome, PanelId,
     drives::fake::{FakeDrives, FakeHub},
-    settings::PORTABLE_DEVICES_KEY,
+    settings::{DEVICE_TRANSFER_HINT_KEY, PORTABLE_DEVICES_KEY},
     test_support::expect_drives,
 };
 
@@ -258,4 +260,95 @@ async fn a_shared_device_name_is_refused_and_the_id_reaches_the_phone() {
             device: twin.to_owned()
         }
     );
+}
+
+/// The phone with `a.jpg` in its DCIM folder, and the same name in `start`: a copy of it onto
+/// the phone waits on its conflict question, so the job does not end by itself.
+async fn phone_with_a_picture(start: &Path) -> Arc<dyn Vfs> {
+    std::fs::write(start.join("a.jpg"), b"new").expect("source");
+    let fs = phone_files().await;
+    let mut file = fs
+        .open_write(
+            Path::new("/Internal storage/DCIM/a.jpg"),
+            WriteMode::CreateNew,
+        )
+        .await
+        .expect("open");
+    file.write_all(b"old").await.expect("write");
+    file.shutdown().await.expect("close");
+    fs
+}
+
+/// F5 of `name` from the left panel into the phone's DCIM folder.
+async fn copy_to_the_phone(engine: &Engine, name: &str) -> Result<Outcome, EngineError> {
+    engine
+        .dispatch(Command::OpsCopyTo {
+            panel: Some(PanelId::Left),
+            sources: vec![name.into()],
+            target: "device://Pixel 8/Internal storage/DCIM/".into(),
+            options: JobOptions::default(),
+            queue: None,
+        })
+        .await
+}
+
+async fn hint_off(engine: &Engine) {
+    engine
+        .dispatch(Command::SetSetting {
+            key: DEVICE_TRANSFER_HINT_KEY.into(),
+            value: serde_json::json!(false),
+        })
+        .await
+        .expect("stored");
+}
+
+/// F5 onto a file a job is putting onto the phone right now says so (`target_in_transfer`)
+/// instead of becoming a second job that later asks about a file that "already exists"
+/// (RC-110-16); another file is taken, and with the setting off so is the same one.
+#[tokio::test]
+async fn a_file_in_transfer_to_the_phone_is_not_copied_there_again() {
+    let start = TempDir::new().expect("tempdir");
+    let hub = hub(wpd_phone(), phone_with_a_picture(start.path()).await);
+    let engine = engine(&hub, start.path()).await;
+    assert!(engine.attach_db(Db::open_in_memory().await.expect("db")));
+    drives(&engine).await;
+    copy_to_the_phone(&engine, "a.jpg").await.expect("the copy");
+    let again = copy_to_the_phone(&engine, "a.jpg").await;
+    assert_eq!(again.expect_err("in transfer").code(), "target_in_transfer");
+    std::fs::write(start.path().join("b.jpg"), b"other").expect("source");
+    copy_to_the_phone(&engine, "b.jpg")
+        .await
+        .expect("another file is taken");
+    hint_off(&engine).await;
+    copy_to_the_phone(&engine, "a.jpg")
+        .await
+        .expect("taken with the setting off");
+}
+
+/// Ctrl+R on the phone while a job writes onto it: `device_busy`, not a listing that waits
+/// behind the transfer (RC-110-16). The other panel is read as ever; with the setting off the
+/// phone's panel is too.
+#[tokio::test]
+async fn a_phone_taking_a_transfer_is_not_read_again() {
+    let start = TempDir::new().expect("tempdir");
+    let hub = hub(wpd_phone(), phone_with_a_picture(start.path()).await);
+    let engine = engine(&hub, start.path()).await;
+    assert!(engine.attach_db(Db::open_in_memory().await.expect("db")));
+    drives(&engine).await;
+    copy_to_the_phone(&engine, "a.jpg").await.expect("the copy");
+    change(&engine, &format!("device:{PHONE}"))
+        .await
+        .expect("changes to the phone");
+    let refresh = |panel| Command::Refresh { panel: Some(panel) };
+    let refused = engine.dispatch(refresh(PanelId::Left)).await;
+    assert_eq!(refused.expect_err("busy").code(), "device_busy");
+    engine
+        .dispatch(refresh(PanelId::Right))
+        .await
+        .expect("the panel on the disk is read");
+    hint_off(&engine).await;
+    engine
+        .dispatch(refresh(PanelId::Left))
+        .await
+        .expect("read with the setting off");
 }

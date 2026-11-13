@@ -209,6 +209,102 @@ fn mouse_reports_in_sgr_and_x10() {
     );
 }
 
+/// RC-110-28: the middle and the right button reach a program in a mouse mode, each in the
+/// encoding the mode asks for.
+#[test]
+fn the_middle_and_right_buttons_report_in_every_encoding() {
+    let point = GridPoint::new(Line(4), Column(9));
+    let none = Modifiers::empty();
+    let click = TermMode::MOUSE_REPORT_CLICK;
+    for (button, code) in [(MIDDLE_BUTTON, 1), (RIGHT_BUTTON, 2)] {
+        let sgr = click | TermMode::SGR_MOUSE;
+        assert_eq!(
+            mouse_report(button, none, point, true, sgr),
+            Some(format!("\x1b[<{code};10;5M").into_bytes())
+        );
+        assert_eq!(
+            mouse_report(button, none, point, false, sgr),
+            Some(format!("\x1b[<{code};10;5m").into_bytes()),
+            "SGR names the button on its release"
+        );
+        assert_eq!(
+            mouse_report(button, none, point, true, click),
+            Some(vec![0x1b, b'[', b'M', 32 + code, 32 + 10, 32 + 5])
+        );
+        assert_eq!(
+            mouse_report(button, none, point, false, click),
+            Some(vec![0x1b, b'[', b'M', 32 + 3, 32 + 10, 32 + 5]),
+            "X10 does not"
+        );
+        // Past column 95 the UTF-8 encoding takes two bytes a coordinate.
+        let far = GridPoint::new(Line(4), Column(199));
+        let beyond = GridPoint::new(Line(4), Column(300));
+        assert_eq!(mouse_report(button, none, beyond, true, click), None);
+        assert_eq!(
+            mouse_report(button, none, far, true, click | TermMode::UTF8_MOUSE),
+            Some(vec![0x1b, b'[', b'M', 32 + code, 0xC3, 0xA8, 32 + 5])
+        );
+    }
+    assert_eq!(
+        mouse_report(RIGHT_BUTTON, Modifiers::CTRL, point, true, click),
+        Some(vec![0x1b, b'[', b'M', 32 + 2 + 16, 32 + 10, 32 + 5])
+    );
+}
+
+/// RC-110-28: the wheel is button 64 away from the person and 65 towards them, once a notch,
+/// so tmux, htop and mc scroll their own panes.
+#[test]
+fn the_wheel_reports_buttons_64_and_65_in_every_encoding() {
+    let point = GridPoint::new(Line(4), Column(9));
+    let none = Modifiers::empty();
+    let click = TermMode::MOUSE_REPORT_CLICK;
+    let sgr = click | TermMode::SGR_MOUSE;
+    assert_eq!(wheel_report(3, none, point, sgr), b"\x1b[<64;10;5M");
+    assert_eq!(wheel_report(-3, none, point, sgr), b"\x1b[<65;10;5M");
+    assert_eq!(
+        wheel_report(-6, none, point, sgr),
+        b"\x1b[<65;10;5M\x1b[<65;10;5M",
+        "two notches, two reports"
+    );
+    assert_eq!(
+        wheel_report(1, none, point, sgr),
+        b"\x1b[<64;10;5M",
+        "a line of a touchpad is a report too"
+    );
+    assert_eq!(
+        wheel_report(3, Modifiers::CTRL, point, sgr),
+        b"\x1b[<80;10;5M"
+    );
+    assert_eq!(
+        wheel_report(3, none, point, click),
+        vec![0x1b, b'[', b'M', 32 + 64, 32 + 10, 32 + 5]
+    );
+    assert_eq!(
+        wheel_report(-3, none, point, click),
+        vec![0x1b, b'[', b'M', 32 + 65, 32 + 10, 32 + 5]
+    );
+    let far = GridPoint::new(Line(4), Column(199));
+    assert!(
+        wheel_report(3, none, GridPoint::new(Line(4), Column(300)), click).is_empty(),
+        "X10 ends at 223"
+    );
+    assert_eq!(
+        wheel_report(-3, none, far, click | TermMode::UTF8_MOUSE),
+        vec![0x1b, b'[', b'M', 32 + 65, 0xC3, 0xA8, 32 + 5]
+    );
+}
+
+/// RC-110-28: Shift keeps the wheel and the buttons for the widget, as it keeps the left one.
+#[test]
+fn shift_keeps_the_wheel_and_the_other_buttons_too() {
+    let tmux = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE | TermMode::ALT_SCREEN;
+    assert!(mouse_to_program(tmux, Modifiers::empty(), true));
+    assert!(!mouse_to_program(tmux, Modifiers::SHIFT, true));
+    // A full-screen program without a mouse mode keeps the arrows of the alternate scroll.
+    let less = TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL;
+    assert!(!mouse_to_program(less, Modifiers::empty(), true));
+}
+
 #[test]
 fn the_wheel_scrolls_three_lines_a_notch_and_keeps_pixel_rests() {
     let mut rest = 0.0;

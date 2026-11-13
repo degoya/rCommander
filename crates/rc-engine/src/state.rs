@@ -72,8 +72,10 @@ pub struct PanelState {
     /// `None` elsewhere.
     pub archive: Option<Arc<ArchiveInfo>>,
     /// Folders whose size was counted, or is being counted, by name (Space, Alt+Shift+Enter);
-    /// empty again with every new listing.
-    pub dir_sizes: BTreeMap<String, DirSize>,
+    /// empty again with every new listing. Shared like `entries`: a copy of the state costs no
+    /// copy of the map, and two states with the same map are told by the pointer (RC-110-29).
+    /// Written through `Arc::make_mut`, so a state handed out keeps what it had.
+    pub dir_sizes: Arc<BTreeMap<String, DirSize>>,
     /// The run of a listing still arriving (RC-060-02): `entries` are what came so far, and more
     /// follow (`commands/panel_listing.rs`); `None` once the listing is complete.
     pub listing: Option<u64>,
@@ -104,7 +106,7 @@ impl PanelState {
             filter: QuickFilter::default(),
             flat: None,
             archive: None,
-            dir_sizes: BTreeMap::new(),
+            dir_sizes: Arc::default(),
             listing: None,
             git: None,
         }

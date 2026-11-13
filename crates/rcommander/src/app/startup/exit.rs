@@ -12,6 +12,11 @@
 //! process. Whichever of the two comes first finishes, once ([`claim`]). Everything the session
 //! stores is stored before [`leave`] runs. The limits guard the exit and are no settings.
 //!
+//! The steps before [`leave`] - the server copies, an update handed over, the tabs and places,
+//! what PAM systems lent - are the window's (`quit.rs`) and get [`QUIT_LIMIT`] together
+//! (RC-110-27): a step that hangs is given up, and a second quit after the limit ends iced with
+//! the guard armed, whatever the first one still waits for.
+//!
 //! Each phase writes a `debug` line, which stays out of the database's error log (`warn` and
 //! `error` only).
 
@@ -30,6 +35,10 @@ use tokio::runtime::Handle;
 
 use crate::recover::LockOrRecover as _;
 use crate::{app::Message, mcp::McpServer};
+
+/// How long the window's steps before [`leave`] may take together: a check-in at a PAM system
+/// that answers takes well under a second, and every store is a few rows.
+pub(in crate::app) const QUIT_LIMIT: Duration = Duration::from_secs(5);
 
 /// How long the MCP server may take to stop.
 const MCP_LIMIT: Duration = Duration::from_secs(2);
@@ -127,7 +136,7 @@ pub(super) fn let_log_settle(runtime: &Handle) {
 }
 
 /// `future`'s output, or `None` once `limit` has passed: no step of the exit waits longer.
-pub(super) async fn within<F: Future>(limit: Duration, future: F) -> Option<F::Output> {
+pub(in crate::app) async fn within<F: Future>(limit: Duration, future: F) -> Option<F::Output> {
     tokio::time::timeout(limit, future).await.ok()
 }
 

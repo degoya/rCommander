@@ -113,6 +113,14 @@ pub fn parse_wsl_unc(path: &Path) -> Option<WslPath> {
     })
 }
 
+/// Whether names below `path` that differ only in case are different entries, on a backend that
+/// says `backend` of itself ([`crate::Capabilities::case_sensitive`]): a WSL distribution is a
+/// Linux file system behind the local backend, whatever Windows does elsewhere.
+#[must_use]
+pub fn case_sensitive_at(backend: bool, path: &Path) -> bool {
+    backend || parse_wsl_unc(path).is_some()
+}
+
 /// What a path reaches on another machine, from [`network_path`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkPath {
@@ -177,18 +185,6 @@ pub fn drive_letter(text: &str) -> Option<char> {
     match (chars.next(), chars.next()) {
         (Some(letter), Some(':')) if letter.is_ascii_alphabetic() => Some(letter),
         _ => None,
-    }
-}
-
-/// A name split at its last dot into stem and extension (without the dot), as Total Commander
-/// splits it: `notes.txt` is `("notes", "txt")`, `a.tar.gz` is `("a.tar", "gz")`. A dot that
-/// starts the name (`.bashrc`) or ends it (`notes.`) splits nothing: `("notes.", "")`. A
-/// folder's name is split like a file's.
-#[must_use]
-pub fn split_name(name: &str) -> (&str, &str) {
-    match name.rfind('.') {
-        Some(dot) if dot > 0 && dot + 1 < name.len() => (&name[..dot], &name[dot + 1..]),
-        _ => (name, ""),
     }
 }
 

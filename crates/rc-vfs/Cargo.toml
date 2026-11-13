@@ -22,6 +22,7 @@ encoding_rs.workspace = true
 filetime.workspace = true
 flate2.workspace = true
 lzma-rust2.workspace = true
+rc-recover = { path = "../rc-recover" }
 ruzstd.workspace = true
 rc-process = { path = "../rc-process" }
 secrecy.workspace = true

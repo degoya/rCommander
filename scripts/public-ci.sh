@@ -9,6 +9,8 @@
 # tree; the next export of the same name replaces it. A run of the same tree that another call on
 # this machine started, still going or green, is waited for instead of exported again - the
 # release chain's step beside a run started ahead of it (scripts/lib/public-ci.sh, the marker).
+# A run whose only red jobs GitHub cancelled without a step - no runner, macOS after 15 minutes -
+# is started again once it has ended (RC_PUBLIC_CI_RERUNS times, 1; RC-110-32).
 #
 # A wave's integration branch runs this on Windows before it is merged into development (the
 # `wave` skill); the release pipeline runs the candidate as ci/<version> (RC-100-32).
@@ -50,7 +52,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --platforms) [[ $# -ge 2 ]] || usage; platforms="$2"; shift 2 ;;
         --ref) [[ $# -ge 2 ]] || usage; ref="$2"; shift 2 ;;
-        -h | --help) sed -n '2,30p' "$0"; exit 0 ;;
+        -h | --help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown argument: $1" >&2; usage ;;
         *) [[ -z "$target" ]] || usage; target="$1"; shift ;;
     esac
@@ -70,7 +72,9 @@ git check-ref-format --branch "$public_branch" > /dev/null 2>&1 \
     || { echo "not a branch name: $public_branch" >&2; exit 2; }
 commit="$(git rev-parse --verify --quiet "$ref^{commit}")" \
     || { echo "no such branch or commit: $ref" >&2; exit 2; }
-tree="$(git rev-parse "$commit^{tree}")"
+# The tree a public runner sees: the commit's without what the export leaves out.
+tree="$(rc_public_tree "$ROOT" "$commit")" \
+    || { echo "the exported tree of $ref could not be computed" >&2; exit 1; }
 
 image_list="$(rc_public_ci_images "${platforms:-$RC_PUBLIC_CI_ALL}")" || exit 2
 images=()

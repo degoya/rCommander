@@ -40,7 +40,7 @@ impl DigestBuilder {
 /// Lowercase hex of `bytes`.
 #[must_use]
 pub fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    ::hex::encode(bytes)
 }
 
 /// Hex SHA-256 of `bytes`, the form every digest in a manifest takes.

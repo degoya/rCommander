@@ -211,6 +211,9 @@ fn one_of_each_own() -> Vec<EngineError> {
         EngineError::PropertyInvalid {
             reason: "a link needs its place",
         },
+        EngineError::CommentNotEncodable {
+            encoding: "Windows-1252",
+        },
         EngineError::SftpConnectionNotFound {
             connection: "web".to_owned(),
         },
@@ -332,7 +335,7 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::CommandLineFailed { .. }
             | EngineError::FilterInvalid { .. } => {}
             EngineError::ArchiveReadOnly | EngineError::NotAnArchive { .. } => {}
-            EngineError::PropertyInvalid { .. } => {}
+            EngineError::PropertyInvalid { .. } | EngineError::CommentNotEncodable { .. } => {}
             EngineError::SftpConnectionNotFound { .. }
             | EngineError::SftpConnectionAmbiguous { .. } => {}
             EngineError::SavedQueueNotFound { .. }

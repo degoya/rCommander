@@ -161,6 +161,7 @@ async fn a_tile_loads_through_the_engine_and_shows_and_one_off_screen_is_skipped
         source: Source::Picture,
         engine: harness.app.engine().clone(),
         disk: None,
+        disk_limit: 0,
         wanted: harness.app.thumbnails.wanted.clone(),
         gate: Arc::new(Semaphore::new(1)),
     };

@@ -349,12 +349,7 @@ fn terminal(reason: &str) -> WorkspaceError {
 
 /// The connection a location is on: a server's, over SFTP or FTP.
 pub(super) fn connection_of(location: &VfsPath) -> Option<ConnectionId> {
-    match location.backend {
-        BackendId::Sftp { connection_id } | BackendId::Ftp { connection_id } => {
-            Some(ConnectionId(connection_id))
-        }
-        _ => None,
-    }
+    location.backend.connection_id().map(ConnectionId)
 }
 
 fn check_location(location: &VfsPath, context: &SpecContext) -> Result<(), WorkspaceError> {

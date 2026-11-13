@@ -26,6 +26,7 @@
 
 mod members;
 // The writers and the feed are shared with the archive update (`update/`, RC-110-05).
+pub(crate) mod follow;
 pub(crate) mod sevenz;
 pub(crate) mod tar;
 pub(crate) mod write;
@@ -40,8 +41,10 @@ use rc_vfs::{EntryKind, LocalFs, Vfs, VfsError, VfsPath, long_path};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
-use self::write::{Feed, Member, Spec};
-use crate::recover::LogPanic as _;
+use self::{
+    follow::remove_temp,
+    write::{Feed, Member, Spec},
+};
 use crate::{
     Failure, JobState, OpsError,
     runner::{Runner, Step, Stop, attempt},
@@ -323,10 +326,9 @@ impl Runner {
         let (members, items): (Vec<Member>, Vec<Item>) =
             self.members(group, settings).into_iter().unzip();
         let temp = crate::temp_name::pack_path(&dest, self.job.id);
-        let (bytes, mut seen) = watch::channel(0_u64);
+        let (bytes, seen) = watch::channel(0_u64);
         let feed = Feed::new(Arc::clone(&self.src), self.job.control.clone(), bytes)
             .map_err(|error| OpsError::from_io(error, &group.dest))?;
-        let current = feed.current();
         let grown = feed.grown();
         let spec = Spec {
             members,
@@ -335,27 +337,12 @@ impl Runner {
             solid: settings.solid,
             temp: temp.clone(),
         };
-        let start = self.progress.bytes_done;
-        let mut task = tokio::task::spawn_blocking(move || write::write(&spec, &feed));
-        let joined = loop {
-            tokio::select! {
-                joined = &mut task => break joined,
-                changed = seen.changed() => {
-                    if changed.is_err() {
-                        break (&mut task).await;
-                    }
-                    let read = *seen.borrow_and_update();
-                    self.progress.bytes_done = start + read;
-                    if let Some(member) = current.get() {
-                        let at = self.src_path(&member.path);
-                        self.progress.begin_file(at, member.size);
-                        self.progress.file_bytes_done = read.saturating_sub(member.from);
-                    }
-                    self.tick(false);
-                }
-            }
-        };
-        let written = match joined.log_panic("ops.pack") {
+        let joined = self
+            .follow_blocking("ops.pack", feed, seen, move |feed| {
+                write::write(&spec, feed)
+            })
+            .await;
+        let written = match joined {
             Ok(written) => written,
             Err(_) => Err(write::panicked()),
         };
@@ -368,14 +355,7 @@ impl Runner {
             Err(error) => Some(OpsError::from_io(error, &group.dest)),
         };
         if let Some(error) = failed {
-            if let Err(left) = tokio::fs::remove_file(&temp).await
-                && left.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::warn!(
-                    path = %temp.display(),
-                    "an unfinished archive could not be removed: {left}"
-                );
-            }
+            remove_temp(&temp).await;
             if self.job.control.is_cancelled() {
                 return Err(Step::Stop(Stop::Cancelled));
             }

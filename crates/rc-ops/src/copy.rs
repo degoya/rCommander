@@ -41,7 +41,7 @@ use crate::{
     links::{LinkDone, is_dir_link},
     name::{check_target, keeps_windows_rules},
     runner::{Runner, Step, Stop, attempt},
-    staging::{Resolved, is_resumable, is_staged, open_part, remove_leftover},
+    staging::{Resolved, is_resumable, is_staged, open_part, remove_leftover, replace_by_rename},
     temp_name::part_path,
     walk::{Item, Subtrees},
 };
@@ -395,7 +395,8 @@ impl Runner {
     }
 
     /// Renames (moving within one backend) or streams the file to `dest`; whatever is left of
-    /// a copy that did not complete is removed.
+    /// a copy that did not complete is removed - but not the old file of an overwrite on a
+    /// device, and not a complete part whose old target is gone ([`Runner::settle`]).
     pub(crate) async fn copy_one(
         &mut self,
         item: &Item,
@@ -403,21 +404,19 @@ impl Runner {
         mode: WriteMode,
     ) -> Result<Moved, Step> {
         if self.rename_ok {
-            let renamed = if mode == WriteMode::CreateNew {
-                self.src.rename_no_replace(&item.path, dest).await
-            } else {
-                self.src.rename(&item.path, dest).await
+            let renamed = match mode {
+                WriteMode::CreateNew => self.src.rename_no_replace(&item.path, dest).await,
+                // A backend whose rename does not replace: the target goes first, and the
+                // source stays where it is when the rename after it fails.
+                WriteMode::Truncate => replace_by_rename(self.src.as_ref(), &item.path, dest)
+                    .await
+                    .map_err(|unreplaced| unreplaced.error),
+                WriteMode::Append => self.src.rename(&item.path, dest).await,
             };
             match renamed {
                 Ok(()) => return Ok(Moved::Renamed),
                 Err(VfsError::AlreadyExists { .. }) if mode == WriteMode::CreateNew => {
                     return Ok(Moved::Taken);
-                }
-                // A backend whose rename does not replace: the target goes first.
-                Err(VfsError::AlreadyExists { .. }) if mode == WriteMode::Truncate => {
-                    self.dst.remove_file(dest).await?;
-                    self.src.rename(&item.path, dest).await?;
-                    return Ok(Moved::Renamed);
                 }
                 Err(error) if falls_back(&error) => self.rename_ok = false,
                 Err(error) => return Err(error.into()),
@@ -440,12 +439,28 @@ impl Runner {
         let landed = self
             .land(item, (reader, writer), pair, written, hasher, 0)
             .await;
+        // An overwrite on a device keeps the old file until the new one is whole, and a stream
+        // let go leaves nothing: what is under the name after a failure is the old file
+        // (RC-110-25).
+        let mut keep = part.is_none()
+            && mode == WriteMode::Truncate
+            && matches!(self.dst_id, Some(BackendId::Device { .. }));
         let landed = match (landed, &part) {
-            (Ok(()), Some(part)) => self.settle(part, dest, mode).await,
+            (Ok(()), Some(part)) => match self.settle(part, dest, mode).await {
+                Ok(()) => Ok(()),
+                Err(unsettled) => {
+                    keep = unsettled.keep_part;
+                    Err(unsettled.step)
+                }
+            },
             (other, _) => other,
         };
         if let Err(step) = landed {
-            remove_leftover(self.dst.as_ref(), written).await;
+            // A copy that failed its check was written whole: the file there is the new one.
+            let checked = matches!(&step, Step::Fail(OpsError::VerifyFailed { .. }));
+            if !keep || checked {
+                remove_leftover(self.dst.as_ref(), written).await;
+            }
             return Err(step);
         }
         self.preserve(&item.entry, dest).await;

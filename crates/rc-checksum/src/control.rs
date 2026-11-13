@@ -188,6 +188,20 @@ impl Control {
         self.check()
     }
 
+    /// `work` - one read of a source - unless the run is cancelled first: the cancel is looked
+    /// at before `work` each time (`biased`), and `work` is dropped then. A backend that stalls
+    /// does not hold a cancel until its own time limit (RC-110-26).
+    pub(crate) async fn or_cancel<T>(
+        &self,
+        work: impl std::future::Future<Output = T>,
+    ) -> Result<T, ChecksumError> {
+        tokio::select! {
+            biased;
+            () = self.cancel.cancelled() => Err(ChecksumError::Cancelled),
+            done = work => Ok(done),
+        }
+    }
+
     /// Adds `files` files (parts, lines) of `bytes` bytes to what the run will handle.
     pub(crate) fn plan(&self, files: u64, bytes: u64) {
         self.counts.files_total.fetch_add(files, Ordering::Relaxed);

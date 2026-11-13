@@ -10,6 +10,11 @@
 #   scripts/fuzz.sh --seconds 300         # every target, 5 min each (the nightly run)
 #   scripts/fuzz.sh tc_ini osc            # only these
 #   scripts/fuzz.sh --list                # the targets, one per line (takes no lock)
+#   scripts/fuzz.sh --build               # only build every target (or the ones named): the
+#                                         # stage `fuzz-build` of scripts/check.sh --full, so a
+#                                         # change that breaks a target is seen before the nightly
+#                                         # run; the same build directory and flags as a run, so
+#                                         # either warms the other
 #
 # Every target starts from the corpus it has grown in earlier runs plus the repository's test
 # data for its parser (seeds(), copied in once). A finding is libFuzzer's input file under
@@ -28,7 +33,8 @@
 #   RC_FUZZ_TOOLCHAIN  the nightly (default RC_FUZZ_NIGHTLY of tool-versions.sh)
 #   RC_FUZZ_TIMEOUT    seconds one input may take before libFuzzer calls it a hang (default 25)
 #
-# Exit 0 when no target found anything; 1 when one found something or did not build or run;
+# Exit 0 when no target found anything (--build: every target built); 1 when one found something
+# or did not build or run;
 # 2 on wrong arguments; 3 when the nightly or cargo-fuzz is not installed (nothing was run).
 set -uo pipefail
 
@@ -57,18 +63,25 @@ rc_take_lock "$@"
 cd "$ROOT" || exit 1
 
 usage() {
-    echo "usage: scripts/fuzz.sh [<target>...] [--seconds N] | --list" >&2
+    echo "usage: scripts/fuzz.sh [<target>...] [--seconds N | --build] | --list" >&2
     exit 2
 }
 
 seconds=60
+build_only=0
+timed=0
 targets=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --seconds)
             [[ $# -ge 2 ]] || usage
             seconds="$2"
+            timed=1
             shift 2
+            ;;
+        --build)
+            build_only=1
+            shift
             ;;
         -*) usage ;;
         *)
@@ -78,6 +91,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 [[ "$seconds" =~ ^[1-9][0-9]*$ ]] || usage
+[[ "$build_only" -eq 0 || "$timed" -eq 0 ]] || usage
 TIMEOUT="${RC_FUZZ_TIMEOUT:-25}"
 if [[ ! "$TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
     echo "RC_FUZZ_TIMEOUT must be a positive whole number of seconds, not '$TIMEOUT'" >&2
@@ -95,7 +109,8 @@ for target in "${targets[@]}"; do
         exit 2
     fi
 done
-[[ "${#targets[@]}" -gt 0 ]] || targets=("${known[@]}")
+named="${#targets[@]}"
+[[ "$named" -gt 0 ]] || targets=("${known[@]}")
 
 TOOLCHAIN="${RC_FUZZ_TOOLCHAIN:-$RC_FUZZ_NIGHTLY}"
 installed="$(rustup toolchain list 2> /dev/null)"
@@ -167,6 +182,28 @@ seed() {
 # The main workspace's lock, so the targets fuzz the versions rCommander ships; cargo adds what
 # the fuzz workspace needs on top (libfuzzer-sys) and drops the rest.
 cp -- "$ROOT/Cargo.lock" "$ROOT/fuzz/Cargo.lock" || exit 1
+
+# --build: the targets compiled and linked as a run would, nothing run. Every target in one cargo
+# call unless some were named.
+if [[ "$build_only" -eq 1 ]]; then
+    echo "==> building ${targets[*]} on $TOOLCHAIN (jobs: $JOBS, log: $LOG/build.log)"
+    build_targets=("")
+    [[ "$named" -eq 0 ]] || build_targets=("${targets[@]}")
+    failed=0
+    for target in "${build_targets[@]}"; do
+        # shellcheck disable=SC2086  # an empty target is no argument: cargo-fuzz then builds all
+        CARGO_BUILD_JOBS="$JOBS" cargo "+$TOOLCHAIN" fuzz build --fuzz-dir "$ROOT/fuzz" \
+            --target-dir "$FUZZ_DIR/build" --debug-assertions $target >> "$LOG/build.log" 2>&1 < /dev/null \
+            || failed=1
+    done
+    if [[ "$failed" -eq 0 ]]; then
+        echo "==> ${#targets[@]} fuzz targets built"
+    else
+        echo "!! a fuzz target did not build; the end of $LOG/build.log:"
+        tail -n 40 "$LOG/build.log" | sed 's/^/   /'
+    fi
+    exit "$failed"
+fi
 
 echo "==> fuzzing ${targets[*]}: ${seconds} s each on $TOOLCHAIN (jobs: $JOBS, log: $LOG)"
 failed=0

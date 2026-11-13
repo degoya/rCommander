@@ -2,14 +2,29 @@
 //! file with links or another owner asked about, then a job of the queue - the copy into the
 //! server's folder through `<name>.rcpart` and a rename (RC-060-05) - or, after "Overwrite in
 //! place", a write into the file itself. The Unix mode of the baseline is given back where the
-//! backend has modes (the rename would leave the upload's own); the stat after it is the new
-//! baseline. One upload of a file runs at a time: saves meanwhile give one upload after it.
+//! backend has modes (the rename would leave the upload's own) - not after a write in place,
+//! which keeps the file's mode and is chosen where the file is someone else's, whose mode the
+//! server lets nobody else set (RC-110-25); a mode the server refuses is logged and fails no
+//! upload. The stat after it is the new baseline. One upload of a file runs at a time: saves
+//! meanwhile give one upload after it. A write in place outlives its edit's closing, unless it
+//! has stalled.
 
-use std::{path::Path, time::SystemTime};
+use std::{
+    io,
+    path::Path,
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    task::{Context, Poll},
+    time::{Duration, SystemTime},
+};
 
 use rc_ops::{ConflictChoice, JobKind, JobOptions, JobSpec};
-use rc_vfs::{SetAttributes, VfsError, VfsPath, WriteMode};
-use tokio::io::AsyncWriteExt as _;
+use rc_vfs::{SetAttributes, VfsError, VfsPath, WriteMode, WriteStream};
+use tokio::io::{AsyncWrite, AsyncWriteExt as _};
+use tokio_util::sync::CancellationToken;
 
 use super::{
     Baseline, RemoteEditChange, RemoteEditId, RemoteEditQuestion, RemoteEditState, UploadChoice,
@@ -20,6 +35,38 @@ use crate::{
     Engine, EngineError, Outcome,
     settings::{REMOTE_EDIT_CHECK_KEY, REMOTE_EDIT_UPLOAD_KEY},
 };
+
+/// How long a write in place whose edit was closed may take no byte before it is let go.
+pub(super) const IN_PLACE_STALL: Duration = Duration::from_secs(30);
+
+/// A write stream that counts the bytes its backend took: what tells a slow write from a
+/// stalled one.
+struct Counting {
+    inner: WriteStream,
+    taken: Arc<AtomicU64>,
+}
+
+impl AsyncWrite for Counting {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let polled = Pin::new(&mut self.inner).poll_write(context, bytes);
+        if let Poll::Ready(Ok(count)) = &polled {
+            self.taken.fetch_add(*count as u64, Ordering::Relaxed);
+        }
+        polled
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.inner).poll_flush(context)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.inner).poll_shutdown(context)
+    }
+}
 
 /// What a look at the server's file found.
 enum Found {
@@ -125,18 +172,20 @@ impl Engine {
 
     /// One upload of `id`; whether a save came meanwhile and the loop goes on.
     async fn upload_once(&self, id: RemoteEditId, choice: UploadChoice) -> bool {
-        let Ok((file, remote, baseline, dir)) = self.with_edit(id, |edit| {
+        let Ok((file, remote, baseline, dir, closed)) = self.with_edit(id, |edit| {
             edit.state = RemoteEditState::Uploading;
             (
                 edit.file.clone(),
                 edit.remote.clone(),
                 edit.baseline,
                 edit.dir.clone(),
+                edit.closed.clone(),
             )
         }) else {
             return false;
         };
         self.announce_edit(id, RemoteEditChange::State);
+        let stall = self.edits().stall.unwrap_or(IN_PLACE_STALL);
         let read = file.clone();
         let stamp = tokio::task::spawn_blocking(move || rules::local_stamp(&read))
             .await
@@ -144,7 +193,7 @@ impl Engine {
             .unwrap_or_default();
         let sent = match choice {
             UploadChoice::InPlace => self
-                .write_in_place(&file, &remote)
+                .write_in_place(&file, &remote, &closed, stall)
                 .await
                 .map_err(|error| error.code().to_owned()),
             UploadChoice::AsCopy => {
@@ -160,7 +209,7 @@ impl Engine {
         let after = match sent {
             Ok(()) if choice == UploadChoice::AsCopy => Ok(None),
             Ok(()) => self
-                .after_upload(&remote, baseline)
+                .after_upload(&remote, baseline, choice != UploadChoice::InPlace)
                 .await
                 .map(Some)
                 .map_err(|error| error.code().to_owned()),
@@ -256,36 +305,77 @@ impl Engine {
             .map_or_else(|| "cancelled".to_owned(), |failure| failure.code.clone()))
     }
 
-    /// Writes `file` into the server's file `remote` itself: links, owner and mode stay.
-    async fn write_in_place(&self, file: &Path, remote: &VfsPath) -> Result<(), EngineError> {
+    /// Writes `file` into the server's file `remote` itself: links, owner and mode stay. A
+    /// write whose edit is closed (`closed`: Done or Discard) still runs to its end - cut, it
+    /// would leave half of a file that was truncated - unless it has stalled: closed and no
+    /// byte taken for `stall`, it is let go instead of waited for (RC-110-26).
+    async fn write_in_place(
+        &self,
+        file: &Path,
+        remote: &VfsPath,
+        closed: &CancellationToken,
+        stall: Duration,
+    ) -> Result<(), EngineError> {
         self.open_server(remote).await?;
         let vfs = self.vfs(remote)?;
-        let io = |error| VfsError::from_io(error, &remote.path);
-        let mut reader = tokio::fs::File::open(file).await.map_err(io)?;
-        let mut writer = vfs.open_write(&remote.path, WriteMode::Truncate).await?;
-        tokio::io::copy(&mut reader, &mut writer)
-            .await
-            .map_err(io)?;
-        writer.shutdown().await.map_err(io)?;
-        Ok(())
+        let io = |error: io::Error| VfsError::from_io(error, &remote.path);
+        let taken = Arc::new(AtomicU64::new(0));
+        let write = async {
+            let mut reader = tokio::fs::File::open(file).await.map_err(io)?;
+            let mut writer = Counting {
+                inner: vfs.open_write(&remote.path, WriteMode::Truncate).await?,
+                taken: Arc::clone(&taken),
+            };
+            tokio::io::copy(&mut reader, &mut writer)
+                .await
+                .map_err(io)?;
+            writer.shutdown().await.map_err(io)
+        };
+        tokio::pin!(write);
+        tokio::select! {
+            written = &mut write => return Ok(written?),
+            () = closed.cancelled() => {}
+        }
+        let mut seen = taken.load(Ordering::Relaxed);
+        loop {
+            tokio::select! {
+                written = &mut write => return Ok(written?),
+                () = tokio::time::sleep(stall) => {
+                    let now = taken.load(Ordering::Relaxed);
+                    if now == seen {
+                        return Err(io(std::io::ErrorKind::TimedOut.into()).into());
+                    }
+                    seen = now;
+                }
+            }
+        }
     }
 
-    /// After an upload: the baseline's Unix mode given back where the backend has modes, and
-    /// the server's file as it is now - the new baseline.
+    /// After an upload: the baseline's Unix mode given back where the backend has modes and
+    /// the upload replaced the file (`give_mode`; a write in place kept it), and the server's
+    /// file as it is now - the new baseline. A mode the server refuses costs the mode, not the
+    /// upload: the bytes are there.
     async fn after_upload(
         &self,
         remote: &VfsPath,
         baseline: Baseline,
+        give_mode: bool,
     ) -> Result<Baseline, EngineError> {
         let vfs = self.vfs(remote)?;
-        if let Some(mode) = baseline.mode
+        if give_mode
+            && let Some(mode) = baseline.mode
             && vfs.capabilities().unix_mode
         {
             let change = SetAttributes {
                 mode: Some(mode),
                 readonly: None,
             };
-            vfs.set_attributes(&remote.path, change).await?;
+            if let Err(error) = vfs.set_attributes(&remote.path, change).await {
+                tracing::warn!(
+                    code = error.code(),
+                    "an uploaded server file did not get its mode back: {error}"
+                );
+            }
         }
         let mut now = Baseline::of(&vfs.stat(&remote.path).await?);
         now.mode = now.mode.or(baseline.mode);

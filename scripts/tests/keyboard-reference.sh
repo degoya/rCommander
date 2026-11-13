@@ -100,6 +100,7 @@ expect_status "without a wiki nothing is written" 2
 mkdir -p "$TREE/scripts/lib"
 cp "$ROOT/scripts/keyboard-reference.sh" "$TREE/scripts/"
 cp "$ROOT/scripts/lib/keyboard_reference.py" "$ROOT/scripts/lib/mcp_coverage.py" "$TREE/scripts/lib/"
+cp "$ROOT/scripts/lib/generators.sh" "$TREE/scripts/lib/"
 git init -q "$TREE"
 run_status env -u RC_WIKI "$TREE/scripts/keyboard-reference.sh" --check
 expect_status "no wiki beside the checkout: --check passes" 0
@@ -109,7 +110,11 @@ run_status env -u RC_WIKI "$TREE/scripts/keyboard-reference.sh" --check
 expect_status "no wiki, but the data is still checked" 2
 cp "$ROOT/crates/rcommander/src/app/palette/reach.json" "$REACH"
 mkdir -p "$SCRATCH/rcommander.wiki"
-run_status env -u RC_WIKI "$TREE/scripts/keyboard-reference.sh" --check
+# Where the page has to fit this branch (RC-110-33, rc_wiki_strict) it is stale; elsewhere a notice.
+run_status env -u RC_WIKI RC_WIKI_STRICT=1 "$TREE/scripts/keyboard-reference.sh" --check
 expect_status "a wiki beside the checkout without the page is stale" 1
+run_status env -u RC_WIKI RC_WIKI_STRICT=0 "$TREE/scripts/keyboard-reference.sh" --check
+expect_status "on a branch the wiki is not written for: no failure" 0
+expect_output "but a notice" "does not fit this branch"
 
 finish_tests keyboard-reference

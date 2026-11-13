@@ -360,9 +360,22 @@ async fn an_mcp_load_judges_each_entry() {
     let out = VfsPath::local(root.join("out"));
     let key = copy(VfsPath::local(root.join(".ssh")), out.clone());
     let plain = copy(VfsPath::local(root.join("a.txt")), out.clone());
+    let moved = JobSpec {
+        kind: JobKind::Move {
+            sources: vec![VfsPath::local(root.join("b.txt"))],
+            target: out.clone(),
+        },
+        options: JobOptions::default(),
+    };
     engine.ops().load(key, list).expect("held");
     engine.ops().load(plain, list).expect("held");
+    engine.ops().load(moved, list).expect("held");
     let saved = save(&engine, list).await;
+    // RC-110-19: the sources the list's moves take away, the copies' left out.
+    assert_eq!(
+        engine.saved_queue_moved(saved.id).await.expect("the moves"),
+        [VfsPath::local(root.join("b.txt"))]
+    );
 
     let places = engine
         .saved_queue_places(saved.id)
@@ -373,6 +386,7 @@ async fn an_mcp_load_judges_each_entry() {
         [
             (VfsPath::local(root.join(".ssh")), out.join(".ssh")),
             (VfsPath::local(root.join("a.txt")), out.join("a.txt")),
+            (VfsPath::local(root.join("b.txt")), out.join("b.txt")),
         ]
     );
     let judge: crate::read_guard::ReadJudge = |path| {
@@ -389,7 +403,7 @@ async fn an_mcp_load_judges_each_entry() {
     else {
         panic!("loaded");
     };
-    assert_eq!(jobs.len(), 1, "the plain copy loads");
+    assert_eq!(jobs.len(), 2, "the plain copy and the move load");
     assert_eq!(
         unloadable
             .iter()

@@ -4,7 +4,6 @@
 //! as in Total Commander.
 
 use rc_engine::{Chord, Command, ConnectionId, Outcome, PanelView, SessionStatus};
-use rc_vfs::BackendId;
 
 use super::{ConnMsg, ConnectionManager, jobs::Then, run, vault::Retry};
 use crate::{
@@ -76,9 +75,7 @@ impl App {
         {
             return None;
         }
-        let (BackendId::Ftp { connection_id } | BackendId::Sftp { connection_id }) =
-            self.pane(self.active).state.path.backend
-        else {
+        let Some(connection_id) = self.pane(self.active).state.path.backend.connection_id() else {
             return Some(Vec::new());
         };
         let disconnect = Command::DisconnectSession {

@@ -56,3 +56,39 @@ fn a_backend_is_usable_as_a_trait_object() {
     let backend: Arc<dyn Vfs> = Arc::new(LocalFs::new());
     assert!(backend.capabilities().rename_across_dirs);
 }
+
+#[test]
+fn a_server_is_sftp_or_ftp_and_names_its_connection() {
+    let sftp = BackendId::Sftp { connection_id: 3 };
+    let ftp = BackendId::Ftp { connection_id: -4 };
+    assert!(sftp.is_server() && ftp.is_server());
+    assert_eq!(sftp.connection_id(), Some(3));
+    assert_eq!(ftp.connection_id(), Some(-4));
+    let archive = VfsPath::archive(VfsPath::local("/a.zip"), super::ArchiveFormat::Zip, "/");
+    let device = BackendId::Device {
+        device: "phone".to_owned(),
+    };
+    for other in [
+        BackendId::Local,
+        BackendId::Memory(1),
+        archive.backend,
+        device,
+    ] {
+        assert!(!other.is_server(), "{other:?}");
+        assert_eq!(other.connection_id(), None, "{other:?}");
+    }
+}
+
+#[test]
+fn a_location_names_its_last_part() {
+    assert_eq!(
+        VfsPath::local("/data/track.flac").file_name().as_deref(),
+        Some("track.flac")
+    );
+    assert_eq!(
+        VfsPath::local("/data/music/").file_name().as_deref(),
+        Some("music")
+    );
+    assert_eq!(VfsPath::local("/").file_name(), None);
+    assert_eq!(VfsPath::local("/data/..").file_name(), None);
+}

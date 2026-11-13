@@ -7,14 +7,16 @@
 # The steps and their order: scripts/lib/release-plan.sh.
 #
 # Usage:
-#   scripts/release-pipeline.sh 0.9.0             # everything up to the tag and a local public
-#                                                 # export; pushes nothing
-#   scripts/release-pipeline.sh 0.9.0 --push      # ... with the public CI before the tag, and
-#                                                 # pushes main, development, the tag, the public
-#                                                 # export, the wiki and the website
+#   scripts/release-pipeline.sh 0.9.0             # everything up to the tag, the public export,
+#                                                 # wiki and website staged locally; pushes nothing
+#   scripts/release-pipeline.sh 0.9.0 --push      # ... with the public CI beside the checks and
+#                                                 # before the tag, and pushes main, development,
+#                                                 # the tag, the public export, the wiki and the
+#                                                 # website
 #   scripts/release-pipeline.sh 0.9.0 --resume    # continue the run the log started; after a
 #                                                 # change of the tree every step but preflight
-#                                                 # runs again
+#                                                 # runs again - before the tag; after it only
+#                                                 # the unchanged tree is published
 #   scripts/release-pipeline.sh 0.9.0 --plan      # print the steps and exit
 #   scripts/release-pipeline.sh 0.9.0-beta.1      # a pre-release: no merge into main, the tag on
 #                                                 # development, the public export alone
@@ -22,6 +24,9 @@
 # Started detached by scripts/release-start.sh. Every start and every --push only on the owner's
 # word (.claude/skills/release). There is no --skip, --no-verify or --force: every flag this
 # script does not have is a green it cannot report falsely.
+#
+# The release commit comes before the checks (RC-110-31): test, the packages, the public CI and
+# the tag all see one tree, and the gate refuses the tag when a marker says otherwise.
 #
 # Takes the build lock (scripts/lib/lock.sh) for the whole run; the locked scripts it calls hold
 # the same one. Never wrap it in flock.
@@ -70,9 +75,9 @@ if [[ "$PLAN_ONLY" -eq 1 ]]; then
     for id in "${RC_RELEASE_STEPS[@]}"; do
         if why="$(rc_release_step_skipped "$id" "$DO_PUSH" "$PRERELEASE")"; then
             echo "  - $id ($why)"
-        elif [[ "$id" == publish-public && "$PRERELEASE" -eq 1 ]]; then
+        elif [[ "$id" == *-public && "$PRERELEASE" -eq 1 ]]; then
             echo "  - $id (the public export only: no wiki, no website)"
-        elif [[ "$id" == publish-public && "$DO_PUSH" -eq 0 ]]; then
+        elif [[ "$id" == stage-public ]]; then
             echo "  - $id (committed locally, not pushed)"
         else
             echo "  - $id"
@@ -102,13 +107,14 @@ if [[ "$RESUME" -eq 1 ]]; then
     [[ -n "$NONCE" ]] || { echo "$LOG has no run header to resume" >&2; exit 1; }
     logged="$(rc_release_logged_version "$LOG")"
     [[ "$logged" == "$VERSION" ]] || { echo "$LOG is evidence for $logged, not $VERSION" >&2; exit 1; }
+    rc_release_plan_check "$LOG" "$NONCE" || exit 1
     printf '##RC-RESUME nonce=%s push=%s at=%s\n' "$NONCE" "$DO_PUSH" "$(date -Is)" >> "$LOG"
     echo "==> resuming run $NONCE from $LOG"
 else
     NONCE="$(date +%s)-$$-$RANDOM"
-    printf '##RC-RELEASE version=%s nonce=%s push=%s head=%s branch=%s started=%s host=%s\n' \
+    printf '##RC-RELEASE version=%s nonce=%s push=%s head=%s branch=%s started=%s host=%s plan=%s\n' \
         "$VERSION" "$NONCE" "$DO_PUSH" "$(git rev-parse HEAD)" "$(git rev-parse --abbrev-ref HEAD)" \
-        "$(date -Is)" "$(hostname)" > "$LOG"
+        "$(date -Is)" "$(hostname)" "$RC_RELEASE_PLAN" > "$LOG"
 fi
 
 if [[ -n "${RELEASE_PIPELINE_LIB:-}" ]]; then
@@ -116,7 +122,9 @@ if [[ -n "${RELEASE_PIPELINE_LIB:-}" ]]; then
     return 0 2> /dev/null || exit 0
 fi
 
-[[ "$RESUME" -eq 0 ]] || resume_tree_check | tee -a "$LOG"
+if [[ "$RESUME" -eq 1 ]] && ! resume_tree_check 2>&1 | tee -a "$LOG"; then
+    exit 1
+fi
 
 for id in "${RC_RELEASE_STEPS[@]}"; do
     if why="$(rc_release_step_skipped "$id" "$DO_PUSH" "$PRERELEASE")"; then

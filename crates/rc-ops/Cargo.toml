@@ -17,6 +17,7 @@ flate2.workspace = true
 # Checksum files, split and combine as jobs (RC-020-05).
 rc-checksum = { path = "../rc-checksum" }
 lzma-rust2.workspace = true
+rc-recover = { path = "../rc-recover" }
 # The steps of a multi-rename job (`JobKind::Rename`).
 rc-rename = { path = "../rc-rename" }
 rc-vfs = { path = "../rc-vfs" }

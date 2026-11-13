@@ -1,5 +1,5 @@
-//! What the tests share: a local file system in a temporary folder, and one that cancels a run
-//! half way.
+//! What the tests share: a local file system in a temporary folder, one that cancels a run
+//! half way, and one whose files never yield a byte.
 
 use std::{
     path::Path,
@@ -94,4 +94,55 @@ impl rc_vfs::testing::Forward for Tripwire {
             left: self.after,
         }))
     }
+}
+
+/// The local file system, except that every stream it opens for reading yields its first
+/// `after` bytes and then nothing more, without ending: a server that stopped answering.
+pub(crate) struct Stalled {
+    pub(crate) inner: LocalFs,
+    pub(crate) after: u64,
+}
+
+struct StalledReader {
+    inner: ReadStream,
+    left: u64,
+}
+
+impl AsyncRead for StalledReader {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        if self.left == 0 {
+            return Poll::Pending;
+        }
+        let before = buf.filled().len();
+        let polled = Pin::new(&mut self.inner).poll_read(cx, buf);
+        let read = (buf.filled().len() - before) as u64;
+        self.left = self.left.saturating_sub(read);
+        polled
+    }
+}
+
+#[async_trait]
+impl rc_vfs::testing::Forward for Stalled {
+    fn inner(&self) -> &dyn Vfs {
+        &self.inner
+    }
+    async fn open_read(&self, path: &Path) -> rc_vfs::Result<ReadStream> {
+        Ok(Box::new(StalledReader {
+            inner: self.inner.open_read(path).await?,
+            left: self.after,
+        }))
+    }
+}
+
+/// Cancels `control` shortly, from another task: a cancel that meets a read under way.
+pub(crate) fn cancel_soon(control: &crate::Control) {
+    let control = control.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        control.cancel();
+    });
 }

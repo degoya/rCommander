@@ -59,17 +59,9 @@ STAGE="$OUT/rcommander-$version-windows-x64"
 ZIP="$OUT/rcommander-$version-windows-x64.zip"
 echo "==> packaging rCommander $version for $TARGET (profile: $profile, jobs: $JOBS)"
 
-# The commit and the time, exported so the binary and VERSION.txt name the same ones (build.rs
-# takes them verbatim). An existing package of this version from another build stops the run.
-commit="$(rc_package_commit)"
-rc_package_guard "$ZIP" "$(basename "$STAGE")/VERSION.txt" "$commit"
-RC_BUILD_COMMIT="$commit"
-RC_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-export RC_BUILD_COMMIT RC_BUILD_TIME
-
-plugins=()
-plugin_list="$(rc_package_plugins "$ROOT" "$prebuilt")"
-while IFS= read -r package; do [[ -z "$package" ]] || plugins+=("$package"); done <<< "$plugin_list"
+# The commit and the time of the build, after the guard; then the bundled plugins (lib/package.sh).
+rc_package_begin "$ZIP" "$(basename "$STAGE")/VERSION.txt"
+rc_package_plugin_list "$ROOT" "$prebuilt"
 
 # cargo-xwin brings the MSVC libraries to WSL; on Windows itself cargo has them.
 build=(xwin build)
@@ -90,11 +82,7 @@ install -m 755 "$binary" "$STAGE/rcommander.exe"
 if [[ "$profile" == release-test && -f "${binary%.exe}.pdb" ]]; then
     install -m 644 "${binary%.exe}.pdb" "$STAGE/rcommander.pdb"
 fi
-install -m 644 README.md LICENSE NOTICE "$STAGE/"
-mkdir -p "$STAGE/plugins"
-install -m 644 "${plugins[@]}" "$STAGE/plugins/"
-printf '%s\n' "rCommander $version" "commit $RC_BUILD_COMMIT" "built $RC_BUILD_TIME" \
-    "target $TARGET, profile $profile" > "$STAGE/VERSION.txt"
+rc_package_payload "$STAGE" "$version" "$TARGET" "$profile"
 
 echo "==> writing $ZIP"
 rc_package_zip "$OUT" "$(basename "$STAGE")" "$ZIP"

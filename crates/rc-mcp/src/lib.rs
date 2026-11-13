@@ -42,6 +42,7 @@ mod test_support;
 mod token;
 mod tools;
 mod unc;
+mod workspace_shown;
 
 pub use codes::ALL_CODES;
 pub use guard::sensitive_path;

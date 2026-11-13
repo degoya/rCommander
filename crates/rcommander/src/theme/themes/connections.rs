@@ -90,10 +90,7 @@ pub fn set_assigned(assigned: Assigned) {
 /// The connection a location is on: a server's, over SFTP or FTP; `None` on this machine, in an
 /// archive or in WSL.
 pub fn connection_of(path: &VfsPath) -> Option<i64> {
-    match path.backend {
-        BackendId::Sftp { connection_id } | BackendId::Ftp { connection_id } => Some(connection_id),
-        _ => None,
-    }
+    path.backend.connection_id()
 }
 
 /// The WSL distribution whose share `path` is on, either UNC form; `None` anywhere else.

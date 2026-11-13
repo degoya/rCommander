@@ -41,6 +41,7 @@ mod hostkeys;
 mod icons;
 mod intercepts;
 mod keys;
+mod known;
 mod list_window;
 mod login_scripts;
 mod mcp_confirm;
@@ -341,13 +342,7 @@ impl App {
                 return self.open_file_dialog(panel, dialog);
             }
             Message::Engine(EngineEvent::Job { job, change }) => {
-                self.archive_test_result(job, &change);
-                self.checksum_result(job, &change);
-                let renamed = self.multi_rename_job(job, &change);
-                let mut effects = self.drag_job(job, &change);
-                effects.extend(self.on_job(job, change));
-                effects.extend(renamed);
-                return effects;
+                return self.job_changed(job, change);
             }
             Message::Engine(EngineEvent::SettingChanged { key })
                 if file_ops::settings_concern(&key) =>

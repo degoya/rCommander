@@ -1,6 +1,7 @@
 //! The Explorer's context menu for entries of a local folder (RC-080-02), where the system has
 //! one: Windows (`windows/context_menu.rs`). Elsewhere [`show`] has none and the window draws
-//! rCommander's own menu (`app/context_menu.rs`).
+//! rCommander's own menu (`app/context_menu.rs`) - as it does for more than [`MAX_NAMES`]
+//! entries, which the shell would resolve one by one on the window's thread (RC-110-29).
 
 use std::path::PathBuf;
 
@@ -8,6 +9,12 @@ use iced::Task;
 
 /// Whether this system has a shell menu at all.
 pub const AVAILABLE: bool = cfg!(windows);
+
+/// The most entries the shell's menu is made for: the shell resolves each name against the disk
+/// on the window's thread before the menu opens, which a selection of thousands - or hundreds on
+/// a slow share - holds for seconds. A safety limit, not a setting; past it rCommander's own
+/// menu opens, which acts on the whole selection.
+pub const MAX_NAMES: usize = 500;
 
 /// What the shell menu is asked for.
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +31,13 @@ pub struct ShellRequest {
     pub own: Vec<String>,
     /// Where the menu opens.
     pub anchor: Anchor,
+}
+
+impl ShellRequest {
+    /// Whether it names more entries than the shell's menu is made for.
+    pub fn too_many(&self) -> bool {
+        self.names.len() > MAX_NAMES
+    }
 }
 
 /// Where the shell menu opens.
@@ -59,15 +73,24 @@ pub enum ShellOutcome {
 }
 
 /// The shell menu for `request` on the app's window, modal on the window's thread; `None` where
-/// the system has none.
-#[cfg(windows)]
+/// the system has none, and for more entries than [`MAX_NAMES`].
 pub fn show(request: ShellRequest) -> Option<Task<ShellOutcome>> {
+    if request.too_many() {
+        return None;
+    }
+    native(request)
+}
+
+#[cfg(windows)]
+fn native(request: ShellRequest) -> Option<Task<ShellOutcome>> {
     Some(super::windows::context_menu::task(request))
 }
 
-/// The shell menu for `request` on the app's window, modal on the window's thread; `None` where
-/// the system has none.
 #[cfg(not(windows))]
-pub fn show(_request: ShellRequest) -> Option<Task<ShellOutcome>> {
+fn native(_request: ShellRequest) -> Option<Task<ShellOutcome>> {
     None
 }
+
+#[cfg(test)]
+#[path = "shell_menu_tests.rs"]
+mod tests;

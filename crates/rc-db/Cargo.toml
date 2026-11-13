@@ -11,6 +11,7 @@ publish = false
 # The digest of a staged restore (RC-080-09).
 blake3.workspace = true
 directories.workspace = true
+rc-recover = { path = "../rc-recover" }
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true

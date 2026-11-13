@@ -32,6 +32,7 @@ clap.workspace = true
 ed25519-dalek.workspace = true
 # The portable Linux archive (`.tar.gz`) the switch unpacks.
 flate2.workspace = true
+hex.workspace = true
 rand.workspace = true
 rc-process = { path = "../rc-process" }
 # The update check and the download over https (RC-100-05): rustls with the platform verifier,

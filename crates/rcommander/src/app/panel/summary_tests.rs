@@ -1,6 +1,8 @@
 //! The status line's numbers: a selection change counts only the names that changed, and comes
 //! to what a count of the whole folder says (RC-080-53).
 
+use std::collections::BTreeMap;
+
 use rc_engine::{
     DirSize, Entry, EntryKind, ListMode, PanelState, PanelView, Selection, SortOrder, VfsPath,
 };
@@ -42,7 +44,7 @@ fn folder() -> PanelState {
         filter: Default::default(),
         flat: None,
         archive: None,
-        dir_sizes: [("inner".to_owned(), DirSize::Bytes(500))].into(),
+        dir_sizes: BTreeMap::from([("inner".to_owned(), DirSize::Bytes(500))]).into(),
         columns: Default::default(),
         listing: None,
         git: None,

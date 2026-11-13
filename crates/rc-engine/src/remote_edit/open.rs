@@ -20,11 +20,6 @@ use crate::{
 /// The most links followed to the file they lead to.
 const MAX_HOPS: usize = 8;
 
-/// Whether `backend` is a server whose files are edited through a copy.
-pub(crate) fn is_server(backend: &BackendId) -> bool {
-    matches!(backend, BackendId::Sftp { .. } | BackendId::Ftp { .. })
-}
-
 /// How a server file is to be opened.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct OpenRemote {
@@ -102,6 +97,7 @@ impl Engine {
             question: None,
             uploading: false,
             again: false,
+            closed: tokio_util::sync::CancellationToken::new(),
         };
         let id = self.adopt_edit(edit).await?;
         self.announce_edit(id, RemoteEditChange::Opened);
@@ -135,11 +131,8 @@ impl Engine {
 
     /// The connection's name and user for the backend `backend`.
     async fn server_of(&self, backend: &BackendId) -> (String, Option<String>) {
-        let id = match backend {
-            BackendId::Sftp { connection_id } | BackendId::Ftp { connection_id } => {
-                ConnectionId(*connection_id)
-            }
-            _ => return (String::new(), None),
+        let Some(id) = backend.connection_id().map(ConnectionId) else {
+            return (String::new(), None);
         };
         if let Ok(db) = self.db()
             && let Ok(connection) = db.connection(id).await
@@ -236,17 +229,13 @@ pub(super) fn clean(snapshot: &JobSnapshot) -> bool {
 
 /// The file name of `target`.
 fn file_name(target: &VfsPath) -> Result<String, EngineError> {
-    target
-        .path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .ok_or_else(|| {
-            rc_vfs::VfsError::InvalidPath {
-                path: target.path.clone(),
-                reason: "no file name",
-            }
-            .into()
-        })
+    target.file_name().ok_or_else(|| {
+        rc_vfs::VfsError::InvalidPath {
+            path: target.path.clone(),
+            reason: "no file name",
+        }
+        .into()
+    })
 }
 
 /// Hands `file` to `program`, or to the system's program for it, off the async threads.

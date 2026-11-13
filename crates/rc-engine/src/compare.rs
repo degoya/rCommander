@@ -22,7 +22,6 @@ use std::path::Path;
 
 use rc_vfs::{Entry, Vfs, VfsError, VfsPath, unix_seconds};
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncReadExt as _;
 use tokio_util::sync::CancellationToken;
 
 use crate::EngineError;
@@ -293,17 +292,19 @@ async fn read_bounded(
     side: Side<'_>,
     cancel: &CancellationToken,
 ) -> Result<Option<Vec<u8>>, EngineError> {
+    read_within(side, TEXT_DIFF_LIMIT, cancel).await
+}
+
+/// A whole file, or `None` when it is larger than `limit` bytes.
+async fn read_within(
+    side: Side<'_>,
+    limit: u64,
+    cancel: &CancellationToken,
+) -> Result<Option<Vec<u8>>, EngineError> {
     if cancel.is_cancelled() {
         return Err(EngineError::Cancelled);
     }
-    let stream = side.vfs.open_read(&side.path.path).await?;
-    let mut bytes = Vec::new();
-    stream
-        .take(TEXT_DIFF_LIMIT + 1)
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(|error| VfsError::from_io(error, &side.path.path))?;
-    Ok((bytes.len() as u64 <= TEXT_DIFF_LIMIT).then_some(bytes))
+    Ok(rc_vfs::read_within(side.vfs, &side.path.path, limit).await?)
 }
 
 pub(crate) fn read_failure(

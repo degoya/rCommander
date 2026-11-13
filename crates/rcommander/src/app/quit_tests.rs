@@ -1,15 +1,21 @@
 //! F10 closes a dialog as Escape does and quits without one; the question before quitting with
 //! unfinished jobs; `keys.f10` narrows the key or switches it off (owner, 2026-10-18; RC-080-17).
 
-use std::{fs, path::Path, time::Duration};
+use std::{
+    fs,
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use rc_db::Db;
 use rc_engine::{Command, EngineEvent, settings::F10_KEY};
 use serde_json::json;
 use tempfile::TempDir;
 
-use super::{F10Mode, QuitMsg, f10, f10_mode};
-use crate::app::{Message, harness::Harness, settings::SettingsMessage};
+use super::{F10Mode, QuitMsg, before_exit, f10, f10_mode};
+use crate::app::{
+    Effect, Message, harness::Harness, settings::SettingsMessage, startup::QUIT_LIMIT,
+};
 
 /// The left panel on `root` with `abc.txt`, the right one on `out`, and a database.
 async fn harness(root: &Path, db: Db) -> Harness {
@@ -208,4 +214,48 @@ async fn the_main_windows_close_request_asks_while_a_job_waits() {
     harness.settle().await;
     assert_eq!(harness.app.quit.asking, None);
     assert!(harness.app.quit.leaving, "switched off: it ends");
+}
+
+/// RC-110-27: a step before the exit that never ends holds the quit for the limit, no longer;
+/// steps that end in time are run to their end.
+#[tokio::test]
+async fn a_hanging_step_holds_the_quit_for_the_limit_at_most() {
+    let limit = Duration::from_millis(100);
+    let start = Instant::now();
+    before_exit(limit, std::future::pending()).await;
+    let took = start.elapsed();
+    assert!(took >= limit, "{took:?}");
+    assert!(took < Duration::from_secs(5), "{took:?}");
+
+    let mut ran = false;
+    before_exit(Duration::from_secs(5), async { ran = true }).await;
+    assert!(ran, "steps in time are not cut");
+}
+
+/// RC-110-27: on the way out a second quit starts nothing while the first has its limit; once
+/// the limit has passed - a step hangs - it ends the app itself.
+#[tokio::test]
+async fn a_second_quit_after_the_limit_ends_the_app() {
+    let root = TempDir::new().expect("temp dir");
+    let mut harness = harness(root.path(), Db::open_in_memory().await.expect("db")).await;
+    let wanted = Message::Engine(EngineEvent::Quit { unfinished: 0 });
+
+    let first = harness.app.apply(wanted.clone());
+    assert!(matches!(first[..], [Effect::Task(_)]), "the steps start");
+    assert!(harness.app.quit.leaving);
+    assert!(harness.app.quit.left_at.is_some(), "the limit runs");
+
+    let within = harness.app.apply(wanted.clone());
+    assert!(
+        within.is_empty(),
+        "within the limit the first quit works on"
+    );
+
+    // The limit has passed and the app is still there.
+    let long_ago = Instant::now()
+        .checked_sub(QUIT_LIMIT)
+        .expect("the machine runs longer than the limit");
+    harness.app.quit.left_at = Some(long_ago);
+    let after = harness.app.apply(wanted);
+    assert!(matches!(after[..], [Effect::Task(_)]), "the exit itself");
 }

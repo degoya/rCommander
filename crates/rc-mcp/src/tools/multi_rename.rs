@@ -13,7 +13,9 @@
 //! against the guard before anything is renamed, and one sensitive name refuses the whole run
 //! with `sensitive_path`. Both are held against the write guard as well (`guard_write.rs`,
 //! RC-080-09): a folder renamed to `autostart` beside `.config` is refused with
-//! `protected_target`.
+//! `protected_target`, and so is a folder above rCommander's program or data folder (RC-110-19):
+//! renaming it takes the program away as a move does. What else lies below a renamed folder is
+//! not judged - it stays in the folder.
 //!
 //! The presets are rules saved under a name (Total Commander's saved settings, RC-020-02); they
 //! rename nothing and are `write` tools for the settings they change.
@@ -324,6 +326,12 @@ impl RcMcpServer {
                 if let Some(refusal) = guard.refuse(&dir.join(name)).await {
                     return Some(refusal);
                 }
+                // A rename takes the entry away from its name (RC-110-19): no folder above
+                // the program's or the data folder either, judged by name - the tree below is
+                // not read. An undo takes the new name, so both are judged.
+                if let Some(refusal) = guard.refuse_renaming(&dir.join(name)).await {
+                    return Some(refusal);
+                }
             }
         }
         None
@@ -360,7 +368,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Rename entries of one folder by masks (or a list of new_names), case, search and replace and counter, as a background job of the operations queue: the plan is made again from the folder as it is, and nothing is renamed when it has a conflict (rename_plan_conflicts - run multi_rename_preview to see which). Swaps, rings and case-only changes go through temporary names; no entry is ever overwritten. When a step fails while entries are under temporary names, the job reverses its own steps with the setting rename.undo_on_failure on (the default); the failed job's report (ops_list) says rename_stopped with rolled_back, or lists each parked entry (temp, old, new). Answers with the run and its queued job (follow it with ops_list); the run is kept for multi_rename_undo. Keys and credential files, and new names that would look like one, are refused with sensitive_path; names in rCommander's data folder, an SSH folder or an autostart folder, or of a shell's start-up file, with protected_target. Each step is its own run: a second multi_rename_undo goes on to the run before. Errors also: rename_no_changes, rename_busy, database_unavailable."
+        description = "Rename entries of one folder by masks (or a list of new_names), case, search and replace and counter, as a background job of the operations queue: the plan is made again from the folder as it is, and nothing is renamed when it has a conflict (rename_plan_conflicts - run multi_rename_preview to see which). Swaps, rings and case-only changes go through temporary names; no entry is ever overwritten. When a step fails while entries are under temporary names, the job reverses its own steps with the setting rename.undo_on_failure on (the default); the failed job's report (ops_list) says rename_stopped with rolled_back, or lists each parked entry (temp, old, new). Answers with the run and its queued job (follow it with ops_list); the run is kept for multi_rename_undo. Keys and credential files, and new names that would look like one, are refused with sensitive_path; names in rCommander's data folder, an SSH folder or an autostart folder, or of a shell's start-up file, and a folder that holds rCommander's program or data folder, with protected_target. Each step is its own run: a second multi_rename_undo goes on to the run before. Errors also: rename_no_changes, rename_busy, database_unavailable."
     )]
     pub(crate) async fn multi_rename_apply(
         &self,
@@ -399,7 +407,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Reverse the latest multi-rename as far as it got (also one cancelled half way, or broken off by a crash), as a background job. Refused as a whole, renaming nothing, when an entry of it was renamed, removed or its old name taken since (rename_undo_mismatch names them). A run that renamed a key or credential file, or gave a file such a name, is refused with sensitive_path. Errors also: rename_nothing_to_undo, rename_undo_incomplete, rename_busy."
+        description = "Reverse the latest multi-rename as far as it got (also one cancelled half way, or broken off by a crash), as a background job. Refused as a whole, renaming nothing, when an entry of it was renamed, removed or its old name taken since (rename_undo_mismatch names them). A run that renamed a key or credential file, or gave a file such a name, is refused with sensitive_path, one that renamed an entry in a protected place or a folder holding rCommander's program or data folder with protected_target. Errors also: rename_nothing_to_undo, rename_undo_incomplete, rename_busy."
     )]
     pub(crate) async fn multi_rename_undo(
         &self,

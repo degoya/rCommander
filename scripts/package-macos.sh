@@ -81,17 +81,9 @@ APP="$STAGE/rCommander.app"
 ZIP="$OUT/rcommander-$version-macos-$arch.zip"
 echo "==> packaging rCommander $version for $TARGET (profile: $profile, jobs: $JOBS)"
 
-# The commit and the time, exported so the binary and VERSION.txt name the same ones (build.rs
-# takes them verbatim). An existing package of this version from another build stops the run.
-commit="$(rc_package_commit)"
-rc_package_guard "$ZIP" "rCommander.app/Contents/Resources/VERSION.txt" "$commit"
-RC_BUILD_COMMIT="$commit"
-RC_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-export RC_BUILD_COMMIT RC_BUILD_TIME
-
-plugins=()
-plugin_list="$(rc_package_plugins "$ROOT" "$prebuilt")"
-while IFS= read -r package; do [[ -z "$package" ]] || plugins+=("$package"); done <<< "$plugin_list"
+# The commit and the time of the build, after the guard; then the bundled plugins (lib/package.sh).
+rc_package_begin "$ZIP" "rCommander.app/Contents/Resources/VERSION.txt"
+rc_package_plugin_list "$ROOT" "$prebuilt"
 
 echo "==> building rcommander"
 CARGO_BUILD_JOBS="$JOBS" cargo build --locked --profile "$profile" --target "$TARGET" \
@@ -102,14 +94,9 @@ binary="${CARGO_TARGET_DIR:-$ROOT/target}/$TARGET/$profile/rcommander"
 
 echo "==> assembling $APP"
 rm -rf "$STAGE" "$ZIP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/plugins"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 install -m 755 "$binary" "$APP/Contents/MacOS/rcommander"
-install -m 644 README.md LICENSE NOTICE "$APP/Contents/Resources/"
-if [[ ${#plugins[@]} -gt 0 ]]; then
-    install -m 644 "${plugins[@]}" "$APP/Contents/Resources/plugins/"
-fi
-printf '%s\n' "rCommander $version" "commit $RC_BUILD_COMMIT" "built $RC_BUILD_TIME" \
-    "target $TARGET, profile $profile" > "$APP/Contents/Resources/VERSION.txt"
+rc_package_payload "$APP/Contents/Resources" "$version" "$TARGET" "$profile"
 # The brand icon lives beside the crate's resources (RC-100-30 moved it out of docs/, which the
 # public export drops); docs/assets/ only in a checkout from before that move.
 icon=crates/rcommander/resources/brand/rCommander-icon.png

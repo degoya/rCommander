@@ -16,18 +16,15 @@
 #
 # Every finding is printed with what fixes it; the exit is 1 when there is any.
 
+# shellcheck source=changelog.sh
+source "$(dirname "${BASH_SOURCE[0]}")/changelog.sh"
+
 # The `- ` entries of the section of file $1 whose heading line is exactly $2 or, with $3 = prefix,
-# begins with $2; nothing when there is no such section.
+# begins with $2; nothing and 1 when there is no such section.
 rc_section_entries() {
-    awk -v heading="$2" -v mode="${3:-exact}" '
-        /^## / {
-            inside = (mode == "prefix") ? (index($0, heading) == 1) : ($0 == heading)
-            if (inside) found = 1
-            next
-        }
-        inside && /^- / { print }
-        END { if (!found) exit 1 }
-    ' "$1"
+    local section
+    section="$(rc_doc_section "$1" "$2" "${3:-exact}")" || return 1
+    sed -n '/^- /p' <<< "$section"
 }
 
 rc_release_docs_check() {

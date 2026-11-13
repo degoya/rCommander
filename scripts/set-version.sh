@@ -24,6 +24,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/workspace-version.sh"
 # shellcheck source=lib/changelog.sh
 source "$ROOT/scripts/lib/changelog.sh"
+# shellcheck source=lib/release-tag.sh
+source "$ROOT/scripts/lib/release-tag.sh"
 cd "$ROOT"
 
 usage() {
@@ -43,7 +45,8 @@ for argument in "$@"; do
             ;;
     esac
 done
-if [[ -n "$wanted" && ! "$wanted" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+# Any pre-release suffix: a release's own forms are scripts/lib/release-tag.sh's.
+if [[ -n "$wanted" && ! "$wanted" =~ ^${RC_VERSION_CORE}(-[0-9A-Za-z.-]+)?$ ]]; then
     echo "!! '$wanted' is not a version (X.Y.Z, optionally -pre)" >&2
     exit 2
 fi

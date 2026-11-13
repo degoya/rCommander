@@ -19,12 +19,15 @@ trap 'rm -rf "$SCRATCH"' EXIT
 source "$ROOT/scripts/tests/lib/expect.sh"
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=test \
     GIT_COMMITTER_EMAIL=test@example.invalid GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
-unset RC_RELEASE_BRANCH
+unset RC_RELEASE_BRANCH RC_RELEASE_REMOTE_TIMEOUT
+# No public clone unless a case makes one: the real one would be asked over the network.
+export RC_PUBLIC_DIR="$SCRATCH/no-public"
 
 BASE="$SCRATCH/base"
 mkdir -p "$BASE/scripts/lib"
 cp "$ROOT/scripts/release-start.sh" "$BASE/scripts/"
-cp "$ROOT/scripts/lib/release-tag.sh" "$ROOT/scripts/lib/release-docs.sh" "$BASE/scripts/lib/"
+cp "$ROOT/scripts/lib/release-tag.sh" "$ROOT/scripts/lib/release-docs.sh" "$ROOT/scripts/lib/changelog.sh" \
+    "$ROOT/scripts/lib/tool-versions.sh" "$BASE/scripts/lib/"
 cat > "$BASE/scripts/release-pipeline.sh" << 'EOF'
 #!/usr/bin/env bash
 echo "$*" > "$RC_RELEASE_RUN_DIR/pipeline-args"
@@ -95,6 +98,31 @@ expect_output "saying where" "on 'other'"
 start_case tagged 'git tag v9.9.9' 9.9.9
 expect_status "the tag taken: refused" 1
 expect_output "saying so" "tag v9.9.9 already exists"
+
+# --push asks the remotes before anything detaches (RC-110-33).
+start_case no-origin 'git remote set-url origin "$PWD/gone.git"' 9.9.9 --push
+expect_status "--push with an origin that does not answer: refused" 1
+expect_output "naming it" "origin does not answer"
+expect_true "and nothing started" '[[ ! -e "$RC_RELEASE_RUN_DIR/pipeline-args" ]]'
+start_case no-origin-local 'git remote set-url origin "$PWD/gone.git"' 9.9.9
+expect_status "without --push the remote is not asked" 0
+chain_exit > /dev/null
+start_case remote-tag 'git -C "$BASE" tag v9.9.9' 9.9.9 --push
+expect_status "--push with the tag on origin already: refused" 1
+expect_output "saying so" "origin already has tag v9.9.9"
+git -C "$BASE" tag -d v9.9.9 > /dev/null
+git init -q --bare "$SCRATCH/public.git"
+git clone -q "$SCRATCH/public.git" "$SCRATCH/public" 2> /dev/null
+git -C "$SCRATCH/public" commit -q --allow-empty -m "Release 9.9.9"
+git -C "$SCRATCH/public" tag v9.9.9
+git -C "$SCRATCH/public" push -q origin v9.9.9
+RC_PUBLIC_DIR="$SCRATCH/public" start_case public-tag ':' 9.9.9 --push
+expect_status "--push with the tag in the public repository already: refused" 1
+expect_output "saying so" "the public repository already has tag v9.9.9"
+RC_PUBLIC_DIR="$SCRATCH/public" start_case public-free ':' 9.9.8-beta.1 --push
+expect_true "a public repository without the tag does not refuse" \
+    '! grep -qF "the public repository" <<< "$output"'
+chain_exit > /dev/null
 
 start_case notes 'printf "# Release notes\n" > RELEASE-NOTES.md' 9.9.9
 expect_status "no release notes for the version: refused" 1

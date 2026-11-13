@@ -1,9 +1,14 @@
 # shellcheck shell=bash
-# shellcheck disable=SC2154  # the globals are release-pipeline.sh's, which sources this file
+# shellcheck disable=SC2153,SC2154  # the globals are release-pipeline.sh's, which sources this file
 #
-# The release chain's steps from preflight to verify-artifacts (scripts/release-pipeline.sh; the
-# order and the reasons: scripts/lib/release-plan.sh). Expects VERSION, NONCE, PRERELEASE,
+# The release chain's steps that check and build: preflight, version-bump and test to
+# verify-artifacts (scripts/release-pipeline.sh; the order and the reasons:
+# scripts/lib/release-plan.sh). Expects VERSION, NONCE, PRERELEASE,
 # DO_PUSH, RELEASE_BRANCH, MAIN_BRANCH and the working directory at the checkout root.
+
+# rc_package_version_txt, the reader of a package's VERSION.txt.
+# shellcheck source=package.sh
+source "$(dirname "${BASH_SOURCE[0]}")/package.sh"
 
 # The cargo processes that build, one `<pid> <command line>` each: named exactly `cargo`, with a
 # subcommand that builds. Not `pgrep -f`, which counts every shell whose command line names one.
@@ -37,7 +42,7 @@ step_preflight() {
     fi
     git rev-parse -q --verify "refs/heads/$MAIN_BRANCH" > /dev/null || {
         echo "there is no branch '$MAIN_BRANCH' to merge the release into" >&2; return 1; }
-    for tool in cargo cargo-nextest python3 zip aarch64-linux-gnu-gcc; do
+    for tool in cargo cargo-nextest python3 zip; do
         command -v "$tool" > /dev/null || { echo "missing tool: $tool" >&2; return 1; }
     done
     cargo xwin --version > /dev/null 2>&1 || { echo "missing: cargo xwin" >&2; return 1; }
@@ -71,22 +76,20 @@ step_version_bump() {
 step_test() { scripts/check.sh --full; }
 
 # The packages are checks: the release's assets come from the tag's release.yml. They are built
-# from the bumped, not yet committed tree, so VERSION.txt names `<commit>-dirty`; RC_REPACK=1 lets
-# the release candidate replace an earlier local package of the same version, which the release
-# is the one build of.
+# from the release commit (RC-110-31), so VERSION.txt names it; RC_REPACK=1 lets the release
+# candidate replace an earlier local package of the same version, which the release is the one
+# build of.
 step_package_windows() { RC_REPACK=1 scripts/package-windows.sh --profile release; }
 step_package_linux_x64() { RC_REPACK=1 scripts/package-linux.sh --profile release --arch x64; }
-step_package_linux_arm64() { RC_REPACK=1 scripts/package-linux.sh --profile release --arch arm64; }
 
 # The archives, as the asset names of release.yml spell them, and what each must carry.
 rc_release_archives() {
     printf '%s\n' "artifacts/windows/rcommander-$1-windows-x64.zip" \
-        "artifacts/linux/rcommander-$1-linux-x64.tar.gz" \
-        "artifacts/linux/rcommander-$1-linux-arm64.tar.gz"
+        "artifacts/linux/rcommander-$1-linux-x64.tar.gz"
 }
 
 step_verify_artifacts() {
-    local expected archive failed=0
+    local expected archive failed=0 stem version_txt
     expected="$(scripts/build-plugins.sh --list | wc -l)" || return 1
     echo "bundled plugins expected: $expected"
     while IFS= read -r archive; do
@@ -95,27 +98,32 @@ step_verify_artifacts() {
             failed=1
             continue
         fi
-        python3 -I - "$archive" "$VERSION" "$expected" << 'PY' || failed=1
+        stem="$(basename "$archive")"
+        stem="${stem%.zip}"
+        stem="${stem%.tar.gz}"
+        # VERSION.txt through the package scripts' own reader (lib/package.sh); empty when it
+        # cannot be read.
+        version_txt="$(rc_package_version_txt "$archive" "$stem/VERSION.txt" || true)"
+        python3 -I - "$archive" "$VERSION" "$expected" "$stem" "$version_txt" << 'PY' || failed=1
 import sys
 import tarfile
 import zipfile
 
-archive, version, expected = sys.argv[1], sys.argv[2], int(sys.argv[3])
-stem = archive.rsplit("/", 1)[-1].removesuffix(".zip").removesuffix(".tar.gz")
+archive, version, expected, stem = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+lines = sys.argv[5].splitlines()
 problems = []
-names, lines = [], []
+names = []
 try:
     if zipfile.is_zipfile(archive):
         with zipfile.ZipFile(archive) as package:
             names = package.namelist()
-            text = package.read(f"{stem}/VERSION.txt")
     else:
         with tarfile.open(archive) as package:
             names = package.getnames()
-            text = package.extractfile(f"{stem}/VERSION.txt").read()
-    lines = text.decode("utf-8").splitlines()
-except (OSError, KeyError, AttributeError, UnicodeDecodeError, tarfile.TarError, zipfile.BadZipFile) as error:
-    problems.append(f"no readable VERSION.txt ({error})")
+except (OSError, tarfile.TarError, zipfile.BadZipFile) as error:
+    problems.append(f"not readable ({error})")
+if not lines:
+    problems.append("no readable VERSION.txt")
 if lines and lines[0] != f"rCommander {version}":
     problems.append(f"VERSION.txt names '{lines[0]}'")
 if lines and not any(line.endswith("profile release") for line in lines):

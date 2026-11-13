@@ -167,7 +167,7 @@ fn call(command: Command) -> Vec<Effect> {
 
 impl App {
     /// The saved lists read again for the open window.
-    pub(super) fn read_saved_lists(&self) -> Vec<Effect> {
+    pub(in crate::app) fn read_saved_lists(&self) -> Vec<Effect> {
         if self.queue_window.is_none() {
             return Vec::new();
         }

@@ -4,23 +4,18 @@
 //! changes, kept for the run as the own commands are (`user_commands/known.rs`), so the context
 //! menu offers a file's commands without asking the engine while it opens.
 
-use std::sync::RwLock;
-
 use rc_engine::Associations;
 
-use crate::recover::RwLockOrRecover as _;
+use crate::app::known::Known;
 
-static KNOWN: RwLock<Option<Associations>> = RwLock::new(None);
+static KNOWN: Known<Option<Associations>> = Known::new("associations.known", None);
 
 /// The rules and switches from now on.
 pub fn set(associations: Associations) {
-    *KNOWN.write_or_recover("associations.known") = Some(associations);
+    KNOWN.set(Some(associations));
 }
 
 /// The rules and switches; none and switched off before the first read.
 pub fn get() -> Associations {
-    KNOWN
-        .read_or_recover("associations.known")
-        .clone()
-        .unwrap_or_default()
+    KNOWN.get().unwrap_or_default()
 }

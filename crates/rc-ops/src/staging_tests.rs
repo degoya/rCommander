@@ -1,6 +1,11 @@
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
-use rc_vfs::BackendId;
+use async_trait::async_trait;
+use rc_vfs::{BackendId, MemoryFs};
+use tokio::io::AsyncWriteExt as _;
 
 use super::*;
 
@@ -72,4 +77,116 @@ fn a_foreign_mode_is_held_to_the_umask() {
     };
     assert_eq!(kept_mode(0o775, &archive), foreign_mode(0o775));
     assert_eq!(kept_mode(0o775, &BackendId::Local), 0o775);
+}
+
+/// A server as SFTP version 3 is one: its rename never replaces, and - `full` - refuses to
+/// rename onto a name that is free, as a quota reached after the old file went would.
+struct Version3 {
+    fs: MemoryFs,
+    full: AtomicBool,
+    /// The server has a rename that replaces.
+    posix: bool,
+}
+
+impl Version3 {
+    async fn with(posix: bool) -> Self {
+        let fs = MemoryFs::new();
+        for (path, bytes) in [("/f.txt.rcpart", b"new"), ("/f.txt", b"old")] {
+            let mut file = fs
+                .open_write(Path::new(path), WriteMode::CreateNew)
+                .await
+                .expect("open");
+            file.write_all(bytes).await.expect("write");
+            file.shutdown().await.expect("close");
+        }
+        Self {
+            fs,
+            full: AtomicBool::new(false),
+            posix,
+        }
+    }
+
+    async fn holds(&self, path: &str) -> Option<u64> {
+        self.fs.stat(Path::new(path)).await.ok().map(|at| at.size)
+    }
+}
+
+#[async_trait]
+impl rc_vfs::testing::Forward for Version3 {
+    fn inner(&self) -> &dyn Vfs {
+        &self.fs
+    }
+    async fn rename(&self, from: &Path, to: &Path) -> rc_vfs::Result<()> {
+        if self.fs.stat(to).await.is_ok() {
+            return Err(VfsError::AlreadyExists {
+                path: to.to_path_buf(),
+            });
+        }
+        if self.full.load(Ordering::SeqCst) {
+            return Err(VfsError::PermissionDenied {
+                path: to.to_path_buf(),
+            });
+        }
+        self.fs.rename(from, to).await
+    }
+    async fn rename_replacing(&self, from: &Path, to: &Path) -> rc_vfs::Result<()> {
+        if self.posix {
+            return self.fs.rename(from, to).await;
+        }
+        rc_vfs::testing::Forward::rename(self, from, to).await
+    }
+}
+
+const PART: &str = "/f.txt.rcpart";
+const TARGET: &str = "/f.txt";
+
+/// RC-110-25: where the rename does not replace, the old target goes first and the file takes
+/// its name.
+#[tokio::test]
+async fn a_rename_that_does_not_replace_removes_the_target_first() {
+    let server = Version3::with(false).await;
+    replace_by_rename(&server, Path::new(PART), Path::new(TARGET))
+        .await
+        .expect("replaced");
+    assert_eq!(server.holds(TARGET).await, Some(3));
+    assert_eq!(server.holds(PART).await, None);
+}
+
+/// RC-110-25, the failure of the second rename: the old target is gone, and the caller is told
+/// that the file it wanted to rename is the only copy left - which is still there.
+#[tokio::test]
+async fn a_failed_rename_after_the_removal_says_the_target_is_gone() {
+    let server = Version3::with(false).await;
+    server.full.store(true, Ordering::SeqCst);
+    let unreplaced = replace_by_rename(&server, Path::new(PART), Path::new(TARGET))
+        .await
+        .expect_err("refused");
+    assert!(unreplaced.target_gone);
+    assert_eq!(unreplaced.error.code(), "permission_denied");
+    assert_eq!(server.holds(TARGET).await, None, "the old file went");
+    assert_eq!(server.holds(PART).await, Some(3), "the new one stays");
+}
+
+/// A rename that replaces is one step: nothing is removed first, even where the plain rename
+/// would refuse.
+#[tokio::test]
+async fn a_rename_that_replaces_never_removes_the_target() {
+    let server = Version3::with(true).await;
+    server.full.store(true, Ordering::SeqCst);
+    replace_by_rename(&server, Path::new(PART), Path::new(TARGET))
+        .await
+        .expect("replaced");
+    assert_eq!(server.holds(TARGET).await, Some(3));
+    assert_eq!(server.holds(PART).await, None);
+}
+
+/// A refusal before anything was removed leaves both files, and says so.
+#[tokio::test]
+async fn a_missing_file_fails_with_the_target_still_there() {
+    let server = Version3::with(false).await;
+    let unreplaced = replace_by_rename(&server, Path::new("/none.rcpart"), Path::new("/free.txt"))
+        .await
+        .expect_err("not found");
+    assert!(!unreplaced.target_gone);
+    assert_eq!(server.holds(TARGET).await, Some(3));
 }

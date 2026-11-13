@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --repo) REPO="${2:?--repo needs owner/name}"; shift 2 ;;
         --job) job_id="${2:?--job needs a job id}"; shift 2 ;;
-        -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         https://github.com/*/actions/runs/*)
             REPO="$(sed -E 's#^https://github.com/([^/]+/[^/]+)/.*#\1#' <<< "$1")"
             run_id="$(sed -E 's#.*/actions/runs/([0-9]+).*#\1#' <<< "$1")"

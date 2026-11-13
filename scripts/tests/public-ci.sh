@@ -9,7 +9,8 @@
 # call for the same tree running nothing, a red run and a red job ending the wait with the branch
 # kept and nothing recorded, no run within the timeout, `gh auth status` timing out (retried,
 # exit 1) apart from gh not signed in (exit 2), a run of the same tree another call
-# started waited for instead of exported again (and when not), a wrong platform and a wrong ref.
+# started waited for instead of exported again (and when not), a run whose jobs never got a runner
+# started again once and only once (RC-110-32), a wrong platform and a wrong ref.
 #
 # Pure bash and git, a few seconds.
 #
@@ -61,9 +62,11 @@ git_quiet clone -q "$ORIGIN" "$PUBLIC" 2> /dev/null
 git_quiet -C "$PUBLIC" commit -q --allow-empty -m first
 git_quiet -C "$PUBLIC" push -q origin HEAD:main
 
-# The stand-in gh: `run list` prints $RC_FAKE/runs (already in the --jq shape) and moves the
-# clock by ten seconds; `run view <id> --json jobs` prints $RC_FAKE/jobs-<id>; `workflow run`
-# is noted in dispatch.log.
+# The stand-in gh: `run list` prints $RC_FAKE/runs (already in the --jq shape), moves the
+# clock by ten seconds and then puts $RC_FAKE/runs.next, when there, in its place; `run view <id>
+# --json jobs` prints $RC_FAKE/jobs-<id>; `workflow run` is noted in dispatch.log; `run rerun
+# <id>` is noted in rerun.log and puts $RC_FAKE/runs.rerun and jobs-<id>.rerun, when there, in
+# the place of runs and jobs-<id> (else the run stays as it was).
 cat > "$BIN/gh" << 'SH'
 #!/usr/bin/env bash
 case "$1 $2" in
@@ -74,8 +77,13 @@ case "$1 $2" in
     "workflow run") echo "$*" >> "$RC_FAKE/dispatch.log" ;;
     "run list")
         echo $(( $(cat "$RC_PUBLIC_CI_CLOCK") + 10 )) > "$RC_PUBLIC_CI_CLOCK"
-        cat "$RC_FAKE/runs" 2> /dev/null || true ;;
+        cat "$RC_FAKE/runs" 2> /dev/null || true
+        [[ ! -e "$RC_FAKE/runs.next" ]] || mv "$RC_FAKE/runs.next" "$RC_FAKE/runs" ;;
     "run view") cat "$RC_FAKE/jobs-$3" 2> /dev/null || true ;;
+    "run rerun")
+        echo "$*" >> "$RC_FAKE/rerun.log"
+        [[ ! -e "$RC_FAKE/runs.rerun" ]] || mv "$RC_FAKE/runs.rerun" "$RC_FAKE/runs"
+        [[ ! -e "$RC_FAKE/jobs-$3.rerun" ]] || mv "$RC_FAKE/jobs-$3.rerun" "$RC_FAKE/jobs-$3" ;;
     *) echo "unexpected gh $*" >&2; exit 9 ;;
 esac
 SH
@@ -83,7 +91,7 @@ chmod +x "$BIN/gh"
 
 public_ci() {
     echo 0 > "$FAKE/clock"
-    rm -f "$FAKE/export.log" "$FAKE/dispatch.log" "$FAKE/ci-log.log"
+    rm -f "$FAKE/export.log" "$FAKE/dispatch.log" "$FAKE/ci-log.log" "$FAKE/rerun.log"
     run_status env PATH="$BIN:$PATH" RC_FAKE="$FAKE" RC_PUBLIC_DIR="$PUBLIC" RC_PUBLIC_CI_POLL=0 RC_PUBLIC_CI_AUTH_PAUSE=0 \
         RC_PUBLIC_CI_TIMEOUT=60 RC_PUBLIC_CI_CLOCK="$FAKE/clock" "$TREE/scripts/public-ci.sh" "$@"
 }
@@ -186,6 +194,78 @@ expect_true "a branch moved on since: exported" '[[ -e "$FAKE/export.log" ]]'
 mark "$(public_head ci/0.9.0) $TREE_ID ubuntu-24.04"
 public_ci ci/0.9.0 --platforms ubuntu-24.04
 expect_true "a run already red: exported again" '[[ -e "$FAKE/export.log" ]]'
+
+# RC-110-32: a job GitHub cancelled without a single step never got a runner (macOS, after 15
+# minutes in the queue). Its run is started again once it has ended, once; a job that failed, or
+# was cancelled while it ran, is red as before.
+url=https://github.com/x/y/actions/runs
+starved="no-runner: rust (macos-15), macos-package (aarch64)"
+printf '%s\n' "106 completed cancelled $url/106 CI" > "$FAKE/runs"
+printf '%s\n' "106 completed success $url/106 CI" > "$FAKE/runs.rerun"
+printf '%s\n' "$starved" > "$FAKE/jobs-106"
+: > "$FAKE/jobs-106.rerun"
+public_ci ci/0.9.0 --platforms ubuntu-24.04-arm
+expect_status "a run whose jobs never got a runner, green when run again" 0
+expect "is started again once, its failed jobs only" "run rerun 106 --repo degoya/rCommander --failed" "$(cat "$FAKE/rerun.log")"
+expect_output "saying which jobs" "rust (macos-15), macos-package (aarch64) never got a runner; started again"
+expect_true "its green is recorded" 'grep -q "^$TREE_ID ubuntu-24.04-arm " "$VERIFIED"'
+
+printf '%s\n' "107 completed cancelled $url/107 CI" > "$FAKE/runs"
+printf '%s\n' "$starved" > "$FAKE/jobs-107"
+public_ci ci/0.9.0 --platforms macos-15
+expect_status "without a runner again after the second start: red" 1
+expect "after one new start, not two" 1 "$(wc -l < "$FAKE/rerun.log")"
+expect_output "named as that" "run 107: cancelled ($url/107); rust (macos-15), macos-package (aarch64) never got a runner"
+expect_true "the branch is kept" 'remote_has ci/0.9.0'
+expect_true "and nothing is recorded" '! grep -q " macos-15 " "$VERIFIED"'
+
+printf '%s\n' "108 in_progress - $url/108 CI" > "$FAKE/runs"
+printf '%s\n' "108 completed failure $url/108 CI" > "$FAKE/runs.next"
+printf '%s\n' "108 completed success $url/108 CI" > "$FAKE/runs.rerun"
+printf '%s\n' "$starved" > "$FAKE/jobs-108"
+: > "$FAKE/jobs-108.rerun"
+public_ci ci/0.9.0 --platforms ubuntu-24.04
+expect_status "a job without a runner in a run still going is waited out, then started again" 0
+expect "once the run has ended" 1 "$(wc -l < "$FAKE/rerun.log")"
+
+printf '%s\n' "109 in_progress - $url/109 CI" > "$FAKE/runs"
+printf '%s\n' "rust (windows-2025): failure ($url/109/job/3)" > "$FAKE/jobs-109"
+public_ci ci/0.9.0 --platforms macos-15
+expect_status "a job that failed is red at once, as before" 1
+expect_true "and nothing is started again" '[[ ! -e "$FAKE/rerun.log" ]]'
+
+printf '%s\n' "110 completed cancelled $url/110 CI" > "$FAKE/runs"
+printf '%s\n' "$starved" > "$FAKE/jobs-110"
+RC_PUBLIC_CI_RERUNS=0 public_ci ci/0.9.0 --platforms macos-15
+expect_status "RC_PUBLIC_CI_RERUNS=0: red at once" 1
+expect_true "nothing is started again" '[[ ! -e "$FAKE/rerun.log" ]]'
+rm -f "$FAKE"/runs.* "$FAKE"/jobs-*
+
+# The green belongs to the tree the export leaves (RC-110-33): a commit that changes only what
+# scripts/public-exclude.txt names keeps it, one that changes anything else does not.
+mkdir -p "$TREE/docs"
+printf '%s\n' '# what the public repository does not get' 'docs/' 'AGENTS.md  # the working card' \
+    > "$TREE/scripts/public-exclude.txt"
+echo "one" > "$TREE/docs/notes.md"
+git_quiet -C "$TREE" add -A && git_quiet -C "$TREE" commit -qm "the exclude list"
+EXPORTED="$(rc_public_tree "$TREE" HEAD)"
+expect_true "the exported tree is the commit's without docs/" \
+    '[[ "$EXPORTED" != "$(git -C "$TREE" rev-parse "HEAD^{tree}")" ]] && ! git -C "$TREE" ls-tree -r --name-only "$EXPORTED" | grep -q "^docs/"'
+printf '%s\n' "111 completed success $url/111 CI" > "$FAKE/runs"
+public_ci ci/0.9.0 --platforms windows
+expect_true "its green is recorded for the exported tree" '[[ $status -eq 0 ]] && grep -q "^$EXPORTED windows-2025 " "$VERIFIED"'
+echo "two" > "$TREE/docs/notes.md"
+echo "the card" > "$TREE/AGENTS.md"
+git_quiet -C "$TREE" add -A && git_quiet -C "$TREE" commit -qm "documents only"
+public_ci ci/0.9.0 --platforms windows
+expect_status "a commit that changes only what the export leaves out" 0
+expect_output "keeps the green" "nothing was run"
+expect_true "without an export" '[[ ! -e "$FAKE/export.log" ]]'
+expect "and the index of the checkout is untouched" "" "$(git -C "$TREE" status --porcelain)"
+echo "three" > "$TREE/README.md"
+git_quiet -C "$TREE" add -A && git_quiet -C "$TREE" commit -qm "a public file"
+public_ci ci/0.9.0 --platforms windows
+expect_true "a commit that changes a public file is run again" '[[ $status -eq 0 && -e "$FAKE/export.log" ]]'
 
 public_ci ci/0.9.0 --platforms beos
 expect_status "an unknown platform is a wrong call" 2

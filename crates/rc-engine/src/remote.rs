@@ -270,11 +270,7 @@ impl Engine {
 
 /// Whether `path` lies on the server of connection `id`, over SFTP or FTP.
 fn shows_connection(path: &VfsPath, id: ConnectionId) -> bool {
-    matches!(
-        path.backend,
-        BackendId::Sftp { connection_id } | BackendId::Ftp { connection_id }
-            if connection_id == id.0
-    )
+    path.backend.connection_id() == Some(id.0)
 }
 
 #[cfg(test)]

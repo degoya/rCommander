@@ -21,6 +21,9 @@
 //!   selection, and so can letting go of the mouse;
 //!   Ctrl+V pastes text, Shift selects while the program takes the mouse, and a program's OSC 52
 //!   copy reaches the app ([`Event::Copy`], [`CopySettings`]).
+//! - **The whole mouse for a program that asked for it** (RC-110-28): the wheel as buttons 64
+//!   and 65 and the middle and right button, not only the left one; Shift keeps them for the
+//!   widget.
 //! - **Drawn without the lock.** A frame copies the cells that show anything while the terminal
 //!   is locked and draws them after (RC-080-46); a wide glyph spans its two cells, a combining
 //!   mark stays with its glyph.

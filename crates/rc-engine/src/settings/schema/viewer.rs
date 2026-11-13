@@ -12,7 +12,9 @@
 //! offers a photo's EXIF as a second view (RC-100-99), on by default and not protected: it only
 //! shows what the file holds. Whether certificates and keys open as their report and tree, and
 //! how many days before its end a certificate warns (RC-110-08); neither is protected - the
-//! report never shows private key material either way, and that is no setting.
+//! report never shows private key material either way, and that is no setting. How long Quick
+//! View waits for the cursor to rest on a server, a device or in an archive before it reads the
+//! entry (RC-110-28); not protected: it only trades a wait for requests.
 
 use super::{Choice, SettingKind, SettingPage, SettingSpec};
 
@@ -52,6 +54,12 @@ pub const CERT_EXPIRY_WARNING_DAYS_KEY: &str = "viewer.cert_expiry_warning_days"
 /// Whether F3 with marked files lets N and P step through the marked ones only, as Total
 /// Commander's Lister does (RC-100-91); off, they step through every file of the panel.
 pub const STEP_THROUGH_SELECTION_KEY: &str = "viewer.step_through_selection";
+/// The milliseconds the cursor rests on an entry that is not on a local disk before Quick View
+/// lists or opens it; 0 reads at every step. Local folders are read at once either way.
+pub const QUICK_VIEW_PAUSE_KEY: &str = "viewer.quick_view_pause_ms";
+/// What `viewer.quick_view_pause_ms` holds until it is changed, and its upper end.
+pub const QUICK_VIEW_PAUSE_DEFAULT_MS: i64 = 300;
+pub const QUICK_VIEW_PAUSE_MAX_MS: i64 = 2000;
 
 /// On the Appearance page beside the viewer's font: the dialog has no page of the viewer's own.
 pub(super) const MARKDOWN_PREVIEW: SettingSpec = SettingSpec {
@@ -195,6 +203,20 @@ pub(super) const CERT_EXPIRY_WARNING_DAYS: SettingSpec = SettingSpec {
     },
     label: "setting.viewer.cert_expiry_warning_days",
     help: "setting.viewer.cert_expiry_warning_days.help",
+    protected: false,
+    restart: false,
+};
+
+pub(super) const QUICK_VIEW_PAUSE: SettingSpec = SettingSpec {
+    key: QUICK_VIEW_PAUSE_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Int {
+        min: 0,
+        max: QUICK_VIEW_PAUSE_MAX_MS,
+        default: QUICK_VIEW_PAUSE_DEFAULT_MS,
+    },
+    label: "setting.viewer.quick_view_pause_ms",
+    help: "setting.viewer.quick_view_pause_ms.help",
     protected: false,
     restart: false,
 };

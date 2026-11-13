@@ -159,6 +159,11 @@ impl Engine {
     /// The file `target` inside an archive, unpacked into a folder of its own under the system's
     /// temporary folder and marked read-only, for a program of the system to open. Nothing is
     /// written back into the archive.
+    ///
+    /// # Errors
+    ///
+    /// `invalid_name` for an entry whose name is not one plain file name; the backend's or the
+    /// disk's error otherwise.
     pub(crate) async fn unpack_to_temp(&self, target: &VfsPath) -> Result<PathBuf, EngineError> {
         let name = target
             .path
@@ -167,6 +172,9 @@ impl Engine {
                 path: target.path.clone(),
                 reason: "no file name",
             })?;
+        // An entry's name is the archive's word: one that is no plain file name - `notes.txt:x`
+        // would land in an NTFS stream - is refused before anything is made (RC-110-26).
+        rc_ops::check_name(&name.to_string_lossy())?;
         // Removed at exit, or at a later start (`unpacked.rs`).
         let dir = crate::unpacked::new_folder()
             .await

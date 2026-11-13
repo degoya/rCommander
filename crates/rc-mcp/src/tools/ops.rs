@@ -10,6 +10,9 @@
 //! The write guard (`guard_write.rs`, RC-080-09) judges every place a copy, move or mkdir writes
 //! to before the job is queued: the target, what each source becomes there and every entry
 //! below a local folder. The sources are fixed first, so the job takes exactly what was judged.
+//! A move is judged by its sources as well (RC-110-19): nothing is moved away from a protected
+//! place, and no folder that holds one. `ops_delete` is not: it always asks a person, and the
+//! question names the entries and the panel's folder.
 
 use rc_engine::{ConflictChoice, DeleteMode, ErrorPolicy, JobOptions, JobSnapshot, Outcome};
 use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
@@ -251,6 +254,10 @@ impl RcMcpServer {
                         Err(error) => return respond::<View>(Err(error)),
                     };
                     let Some(name) = from.path.file_name() else {
+                        // A root lands under no name, but a move would take what it holds.
+                        if moving && let Some(refusal) = guard.refuse_taking(&from).await {
+                            return Ok(refusal);
+                        }
                         continue;
                     };
                     // The guard judges the name the entry gets there, its mask applied.
@@ -260,7 +267,13 @@ impl RcMcpServer {
                         }
                         None => name.to_owned(),
                     };
-                    if let Some(refusal) = guard.refuse_copy(&from, &target.join(name)).await {
+                    let place = target.join(name);
+                    let refusal = if moving {
+                        guard.refuse_move(&from, &place).await
+                    } else {
+                        guard.refuse_copy(&from, &place).await
+                    };
+                    if let Some(refusal) = refusal {
                         return Ok(refusal);
                     }
                 }
@@ -290,7 +303,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Move files and directories into a directory, as a background job: renamed in place on the same drive, otherwise copied and each source removed once its copy is complete and its size checked on the target (also to and from sftp://<connection name>/<path>). Parameters, answer and refusals (sensitive_path, protected_target) as ops_copy; overwriting needs a confirmation code."
+        description = "Move files and directories into a directory, as a background job: renamed in place on the same drive, otherwise copied and each source removed once its copy is complete and its size checked on the target (also to and from sftp://<connection name>/<path>). Parameters, answer and refusals (sensitive_path, protected_target) as ops_copy; overwriting needs a confirmation code. A source in a place ops_copy would not write to - rCommander's program or data folder, an SSH folder, an autostart folder, a shell's start-up file - or a folder that holds one is refused with protected_target as well: a person moves it in rCommander."
     )]
     pub(crate) async fn ops_move(
         &self,

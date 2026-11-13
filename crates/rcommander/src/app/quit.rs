@@ -7,7 +7,7 @@
 //! Alt+F4 run `app.quit` too (`dialog_windows.rs`), so they ask the same. The engine announces the
 //! wish ([`EngineEvent::Quit`]); with jobs running or waiting the window asks first - Quit or
 //! Cancel, Cancel the default, Enter and Escape cancel - otherwise it stores the tabs and the
-//! places and ends ([`App::save_and_exit`]). The setting `keys.f10` narrows the key to closing
+//! places and ends ([`App::store_session`]). The setting `keys.f10` narrows the key to closing
 //! dialogs or switches it off; it is read at the start and whenever it changes. The command
 //! palette's row runs `app.quit` whatever the setting says.
 //!
@@ -15,11 +15,23 @@
 //! asked about too, the first three named with their server: Cancel, or "Quit and keep changes" -
 //! the copies stay for the next start, nothing is uploaded and nothing waited for.
 //!
+//! The steps on the way out have a limit together (RC-110-27, [`QUIT_LIMIT`]): one that hangs -
+//! a PAM plugin that never answers its check-in, a store on a disk that does not answer - is
+//! given up and the app ends without it. The order is what must not be lost first: the server
+//! copies, the tabs and places, then the update and what was lent. A second quit within the
+//! limit starts nothing; one after it ends the app at once, with the exit's guard armed
+//! (`startup/exit.rs`), so the window cannot stay whatever still hangs.
+//!
 //! A lost graphics device (`gpu_loss.rs`) asks in the system's message box whether to restart,
 //! unless `appearance.gpu_loss_notice` is off; yes leaves as a confirmed quit does - the queue's
 //! jobs are kept - and the program starts again once the window has closed.
 
 pub mod remote_edit;
+
+use std::{
+    future::Future,
+    time::{Duration, Instant},
+};
 
 use iced::{
     Element, Subscription, Task,
@@ -35,6 +47,7 @@ use super::{
     App, Effect, Message,
     escape::{enter, escape},
     field_walk,
+    startup::{self, QUIT_LIMIT},
 };
 use crate::recover::LogPanic as _;
 use crate::{
@@ -75,6 +88,8 @@ pub struct Quit {
     pub asking: Option<usize>,
     /// The tabs and places are being stored on the way out; a second quit starts nothing.
     pub leaving: bool,
+    /// When the way out began: its steps have [`QUIT_LIMIT`] from then.
+    pub left_at: Option<Instant>,
     /// The server files the question names, with a change not on the server (RC-110-01).
     pub kept: Option<String>,
     /// The server files edited through copies: their questions and their list.
@@ -152,6 +167,12 @@ impl App {
     /// on the server, else the way out.
     fn quit_wanted(&mut self, unfinished: usize) -> Vec<Effect> {
         if self.quit.leaving {
+            // Within the limit the first quit is still at work; after it, whatever it waits for
+            // is given up and the app ends now (RC-110-27).
+            if self.quit_time_left().is_zero() {
+                tracing::warn!(limit = ?QUIT_LIMIT, "quit again after the limit; the app ends");
+                return vec![Effect::Task(startup::leave())];
+            }
             return Vec::new();
         }
         let changed: Vec<&rc_engine::RemoteEditInfo> = self
@@ -210,27 +231,38 @@ impl App {
         )
     }
 
-    /// Stores the tabs, the places and the windows' geometry, then ends the app. The queue's
-    /// unfinished jobs are kept by the engine for the next start. With "install when quitting"
-    /// a downloaded update is handed to the updater first (RC-100-07); the engine decides.
+    /// Stores the tabs, the places and the windows' geometry, then ends the app
+    /// ([`Message::Saved`]). The queue's unfinished jobs are kept by the engine for the next
+    /// start. With "install when quitting" a downloaded update is handed to the updater
+    /// (RC-100-07); the engine decides. All of it within [`QUIT_LIMIT`].
     fn leave(&mut self) -> Vec<Effect> {
         self.quit.leaving = true;
+        self.quit.left_at = Some(Instant::now());
         let engine = self.engine.clone();
-        let mut exit = Some(self.save_and_exit());
-        let handed = Task::perform(
-            async move {
-                // The server copies: the unchanged go, the changed stay for the next start.
-                let edits = engine.clone();
-                let _ = tokio::task::spawn_blocking(move || edits.finish_remote_edits())
-                    .await
-                    .log_panic("app.finish_remote_edits");
-                engine.update_on_quit().await
-            },
-            |_| (),
-        );
-        vec![Effect::Task(
-            handed.then(move |()| exit.take().unwrap_or_else(Task::none)),
-        )]
+        let store = self.store_session();
+        let steps = async move {
+            // The server copies: the unchanged go, the changed stay for the next start.
+            let edits = engine.clone();
+            let _ = tokio::task::spawn_blocking(move || edits.finish_remote_edits())
+                .await
+                .log_panic("app.finish_remote_edits");
+            store.await;
+            engine.update_on_quit().await;
+            // What PAM systems lent the sessions goes back before the app ends (RC-100-38):
+            // last, a plugin's check-in being the one step that waits for somebody else.
+            engine.return_all_leases().await;
+        };
+        vec![Effect::Task(Task::perform(
+            before_exit(QUIT_LIMIT, steps),
+            |()| Message::Saved,
+        ))]
+    }
+
+    /// What is left of [`QUIT_LIMIT`] since the way out began; all of it before.
+    pub(super) fn quit_time_left(&self) -> Duration {
+        self.quit
+            .left_at
+            .map_or(QUIT_LIMIT, |at| QUIT_LIMIT.saturating_sub(at.elapsed()))
     }
 
     /// Reads `keys.f10` (at the start and when it changed).
@@ -279,6 +311,17 @@ impl App {
             body = body.push(label(t!("quit.remote_edits", names = names.as_str())));
         }
         Some(body.push(buttons).into())
+    }
+}
+
+/// `steps`, the window's work before the exit, for at most `limit`: what has not ended by then
+/// is given up - the app ends without it.
+pub(super) async fn before_exit(limit: Duration, steps: impl Future<Output = ()>) {
+    if startup::within(limit, steps).await.is_none() {
+        tracing::warn!(
+            ?limit,
+            "the steps before the exit did not end in time; given up"
+        );
     }
 }
 

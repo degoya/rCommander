@@ -29,10 +29,10 @@ use std::{
 use async_trait::async_trait;
 use tokio::io::AsyncSeekExt;
 
-use crate::recover::LogPanic as _;
 use crate::{
     Capabilities, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange, ReadStream,
     Result, SeekStream, SetAttributes, Vfs, VfsError, WriteMode, WriteStream, long_path,
+    work::blocking,
 };
 
 /// The local file system.
@@ -61,20 +61,8 @@ pub fn umask() -> u32 {
     }
 }
 
-/// Runs blocking file-system work off the async threads.
-async fn blocking<T, F>(path: &Path, work: F) -> Result<T>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T> + Send + 'static,
-{
-    tokio::task::spawn_blocking(work)
-        .await
-        .log_panic("vfs.local_work")
-        .map_err(|join| VfsError::Io {
-            path: path.to_path_buf(),
-            source: io::Error::other(join),
-        })?
-}
+/// The name blocking work of this backend is logged under when it panics.
+const WORK: &str = "vfs.local_work";
 
 /// Maps an I/O error to the caller's spelling of the path.
 fn io_err(path: &Path) -> impl FnOnce(io::Error) -> VfsError + '_ {
@@ -125,12 +113,12 @@ impl Vfs for LocalFs {
 
     async fn list(&self, dir: &Path) -> Result<Vec<Entry>> {
         let shown = dir.to_path_buf();
-        blocking(dir, move || describe::list(&shown)).await
+        blocking(WORK, dir, move || describe::list(&shown)).await
     }
 
     async fn stat(&self, path: &Path) -> Result<Entry> {
         let shown = path.to_path_buf();
-        blocking(path, move || describe::stat(&shown)).await
+        blocking(WORK, path, move || describe::stat(&shown)).await
     }
 
     async fn open_read(&self, path: &Path) -> Result<ReadStream> {
@@ -189,7 +177,7 @@ impl Vfs for LocalFs {
     async fn sync(&self, path: &Path) -> Result<()> {
         let real = long_path(path);
         let shown = path.to_path_buf();
-        blocking(path, move || {
+        blocking(WORK, path, move || {
             let synced = (|| -> io::Result<()> {
                 // Unix syncs through any descriptor of the file; Windows' flush needs write
                 // access.
@@ -202,9 +190,7 @@ impl Vfs for LocalFs {
                     // A copy that kept its source's read-only attribute opens for reading only
                     // on Windows: it is left to the system's lazy writer, as before the flush
                     // existed, rather than failing the move.
-                    Err(error)
-                        if cfg!(windows) && error.kind() == io::ErrorKind::PermissionDenied =>
-                    {
+                    Err(error) if left_unflushed(&error, cfg!(windows), || read_only(&real)) => {
                         return Ok(());
                     }
                     Err(error) => return Err(error),
@@ -229,7 +215,7 @@ impl Vfs for LocalFs {
     /// (drvfs, 9p, an older kernel) gets the look first.
     async fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<()> {
         let (real_from, real_to) = (long_path(from), long_path(to));
-        let renamed = blocking(from, move || {
+        let renamed = blocking(WORK, from, move || {
             Ok(platform::rename_no_replace(&real_from, &real_to))
         })
         .await?;
@@ -247,7 +233,7 @@ impl Vfs for LocalFs {
 
     async fn remove_file(&self, path: &Path) -> Result<()> {
         let shown = path.to_path_buf();
-        blocking(path, move || {
+        blocking(WORK, path, move || {
             platform::remove_file(&long_path(&shown)).map_err(io_err(&shown))
         })
         .await
@@ -265,7 +251,7 @@ impl Vfs for LocalFs {
 
     async fn set_mtime(&self, path: &Path, modified: SystemTime) -> Result<()> {
         let shown = path.to_path_buf();
-        blocking(path, move || {
+        blocking(WORK, path, move || {
             filetime::set_file_mtime(
                 long_path(&shown),
                 filetime::FileTime::from_system_time(modified),
@@ -277,12 +263,12 @@ impl Vfs for LocalFs {
 
     async fn set_attributes(&self, path: &Path, change: SetAttributes) -> Result<()> {
         let shown: PathBuf = path.to_path_buf();
-        blocking(path, move || platform::set_attributes(&shown, change)).await
+        blocking(WORK, path, move || platform::set_attributes(&shown, change)).await
     }
 
     async fn free_space(&self, path: &Path) -> Result<Option<u64>> {
         let shown = path.to_path_buf();
-        blocking(path, move || {
+        blocking(WORK, path, move || {
             space::disk_space(&long_path(&shown))
                 .map(|(available, _total)| Some(available))
                 .map_err(io_err(&shown))
@@ -296,23 +282,38 @@ impl Vfs for LocalFs {
 
     async fn details(&self, path: &Path) -> Result<Details> {
         let shown = path.to_path_buf();
-        blocking(path, move || describe::details(&shown)).await
+        blocking(WORK, path, move || describe::details(&shown)).await
     }
 
     async fn list_details(&self, dir: &Path) -> Result<Vec<(Entry, Details)>> {
         let shown = dir.to_path_buf();
-        blocking(dir, move || describe::list_details(&shown)).await
+        blocking(WORK, dir, move || describe::list_details(&shown)).await
     }
 
     async fn set_properties(&self, path: &Path, change: PropertyChange) -> Result<()> {
         let shown = path.to_path_buf();
-        blocking(path, move || platform::set_properties(&shown, change)).await
+        blocking(WORK, path, move || platform::set_properties(&shown, change)).await
     }
 
     async fn create_link(&self, link: &Path, target: &Path, kind: LinkKind) -> Result<()> {
         let (shown, target) = (link.to_path_buf(), target.to_path_buf());
-        blocking(link, move || links::create_link(&shown, &target, kind)).await
+        blocking(WORK, link, move || {
+            links::create_link(&shown, &target, kind)
+        })
+        .await
     }
+}
+
+/// Whether a file that could not be opened for its flush goes without one: on Windows, where
+/// the flush needs write access, a file whose read-only attribute refuses it. Any other refusal
+/// is the caller's error - a move must not go on and remove its source (RC-110-26).
+fn left_unflushed(error: &io::Error, windows: bool, read_only: impl FnOnce() -> bool) -> bool {
+    windows && error.kind() == io::ErrorKind::PermissionDenied && read_only()
+}
+
+/// Whether the file at `real` carries the read-only attribute; `false` when that cannot be read.
+fn read_only(real: &Path) -> bool {
+    std::fs::metadata(real).is_ok_and(|found| found.permissions().readonly())
 }
 
 #[cfg(test)]

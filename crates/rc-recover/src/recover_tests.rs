@@ -5,7 +5,7 @@ use std::{
 
 use tracing_subscriber::layer::SubscriberExt as _;
 
-use super::{LockOrRecover as _, LogPanic as _};
+use super::{LockOrRecover as _, LogPanic as _, RwLockOrRecover as _, recovered};
 
 #[test]
 fn a_thread_that_panicked_stays_an_error() {
@@ -102,4 +102,35 @@ fn a_poisoned_lock_is_logged_once_with_its_name() {
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].contains("lock=\"test.mutex\""), "{}", lines[0]);
     assert!(lines[0].contains("recover_tests.rs"), "{}", lines[0]);
+}
+
+#[test]
+fn a_poisoned_rwlock_is_read_and_written_with_its_state() {
+    let lock = std::sync::RwLock::new(1_u8);
+    let _ = std::panic::catch_unwind(|| {
+        let _guard = lock.write();
+        panic!("the test's own panic");
+    });
+    assert!(lock.is_poisoned());
+    assert_eq!(*lock.read_or_recover("test.rwlock"), 1);
+    assert!(!lock.is_poisoned());
+    *lock.write_or_recover("test.rwlock") += 1;
+    assert_eq!(*lock.read_or_recover("test.rwlock"), 2);
+}
+
+#[test]
+fn a_poisoned_wait_hands_its_guard_back_and_is_logged() {
+    let mutex = poisoned(5);
+    let lines = Lines::default();
+    {
+        let _logs =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(lines.clone()));
+        let guard = mutex
+            .lock()
+            .unwrap_or_else(|poisoned| recovered(poisoned, "test.wait"));
+        assert_eq!(*guard, 5);
+    }
+    let lines = lines.0.lock_or_recover("test.lines");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].contains("lock=\"test.wait\""), "{}", lines[0]);
 }

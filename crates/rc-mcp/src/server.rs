@@ -47,6 +47,8 @@ pub struct McpContext {
     pub(crate) classes: Arc<HashMap<String, CommandClass>>,
     /// How long a call waits for the person in the window.
     pub(crate) answer_within: Duration,
+    /// The program's folder under every name it has: no call writes there (`guard_write.rs`).
+    pub(crate) program_dirs: Vec<std::path::PathBuf>,
 }
 
 impl McpContext {
@@ -78,6 +80,7 @@ impl McpContext {
             confirmations: Confirmations::default(),
             classes: Arc::new(classes),
             answer_within: crate::ask::ANSWER_WITHIN,
+            program_dirs: crate::guard_write::program_dirs(),
         }
     }
 

@@ -1,7 +1,10 @@
 //! Network shares from an agent (RC-080-10): the rules on the arguments alone, and the tools over
 //! an in-process pipe.
 
-use rc_engine::{Drive, DriveGroup, DriveKind, DriveState, NetworkPath, VfsPath, network_path};
+use rc_engine::{
+    Command, CreateWorkspaceRequest, Drive, DriveGroup, DriveKind, DriveState, NetworkPath,
+    VfsPath, WorkspaceSpec, network_path,
+};
 use rmcp::{RoleClient, model::CallToolRequestParams, service::RunningService};
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -185,6 +188,125 @@ async fn a_wsl_share_and_a_local_folder_are_not_refused() {
             &setup,
             "settings_set",
             json!({ "key": "folders.left_start", "value": "" })
+        )
+        .await,
+        None
+    );
+}
+
+/// A folder of this machine, absolute on every platform.
+fn here() -> String {
+    std::env::temp_dir().display().to_string()
+}
+
+/// A workspace whose left panel has the tab `tab` and, with `cwd`, a terminal starting there.
+fn workspace(tab: &str, cwd: Option<&str>) -> Value {
+    let location = |path: &str| json!({ "location": { "backend": "local", "path": path } });
+    let mut spec = json!({
+        "version": 1,
+        "active": "left",
+        "left": { "tabs": [location(&here()), location(tab)], "active_tab": 0 },
+        "right": { "tabs": [location(&here())], "active_tab": 0 }
+    });
+    if let Some(cwd) = cwd {
+        spec["right"]["terminal"] = json!({ "kind": "local", "cwd": cwd });
+    }
+    spec
+}
+
+/// RC-110-21: the folders of a workspace lie below the top level of the call, and are judged.
+#[test]
+fn a_workspace_spec_is_judged_by_its_tabs_and_start_folders() {
+    for tool in ["workspaces_create", "workspaces_update"] {
+        assert_eq!(
+            named(
+                tool,
+                json!({ "id": 1, "spec": workspace(r"\\attacker\share", None) })
+            ),
+            [r"\\attacker\share"],
+            "{tool}"
+        );
+        assert_eq!(
+            named(
+                tool,
+                json!({ "id": 1, "spec": workspace(&here(), Some("//attacker/share/x")) })
+            ),
+            ["//attacker/share/x"],
+            "{tool}"
+        );
+        // A WSL share, a drive and a folder of this machine stay.
+        let wsl = workspace(r"\\wsl.localhost\Ubuntu\home", Some(r"Z:\mapped"));
+        assert!(named(tool, json!({ "id": 1, "spec": wsl })).is_empty());
+    }
+    // A tab on a server is the server's path; another tool's spec is not a workspace.
+    let mut remote = workspace(&here(), None);
+    remote["left"]["tabs"][1]["location"] =
+        json!({ "backend": { "sftp": { "connection_id": 4 } }, "path": "//var/www" });
+    assert!(named("workspaces_create", json!({ "spec": remote })).is_empty());
+    let share = workspace("//attacker/share", None);
+    assert!(named("column_sets_create", json!({ "spec": share })).is_empty());
+}
+
+#[tokio::test]
+async fn a_workspace_with_a_share_is_refused_from_an_agent_and_kept_from_the_window() {
+    let built = Fixture::new().build().await;
+    let setup = Setup {
+        client: built.client().await,
+        _dir: built.root,
+    };
+    let engine = built.engine;
+    // From the window: the person's own share, saved as before.
+    let spec = WorkspaceSpec::from_value(workspace("//fileserver/team/docs", None)).expect("reads");
+    engine
+        .dispatch(Command::CreateWorkspace(CreateWorkspaceRequest {
+            name: "Team".to_owned(),
+            spec,
+            theme_light: None,
+            theme_dark: None,
+        }))
+        .await
+        .expect("the window saves a workspace on a share");
+    let listed = engine
+        .dispatch(Command::ListWorkspaces {})
+        .await
+        .expect("lists");
+    let listed = serde_json::to_value(&listed).expect("json");
+    let id = listed["workspaces"][0]["id"].as_i64().expect("an id");
+    // From an agent: a tab and a start folder, in a new workspace and in a stored one.
+    for spec in [
+        workspace("//attacker/share/x", None),
+        workspace(r"\\attacker\share", None),
+        workspace(&here(), Some("//attacker/share")),
+        workspace(&here(), Some(r"\\.\pipe\x")),
+    ] {
+        for (tool, arguments) in [
+            ("workspaces_create", json!({ "name": "Bait", "spec": spec })),
+            ("workspaces_update", json!({ "id": id, "spec": spec })),
+        ] {
+            assert_eq!(
+                code(&setup, tool, arguments.clone()).await.as_deref(),
+                Some("network_path"),
+                "{tool} {arguments}"
+            );
+        }
+    }
+    // Nothing was saved, and a workspace without a share still is.
+    let listed = engine
+        .dispatch(Command::ListWorkspaces {})
+        .await
+        .expect("lists");
+    let listed = serde_json::to_value(&listed).expect("json");
+    assert_eq!(listed["workspaces"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        listed["workspaces"][0]["spec"]["left"]["tabs"][1]["location"]["path"],
+        "//fileserver/team/docs"
+    );
+    let plain = workspace(&here(), Some(&here()));
+    assert_eq!(
+        code(
+            &setup,
+            "workspaces_update",
+            json!({ "id": id, "spec": plain })
         )
         .await,
         None

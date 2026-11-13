@@ -3,7 +3,7 @@ use rc_vfs::LocalFs;
 use super::*;
 use crate::{
     combine,
-    test_support::{self, Tripwire, names},
+    test_support::{self, Stalled, Tripwire, cancel_soon, names},
 };
 
 async fn split_here(
@@ -204,6 +204,32 @@ async fn a_cancel_half_way_removes_every_part_written() {
     assert_eq!(control.file_bytes_total(), size);
     let done = control.file_bytes_done();
     assert!((size / 2..size).contains(&done), "half way: {done}");
+}
+
+/// A cancel ends the read of a source that stalls, not the backend's time limit (RC-110-26).
+#[tokio::test]
+async fn a_cancel_ends_a_read_that_stalls() {
+    let root = tempfile::tempdir().expect("root");
+    test_support::write(
+        root.path(),
+        "a.bin",
+        &test_support::pattern(4 * BUFFER_SIZE),
+    );
+    std::fs::create_dir(root.path().join("out")).expect("out");
+    let control = Control::new();
+    let vfs: Arc<dyn Vfs> = Arc::new(Stalled {
+        inner: LocalFs::new(),
+        after: 2 * BUFFER_SIZE as u64,
+    });
+    cancel_soon(&control);
+    let (source, out) = (root.path().join("a.bin"), root.path().join("out"));
+    let run = split(&vfs, &source, &vfs, &out, BUFFER_SIZE as u64, &control);
+    let error = tokio::time::timeout(std::time::Duration::from_secs(10), run)
+        .await
+        .expect("the cancel ended the read")
+        .expect_err("cancelled");
+    assert_eq!(error.code(), "cancelled");
+    assert!(names(&root.path().join("out")).is_empty());
 }
 
 #[test]

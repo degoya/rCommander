@@ -11,7 +11,8 @@
 //!
 //! Under MCP (RC-080-42) a load is gated by the jobs it holds (`Engine::effective_class`: one
 //! that overwrites makes it destructive), the MCP server judges every place an entry writes to
-//! first ([`Engine::saved_queue_places`]), and an entry whose sources hold a file the read guard
+//! first ([`Engine::saved_queue_places`], and the sources its moves take away:
+//! [`Engine::saved_queue_moved`]), and an entry whose sources hold a file the read guard
 //! keeps from MCP is not loaded (`sensitive_path`). A database error on one entry names that
 //! entry and loads the others.
 
@@ -245,9 +246,7 @@ impl Engine {
         }
         let db = self.db()?;
         for place in places {
-            if let BackendId::Sftp { connection_id } | BackendId::Ftp { connection_id } =
-                place.backend
-            {
+            if let Some(connection_id) = place.backend.connection_id() {
                 match db.connection(ConnectionId(connection_id)).await {
                     Ok(_) => {}
                     Err(ConnectionError::ConnectionNotFound { .. }) => {
@@ -301,16 +300,8 @@ impl Engine {
         &self,
         saved: i64,
     ) -> Result<Vec<(VfsPath, VfsPath)>, EngineError> {
-        let (_, texts) = self
-            .db()?
-            .saved_queue(saved)
-            .await?
-            .ok_or(EngineError::SavedQueueNotFound { saved })?;
         let mut places = Vec::new();
-        for spec in texts
-            .iter()
-            .filter_map(|text| serde_json::from_str::<JobSpec>(text).ok())
-        {
+        for spec in self.saved_queue_specs(saved).await? {
             match spec.kind {
                 JobKind::Copy { sources, target } | JobKind::Move { sources, target } => {
                     for source in sources {
@@ -328,6 +319,37 @@ impl Engine {
             }
         }
         Ok(places)
+    }
+
+    /// Every source a move of the saved list `saved` takes away, in order. For the MCP server's
+    /// write guard, which lets no move take an entry out of a protected place (RC-110-19).
+    ///
+    /// # Errors
+    ///
+    /// As [`Engine::saved_queue_places`].
+    pub async fn saved_queue_moved(&self, saved: i64) -> Result<Vec<VfsPath>, EngineError> {
+        let mut moved = Vec::new();
+        for spec in self.saved_queue_specs(saved).await? {
+            match spec.kind {
+                JobKind::Move { sources, .. } => moved.extend(sources),
+                JobKind::MoveAs { source, .. } => moved.push(source),
+                _ => {}
+            }
+        }
+        Ok(moved)
+    }
+
+    /// The entries of the saved list `saved` that read as jobs.
+    async fn saved_queue_specs(&self, saved: i64) -> Result<Vec<JobSpec>, EngineError> {
+        let (_, texts) = self
+            .db()?
+            .saved_queue(saved)
+            .await?
+            .ok_or(EngineError::SavedQueueNotFound { saved })?;
+        Ok(texts
+            .iter()
+            .filter_map(|text| serde_json::from_str::<JobSpec>(text).ok())
+            .collect())
     }
 
     /// `queue.delete_saved`.

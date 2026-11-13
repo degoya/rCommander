@@ -1,6 +1,80 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Read as _, Write},
+    path::{Path, PathBuf},
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 
-use super::{PipeWriter, encode_zst, is_panic};
+use rc_vfs::{LocalFs, ReadStream, Vfs};
+use tokio::{
+    io::{AsyncRead, ReadBuf},
+    sync::watch,
+};
+
+use super::{Feed, Member, MemberKind, PipeWriter, encode_zst, is_panic};
+use crate::control::Control;
+
+/// A stream that never yields a byte: a server that stopped answering.
+struct Never;
+
+impl AsyncRead for Never {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        _buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Poll::Pending
+    }
+}
+
+/// The local disk, except that no file opened for reading ever yields anything.
+struct Stalled(LocalFs);
+
+#[async_trait::async_trait]
+impl rc_vfs::testing::Forward for Stalled {
+    fn inner(&self) -> &dyn Vfs {
+        &self.0
+    }
+    async fn open_read(&self, _path: &Path) -> rc_vfs::Result<ReadStream> {
+        Ok(Box::new(Never))
+    }
+}
+
+/// A cancel ends the read of a source that stalls, not the backend's time limit (RC-110-26).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_cancel_ends_a_read_that_stalls() {
+    let control = Control::default();
+    let (bytes, _seen) = watch::channel(0_u64);
+    let src: Arc<dyn Vfs> = Arc::new(Stalled(LocalFs::new()));
+    let feed = Feed::new(src, control.clone(), bytes).expect("on the runtime");
+    let reading = tokio::task::spawn_blocking(move || {
+        let member = Member {
+            path: PathBuf::from("/stalled.bin"),
+            name: "stalled.bin".to_owned(),
+            kind: MemberKind::File,
+            size: 10,
+            modified: None,
+            mode: None,
+            readonly: false,
+        };
+        let mut source = feed.open(&member)?;
+        let mut buffer = [0_u8; 10];
+        source.read(&mut buffer)
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(!reading.is_finished(), "the read waits for the server");
+    control.cancel();
+    let ended = tokio::time::timeout(Duration::from_secs(10), reading)
+        .await
+        .expect("the cancel ended the read")
+        .expect("joins");
+    assert_eq!(
+        ended.expect_err("cancelled").to_string(),
+        "the job was cancelled"
+    );
+}
 
 /// An output that fails after a few bytes, as a full disk does.
 struct Failing {

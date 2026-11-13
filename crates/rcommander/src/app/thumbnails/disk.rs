@@ -5,13 +5,15 @@
 //! durable state (AGENTS.md).
 //!
 //! A tile read back is a file anyone with the user's rights could have put there: it is decoded
-//! with the picture limits and must fit its tile, or it is deleted. The start trims the cache by
-//! age to 90 % of `thumbnails.cache_mb` once it is over; the settings clear it. Every call
-//! blocks: run it off the UI thread.
+//! with the picture limits and must fit its tile, or it is deleted. The start, and every
+//! [`DiskCache::TRIM_EVERY`] tiles written, trims the cache by age to 90 % of
+//! `thumbnails.cache_mb` once it is over; the settings clear it. Every call blocks: run it off
+//! the UI thread.
 
 use std::{
     fs, io,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU32, Ordering},
     time::SystemTime,
 };
 
@@ -83,6 +85,19 @@ impl DiskCache {
         let part = path.with_extension(format!("part{}", std::process::id()));
         fs::write(&part, bytes)?;
         fs::rename(&part, &path).inspect_err(|_| remove(&part))
+    }
+
+    /// The tiles written between two trims while the program runs (RC-110-29): the cache is over
+    /// its limit by no more than these, and its folder is read through once for as many.
+    pub const TRIM_EVERY: u32 = 128;
+
+    /// A tile was written, counted in `writes`: every [`Self::TRIM_EVERY`]th trims the cache to
+    /// `limit`; the bytes left then.
+    pub fn written(&self, writes: &AtomicU32, limit: u64) -> Option<u64> {
+        let count = writes.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+        count
+            .is_multiple_of(Self::TRIM_EVERY)
+            .then(|| self.trim(limit))
     }
 
     /// The bytes the cache's tiles take.

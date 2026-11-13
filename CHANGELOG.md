@@ -5,6 +5,260 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-11-13
+
+### Changed
+
+- **Dependencies before 0.23.1**: cc 1.11.2, errno 0.3.15, rmcp 3.10.0, rustls-webpki 0.103.17 and
+  zstd 0.13.5; in the workflows taiki-e/install-action 2.90.3, sigstore/cosign-installer 4.1.3 and
+  softprops/action-gh-release 3.0.4 (the public repository's pull request 19).
+
+### Fixed
+
+- **Comments on a server: a failed write no longer costs the folder's `descript.ion`** (RC-110-24).
+  Over SFTP and FTP the file was still written in place, so a lost connection or a full disk in
+  the middle left it cut off or empty. `file.set_comment` now writes the new file beside the old
+  one there too (`.rc-tmp-<process>-<time>-save`, the old file's permission bits where the server
+  keeps them) and puts it in place with `rc_ops::replace_by_rename` (now public, RC-110-25): in
+  one step where the server's rename replaces (SFTP with `posix-rename@openssh.com`), else the old
+  file is removed and the new one renamed. A failure before that leaves the old file and removes
+  the temporary one; a rename refused after the old file went leaves the complete new file under
+  its temporary name, and the error (`io`) names that file. A temporary file a run left is never
+  read as the comments. A portable device and an archive are written in place as before, and so
+  are a link and a read-only file. No setting, no new command or code; the lock per folder holds
+  around all of it.
+- **MCP could move rCommander's program or files of its data folder away** (RC-110-19, the
+  rest): the write guard judged where a call writes to, not what a move or rename takes away.
+  `ops_move`, `multi_rename_apply`, `multi_rename_undo` and `queue_load` (a saved list's moves)
+  now refuse with `protected_target` a source in a protected place - the program's folder, the
+  data folders, `.ssh`, the autostart folders, shells' start-up files, a tool's configuration -
+  and a folder that holds one (the folder above the program; for a move also a home folder
+  with `.ssh` in it),
+  judged as written, with links resolved and as Windows opens the name
+  (`WriteGuard::refuse_taking`, `rc-mcp` `guard_write.rs`; `Engine::saved_queue_moved`).
+  Deleting is unchanged - every deleting tool asks a person, and the question names the entries
+  and the panel's folder -, and so are copying and reading. A rename is judged by names alone
+  (the entry, and a folder above the program's or a data folder): what lies below a renamed
+  folder stays in it, so a folder with a Git repository is renamed as before. No setting: the
+  guard holds whatever the policy.
+
+## [0.23.0] - 2026-11-13
+
+### Added
+
+- **Hint while a portable device takes a transfer** (RC-110-16): on Windows a device answers one
+  call at a time, so its folder cannot be read while a copy or move onto it runs. A panel on the
+  device now says so in its status line - the file at work and the job's percent
+  (`file_ops/device_hint.rs`) -, `panel.refresh` (Ctrl+R) there is refused as `device_busy`
+  instead of waiting behind the transfer, and a copy or move onto a file that a job which has not
+  ended writes already is refused as `target_in_transfer` before it is submitted, instead of a
+  second job that asks about a file that "already exists" (`rc_engine::device_transfer`). Both
+  panels are read again when the job is over; a job that ends meanwhile leaves the busy device's
+  panel unread. Setting `panels.device_transfer_hint` (on; off: as before). No new command; MCP's
+  `panel_refresh`, `ops_copy` and `ops_copy_to` answer the two codes.
+
+### Changed
+
+- **Redundancies from the audit merged, no behaviour changed** (RC-110-30): the eleven
+  `recover.rs` are one leaf crate `rc-recover`, re-exported by each crate's `recover.rs`;
+  `BackendId::is_server`/`connection_id`, `VfsPath::file_name`, `rc_vfs::read_within` (the
+  bounded whole-file reader over a `Vfs`) and one `blocking()` for the local and the archive
+  backend; the name split at the last dot is `rc_rename::split_name` and
+  `rc_rename::split_extension`, which part only for a name that ends in a dot
+  (`rc_vfs::split_name` is gone); `Runner::follow_blocking` for pack and the archive update;
+  `platform/windows/gdi.rs` with one `Com`, `Bitmap`, `MemoryDc`; one `Known<T>` behind the
+  window's three `known.rs`; one lower-case hex (`hex::encode`); `rc-engine`'s own re-exports
+  in `api.rs`. Deliberately kept apart, with the reason at the code: the two signature trust
+  stores (`rc-plugin-host`, `rc-update`) and the three loopback rules.
+- **Build workflow: cargo under the lock, one run for the generators, a shorter AGENTS.md**
+  (RC-110-34): `scripts/cargo.sh` runs a cargo command under the build lock and the memory
+  threshold of `scripts/lib/lock.sh` with the jobs of `RC_JOBS` and returns cargo's exit code;
+  the agents' Bash guard refuses a bare `cargo build|check|clippy|test|nextest|run|doc|bench`
+  and names it. `scripts/regen.sh` runs every generator (`--check`: every `--check` form) from
+  `scripts/lib/generators.sh`, the list `check.sh --preflight` now takes those stages from.
+  `check.sh` and `release-start.sh` put `~/.local/bin` on `PATH` in one place
+  (`rc_user_tools_path`), so the pinned shellcheck is found from any shell. `AGENTS.md` names the
+  scripts every session needs and points to `scripts/README.md` and `docs/architecture.md` for
+  the rest (25 690 to 18 943 bytes).
+- **MCP: the `Host` and `Origin` checks are tested through the router** (RC-110-23): a foreign
+  host name or a web page's origin against `/mcp` and `/health` of the real server answers 403
+  with `host_rejected` or `origin_rejected` (`tests/transports.rs`), so the wiring in `http.rs`
+  cannot break unnoticed. `db_backup` describes its confirmation code with `confirm::argument`
+  like every other tool. Where the MCP token is kept is still open.
+- **Build workflow, the rest of the audit** (RC-110-33): `check.sh --full` builds the fuzz targets
+  (`fuzz.sh --build`, stage `fuzz-build`); the preflight runs the script tests in parallel and
+  counts lines in one call; a stale generated wiki page fails only on `main`, `development` and an
+  integration branch and is a notice on a job's branch (`rc_wiki_generator`); the public CI's
+  green is recorded for the exported tree, so a commit of documents keeps it; the export fetches
+  three times and takes its exclude and name lists from the exported commit; `release-start.sh
+  --push` asks the remotes first (`git ls-remote`). The tools' pins have one source
+  (`scripts/lib/tool-versions.sh`, komac and nfpm included, `tests/tool-versions.sh` against the
+  workflows), Dependabot reads the composite actions, `ci.yml` runs once per pull request,
+  `deny.toml` covers `x86_64-apple-darwin`. The doubled script parts are once in `scripts/lib`
+  (`RC_VERSION_CORE`, `rc_doc_section`, `rc_package_version_txt`, the package scripts' common
+  part), `release-publish.sh release-text` writes the GitHub release's text, `scripts/release.sh`
+  is removed. Doctests stay off, held by `tests/doc-fences.sh`.
+- **Release chain without the local Linux arm64 package** (RC-110-31, owner 2026-11-13): the
+  step `package-linux-arm64` is gone, `verify-artifacts` checks the Windows zip and the Linux x64
+  tarball, and the preflight no longer asks for `aarch64-linux-gnu-gcc`; GitHub builds and tests
+  arm64 natively (`ci.yml`, `release.yml`). A run begun with the step resumes.
+  `scripts/package-linux.sh --arch arm64` stays for a build by hand.
+- **The Bash guard refuses `flock <lock> cargo <compiling verb>`** (owner 2026-11-13, after
+  RC-110-34): the same verbs and exceptions as bare cargo, also behind flock's options, inside
+  `bash -c` and flock's own `-c`; the refusal names `scripts/cargo.sh`, the one way to compile.
+  `flock` around anything that does not lock itself stays allowed.
+
+### Fixed
+
+- **Overwriting on a server or a device could lose the old file and the new one** (RC-110-25):
+  on a server whose rename does not replace (SFTP version 3) an overwrite removes the old target
+  and renames the complete `<name>.rcpart`; when that rename failed for another reason than the
+  connection, the part was removed too and the server had neither. One `replace_by_rename`
+  (`rc-ops` `staging.rs`) now serves the staged copy and the move within a backend, and the
+  complete part stays once the old target is gone. Where the server offers
+  `posix-rename@openssh.com` (OpenSSH) the part replaces the target in one step
+  (`Vfs::rename_replacing`, `rc-remote` `sftp/change.rs`). A failed or cancelled overwrite on a
+  portable device no longer removes the old file, which the device keeps until the new one is
+  whole (`copy.rs`). An "Overwrite in place" of a server file being edited sets no mode after the
+  write - the server refuses it for a file of another owner, and the upload counted as failed
+  with its bytes written, the next save as a change on the server -, a mode refused after a
+  replacing upload is a warning in the log, and a write in place whose edit is closed runs to its
+  end while bytes move, but is let go once it took none for 30 s instead of being waited for
+  (`remote_edit/upload.rs`). Defect fixes: no setting, no
+  new command.
+- **A cancelled copy onto a device still uploaded what it had** (RC-110-16): after a cancel or a
+  failure the queue shut the target's stream down, and a device stream that keeps the file on
+  this machine first (a copy within one device, a write without a size) then sent what it had to
+  the device, whole, before it was removed. A device's stream is now only let go, which stops it
+  (`rc-ops` `stream_pair.rs`).
+- **Small defects of the core from the audit** (RC-110-26): a port forward whose `accept` keeps
+  failing pauses 50 to 500 ms between tries and logs the run of failures once, instead of
+  spinning a core and filling the log table (`forwards/listener.rs`). Inside a WSL distribution
+  names compare as Linux compares them (`rc_vfs::case_sensitive_at`): a copy of `Makefile` to
+  `makefile` or into a folder that differs only in case is no longer refused as `same_location`
+  or `target_inside_source`, and "Combine files" takes the parts of the stem asked for, not
+  `X.001` for `x.001`. An archive update in a folder that may not be written to reports that at
+  once outside Windows, not `archive_in_use` after five tries. A moved file goes without its
+  flush on Windows only when it is read-only; any other access failure now fails the move and
+  keeps the source (`rc-vfs` `local.rs`). A cancel ends a stalled read while packing, updating an
+  archive, splitting and combining, instead of waiting for the backend's time limit. A link moved
+  from an FTP server that states the link's own size no longer fails as `verify_failed`
+  (`rc-ops` `verify.rs`). A file opened out of an archive is unpacked only under a plain file
+  name: `notes.txt:x` is refused as `invalid_name` instead of landing in an NTFS stream.
+- **Comments: one changed comment no longer rewrites the folder's `descript.ion`** (RC-110-24).
+  The file is kept line by line as the bytes it has (`rc_engine::comments`): `file.set_comment`
+  writes the comment's own line anew, in the file's encoding and with CRLF, and every other line
+  goes back byte for byte - before, a file that was neither UTF-8 nor UTF-16 (OEM 850, cp1250)
+  was read as Windows-1252 and written back whole as UTF-8, which destroyed every other
+  comment's characters beyond ASCII. UTF-8 keeps its byte-order mark or the lack of one, UTF-16
+  stays UTF-16; a comment the file's encoding cannot hold is refused as `comment_not_encodable`
+  and nothing is written (only a file of plain ASCII takes UTF-8 with a mark, which changes none
+  of its bytes). On this computer the new file is written beside the old one and renamed over it
+  with its permission bits and hidden and system attributes, so a full disk leaves the old
+  comments (a link and a read-only file are written in place as before; so is a server's file,
+  until RC-110-25); reading, changing and writing run under one lock per folder, so two comments
+  set at once are both kept. No setting: there is no choice to make. MCP: `files_set_comment`
+  unchanged, its description names the new code.
+- **Jobs after missed engine events, and a quit that cannot hang** (RC-110-27): after
+  `EngineLagged` the window read panels, questions and trust again, but no job - a `Finished` lost
+  in the gap left the progress window and the multi-rename dialog busy for good, a lost conflict
+  never asked. `reload()` now reads the queue too (`file_ops/resync.rs`): bar and queue window,
+  every followed job (ended ones end as their `Finished` would have, the others take the queue's
+  state and question), the multi-rename run, an archive's password, the server copies' list; the
+  `Finished` that still arrives behind the gap is dropped once. The steps before the exit run in
+  `exit::within(QUIT_LIMIT, ..)` (5 s, no setting: a guard like the exit's other limits) - server
+  copies, tabs and places, the update, then the PAM check-ins, which went first and could cost
+  the tabs; the drag folder's removal takes what the limit leaves. A second quit after the limit
+  ends iced with the guard armed instead of being swallowed. No new command.
+- **The window stays quick with large folders and slow handlers** (RC-110-29): the disk-usage
+  window numbers its walks over the session and stops one that starts after its window closed or
+  read again (`UsageMsg::Started` without its window calls `DiskUsageHandle::cancel`); a tick
+  reads only the tab shown and builds its list only when the folder's sum moved. A panel's
+  counted folder sizes (`PanelState::dir_sizes`) are an `Arc<BTreeMap>`, shared with every copy
+  of the state and told apart by `Arc::ptr_eq`, so a cursor step after "all folder sizes" copies
+  and compares no map. The button bar reads the own commands in place
+  (`user_commands::known::with_commands`) instead of a copy per button and draw. Explorer's
+  thumbnail handler has ten seconds for a tile and at most four may hang, so two hanging
+  handlers no longer end all thumbnail loading until the restart; the thumbnails' disk cache is
+  trimmed at every 128th tile written, not only at the start. A search whose events end without
+  `Finished` closes as stopped instead of leaving the dialog running. The Explorer's context
+  menu is made for at most 500 entries (`shell_menu::MAX_NAMES`); for more, rCommander's own
+  menu opens. Defect fixes, no setting; no new command.
+- **Quick View waits for the cursor to rest; the terminal gives a program the whole mouse**
+  (RC-110-28): Quick View asked for a listing or an open at every step of the cursor, so an
+  arrow key held through 200 entries of an SFTP folder started 200 requests and dropped only
+  their answers. A step in a folder that is not local (SFTP, FTP, device, archive) now starts
+  a pause by turn and only the last move's pause asks; the pause is the new setting
+  `viewer.quick_view_pause_ms` (0 to 2000, default 300, 0 = no pause). A local folder is shown
+  at once as before. The request is an abortable task that ends when the cursor leaves an entry
+  not yet answered, when the next request replaces it and when Quick View is switched off
+  (`app/viewer/quick_follow.rs`). In a terminal whose
+  program set a mouse mode the wheel is reported as button 64/65, one report a notch, and the
+  middle and right button through `input::mouse_report`, in SGR, UTF-8 or X10 as the mode asks -
+  tmux with `mouse on` scrolls its pane, htop and mc their lists; Shift keeps wheel and buttons
+  for the widget (`terminal.shift_selects`). A right click that copied nothing pastes on Windows
+  only while the new setting `terminal.paste_right_click` is on (the default, as before). No new
+  command.
+- **The update manifest of a release, and macOS jobs without a runner** (RC-110-32):
+  `scripts/release-publish.sh` hands `rc-pack` the release's `--schema-change` from
+  `scripts/update-schema-change.sh` (it handed none, so every update counted as a schema change
+  and copied the database first; `release.yml`'s `publish` job now checks out every tag for the
+  comparison), and a missing `RCOMMANDER_UPDATE_SIGNING_KEY` is an error in `degoya/rCommander` -
+  checked by the new `release-publish.sh require-key` before anything is built - and stays a
+  warning in a fork or a local run. `ci.yml` leaves `macos-package` out on a push to `main`, where
+  it queued for the same macOS runners as the Release run's two package jobs, and
+  `scripts/public-ci.sh` starts a run whose only red jobs were cancelled without a step again
+  once it has ended (`RC_PUBLIC_CI_RERUNS`, default 1, 0 off). `docs/development.md` describes
+  the workflow's manifest; `scripts/sign-update.sh` is the emergency path and says that its
+  hashes are the local packages'.
+- **A rename to another case could replace a different file** (RC-110-22): a backend says for
+  all of its paths whether case counts, so on Windows `makefile` to `Makefile` was a change of
+  case only - also in a folder that tells the two apart (a WSL share, an NTFS folder flagged
+  case-sensitive), where the second step replaced the other file without a question. Every step
+  of the case-only rename is now a rename that never replaces (`rc-ops` `case_rename.rs`): a
+  taken name is `already_exists`, the entry goes back to its old name - or stays, named, under
+  its temporary one when that was taken meanwhile - and the other file or folder stays. The
+  multi-rename's job already renamed that way and is now tested for it.
+- **MCP could write beside the program and plant the portable marker** (RC-110-19): the write
+  guard knew the data folder, `.ssh`, the autostart folders and an update's folders, but not the
+  folder of the program itself. A client could put a file named `rcommander.portable` there -
+  the next start would have run on an empty `data/` beside it, the MCP policy at its defaults,
+  the trusted host keys and the audit log gone - or rename the program and put another file in
+  its place. The guard now refuses the program's folder as a whole (as started and with links
+  resolved, also for a link to the program) and the name `rcommander.portable` anywhere, with
+  `protected_target` and a reason of its own (`rc-mcp` `guard_write/places.rs`). No setting: the
+  guard holds whatever the policy, as for the other protected places.
+- **The MCP mask let a text through that starts with an address** (RC-110-20): a string that
+  parses as an address with a host was masked as an address only, and the parser drops tabs and
+  line breaks and encodes spaces - so a note or `.http` file with `https://...` in its first line
+  left with its `Authorization: Bearer ...`, `password=...`, tokens and private key blocks in
+  clear (`files_read_text`, a terminal's screen, `ssh_exec`'s output). Only a string without white
+  space or control characters is an address now; everything else is masked line by line, and
+  private key blocks are replaced on both ways (`rc-mcp` `mask.rs`).
+- **MCP: the network-share block reaches into workspaces** (RC-110-21): `workspaces_create` and
+  `workspaces_update` took a `spec` whose tabs and terminal start folders lie below the top
+  level of the call, where the block of RC-080-10 did not look - an agent could save a tab on
+  `\\server\share` that Windows signs in to when the workspace is called up. The gate now reads
+  the spec as the tool does and judges every tab of this machine and every start folder
+  (`rc-mcp` `unc.rs`, `rc_engine` `WorkspaceSpec::local_places`): `network_path`, mapped drives
+  and WSL shares as before, a workspace saved in the window untouched. The question about
+  `workspaces_apply` names the workspace, each panel's tabs and its terminal instead of the id
+  alone (`workspace_shown.rs`, labels `mcp_confirm.shown.*` in four languages), and the call runs
+  only while the workspace reads as shown: changed meanwhile it fails with the new code
+  `workspace_changed`, and a headless code issued for other tabs asks anew. No setting: the
+  block of RC-080-10 has none.
+- **The release chain tags the tree it tested** (RC-110-31): `scripts/release-pipeline.sh` now
+  runs `docs-gate`, `archive-jobs` and `commit` before `test` and the packages; from the commit
+  to the tag a step that leaves the tree other than HEAD's is red, every marker records the tree
+  it began and ended on, and the gate and `tag-release.sh` want each of them on HEAD's tree
+  (v0.19.0 was tagged on a tree the test had not seen). With `--push` the public CI starts right
+  after the commit (`public-ci-start`) beside the checks; `stage-public` checks and commits the
+  public export, wiki and website locally before the tag, `publish-public` only pushes, so
+  `--resume` after the tag needs no change of the tree. A log of the earlier step order is not
+  resumed. The public clones are locked for one export at a time (`rc-export.lock` in the
+  clone's `.git`, `RC_PUBLIC_LOCK_WAIT`), and a push goes out only when the committed tree is
+  the staged one.
+
 ## [0.22.0] - 2026-11-11
 
 ### Added

@@ -82,6 +82,10 @@ impl From<ForwardError> for crate::EngineError {
 }
 
 /// Whether `address` is loopback: `127.0.0.1`, `::1` and the rest of `127.0.0.0/8`.
+///
+/// One of three loopback rules, each for its own boundary and not the same set (RC-110-30): this
+/// one judges an IP address a forward binds to; `rc-plugin-host/src/http.rs` and
+/// `rc-mcp/src/http.rs` judge a host name and take only `localhost`, `127.0.0.1` and `::1`.
 #[must_use]
 pub fn is_loopback(address: &str) -> bool {
     address

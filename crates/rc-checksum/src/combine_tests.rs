@@ -5,7 +5,7 @@ use rc_vfs::LocalFs;
 use super::*;
 use crate::{
     BUFFER_SIZE, split,
-    test_support::{self, Tripwire, names},
+    test_support::{self, Stalled, Tripwire, cancel_soon, names},
 };
 
 /// A file split into `parts/`, an empty `back/` to combine into, and the data.
@@ -173,6 +173,69 @@ async fn a_cancel_half_way_removes_the_target() {
     assert_eq!(control.current_file(), Some(parts.join("data.001")));
     assert_eq!(control.file_bytes_total(), BUFFER_SIZE as u64);
     assert!(control.file_bytes_done() > 0);
+}
+
+/// A cancel ends the read of a part that stalls, not the backend's time limit (RC-110-26).
+#[tokio::test]
+async fn a_cancel_ends_a_read_that_stalls() {
+    let (root, _, _) = prepared(4 * BUFFER_SIZE, BUFFER_SIZE as u64).await;
+    let (parts, back) = dirs(&root);
+    let control = Control::new();
+    let vfs: Arc<dyn Vfs> = Arc::new(Stalled {
+        inner: LocalFs::new(),
+        after: BUFFER_SIZE as u64 / 2,
+    });
+    cancel_soon(&control);
+    let first = parts.join("data.001");
+    let run = combine(&vfs, &first, &vfs, &back, None, &control);
+    let error = tokio::time::timeout(std::time::Duration::from_secs(10), run)
+        .await
+        .expect("the cancel ended the read")
+        .expect_err("cancelled");
+    assert_eq!(error.code(), "cancelled");
+    assert!(names(&back).is_empty());
+}
+
+/// Windows' local backend - case does not count - listing a folder that holds `x.001` and, as
+/// only a Linux file system can, `X.001` beside it.
+struct TwoCases(LocalFs, PathBuf);
+
+#[async_trait::async_trait]
+impl rc_vfs::testing::Forward for TwoCases {
+    fn inner(&self) -> &dyn Vfs {
+        &self.0
+    }
+    fn capabilities(&self) -> rc_vfs::Capabilities {
+        rc_vfs::Capabilities {
+            case_sensitive: false,
+            ..self.0.capabilities()
+        }
+    }
+    async fn list(&self, _dir: &Path) -> rc_vfs::Result<Vec<rc_vfs::Entry>> {
+        let mut entries = self.0.list(&self.1).await?;
+        let mut twin = entries[0].clone();
+        twin.name = "X.001".to_owned();
+        twin.size = 99;
+        entries.push(twin);
+        Ok(entries)
+    }
+}
+
+#[tokio::test]
+async fn in_a_wsl_folder_the_parts_are_chosen_by_their_exact_stem() {
+    let (root, _) = test_support::local();
+    test_support::write(root.path(), "x.001", b"1");
+    let vfs: Arc<dyn Vfs> = Arc::new(TwoCases(LocalFs::new(), root.path().to_path_buf()));
+    let wsl = Path::new("//wsl.localhost/Ubuntu/home/me");
+    let lower = find_parts(&vfs, wsl, "x").await.expect("parts");
+    assert_eq!(lower, vec![("x.001".to_owned(), 1)]);
+    let upper = find_parts(&vfs, wsl, "X").await.expect("parts");
+    assert_eq!(upper, vec![("X.001".to_owned(), 99)]);
+    // Where case does not count, either spelling is the one part.
+    let folded = find_parts(&vfs, Path::new("/plain"), "x")
+        .await
+        .expect("parts");
+    assert_eq!(folded.len(), 1);
 }
 
 #[test]

@@ -44,9 +44,6 @@ use windows::{
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM},
     Graphics::Gdi::ClientToScreen,
-    System::Com::{
-        COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
-    },
     UI::{
         HiDpi::GetDpiForWindow,
         Shell::{DefSubclassProc, ILFree, RemoveWindowSubclass, SetWindowSubclass},
@@ -58,6 +55,8 @@ use windows_sys::Win32::{
     },
 };
 
+// COM for the menu's time; `drag_out.rs` and `taskbar.rs` take the guard from here.
+pub(super) use super::gdi::Com;
 use crate::platform::shell_menu::{Anchor, ShellOutcome, ShellRequest};
 
 /// The menu ids of rCommander's own entries start here; 0 means nothing was chosen.
@@ -153,7 +152,9 @@ fn run(hwnd: HWND, request: &ShellRequest) -> Option<ShellOutcome> {
     Some(ShellOutcome::Invoked)
 }
 
-/// The handler of `names` in `folder`, or of `folder` itself when there are none.
+/// The handler of `names` in `folder`, or of `folder` itself when there are none. Each name is
+/// resolved against the disk here, on the window's thread: `shell_menu::show` asks for at most
+/// `shell_menu::MAX_NAMES` (RC-110-29).
 fn context_menu(hwnd: HWND, folder: &Path, names: &[String]) -> Option<IContextMenu> {
     let path = wide(folder);
     let mut absolute = Pidl::null();
@@ -282,33 +283,6 @@ pub(super) fn succeeded(result: i32) -> Option<()> {
 /// `text` as a NUL-terminated UTF-16 string.
 pub(super) fn wide(text: impl AsRef<OsStr>) -> Vec<u16> {
     text.as_ref().encode_wide().chain(Some(0)).collect()
-}
-
-/// COM on this thread for the menu's (or a drag's, `drag_out.rs`) time; the window's thread has
-/// it already (winit's drag and drop), and then the pair of calls only counts.
-pub(super) struct Com(bool);
-
-impl Com {
-    pub(super) fn init() -> Self {
-        // SAFETY: no pointers; a thread that has COM in another mode answers RPC_E_CHANGED_MODE,
-        // and then there is nothing to undo.
-        let result = unsafe {
-            CoInitializeEx(
-                ptr::null(),
-                (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32,
-            )
-        };
-        Self(result >= 0)
-    }
-}
-
-impl Drop for Com {
-    fn drop(&mut self) {
-        if self.0 {
-            // SAFETY: pairs the successful CoInitializeEx of `init`, on the same thread.
-            unsafe { CoUninitialize() };
-        }
-    }
 }
 
 /// A popup menu of ours, destroyed with the shell's submenus in it.

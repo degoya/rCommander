@@ -11,7 +11,9 @@
 //! it does not complete.
 //!
 //! A lost connection keeps the part and the copy continues it (`resume.rs`, RC-060-07); a cancel
-//! or another failure removes it, and a part that cannot be removed is logged. A part found where
+//! or another failure removes it, and a part that cannot be removed is logged - but never a
+//! complete part whose old target is gone already ([`replace_by_rename`], RC-110-25): it is the
+//! only copy on the server then, and stays. A part found where
 //! a new copy's target is free is a conflict of its own - "resume" or "overwrite" - and a job put
 //! back after a restart continues the part of the file it was writing without asking.
 //!
@@ -34,7 +36,7 @@ use crate::{
 /// Whether `backend` is a server: a transfer there goes through a part file and waits in the
 /// lane of the connection.
 pub(crate) fn is_remote(backend: &BackendId) -> bool {
-    matches!(backend, BackendId::Sftp { .. } | BackendId::Ftp { .. })
+    backend.is_server()
 }
 
 /// Whether a file written onto `dst` goes through a part file: onto a disk of this machine or a
@@ -62,6 +64,45 @@ pub(crate) async fn remove_leftover(vfs: &dyn Vfs, path: &Path) {
             "a file left by an incomplete copy could not be removed: {error}"
         ),
     }
+}
+
+/// Why [`replace_by_rename`] did not put a file at its target.
+#[derive(Debug)]
+pub struct Unreplaced {
+    /// What the backend answered.
+    pub error: VfsError,
+    /// The old target was removed before the rename failed: what was to be renamed is the only
+    /// copy left on the backend, and must stay.
+    pub target_gone: bool,
+}
+
+/// Gives `from` the name `to`, replacing a file there - the one way a file is overwritten by a
+/// rename (RC-110-25). In one step where the backend's rename replaces (the local one, SFTP's
+/// `posix-rename`, [`Vfs::rename_replacing`]); a backend that answers `already_exists` (SFTP
+/// version 3) has the old target removed first, and from then on a failure says so
+/// ([`Unreplaced::target_gone`]): the caller keeps `from`. The engine writes a folder's
+/// `descript.ion` on a server through it as well (RC-110-24).
+pub async fn replace_by_rename(vfs: &dyn Vfs, from: &Path, to: &Path) -> Result<(), Unreplaced> {
+    let kept = |error| Unreplaced {
+        error,
+        target_gone: false,
+    };
+    match vfs.rename_replacing(from, to).await {
+        Err(VfsError::AlreadyExists { .. }) => {}
+        renamed => return renamed.map_err(kept),
+    }
+    vfs.remove_file(to).await.map_err(kept)?;
+    vfs.rename(from, to).await.map_err(|error| Unreplaced {
+        error,
+        target_gone: true,
+    })
+}
+
+/// Why [`Runner::settle`] did not give a complete part its target's name.
+pub(crate) struct Unsettled {
+    pub(crate) step: Step,
+    /// The part is the only copy left on the target's backend ([`Unreplaced::target_gone`]).
+    pub(crate) keep_part: bool,
 }
 
 /// What a file's conflict check comes to: where it is written, skipped by an answer, or - a
@@ -189,30 +230,42 @@ impl Runner {
     }
 
     /// Gives the complete part file its target's name. A server's rename does not replace an
-    /// entry (SFTP version 3), so an overwrite removes the old target first; a file that took the
-    /// free name meanwhile fails the copy with `already_exists`. The local rename replaces what it
-    /// finds, so onto a free name there it is the rename that refuses (`rename_no_replace`,
-    /// RC-080-56). A refusal names the target as the side that failed.
+    /// entry (SFTP version 3), so an overwrite goes through [`replace_by_rename`]; a file that
+    /// took the free name meanwhile fails the copy with `already_exists`. The local rename
+    /// replaces what it finds, so onto a free name there it is the rename that refuses
+    /// (`rename_no_replace`, RC-080-56). A refusal names the target as the side that failed, and
+    /// says whether the part must stay.
     pub(crate) async fn settle(
         &mut self,
         part: &Path,
         dest: &Path,
         mode: WriteMode,
-    ) -> Result<(), Step> {
+    ) -> Result<(), Unsettled> {
         let local = self.dst_id == Some(BackendId::Local);
         let renamed = match mode {
             WriteMode::CreateNew if local => self.dst.rename_no_replace(part, dest).await,
-            _ => match self.dst.rename(part, dest).await {
-                Err(VfsError::AlreadyExists { .. }) if mode == WriteMode::Truncate => {
-                    match self.dst.remove_file(dest).await {
-                        Ok(()) => self.dst.rename(part, dest).await,
-                        Err(error) => Err(error),
-                    }
+            WriteMode::Truncate => match replace_by_rename(self.dst.as_ref(), part, dest).await {
+                Ok(()) => Ok(()),
+                Err(unreplaced) if unreplaced.target_gone => {
+                    tracing::warn!(
+                        part = %part.display(),
+                        code = unreplaced.error.code(),
+                        "the overwritten file is gone and its replacement could not be renamed; \
+                         the complete part file stays"
+                    );
+                    return Err(Unsettled {
+                        step: self.target_refused(unreplaced.error, dest),
+                        keep_part: true,
+                    });
                 }
-                renamed => renamed,
+                Err(unreplaced) => Err(unreplaced.error),
             },
+            _ => self.dst.rename(part, dest).await,
         };
-        renamed.map_err(|error| self.target_refused(error, dest))
+        renamed.map_err(|error| Unsettled {
+            step: self.target_refused(error, dest),
+            keep_part: false,
+        })
     }
 
     /// Carries the modification time and the attributes over, where the target can hold them

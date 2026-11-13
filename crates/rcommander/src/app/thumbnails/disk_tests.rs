@@ -2,6 +2,7 @@
 
 use std::{
     fs,
+    sync::atomic::AtomicU32,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -116,4 +117,19 @@ fn the_folder_is_the_users_alone() {
         .permissions()
         .mode();
     assert_eq!(mode & 0o777, 0o700);
+}
+
+/// RC-110-29: the cache is trimmed while the program runs, at every `TRIM_EVERY`th tile written.
+#[test]
+fn the_cache_is_trimmed_as_tiles_are_written() {
+    let (_root, cache) = cache();
+    let writes = AtomicU32::new(0);
+    let mut trims = Vec::new();
+    for index in 0..u64::from(DiskCache::TRIM_EVERY) {
+        let key = key(&format!("{index}.jpg"), index);
+        cache.write(&key, &tile(16, 16)).expect("written");
+        trims.extend(cache.written(&writes, 0));
+    }
+    assert_eq!(trims, [0], "one trim, at the last write, to the limit");
+    assert_eq!(cache.size(), 0);
 }

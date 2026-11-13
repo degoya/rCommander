@@ -260,6 +260,11 @@ impl Jobs {
         }
     }
 
+    /// Every job the window follows, as it last heard of it.
+    pub fn snapshots(&self) -> impl Iterator<Item = &JobSnapshot> {
+        self.list.iter().map(|job| &job.snapshot)
+    }
+
     pub fn get(&self, id: JobId) -> Option<&Tracked> {
         self.list.iter().find(|job| job.id() == id)
     }
@@ -394,8 +399,8 @@ impl Jobs {
         }
     }
 
-    /// Replaces the snapshot of job `id` with the queue's own; the job when it is over.
-    #[cfg(test)]
+    /// Replaces the snapshot of job `id` with the queue's own - what the window takes after
+    /// missed events (`resync.rs`); the job when it is over.
     pub fn refresh(&mut self, snapshot: JobSnapshot) -> Option<Tracked> {
         let id = snapshot.id;
         let job = self.get_mut(id)?;

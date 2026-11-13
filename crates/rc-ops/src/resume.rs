@@ -18,6 +18,7 @@
 //! [`Reconnect`] hook opened again; then the job pauses as resumable, the lost connection in
 //! its failures while it waits, and `ops.resume` tries again. A cancel, or any other failure,
 //! removes the part, as a cancelled copy always did; a part that cannot be removed is logged.
+//! A complete part whose old target is gone already stays (`staging.rs`, RC-110-25).
 
 use std::{io, path::Path, sync::Arc, time::Duration};
 
@@ -140,10 +141,18 @@ impl Runner {
         let start = self.progress.bytes_done;
         let mut resume = placement.resume;
         let mut retries = 0_u32;
+        // The old target is gone and the part is the only copy on the server: it stays.
+        let mut keep_part = false;
         loop {
             self.progress.restart_file(start);
             let attempt = match self.write_part(item, &part, resume).await {
-                Ok(()) => self.settle(&part, &placement.dest, placement.mode).await,
+                Ok(()) => match self.settle(&part, &placement.dest, placement.mode).await {
+                    Ok(()) => Ok(()),
+                    Err(unsettled) => {
+                        keep_part |= unsettled.keep_part;
+                        Err(unsettled.step)
+                    }
+                },
                 Err(step) => Err(step),
             };
             match attempt {
@@ -156,13 +165,17 @@ impl Runner {
                     why.target = self.failed_on.take().map(Box::new);
                     if let Err(stop) = self.recover(&mut retries, why).await {
                         // Cancelled while it waited: the part goes, as with any cancel.
-                        remove_leftover(self.dst.as_ref(), &part).await;
+                        if !keep_part {
+                            remove_leftover(self.dst.as_ref(), &part).await;
+                        }
                         return Err(stop);
                     }
                     resume = true;
                 }
                 Err(step) => {
-                    remove_leftover(self.dst.as_ref(), &part).await;
+                    if !keep_part {
+                        remove_leftover(self.dst.as_ref(), &part).await;
+                    }
                     return Err(step);
                 }
             }

@@ -107,6 +107,12 @@ impl DiskUsageHandle {
         self.cancel.cancel();
     }
 
+    /// Whether the walk was told to stop.
+    #[must_use]
+    pub fn stop_asked(&self) -> bool {
+        self.cancel.is_cancelled()
+    }
+
     /// Reads the tree as it stands.
     pub fn read<T>(&self, look: impl FnOnce(&UsageTree) -> T) -> T {
         look(&self.tree.lock_or_recover("disk_usage.tree"))

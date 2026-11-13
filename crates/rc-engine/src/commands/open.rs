@@ -17,10 +17,8 @@ use super::panel::resolve_path;
 use crate::recover::LockOrRecover as _;
 use crate::recover::LogPanic as _;
 use crate::{
-    Engine, EngineError, Outcome, PanelId,
-    archives::opens_on_enter,
-    mcp_questions::check_mcp_pin,
-    remote_edit::{OpenRemote, is_server},
+    Engine, EngineError, Outcome, PanelId, archives::opens_on_enter, mcp_questions::check_mcp_pin,
+    remote_edit::OpenRemote,
 };
 
 impl Engine {
@@ -78,7 +76,7 @@ impl Engine {
         {
             return self.show_path(id, root).await;
         }
-        let server = is_server(&target.backend);
+        let server = target.backend.is_server();
         let file = match target.backend {
             BackendId::Local => target.path,
             // Inside an archive the system gets a read-only copy.

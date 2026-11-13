@@ -54,6 +54,9 @@ pub struct Pane {
     /// The follow notice the window put into `error` itself, which it clears by itself when the
     /// terminal can follow again - never another message (RC-080-53).
     pub follow_notice: Option<&'static str>,
+    /// A transfer onto the portable device this panel shows is running: the status line says so
+    /// until it is over (RC-110-16, `file_ops/device_hint.rs`).
+    pub transfer_hint: Option<String>,
 }
 
 impl Pane {
@@ -71,6 +74,7 @@ impl Pane {
             width: 0.0,
             error: None,
             follow_notice: None,
+            transfer_hint: None,
         };
         pane.ensure_visible();
         pane
@@ -93,7 +97,7 @@ impl Pane {
             self.on_parent = false;
         }
         let listed = Arc::ptr_eq(&self.state.entries, &state.entries)
-            && self.state.dir_sizes == state.dir_sizes;
+            && Arc::ptr_eq(&self.state.dir_sizes, &state.dir_sizes);
         if !listed {
             self.summary = Summary::of(&state);
         } else if self.state.selection != state.selection {

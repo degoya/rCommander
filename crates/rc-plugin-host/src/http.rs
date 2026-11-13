@@ -292,6 +292,10 @@ impl HttpGrant {
 }
 
 /// Whether `url` names this machine's loopback: `localhost`, `127.0.0.1` or `[::1]`.
+///
+/// The same three names as the MCP server's `Host` check (`rc-mcp/src/http.rs`), there on a
+/// header's text, here on a parsed URL; narrower than `rc_engine::forwards::is_loopback`, which
+/// takes all of `127.0.0.0/8` for an address a forward binds to (RC-110-30: three rules, kept).
 fn is_loopback(url: &Url) -> bool {
     match url.host() {
         Some(Host::Domain(name)) => name.eq_ignore_ascii_case("localhost"),

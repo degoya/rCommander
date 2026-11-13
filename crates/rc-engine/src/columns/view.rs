@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use rc_vfs::{BackendId, VfsPath};
+use rc_vfs::VfsPath;
 use serde_json::Value;
 
 use super::{
@@ -51,7 +51,7 @@ impl Engine {
     /// `path` as the path line shows it: `sftp://<connection>/<path>` and `ftp://...` on a
     /// server, the archive file's path with the path inside appended in an archive.
     async fn shown_location(&self, path: &VfsPath) -> String {
-        if matches!(path.backend, BackendId::Ftp { .. } | BackendId::Sftp { .. })
+        if path.backend.is_server()
             && let Some((name, written)) = self.connection_writer(path).await
         {
             return written(&name, &path.path);

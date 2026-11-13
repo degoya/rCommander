@@ -63,6 +63,8 @@ fn one_of_each_own() -> Vec<OpsError> {
             needed: 2,
             free: 1,
         },
+        OpsError::TargetInTransfer { path: path() },
+        OpsError::DeviceBusy,
     ];
     for sample in &samples {
         match sample {
@@ -102,7 +104,9 @@ fn one_of_each_own() -> Vec<OpsError> {
             | OpsError::ArchiveInUse { .. }
             | OpsError::ArchiveNotLocal { .. }
             | OpsError::ArchiveFileReadOnly { .. }
-            | OpsError::NotEnoughSpace { .. } => {}
+            | OpsError::NotEnoughSpace { .. }
+            | OpsError::TargetInTransfer { .. }
+            | OpsError::DeviceBusy => {}
         }
     }
     samples

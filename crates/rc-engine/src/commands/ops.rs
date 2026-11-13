@@ -108,13 +108,16 @@ impl Engine {
     /// Submits `spec` into the queue list `list`: with `queue.one_job_per_item` on (the default)
     /// a copy, move or delete of several sources as one job per source, side by side in their
     /// order ([`per_item`], RC-010-14), the outcome listing them; else one job. A link to a
-    /// folder goes as `ops.copy_links` says (RC-080-63).
+    /// folder goes as `ops.copy_links` says (RC-080-63). Refused as `target_in_transfer` when a
+    /// job that has not ended writes one of its files onto a device already (RC-110-16).
     pub(super) async fn submit_items(
         &self,
         mut spec: JobSpec,
         list: QueueListId,
     ) -> Result<Outcome, EngineError> {
         spec.options.copy_links = self.copy_links().await;
+        // A file a running transfer is putting onto a device is not copied there again (RC-110-16).
+        self.refuse_in_transfer([&spec.kind]).await?;
         let specs = if self.setting_on(ONE_JOB_PER_ITEM_KEY).await {
             per_item(spec)
         } else {
@@ -184,7 +187,7 @@ impl Engine {
 
     /// Opens the SFTP or FTP backend of `path`'s connection for the queue, when it is one.
     pub(crate) async fn open_server(&self, path: &VfsPath) -> Result<(), EngineError> {
-        if matches!(path.backend, BackendId::Sftp { .. } | BackendId::Ftp { .. }) {
+        if path.backend.is_server() {
             self.open_vfs(path, self.announces_locked_vault()).await?;
         }
         Ok(())

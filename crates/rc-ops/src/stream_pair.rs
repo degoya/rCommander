@@ -251,8 +251,9 @@ impl Runner {
 
     /// One file's streams to their end, the same for a fresh copy and a continued part: the FTP
     /// turn (`pair`, [`Runner::one_ftp_pair`]) let go now that both streams are open, the
-    /// [`Runner::pump`], the writer shut down - after a failure too, whose error then counts -,
-    /// both streams let go, and [`Runner::check_copy`] on what landed at `to`, where `before`
+    /// [`Runner::pump`], the writer shut down - after a failure too, whose error then counts,
+    /// but onto a portable device, whose stream a failure or a cancel only lets go -, both
+    /// streams let go, and [`Runner::check_copy`] on what landed at `to`, where `before`
     /// bytes were already.
     pub(crate) async fn land(
         &mut self,
@@ -274,6 +275,10 @@ impl Runner {
                 Ok(()) => Ok(pumped),
                 Err(error) => Err(self.target_failed(error, to)),
             },
+            // A device's stream is only let go: shut down, one that kept the file on this
+            // machine would still hand what it has to the device, whole, to be removed after
+            // (RC-110-16). Dropped, either kind stops and keeps nothing.
+            Err(step) if matches!(self.dst_id, Some(BackendId::Device { .. })) => Err(step),
             Err(step) => {
                 let _ = writer.shutdown().await;
                 Err(step)

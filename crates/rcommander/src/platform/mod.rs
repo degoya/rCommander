@@ -18,6 +18,9 @@ pub mod taskbar;
 pub mod window_class;
 #[cfg(windows)]
 mod windows;
+// The COM and GDI guards, for the Win32 modules outside this one (icons, thumbnails).
+#[cfg(windows)]
+pub(crate) use self::windows::gdi;
 // WM_TRANSIENT_FOR and the dialog window type under X11 (RC-080-73).
 #[cfg(all(unix, not(target_os = "macos")))]
 mod x11_dialog;

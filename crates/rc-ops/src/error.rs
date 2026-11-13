@@ -140,6 +140,14 @@ pub enum OpsError {
         needed: u64,
         free: u64,
     },
+    /// A job that has not ended yet writes the same file on a portable device (RC-110-16): the
+    /// new job is refused before it runs, instead of asking about a file that "already exists".
+    #[error("{}: this file is being transferred right now", path.display())]
+    TargetInTransfer { path: PathBuf },
+    /// A portable device is taking a transfer: its folder is not read again until the job is
+    /// over (RC-110-16); the listing would wait behind the transfer and show the old state.
+    #[error("the device is busy with a transfer; its folder is read again afterwards")]
+    DeviceBusy,
 }
 
 impl OpsError {
@@ -182,6 +190,8 @@ impl OpsError {
         "archive_not_local",
         "archive_file_read_only",
         "not_enough_space",
+        "target_in_transfer",
+        "device_busy",
     ];
 
     /// The stable code.
@@ -225,6 +235,8 @@ impl OpsError {
             Self::ArchiveNotLocal { .. } => "archive_not_local",
             Self::ArchiveFileReadOnly { .. } => "archive_file_read_only",
             Self::NotEnoughSpace { .. } => "not_enough_space",
+            Self::TargetInTransfer { .. } => "target_in_transfer",
+            Self::DeviceBusy => "device_busy",
         }
     }
 

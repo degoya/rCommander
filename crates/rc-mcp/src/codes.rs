@@ -22,6 +22,7 @@ pub const ALL_CODES: &[&str] = &[
     "timed_out",
     "headless_ask_denied",
     "too_many_questions",
+    "workspace_changed",
     "answer_unmaskable",
     // Engine codes a tool answers before the engine is asked: an archive test without archives
     // (`OpsError`), a property argument the tool cannot take (`EngineError`).

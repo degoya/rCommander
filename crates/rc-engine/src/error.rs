@@ -15,8 +15,6 @@ use crate::ConnectionId;
 mod codes;
 mod convert;
 
-use convert::describe_mismatches;
-
 /// What went wrong running a command.
 ///
 /// [`EngineError::code`] is the stable machine-readable form: the GUI looks its message up under
@@ -320,7 +318,7 @@ pub enum EngineError {
     #[error(
         "{} entries no longer fit the undo, nothing was renamed: {}",
         .mismatches.len(),
-        describe_mismatches(.mismatches)
+        convert::describe_mismatches(.mismatches)
     )]
     RenameUndoMismatch { mismatches: Vec<UndoMismatch> },
     /// A multi-rename preset name that cannot be used, or one preset too many.
@@ -400,10 +398,12 @@ pub enum EngineError {
     /// The file is no archive rCommander reads.
     #[error("{name} is not an archive rCommander reads")]
     NotAnArchive { name: String },
-    /// A properties command (RC-020-06) misses what it needs or got what it cannot take: a
-    /// link without its place, a comment that is too long.
+    /// A properties command (RC-020-06) misses what it needs or got what it cannot take.
     #[error("{reason}")]
     PropertyInvalid { reason: &'static str },
+    /// A comment has a character its `descript.ion`'s encoding lacks; nothing is written.
+    #[error("the comment has a character the folder's descript.ion ({encoding}) cannot hold")]
+    CommentNotEncodable { encoding: &'static str },
     /// No SFTP session came about on an SSH connection (no subsystem, a timeout, a lost
     /// channel); keeps the code of its [`SftpError`].
     #[error(transparent)]

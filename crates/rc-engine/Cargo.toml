@@ -20,6 +20,7 @@ async-trait.workspace = true
 chrono.workspace = true
 directories.workspace = true
 encoding_rs.workspace = true
+hex.workspace = true
 # The EXIF of photos: the image view's EXIF tree and `file.properties` (RC-100-99).
 kamadak-exif.workspace = true
 # The panels' file watcher (`watch/native.rs`, RC-110-02).
@@ -40,6 +41,7 @@ rc-plugin-text.workspace = true
 rc-plugin-types = { path = "../rc-plugin-types" }
 # The external compare tool starts without a console window (RC-100-94).
 rc-process = { path = "../rc-process" }
+rc-recover = { path = "../rc-recover" }
 rc-remote = { path = "../rc-remote" }
 rc-rename = { path = "../rc-rename" }
 rc-term = { path = "../rc-term" }

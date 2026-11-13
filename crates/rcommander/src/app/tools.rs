@@ -23,9 +23,18 @@ pub struct ToolsUi {
     pub select: Option<SelectDuplicates>,
     /// The disk-usage window, while it is open.
     pub usage: Option<DiskUsageWindow>,
+    /// The number of the last disk-usage walk asked for, over every window of the session.
+    usage_generation: u64,
 }
 
 impl ToolsUi {
+    /// The number of the next disk-usage walk: never one an earlier window had, so a walk that
+    /// starts after its window closed is told from the one a new window waits for.
+    fn next_usage(&mut self) -> u64 {
+        self.usage_generation += 1;
+        self.usage_generation
+    }
+
     /// Whether "Select duplicate files" is open.
     pub fn select_open(&self) -> bool {
         self.select.as_ref().is_some_and(|dialog| dialog.open)

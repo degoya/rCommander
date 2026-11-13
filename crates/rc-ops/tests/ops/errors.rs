@@ -1,5 +1,5 @@
 //! Failing files: a full disk, no access, a copy that does not verify, a move whose source
-//! stream ends early - asked, skipped, retried or fatal.
+//! stream ends early - asked, skipped, retried or fatal - and a moved link whose size is its own.
 
 use std::{path::Path, sync::Arc};
 
@@ -9,7 +9,7 @@ use rc_ops::{
     Answer, Backend, ErrorChoice, ErrorPolicy, JobChange, JobKind, JobOptions, JobSpec, JobState,
     Question,
 };
-use rc_vfs::{BackendId, MemoryFs, ReadStream, SetAttributes, Vfs};
+use rc_vfs::{BackendId, Entry, EntryKind, MemoryFs, ReadStream, SetAttributes, TargetKind, Vfs};
 use tokio::io::AsyncReadExt;
 
 fn copy(sources: &[&str], target: &str, options: JobOptions) -> JobSpec {
@@ -236,6 +236,68 @@ async fn a_move_with_a_short_source_stream_keeps_the_source() {
         !exists(&two, "/in/a.bin").await,
         "the short copy is removed"
     );
+}
+
+/// A backend that shows every file as a link to a file with the link's own size, listed and
+/// looked at again - an FTP server's `LIST` line and `MLST` facts of a link; reading it yields
+/// the target's contents.
+struct LinkSizes(MemoryFs);
+
+impl LinkSizes {
+    fn as_link(mut entry: Entry) -> Entry {
+        if entry.kind == EntryKind::File {
+            entry.kind = EntryKind::Symlink {
+                target: "target.bin".into(),
+                target_kind: Some(TargetKind::File),
+            };
+            entry.size = 10;
+        }
+        entry
+    }
+}
+
+#[async_trait]
+impl rc_vfs::testing::Forward for LinkSizes {
+    fn inner(&self) -> &dyn Vfs {
+        &self.0
+    }
+    async fn list(&self, dir: &Path) -> rc_vfs::Result<Vec<Entry>> {
+        let entries = self.0.list(dir).await?;
+        Ok(entries.into_iter().map(Self::as_link).collect())
+    }
+    async fn stat(&self, path: &Path) -> rc_vfs::Result<Entry> {
+        self.0.stat(path).await.map(Self::as_link)
+    }
+}
+
+/// RC-110-26: a moved link to a file is not held against the link's own size - the stream was
+/// the target's - so it arrives and its source goes.
+#[tokio::test]
+async fn a_moved_link_is_not_held_against_the_links_own_size() {
+    let harness = Harness::start();
+    let one = MemoryFs::new();
+    harness.queue.register(
+        BackendId::Memory(1),
+        Backend::new(Arc::new(LinkSizes(one.clone()))),
+    );
+    let two = harness.memory(2);
+    write(&one, "/dir/link.bin", &payload(10_000, 5)).await;
+    let done = harness
+        .run(JobSpec {
+            kind: JobKind::Move {
+                sources: vec![mem(1, "/dir")],
+                target: mem(2, "/in"),
+            },
+            options: JobOptions {
+                on_error: ErrorPolicy::Skip,
+                ..JobOptions::default()
+            },
+        })
+        .await;
+    assert_eq!(done.state, JobState::Completed, "{done:?}");
+    assert!(done.failures.is_empty(), "{done:?}");
+    assert_eq!(read(&two, "/in/dir/link.bin").await, payload(10_000, 5));
+    assert!(!exists(&one, "/dir/link.bin").await, "the source went");
 }
 
 #[tokio::test]

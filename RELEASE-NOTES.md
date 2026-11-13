@@ -11,6 +11,17 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.23.1
+
+- While a copy onto a phone runs, the panel showing the phone says so, Ctrl+R reports the device as busy, and copying the same file again says it is still being transferred.
+- Assistants connected over MCP can no longer write into rCommander's program folder or move its files away, switch it to portable mode, or save a workspace that opens another computer's share.
+- Text an assistant reads is now masked even when it begins with a web address, and an address with a password inside a text loses the password.
+- Renaming to the same name in another upper or lower case no longer replaces a different file in a folder that tells case apart, such as a WSL folder.
+- Overwriting on a server or a phone no longer loses the old file when the copy fails or is cancelled, and changing one file comment keeps the folder's other comments intact, on servers too.
+- Quick View stays smooth on servers while an arrow key is held, and terminals pass the wheel and the right and middle button to programs such as tmux, htop and Midnight Commander.
+- After a long context menu or drag during a copy the progress no longer stays stuck, and quitting with a hanging plugin closes after five seconds.
+- Updates without a database change no longer copy the database first, thumbnails keep loading when a handler hangs, and the disk usage tool stops when its window closes.
+
 ## 0.22.0
 
 - Right-click the button bar for its own menu: change or delete a button, edit the bar, pick the symbol size, switch to flat buttons or hide the bar.

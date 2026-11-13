@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 
-use crate::{MAX_RULE_TEXT, RenameError};
+use crate::{MAX_RULE_TEXT, RenameError, split::split_extension};
 
 /// Whether `text` holds a wildcard of a target mask, `*` or `?`.
 #[must_use]
@@ -53,7 +53,7 @@ pub fn apply_target_mask(mask: &str, name: &str) -> String {
     let Some((stem_mask, extension_mask)) = mask.rsplit_once('.') else {
         return apply_half(mask, name);
     };
-    let (stem, extension) = split_name(name);
+    let (stem, extension) = split_extension(name);
     let mut new = apply_half(stem_mask, stem);
     let extension = apply_half(extension_mask, extension);
     if !extension.is_empty() {
@@ -61,14 +61,6 @@ pub fn apply_target_mask(mask: &str, name: &str) -> String {
         new.push_str(&extension);
     }
     new
-}
-
-/// `name` split at its last dot; a name whose only dot leads (`.profile`) has no extension.
-fn split_name(name: &str) -> (&str, &str) {
-    match name.rfind('.') {
-        Some(at) if at > 0 => (&name[..at], &name[at + 1..]),
-        _ => (name, ""),
-    }
 }
 
 /// One half of a name, the stem or the extension, through its half of the mask.

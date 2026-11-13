@@ -28,12 +28,14 @@ mod local;
 mod memory;
 mod paths;
 mod props;
+mod read;
 mod recover;
 mod system_folder;
 #[cfg(any(test, feature = "memory"))]
 pub mod testing;
 mod timeout;
 mod vfs;
+mod work;
 pub mod wsl;
 
 use std::path::PathBuf;
@@ -56,10 +58,11 @@ pub use local::{LocalFs, umask};
 #[cfg(any(test, feature = "memory"))]
 pub use memory::MemoryFs;
 pub use paths::{
-    NetworkPath, WslPath, drive_letter, long_path, network_path, parse_wsl_unc, split_name,
+    NetworkPath, WslPath, case_sensitive_at, drive_letter, long_path, network_path, parse_wsl_unc,
     wsl_unc_path,
 };
 pub use props::{Details, FileId, LinkKind, LinkKinds, PropertyCapabilities, PropertyChange};
+pub use read::read_within;
 pub use system_folder::{DEFAULT_SYSTEM_ROOT, system32, system32_from_env};
 pub use timeout::{
     DEFAULT_LISTING_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, IoCancel, TimeoutFs, Timeouts,
@@ -107,6 +110,24 @@ pub enum BackendId {
     },
 }
 
+impl BackendId {
+    /// Whether this is a server's file system, over SFTP or FTP.
+    #[must_use]
+    pub fn is_server(&self) -> bool {
+        matches!(self, Self::Sftp { .. } | Self::Ftp { .. })
+    }
+
+    /// The id of the connection that reaches this backend: a server's, over SFTP or FTP; `None`
+    /// for every other backend.
+    #[must_use]
+    pub fn connection_id(&self) -> Option<i64> {
+        match self {
+            Self::Sftp { connection_id } | Self::Ftp { connection_id } => Some(*connection_id),
+            _ => None,
+        }
+    }
+}
+
 /// A location: the backend and the path inside it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct VfsPath {
@@ -145,6 +166,15 @@ impl VfsPath {
             backend: self.backend.clone(),
             path: self.path.join(name),
         }
+    }
+
+    /// The last part of the path as text, lossily; `None` for a root or a path that ends in
+    /// `..`.
+    #[must_use]
+    pub fn file_name(&self) -> Option<String> {
+        self.path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
     }
 
     /// The parent location: at the root of an archive the directory that holds the archive

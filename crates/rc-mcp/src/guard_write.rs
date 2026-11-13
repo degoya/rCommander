@@ -1,10 +1,12 @@
 //! The write-target guard (RC-080-09): places no MCP call writes to, whatever the policy.
 //!
 //! [`protected_target`] names rCommander's data folder (the database, a staged restore and its
-//! mark, the instance file, the backup folder and the update's folder inside it), the folders an
-//! update keeps beside the program (`.update-*`, `.previous`, `.trash`, `.failed-*`, RC-100-06),
-//! rCommander's own file names anywhere
-//! (`rc_db::is_database_file_name`, `mcp-instance.json`), every `.ssh` folder (`authorized_keys`,
+//! mark, the instance file, the backup folder and the update's folder inside it), the program's
+//! own folder (RC-110-19: a file planted beside the program runs or is loaded at the next start),
+//! the folders an update keeps beside the program (`.update-*`, `.previous`, `.trash`,
+//! `.failed-*`, RC-100-06), rCommander's own file names anywhere
+//! (`rc_db::is_database_file_name`, `mcp-instance.json`, and the portable mode's marker
+//! `rcommander.portable`, which would start the next run on an empty data folder), every `.ssh` folder (`authorized_keys`,
 //! `config` - locally and on a server), the autostart folders (Windows' `Start Menu\Programs\
 //! Startup` of the user and of all users, `~/.config/autostart`, systemd's user units in
 //! `~/.config/systemd/user`), shells' start-up files (`.bashrc`, `.profile`, `.bash_logout`,
@@ -22,167 +24,31 @@
 //! (`guard.rs`). What a copy or an unpack writes below its target is judged entry by entry: a
 //! local folder's tree ([`WriteGuard::refuse_copy`]) and an archive's entries
 //! ([`WriteGuard::refuse_unpack`]); a folder on a server is judged by its own name.
+//!
+//! The same places are no source of a move or a rename (RC-110-19): taking the program, a file
+//! of the data folder, an autostart entry or a shell's start-up file away breaks or changes the
+//! next start as writing there does, and makes room for another file under the old name. A
+//! folder that holds such a place is refused as well ([`WriteGuard::refuse_taking`]); a rename
+//! is judged by names alone ([`WriteGuard::refuse_renaming`]: the entry, and a folder above the
+//! program's or the data folder), a move also by the entries below a local folder. Deleting
+//! is not judged here: every deleting tool is `destructive`, so a person is asked and the
+//! question names the entries; copying and reading are the read guard's (`guard.rs`).
 
-use std::{
-    path::{Path, PathBuf},
-    sync::OnceLock,
-};
+use std::path::{Path, PathBuf};
 
 use rc_db::Db;
 use rc_engine::{Command, Engine, EntryKind, Outcome, PanelId, VfsPath, shown_path};
 use rmcp::model::CallToolResult;
 
-use crate::{
-    RcMcpServer,
-    answer::error_result,
-    guard::{as_windows_opens, lowered},
-    instance::INSTANCE_FILE,
-};
+use crate::{RcMcpServer, answer::error_result};
 
-/// Folder chains whose files start with the session, in lower case: Windows' Startup folders
-/// (`%APPDATA%\Microsoft\Windows\...` and `%ProgramData%\...`) and the XDG autostart folder.
-const AUTOSTART: &[&[&str]] = &[
-    &["start menu", "programs", "startup"],
-    &[".config", "autostart"],
-    &[".config", "systemd", "user"],
-];
+mod places;
 
-/// Folder chains, in lower case, whose files a tool runs or obeys on its own, with the reason:
-/// Git runs its hooks, fish its start-up file, an editor its tasks.
-const RUN_BY_TOOLS: &[(&[&str], &str)] = &[
-    (&[".git", "hooks"], "Git's hooks"),
-    // A repository's and the XDG configuration name a pager, an editor and `core.fsmonitor`.
-    (&[".git", "config"], "Git's configuration"),
-    (&[".config", "git", "config"], "Git's configuration"),
-    (&["fish", "config.fish"], "a shell's start-up file"),
-    (&["fish", "conf.d"], "a shell's start-up file"),
-    (&["fish", "functions"], "a shell's start-up file"),
-    (&[".vscode", "tasks.json"], "an editor's tasks"),
-    (&[".vscode", "settings.json"], "an editor's settings"),
-    (&[".cargo", "config"], "Cargo's configuration"),
-    (&[".cargo", "config.toml"], "Cargo's configuration"),
-    // Programs found before the system's on the PATH, launchers, the session's environment.
-    (&[".local", "bin"], "a folder on the PATH"),
-    (&[".local", "share", "applications"], "a desktop launcher"),
-    (&[".config", "environment.d"], "the session's environment"),
-    (&["plasma-workspace", "env"], "the session's environment"),
-];
-
-/// File names a tool reads its programs from wherever they are: Git's configuration names an
-/// editor, a pager and hooks it starts.
-const TOOL_CONFIG: &[&str] = &[".gitconfig"];
-
-/// Shells' start-up files, run by the next shell or login; PowerShell's profiles end in
-/// `profile.ps1`.
-const SHELL_STARTUP: &[&str] = &[
-    ".bash_aliases",
-    ".bash_login",
-    ".bash_logout",
-    ".bash_profile",
-    ".bashrc",
-    ".cshrc",
-    ".login",
-    ".profile",
-    ".pam_environment",
-    ".tcshrc",
-    ".xinitrc",
-    ".xprofile",
-    ".xsessionrc",
-    ".zlogin",
-    ".zlogout",
-    ".zprofile",
-    ".zshenv",
-    ".zshrc",
-];
-
-/// Why MCP must not write at `path`, or `None` when it may; judged by its name and folders
-/// against the default data folder.
-#[must_use]
-pub fn protected_target(path: &Path) -> Option<&'static str> {
-    judge_all(path, default_data_dirs())
-}
-
-/// [`judge`] of the path as given and as Windows opens it.
-fn judge_all(path: &Path, data_dirs: &[PathBuf]) -> Option<&'static str> {
-    judge(path, data_dirs).or_else(|| judge(&as_windows_opens(path)?, data_dirs))
-}
-
-/// [`protected_target`] with the data folders given.
-fn judge(path: &Path, data_dirs: &[PathBuf]) -> Option<&'static str> {
-    let parts = lowered(path);
-    if data_dirs
-        .iter()
-        .map(|dir| lowered(dir))
-        .any(|dir| !dir.is_empty() && parts.starts_with(&dir))
-    {
-        return Some("rCommander's data folder");
-    }
-    if parts
-        .iter()
-        .any(|name| rc_db::is_database_file_name(name) || name == INSTANCE_FILE)
-    {
-        return Some("one of rCommander's own files");
-    }
-    if parts.iter().any(|name| name == ".ssh") {
-        return Some("an SSH folder");
-    }
-    // The folders an update keeps beside the program (RC-100-06): the staging, the previous
-    // version, the trash and a rolled-back version; the data folder's `update/` is covered above.
-    if parts.iter().any(|name| {
-        name == ".previous"
-            || name == ".trash"
-            || name.starts_with(".update-")
-            || name.starts_with(".failed-")
-    }) {
-        return Some("an update's own folder");
-    }
-    let holds = |chain: &[&str]| {
-        parts.windows(chain.len()).any(|window| {
-            window
-                .iter()
-                .zip(chain.iter())
-                .all(|(name, want)| name == want)
-        })
-    };
-    if AUTOSTART.iter().any(|chain| holds(chain)) {
-        return Some("an autostart folder");
-    }
-    if let Some((_, reason)) = RUN_BY_TOOLS.iter().find(|(chain, _)| holds(chain)) {
-        return Some(*reason);
-    }
-    if parts
-        .iter()
-        .any(|name| TOOL_CONFIG.contains(&name.as_str()))
-    {
-        return Some("Git's configuration");
-    }
-    let name = parts.last()?;
-    if SHELL_STARTUP.contains(&name.as_str()) || name.ends_with("profile.ps1") {
-        return Some("a shell's start-up file");
-    }
-    None
-}
-
-/// The default data folder, as the platform names it and with links resolved; empty when the
-/// platform has no data directory.
-fn default_data_dirs() -> &'static [PathBuf] {
-    static DIRS: OnceLock<Vec<PathBuf>> = OnceLock::new();
-    DIRS.get_or_init(|| {
-        Db::default_path()
-            .ok()
-            .and_then(|db| db.parent().map(Path::to_path_buf))
-            .map(with_real)
-            .unwrap_or_default()
-    })
-}
-
-/// `dir` and, when it differs and exists, where it really is.
-fn with_real(dir: PathBuf) -> Vec<PathBuf> {
-    let real = std::fs::canonicalize(&dir).ok();
-    let mut dirs = vec![dir];
-    dirs.extend(real);
-    dirs
-}
+pub(crate) use places::program_dirs;
+pub use places::protected_target;
+use places::{default_data_dirs, judge_all, judge_holding, with_real};
+#[cfg(test)]
+use places::{judge, program_dirs_of};
 
 /// Whether `at` is on the local backend.
 fn is_local(at: &VfsPath) -> bool {
@@ -217,6 +83,25 @@ fn refusal(at: &VfsPath, reason: &str) -> CallToolResult {
     )
 }
 
+/// The refusal of a move or rename that would take `at` away, as [`WriteGuard::refuse_taking`]
+/// judges it: `holds` when `at` is not in the place named by `reason` but a folder holding it.
+fn refusal_taken(at: &VfsPath, reason: &str, holds: bool) -> CallToolResult {
+    let shown = shown_path(at);
+    let shown = shown.display();
+    let text = if holds {
+        format!(
+            "{shown} holds {reason}: MCP never moves or renames it away. A person can do it in \
+             rCommander."
+        )
+    } else {
+        format!(
+            "{shown} is or lies in {reason}: MCP never moves or renames anything away from \
+             there. A person can do it in rCommander."
+        )
+    };
+    error_result("protected_target", &text)
+}
+
 /// The place a call writes to that is named relative to the other panel: `target` resolved
 /// against the other panel's directory, or that directory when it is omitted - inside
 /// `Engine::pin_mcp_panels` the folder pinned, the one the command resolves against too
@@ -233,29 +118,38 @@ pub(crate) fn other_panel_target(
     }
 }
 
-/// The guard of one call: the default data folder and the folder of the database the server
-/// runs on.
+/// The guard of one call: the default data folder, the folder of the database the server runs
+/// on and the program's folder.
 pub(crate) struct WriteGuard {
     data_dirs: Vec<PathBuf>,
+    program_dirs: Vec<PathBuf>,
 }
 
 impl WriteGuard {
-    pub(crate) fn new(db: &Db) -> Self {
+    pub(crate) fn new(db: &Db, program_dirs: &[PathBuf]) -> Self {
         let mut data_dirs = default_data_dirs().to_vec();
         if let Some(dir) = db.path().and_then(Path::parent) {
             data_dirs.extend(with_real(dir.to_path_buf()));
         }
-        Self { data_dirs }
+        Self {
+            data_dirs,
+            program_dirs: program_dirs.to_vec(),
+        }
+    }
+
+    /// [`judge_all`] against this guard's folders.
+    fn judge(&self, path: &Path) -> Option<&'static str> {
+        judge_all(path, &self.data_dirs, &self.program_dirs)
     }
 
     /// Why nothing may be written at `at`: as it really is, then as written.
     pub(crate) async fn refuses(&self, at: &VfsPath) -> Option<&'static str> {
         if let Some(real) = real_path(at).await
-            && let Some(reason) = judge_all(&real, &self.data_dirs)
+            && let Some(reason) = self.judge(&real)
         {
             return Some(reason);
         }
-        judge_all(&at.path, &self.data_dirs)
+        self.judge(&at.path)
     }
 
     /// [`WriteGuard::refuses`] as a tool's answer.
@@ -285,14 +179,88 @@ impl WriteGuard {
         source: &VfsPath,
         dest: &VfsPath,
     ) -> Option<CallToolResult> {
+        self.refuse_transfer(source, dest, false).await
+    }
+
+    /// [`WriteGuard::refuse_copy`] for a move, which also takes `source` away
+    /// ([`WriteGuard::refuse_taking`]); the source's tree is read once for both.
+    pub(crate) async fn refuse_move(
+        &self,
+        source: &VfsPath,
+        dest: &VfsPath,
+    ) -> Option<CallToolResult> {
+        self.refuse_transfer(source, dest, true).await
+    }
+
+    async fn refuse_transfer(
+        &self,
+        source: &VfsPath,
+        dest: &VfsPath,
+        moving: bool,
+    ) -> Option<CallToolResult> {
         if let Some(refusal) = self.refuse(dest).await {
+            return Some(refusal);
+        }
+        if moving && let Some(refusal) = self.refuse_renaming(source).await {
             return Some(refusal);
         }
         if !is_local(source) {
             return None;
         }
         let rels = local_tree(&source.path).await;
-        self.refuse_below(dest, &rels).await
+        if let Some(refusal) = self.refuse_below(dest, &rels).await {
+            return Some(refusal);
+        }
+        if moving {
+            return self.refuse_taking_below(source, &rels).await;
+        }
+        None
+    }
+
+    /// The refusal of a move or rename that takes the entry `at` away from where it is
+    /// (RC-110-19): an entry in a protected place - the program moved aside, a file of the data
+    /// folder, an autostart entry, a shell's start-up file - and a folder that holds one: the
+    /// program's or the data folder anywhere below it, or, for a local folder, an entry below it
+    /// that is protected by its name. Judged as written, as it really is and as Windows opens
+    /// it, like a target. Copying and reading from there are not this guard's.
+    pub(crate) async fn refuse_taking(&self, at: &VfsPath) -> Option<CallToolResult> {
+        if let Some(refusal) = self.refuse_renaming(at).await {
+            return Some(refusal);
+        }
+        if !is_local(at) {
+            return None;
+        }
+        let rels = local_tree(&at.path).await;
+        self.refuse_taking_below(at, &rels).await
+    }
+
+    /// [`WriteGuard::refuse_taking`] by the name of `at` alone: in a protected place, or a
+    /// folder above the program's or the data folder. All a rename is judged by: what lies
+    /// below a renamed folder stays in it, so its tree is not read - a folder with a Git
+    /// repository in it is renamed like any other.
+    pub(crate) async fn refuse_renaming(&self, at: &VfsPath) -> Option<CallToolResult> {
+        if let Some(reason) = self.refuses(at).await {
+            return Some(refusal_taken(at, reason, false));
+        }
+        let real = real_path(at).await;
+        std::iter::once(&at.path)
+            .chain(real.as_ref())
+            .find_map(|path| judge_holding(path, &self.data_dirs, &self.program_dirs))
+            .map(|reason| refusal_taken(at, reason, true))
+    }
+
+    /// [`WriteGuard::refuse_taking`] for the entries `rels` below the local folder `at`: the
+    /// first that is protected where it is now.
+    async fn refuse_taking_below(&self, at: &VfsPath, rels: &[PathBuf]) -> Option<CallToolResult> {
+        let real = real_path(at).await;
+        for rel in rels {
+            for base in std::iter::once(&at.path).chain(real.as_ref()) {
+                if let Some(reason) = self.judge(&base.join(rel)) {
+                    return Some(refusal_taken(at, reason, true));
+                }
+            }
+        }
+        None
     }
 
     /// [`WriteGuard::refuse`] for every place unpacking `archive` (named relative to `panel`)
@@ -346,7 +314,7 @@ impl WriteGuard {
         let real = real_path(root).await;
         for rel in rels {
             for base in std::iter::once(&root.path).chain(real.as_ref()) {
-                if let Some(reason) = judge_all(&base.join(rel), &self.data_dirs) {
+                if let Some(reason) = self.judge(&base.join(rel)) {
                     return Some(refusal(&root.join(rel), reason));
                 }
             }
@@ -438,10 +406,18 @@ async fn archive_tree(
 impl RcMcpServer {
     /// The write guard of a call.
     pub(crate) fn write_guard(&self) -> WriteGuard {
-        WriteGuard::new(&self.context.db)
+        WriteGuard::new(&self.context.db, &self.context.program_dirs)
     }
 }
 
 #[cfg(test)]
 #[path = "guard_write_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "guard_write_program_tests.rs"]
+mod program_tests;
+
+#[cfg(test)]
+#[path = "guard_write_source_tests.rs"]
+mod source_tests;

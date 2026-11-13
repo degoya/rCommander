@@ -16,8 +16,11 @@
 //! * macOS: a marker inside the signed `.app` breaks its signature, and App Translocation starts
 //!   it from a read-only folder of chance.
 //!
-//! Whoever can write the program's folder can replace the program as well; the marker opens no
-//! new way in. The update leaves [`MARKER`] and [`DATA_DIR`] where they are
+//! Whoever can write the program's folder can replace the program as well; to them the marker
+//! opens no new way in. An MCP client is not among them (RC-110-19): a marker planted beside the
+//! program would start the next run on an empty data folder - the MCP policy at its defaults, the
+//! trusted host keys and the audit log gone - so `rc-mcp`'s write guard refuses the program's
+//! folder and the marker's name anywhere. The update leaves [`MARKER`] and [`DATA_DIR`] where they are
 //! (`install/portable.rs`, `KEPT`).
 
 use std::path::{Component, Path, PathBuf, Prefix};

@@ -54,7 +54,7 @@ impl App {
 
     /// No archive dialog is open any more: the prompt opens for the oldest job that still waits
     /// for a password and was not answered already.
-    pub(super) fn ask_waiting_password(&mut self) {
+    pub(in crate::app) fn ask_waiting_password(&mut self) {
         if self.archive.is_some() {
             return;
         }

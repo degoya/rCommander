@@ -1,11 +1,19 @@
 //! What the remote edits' tests share: an engine with a server - an FTP backend over memory that
-//! keeps Unix modes and records its writes and renames -, a root of their own for the edit
+//! keeps Unix modes and records its writes and renames, and on request refuses a new mode, stops
+//! answering a write or takes it slowly -, a root of their own for the edit
 //! folders, and no watch task (a test reads the copies itself, [`Engine::poll_copies`]).
 
 use std::{
     collections::HashMap,
+    future::Future as _,
+    io,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    pin::Pin,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
+    task::{Context, Poll},
     time::Duration,
 };
 
@@ -33,6 +41,81 @@ pub(crate) struct Server {
     links: Mutex<HashMap<PathBuf, PathBuf>>,
     pub writes: Mutex<Vec<PathBuf>>,
     pub renames: Mutex<Vec<(PathBuf, PathBuf)>>,
+    /// A new mode is refused, as a server refuses the `chmod` of a file that is someone else's.
+    pub refuse_modes: AtomicBool,
+    /// How often a mode was asked for.
+    pub mode_calls: AtomicUsize,
+    /// A file opened to write takes no byte and never answers.
+    pub stall_writes: AtomicBool,
+    /// A stalled write was let go.
+    pub let_go: Arc<AtomicBool>,
+    /// A file opened to write takes one byte every few milliseconds.
+    pub slow_writes: AtomicBool,
+}
+
+/// A write that moves, slowly: one byte after each [`Slow::STEP`].
+struct Slow {
+    inner: WriteStream,
+    wait: Option<Pin<Box<tokio::time::Sleep>>>,
+}
+
+impl Slow {
+    const STEP: Duration = Duration::from_millis(5);
+}
+
+impl tokio::io::AsyncWrite for Slow {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let wait = self
+            .wait
+            .get_or_insert_with(|| Box::pin(tokio::time::sleep(Self::STEP)));
+        if wait.as_mut().poll(context).is_pending() {
+            return Poll::Pending;
+        }
+        self.wait = None;
+        let one = &bytes[..bytes.len().min(1)];
+        Pin::new(&mut self.inner).poll_write(context, one)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.inner).poll_flush(context)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.inner).poll_shutdown(context)
+    }
+}
+
+/// A write the server never answers; it notes when it is let go.
+struct Stalled {
+    let_go: Arc<AtomicBool>,
+}
+
+impl tokio::io::AsyncWrite for Stalled {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _context: &mut Context<'_>,
+        _bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Poll::Pending
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Pending
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Pending
+    }
+}
+
+impl Drop for Stalled {
+    fn drop(&mut self) {
+        self.let_go.store(true, Ordering::SeqCst);
+    }
 }
 
 impl Server {
@@ -132,6 +215,17 @@ impl rc_vfs::testing::Forward for Server {
         self.writes
             .lock_or_recover("server.writes")
             .push(path.to_path_buf());
+        if self.stall_writes.load(Ordering::SeqCst) {
+            return Ok(Box::new(Stalled {
+                let_go: Arc::clone(&self.let_go),
+            }));
+        }
+        if self.slow_writes.load(Ordering::SeqCst) {
+            return Ok(Box::new(Slow {
+                inner: self.inner.open_write(path, mode).await?,
+                wait: None,
+            }));
+        }
         self.inner.open_write(path, mode).await
     }
 
@@ -152,7 +246,14 @@ impl rc_vfs::testing::Forward for Server {
 
     async fn set_attributes(&self, path: &Path, change: SetAttributes) -> rc_vfs::Result<()> {
         match change.mode {
+            Some(_) if self.refuse_modes.load(Ordering::SeqCst) => {
+                self.mode_calls.fetch_add(1, Ordering::SeqCst);
+                Err(rc_vfs::VfsError::PermissionDenied {
+                    path: path.to_path_buf(),
+                })
+            }
             Some(mode) => {
+                self.mode_calls.fetch_add(1, Ordering::SeqCst);
                 self.modes
                     .lock_or_recover("server.modes")
                     .insert(path.to_path_buf(), mode);

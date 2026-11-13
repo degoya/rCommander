@@ -15,6 +15,7 @@ pub use crate::rule::{
     CounterSettings, MAX_NAMES, MAX_NAMES_BYTES, MAX_RULE_TEXT, RenameContext, RenameRule,
     RenameSource, local_time,
 };
+use crate::split::split_name;
 use crate::subdir::{check_path, normalized};
 
 /// What a plan is made from.
@@ -324,15 +325,6 @@ fn mark_conflicts(items: &mut [RenameItem], dir: &str, taken: &HashSet<String>, 
         } else {
             None
         };
-    }
-}
-
-/// The name and the extension: split at the last dot, unless the dot starts the name
-/// (`.bashrc`) or ends it (`notes.`). Folders too, as in Total Commander.
-pub(crate) fn split_name(name: &str) -> (&str, &str) {
-    match name.rfind('.') {
-        Some(dot) if dot > 0 && dot + 1 < name.len() => (&name[..dot], &name[dot + 1..]),
-        _ => (name, ""),
     }
 }
 

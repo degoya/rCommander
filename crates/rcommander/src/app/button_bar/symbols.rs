@@ -103,11 +103,8 @@ impl Symbols {
 /// command's (its `icon_path` and `icon_index`); or on Windows a program's by its absolute path.
 /// `None` for a button that shows a glyph or its text.
 pub fn key_of(button: &BarButton, size: u16) -> Option<SymbolKey> {
-    // The own commands are copied only for a button that needs them.
-    let own = button.icon.is_none()
-        && matches!(&button.action, ButtonAction::Command(action) if action.kind == CommandKind::Own);
-    let commands = if own { known::commands() } else { Vec::new() };
-    key_among(button, size, &commands)
+    // Read in place: this runs per button at every draw (RC-110-29).
+    known::with_commands(|commands| key_among(button, size, commands))
 }
 
 /// [`key_of`] with the own commands `commands`.

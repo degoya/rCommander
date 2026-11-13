@@ -20,8 +20,9 @@ use iced::{
 use rc_engine::{
     Command, JobId, JobState, QueueEntry,
     settings::{
-        FKEY_BAR_KEY, HIDE_SINGLE_LANE_KEY, MKDIR_PREFILL_KEY, RENAME_SELECTION_DIALOG_KEY,
-        SHOW_AT_ONCE_KEY, STRIP_ROWS_KEY, TOTAL_SPEED_KEY, stored_bool, stored_setting,
+        DEVICE_TRANSFER_HINT_KEY, FKEY_BAR_KEY, HIDE_SINGLE_LANE_KEY, MKDIR_PREFILL_KEY,
+        RENAME_SELECTION_DIALOG_KEY, SHOW_AT_ONCE_KEY, STRIP_ROWS_KEY, TOTAL_SPEED_KEY,
+        stored_bool, stored_setting,
     },
 };
 
@@ -58,6 +59,9 @@ pub struct Stored {
     /// `rename.selection_dialog`: Shift+F6 on several selected entries opens a dialog with a
     /// mask (RC-110-04).
     pub selection_dialog: bool,
+    /// `panels.device_transfer_hint`: a panel on a device says that a transfer onto it runs
+    /// (RC-110-16).
+    pub device_hint: bool,
 }
 
 impl Default for Stored {
@@ -70,6 +74,7 @@ impl Default for Stored {
             total_speed: true,
             hide_single_lane: true,
             selection_dialog: true,
+            device_hint: true,
         }
     }
 }
@@ -84,6 +89,7 @@ pub fn concerns(key: &str) -> bool {
         TOTAL_SPEED_KEY,
         HIDE_SINGLE_LANE_KEY,
         RENAME_SELECTION_DIALOG_KEY,
+        DEVICE_TRANSFER_HINT_KEY,
     ]
     .contains(&key)
 }
@@ -159,8 +165,9 @@ impl App {
 
     /// Reads the function-key bar, whether F7 offers the name under the cursor, how many jobs
     /// the background bar lists, whether the queue window lists the jobs run at once, whether it
-    /// shows their speed together, whether it leaves out a lane column all its jobs share and
-    /// whether Shift+F6 on several entries opens a dialog.
+    /// shows their speed together, whether it leaves out a lane column all its jobs share,
+    /// whether Shift+F6 on several entries opens a dialog and whether a panel on a device says
+    /// that a transfer onto it runs.
     pub(in crate::app) fn file_ops_settings_task(&self) -> Task<Message> {
         let Some(db) = self.db.clone() else {
             return Task::none();
@@ -176,6 +183,7 @@ impl App {
                     (&mut stored.total_speed, TOTAL_SPEED_KEY),
                     (&mut stored.hide_single_lane, HIDE_SINGLE_LANE_KEY),
                     (&mut stored.selection_dialog, RENAME_SELECTION_DIALOG_KEY),
+                    (&mut stored.device_hint, DEVICE_TRANSFER_HINT_KEY),
                 ];
                 for (value, key) in switches {
                     *value = stored_bool(&db, key).await;

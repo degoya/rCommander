@@ -2,10 +2,12 @@
 //! source's, which the copy computed on the way. A move checks at least the size before it
 //! removes its source (RC-060-05): the target's against the bytes written, and where those are
 //! not the size the job saw, against the source as it is now - a stream that ended early without
-//! an error never costs the source (RC-080-37).
+//! an error never costs the source (RC-080-37). A link whose backend states the link's own size
+//! is the exception: there is no size of its target to hold the stream against.
 
 use std::path::Path;
 
+use rc_vfs::EntryKind;
 use tokio::io::AsyncReadExt;
 
 use crate::{
@@ -38,11 +40,17 @@ impl Runner {
             .into());
         }
         // A source that changed since it was listed may hold what was read; any other is short.
-        if bytes != item.entry.size && self.src.stat(&item.path).await?.size != bytes {
-            return Err(OpsError::VerifyFailed {
-                path: item.path.clone(),
+        if bytes != item.entry.size {
+            let now = self.src.stat(&item.path).await?;
+            // A link looked at again may still carry its own size, not its target's (an FTP
+            // server's `LIST` and `MLST` facts, RC-110-26): that says nothing about the stream.
+            let own_size = matches!(now.kind, EntryKind::Symlink { .. });
+            if !own_size && now.size != bytes {
+                return Err(OpsError::VerifyFailed {
+                    path: item.path.clone(),
+                }
+                .into());
             }
-            .into());
         }
         Ok(())
     }

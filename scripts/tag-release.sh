@@ -7,8 +7,9 @@
 # Refused unless every step before the tag in the last run of scripts/release-pipeline.sh for
 # this version has a passing, non-empty record in its evidence log
 # (artifacts/release-evidence-X.Y.Z.log, scripts/lib/release-evidence.sh), and HEAD's tree is the
-# one the last of them recorded: a tag never goes on content the chain did not check. So it runs
-# as the pipeline's `tag` step; there is no way around the evidence.
+# one every step from the release commit on recorded - the tests and the packages among them: a
+# tag never goes on content the chain did not check (RC-110-31). So it runs as the pipeline's
+# `tag` step; there is no way around the evidence.
 #
 # Usage:
 #   scripts/tag-release.sh 0.9.0
@@ -21,6 +22,8 @@ source "$ROOT/scripts/lib/release-tag.sh"
 source "$ROOT/scripts/lib/release-plan.sh"
 # shellcheck source=lib/release-evidence.sh
 source "$ROOT/scripts/lib/release-evidence.sh"
+# shellcheck source=lib/changelog.sh
+source "$ROOT/scripts/lib/changelog.sh"
 cd "$ROOT"
 
 if [[ $# -ne 1 ]] || ! rc_release_version "$1"; then
@@ -54,20 +57,14 @@ prerelease=0
 rc_is_prerelease "$VERSION" && prerelease=1
 mapfile -t required < <(rc_release_required_before tag "$(rc_release_push "$LOG" "$NONCE")" "$prerelease")
 echo "the evidence of run $NONCE:"
+# The gate compares every marker from `commit` on with HEAD's tree, which the clean working tree
+# above is.
 if ! rc_release_gate "${required[@]}"; then
-    echo "refusing to tag $tag: not every step before it passed in this run" >&2
-    exit 1
-fi
-checked="$(marker_field "$(last_marker "${required[-1]}")" tree)"
-if [[ "$checked" != "$(git rev-parse 'HEAD^{tree}')" ]]; then
-    echo "refusing to tag $tag: HEAD's tree is not the one [${required[-1]}] recorded (${checked:0:12})" >&2
+    echo "refusing to tag $tag: not every step before it passed in this run, on this tree" >&2
     exit 1
 fi
 
-message="$(awk -v heading="## [$VERSION] - " '
-    /^## \[/ { inside = (index($0, heading) == 1) }
-    inside { print }
-' CHANGELOG.md)"
+message="$(rc_doc_section CHANGELOG.md "## [$VERSION] - " prefix || true)"
 if [[ -z "$message" ]]; then
     echo "CHANGELOG.md has no '## [$VERSION] - <date>' section" >&2
     exit 1

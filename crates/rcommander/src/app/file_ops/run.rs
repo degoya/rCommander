@@ -1,7 +1,9 @@
 //! A job's way through the window: adopted when the engine took it, moved on by the queue's
 //! events, answered by itself where "skip all" was chosen, and when it is over both panels read
 //! again, the copied sources deselected, the cursor on what was made or renamed. A move's
-//! sources are deselected when it starts: they leave the panel anyway (owner, 2026-10-19).
+//! sources are deselected when it starts: they leave the panel anyway (owner, 2026-10-19). A
+//! panel on a portable device that another job still writes to is left as it is until that job
+//! is over (`device_hint.rs`, RC-110-16).
 
 use std::collections::HashMap;
 
@@ -101,6 +103,7 @@ impl App {
         }
         // The pace once per operation, the panels read again once per batch (RC-080-45).
         self.file_ops.jobs.measure_adopted(&adopted);
+        self.show_device_hints();
         let mut last_of: HashMap<u64, usize> = HashMap::new();
         for (at, done) in finished.iter().enumerate() {
             if let Some(batch) = done.snapshot.batch {
@@ -143,7 +146,10 @@ impl App {
             JobChange::Progress { .. } => self.progress_rows(job),
             _ => self.refresh_queue_window(),
         }
-        match self.file_ops.jobs.apply(job, change) {
+        let ended = self.file_ops.jobs.apply(job, change);
+        // A panel on a device says what it takes, as far as it is; over, no longer (RC-110-16).
+        self.show_device_hints();
+        match ended {
             Some(mut done) => {
                 // The events carry no failures: the queue's own snapshot of the ended job has
                 // them, for the status line.
@@ -157,7 +163,7 @@ impl App {
     }
 
     /// A failing file of a job that was told "skip all" is skipped without asking.
-    fn skip_if_asked(&self, job: JobId) -> Vec<Effect> {
+    pub(super) fn skip_if_asked(&self, job: JobId) -> Vec<Effect> {
         let Some(tracked) = self.file_ops.jobs.get(job) else {
             return Vec::new();
         };
@@ -203,6 +209,8 @@ impl App {
             let clean = completed && snapshot.failures.is_empty();
             commands.extend(follow_commands(panel, &done.follow, clean));
         }
+        // A device another job still writes to is read when that one is over (RC-110-16).
+        commands.retain(|command| !self.waits_for_device(command));
         if commands.is_empty() {
             return Vec::new();
         }

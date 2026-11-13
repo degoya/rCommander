@@ -16,7 +16,8 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU8, Ordering as Atomic},
 };
 
-use rc_vfs::{BackendId, Entry, EntryKind, VfsPath, parse_wsl_unc, split_name};
+use rc_rename::split_name;
+use rc_vfs::{BackendId, Entry, EntryKind, VfsPath, parse_wsl_unc};
 use serde::{Deserialize, Serialize};
 
 /// What a panel sorts by.

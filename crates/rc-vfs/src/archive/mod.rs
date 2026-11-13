@@ -34,7 +34,6 @@ mod tree;
 mod zip_format;
 
 use std::{
-    io,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::SystemTime,
@@ -59,9 +58,9 @@ use self::{
     tree::{RawEntry, Tree},
 };
 use crate::recover::LockOrRecover as _;
-use crate::recover::LogPanic as _;
 use crate::{
     Capabilities, Entry, ReadStream, Result, SetAttributes, Vfs, VfsError, WriteMode, WriteStream,
+    work::blocking,
 };
 
 /// What kind of archive a file is, from its first bytes ([`detect_format`]).
@@ -147,7 +146,7 @@ pub async fn detect_format_within(
     limits: ArchiveLimits,
 ) -> Result<Option<ArchiveFormat>> {
     let file = Source::new(Arc::clone(vfs), path)?;
-    blocking(path, move || {
+    blocking(WORK, path, move || {
         let stream = file.stream()?;
         detect::sniff(stream, &limits).map_err(|error| source::io_error(error, file.path()))
     })
@@ -329,7 +328,8 @@ impl ArchiveFs {
                 modified: outer.modified,
             },
         };
-        let tree = Arc::new(blocking(&self.archive, move || scan.run().map(Tree::build)).await?);
+        let tree =
+            Arc::new(blocking(WORK, &self.archive, move || scan.run().map(Tree::build)).await?);
         *self.slot() = Some(Cached {
             stamp,
             tree: Arc::clone(&tree),
@@ -371,20 +371,8 @@ impl Scan {
     }
 }
 
-/// Runs blocking work off the async threads.
-async fn blocking<T, F>(path: &Path, work: F) -> Result<T>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T> + Send + 'static,
-{
-    tokio::task::spawn_blocking(work)
-        .await
-        .log_panic("vfs.archive_work")
-        .map_err(|join| VfsError::Io {
-            path: path.to_path_buf(),
-            source: io::Error::other(join),
-        })?
-}
+/// The name blocking work of this backend is logged under when it panics.
+const WORK: &str = "vfs.archive_work";
 
 fn read_only(path: &Path) -> VfsError {
     VfsError::Unsupported {

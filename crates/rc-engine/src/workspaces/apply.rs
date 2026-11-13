@@ -34,7 +34,7 @@ pub(super) fn note(code: &str, what: impl Display) -> String {
 
 /// A location in words for a note: the folder on this machine, `<scheme>://#<connection><path>`
 /// on a server.
-fn shown(location: &VfsPath) -> String {
+pub(super) fn shown(location: &VfsPath) -> String {
     let scheme = match location.backend {
         BackendId::Sftp { .. } => "sftp",
         BackendId::Ftp { .. } => "ftp",

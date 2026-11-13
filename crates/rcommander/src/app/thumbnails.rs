@@ -8,7 +8,8 @@
 //! screen before its turn is skipped. A tile comes from the disk cache (`disk.rs`), from
 //! rCommander's own decoder with the Lister's limits (`decode.rs`), or from Explorer
 //! (`explorer.rs`, Windows, `thumbnails.explorer`); it is kept in a bounded LRU of 64 MiB
-//! (`cache.rs`) by the file's path, size and time and the tile size (`key.rs`). A file on a
+//! (`cache.rs`) by the file's path, size and time and the tile size (`key.rs`). Explorer's
+//! handler has ten seconds for a tile, and the disk cache is trimmed as it grows (`load.rs`). A file on a
 //! server, a device or in an archive gets one only with `thumbnails.remote`, and its tile never
 //! goes to disk. The cache belongs to the window: "Clear cache" on the settings' Thumbnails tab
 //! is no engine command.
@@ -183,12 +184,14 @@ impl App {
         }
         thumbnails.wanted.set(on_screen);
         let disk = thumbnails.disk();
+        let disk_limit = thumbnails.settings.cache_bytes();
         let tasks = fresh.into_iter().map(|(key, source)| {
             let job = Job {
                 key: key.clone(),
                 source,
                 engine: engine.clone(),
                 disk: disk.clone(),
+                disk_limit,
                 wanted: thumbnails.wanted.clone(),
                 gate: Arc::clone(&thumbnails.gate),
             };

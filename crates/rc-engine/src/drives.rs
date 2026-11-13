@@ -184,7 +184,7 @@ pub(crate) fn roots_of(drives: &[Drive]) -> Vec<(String, PathBuf)> {
 /// the archive's drive, one over SFTP or FTP on its server's (`server:<connection id>`), one on
 /// a WPD device on the device's (`device:<device id>`). `None` for a path on no drive.
 pub(crate) fn drive_key(path: &VfsPath, roots: &[(String, PathBuf)]) -> Option<String> {
-    if let BackendId::Sftp { connection_id } | BackendId::Ftp { connection_id } = path.backend {
+    if let Some(connection_id) = path.backend.connection_id() {
         return Some(format!("server:{connection_id}"));
     }
     if let BackendId::Device { device } = &path.backend {

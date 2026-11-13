@@ -9,14 +9,15 @@
 #   source "$ROOT/scripts/tests/lib/release-fixture.sh"
 #   release_fixture <dir>     # makes <dir>/tree (on development) and <dir>/origin.git
 #
-# Stand-ins read FAKE_FAIL_CHECK (check.sh --full exits 3 while the file exists) and
-# FAKE_FAIL_PUBLIC_CI (public-ci.sh exits 1 while it exists); every call of a publishing script
-# is appended to $FAKE_CALLS.
+# Stand-ins read FAKE_FAIL_CHECK (check.sh --full exits 3 while the file exists), FAKE_STRAY
+# (check.sh --full leaves stray.txt in the tree), FAKE_SNEAK (package-windows.sh commits a change
+# of its own), FAKE_FAIL_PUBLIC_CI (public-ci.sh exits 1 while it exists) and FAKE_FAIL_PUBLISH
+# (export-public.sh --push exits 1); every call of a publishing script is appended to $FAKE_CALLS.
 # shellcheck disable=SC2016  # the stand-ins' bodies are single-quoted on purpose: they expand when run
 
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=test \
     GIT_COMMITTER_EMAIL=test@example.invalid GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
-export RC_NO_LOCK=1 RC_MIN_FREE_MB=0 RC_NO_SCCACHE=1
+export RC_NO_LOCK=1 RC_MIN_FREE_MB=0 RC_NO_SCCACHE=1 RC_RELEASE_CI_POLL=0.1
 
 # A stand-in script $1 with the body $2, executable.
 fake() {
@@ -29,14 +30,15 @@ release_fixture() {
     mkdir -p "$tree/scripts/lib" "$bin"
     cp "$ROOT/scripts/release-pipeline.sh" "$ROOT/scripts/tag-release.sh" "$tree/scripts/"
     for file in lock release-tag release-plan release-evidence release-docs release-steps-build \
-        release-steps-publish changelog; do
+        release-steps-publish changelog package workspace-version; do
         cp "$ROOT/scripts/lib/$file.sh" "$tree/scripts/lib/"
     done
     export FAKE_CALLS="$dir/calls" FAKE_FAIL_CHECK="$dir/fail-check" FAKE_FAIL_PUBLIC_CI="$dir/fail-ci"
+    export FAKE_STRAY="$dir/stray" FAKE_SNEAK="$dir/sneak" FAKE_FAIL_PUBLISH="$dir/fail-publish"
 
     # The tools the preflight asks for, and a pgrep that sees no other cargo job.
     fake "$bin/cargo" 'case "$*" in "xwin --version") echo "cargo-xwin 0.0.0" ;; *) echo "cargo 0.0.0" ;; esac'
-    for file in cargo-nextest zip aarch64-linux-gnu-gcc gh pgrep; do fake "$bin/$file" 'exit 0'; done
+    for file in cargo-nextest zip gh pgrep; do fake "$bin/$file" 'exit 0'; done
     # An archive as package-windows.sh and package-linux.sh lay it out: <stem>/VERSION.txt, the
     # documents, two plugins.
     fake "$bin/fake-package" 'python3 -I - "$@" << "PY"
@@ -71,9 +73,11 @@ case "${1:-}" in
 esac'
     fake "$tree/scripts/check.sh" 'echo "check.sh $*"
 [[ "$*" != --full || ! -e "$FAKE_FAIL_CHECK" ]] || { echo "a test failed"; exit 3; }
+[[ "$*" != --full || ! -e "$FAKE_STRAY" ]] || echo "left by a test" > stray.txt
 echo "==> all requested checks passed"'
     fake "$tree/scripts/build-plugins.sh" 'printf "%s\n" a b'
     fake "$tree/scripts/package-windows.sh" 'v="$(scripts/set-version.sh)"
+[[ ! -e "$FAKE_SNEAK" ]] || { echo "sneaked in" >> RELEASE-NOTES.md; git commit -qam "beside the chain"; }
 fake-package "artifacts/windows/rcommander-$v-windows-x64.zip" "$v"'
     fake "$tree/scripts/package-linux.sh" 'v="$(scripts/set-version.sh)"
 fake-package "artifacts/linux/rcommander-$v-linux-${!#}.tar.gz" "$v"'
@@ -81,7 +85,8 @@ fake-package "artifacts/linux/rcommander-$v-linux-${!#}.tar.gz" "$v"'
     fake "$tree/scripts/public-ci.sh" 'echo "public-ci $*" >> "$FAKE_CALLS"; echo "public-ci $*"
 [[ ! -e "$FAKE_FAIL_PUBLIC_CI" ]] || { echo "ci.yml: windows red"; exit 1; }'
     for file in export-public export-wiki update-website; do
-        fake "$tree/scripts/$file.sh" "echo \"$file \$*\" >> \"\$FAKE_CALLS\"; echo \"$file \$*\""
+        fake "$tree/scripts/$file.sh" "echo \"$file \$*\" >> \"\$FAKE_CALLS\"; echo \"$file \$*\"
+[[ ! -e \"\$FAKE_FAIL_PUBLISH\" || \"\$*\" != *--push* ]] || { echo \"the push was refused\"; exit 1; }"
     done
 
     printf '/artifacts/\n' > "$tree/.gitignore"

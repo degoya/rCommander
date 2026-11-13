@@ -5,6 +5,8 @@
 //! again (owner 2026-11-01, RC-100-69): on by default; network drives and shares only with their
 //! own switch, off by default. Neither is protected. Portable devices (phones over MTP) in the
 //! drive bar (RC-100-61, owner 2026-11-01): on by default; off, the system is not asked for them.
+//! While a copy or move onto a device runs, the panels say so (RC-110-16, `device_transfer.rs`):
+//! on by default, not protected.
 
 use super::{SettingKind, SettingPage, SettingSpec};
 
@@ -67,6 +69,19 @@ pub(super) const PORTABLE_DEVICES: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.drives.portable_devices",
     help: "setting.drives.portable_devices.help",
+    protected: false,
+    restart: false,
+};
+
+/// Whether the panels say that a transfer onto a portable device is running (RC-110-16).
+pub const DEVICE_TRANSFER_HINT_KEY: &str = "panels.device_transfer_hint";
+
+pub(super) const DEVICE_TRANSFER_HINT: SettingSpec = SettingSpec {
+    key: DEVICE_TRANSFER_HINT_KEY,
+    page: SettingPage::Folders,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.panels.device_transfer_hint",
+    help: "setting.panels.device_transfer_hint.help",
     protected: false,
     restart: false,
 };

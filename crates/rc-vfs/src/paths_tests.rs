@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use super::{
-    NetworkPath, WslPath, drive_letter, network_path, parse_wsl_unc, split_name, strip_verbatim,
-    unverbatim, verbatim, wsl_unc_path,
+    NetworkPath, WslPath, case_sensitive_at, drive_letter, network_path, parse_wsl_unc,
+    strip_verbatim, unverbatim, verbatim, wsl_unc_path,
 };
 
 fn verbatim_of(text: &str) -> Option<PathBuf> {
@@ -208,18 +208,6 @@ fn a_drive_letter_is_a_letter_and_a_colon_whatever_follows() {
     }
 }
 
-#[test]
-fn a_name_splits_at_its_last_dot_but_not_at_its_ends() {
-    assert_eq!(split_name("notes.txt"), ("notes", "txt"));
-    assert_eq!(split_name("a.tar.gz"), ("a.tar", "gz"));
-    assert_eq!(split_name(".bashrc"), (".bashrc", ""));
-    assert_eq!(split_name("notes."), ("notes.", ""));
-    assert_eq!(split_name("notes"), ("notes", ""));
-    assert_eq!(split_name("."), (".", ""));
-    assert_eq!(split_name(""), ("", ""));
-    assert_eq!(split_name("..x"), (".", "x"));
-}
-
 fn unverbatim_of(text: &str) -> Option<PathBuf> {
     unverbatim(Path::new(text))
 }
@@ -276,4 +264,19 @@ fn strip_verbatim_only_changes_a_path_on_windows() {
         strip_verbatim(Path::new("/home/x")),
         PathBuf::from("/home/x")
     );
+}
+
+#[test]
+fn case_counts_inside_a_wsl_distribution_whatever_the_backend_says() {
+    for wsl in [
+        r"\\wsl.localhost\Ubuntu\home\me",
+        r"\\wsl$\Ubuntu",
+        "//wsl.localhost/Ubuntu/home/me",
+    ] {
+        assert!(case_sensitive_at(false, Path::new(wsl)), "{wsl}");
+    }
+    for other in [r"C:\Users\me", r"\\nas\media", "/home/me"] {
+        assert!(!case_sensitive_at(false, Path::new(other)), "{other}");
+        assert!(case_sensitive_at(true, Path::new(other)), "{other}");
+    }
 }

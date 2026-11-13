@@ -376,7 +376,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Set the comment of a file or folder in its folder's descript.ion, as Total Commander's Ctrl+Z does (the file is kept compatible with Total Commander); an empty comment removes it, and an empty descript.ion is deleted. Answers the path and the comment now stored. files_properties reads comments. An entry in rCommander's data folder, an SSH folder or an autostart folder is refused with protected_target."
+        description = "Set the comment of a file or folder in its folder's descript.ion, as Total Commander's Ctrl+Z does (the file is kept compatible with Total Commander); an empty comment removes it, and an empty descript.ion is deleted. Only the comment's own line changes: every other line keeps its bytes, and the file keeps its encoding (UTF-8, UTF-16, or a code page read as Windows-1252); a comment with a character that encoding lacks is refused with comment_not_encodable and nothing is written. Answers the path and the comment now stored. files_properties reads comments. An entry in rCommander's data folder, an SSH folder or an autostart folder is refused with protected_target."
     )]
     pub(crate) async fn files_set_comment(
         &self,

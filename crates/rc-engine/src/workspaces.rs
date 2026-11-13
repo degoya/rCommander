@@ -15,6 +15,7 @@
 mod apply;
 mod capture;
 mod error;
+mod places;
 mod spec;
 mod store;
 mod view;

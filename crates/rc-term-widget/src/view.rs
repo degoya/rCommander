@@ -4,22 +4,17 @@
 
 use alacritty_terminal::{
     grid::{Dimensions, Scroll},
-    index::Point as GridPoint,
     selection::{Selection, SelectionType},
     term::TermMode,
 };
 use iced::{
-    Element, Length, Point, Rectangle, Size, Theme, Vector,
-    advanced::Renderer as _,
-    advanced::graphics::geometry::Renderer as _,
-    keyboard::{self, Modifiers},
-    mouse::Cursor,
-    widget::container,
+    Element, Length, Point, Rectangle, Size, Theme, Vector, advanced::Renderer as _,
+    advanced::graphics::geometry::Renderer as _, keyboard, mouse::Cursor, widget::container,
 };
 use iced_core::{
     clipboard::Kind as ClipboardKind,
     mouse::{self, Click},
-    widget::operation::{self, Focusable},
+    widget::operation,
 };
 use iced_graphics::core::{
     Widget,
@@ -27,11 +22,14 @@ use iced_graphics::core::{
 };
 use rc_term::EventProxy;
 
+use self::state::ViewState;
 use crate::{
     Event, Terminal, draw,
     input::{self, KeyInput},
     snapshot::Snapshot,
 };
+
+mod state;
 
 /// A [`Terminal`] on screen.
 pub struct TerminalView<'a> {
@@ -170,15 +168,21 @@ impl<'a> TerminalView<'a> {
         clipboard: &mut dyn iced_graphics::core::Clipboard,
         shell: &mut iced_graphics::core::Shell<'_, Event>,
     ) -> bool {
+        let cell = self.term.cell();
+        let shared = self.term.session().term();
         let Some(position) = position else {
-            // A drag ends wherever the button comes up.
-            if let mouse::Event::ButtonReleased(mouse::Button::Left) = event {
-                state.dragging = false;
+            // A drag ends wherever the button comes up, and a button the program saw go down
+            // comes up for it at the last cell.
+            match event {
+                mouse::Event::ButtonReleased(mouse::Button::Left) => state.dragging = false,
+                mouse::Event::ButtonReleased(button) if state.release(*button) => {
+                    let mode = *shared.lock().mode();
+                    self.report(other_button(*button), state, false, mode);
+                }
+                _ => {}
             }
             return false;
         };
-        let cell = self.term.cell();
-        let shared = self.term.session().term();
         let (point, mode) = {
             let term = shared.lock();
             let point = input::grid_point(
@@ -235,11 +239,24 @@ impl<'a> TerminalView<'a> {
                 }
                 dragged
             }
+            mouse::Event::ButtonPressed(
+                button @ (mouse::Button::Middle | mouse::Button::Right),
+            ) if reports => {
+                let code = other_button(*button);
+                state.held |= 1 << code;
+                self.report(code, state, true, mode);
+                true
+            }
+            // The release of a press the program was told of.
+            mouse::Event::ButtonReleased(button) if state.release(*button) => {
+                self.report(other_button(*button), state, false, mode);
+                true
+            }
             // Windows Terminal copies a selection on a right click and pastes without one.
-            mouse::Event::ButtonPressed(mouse::Button::Right) if !reports => {
+            mouse::Event::ButtonPressed(mouse::Button::Right) => {
                 if self.term.copy.right_click && self.copy(clipboard, true) {
                     true
-                } else if cfg!(windows) {
+                } else if cfg!(windows) && self.term.copy.right_click_pastes {
                     self.paste(clipboard, shell);
                     true
                 } else {
@@ -251,7 +268,13 @@ impl<'a> TerminalView<'a> {
                 if lines == 0 {
                     return false;
                 }
-                if mode.contains(TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL) {
+                if reports {
+                    // tmux, htop and mc scroll their own panes (RC-110-28).
+                    let wheel = input::wheel_report(lines, state.modifiers, point, mode);
+                    if !wheel.is_empty() {
+                        self.term.send(wheel);
+                    }
+                } else if mode.contains(TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL) {
                     self.term.send(input::alternate_scroll(lines));
                 } else {
                     self.scroll(Scroll::Delta(lines));
@@ -262,12 +285,25 @@ impl<'a> TerminalView<'a> {
         }
     }
 
-    /// Tells a program that asked for the mouse what the left button did at the cell under it.
+    /// Tells a program that asked for the mouse what a button did at the cell under it; one
+    /// that gave the mouse back since the press hears nothing more.
     fn report(&self, button: u8, state: &ViewState, pressed: bool, mode: TermMode) {
+        if !mode.intersects(TermMode::MOUSE_MODE) {
+            return;
+        }
         let report = input::mouse_report(button, state.modifiers, state.grid_point, pressed, mode);
         if let Some(bytes) = report {
             self.term.send(bytes);
         }
+    }
+}
+
+/// The middle or the right button as xterm numbers it.
+fn other_button(button: mouse::Button) -> u8 {
+    if button == mouse::Button::Middle {
+        input::MIDDLE_BUTTON
+    } else {
+        input::RIGHT_BUTTON
     }
 }
 
@@ -400,56 +436,5 @@ impl Widget<Event, Theme, iced::Renderer> for TerminalView<'_> {
 impl<'a> From<TerminalView<'a>> for Element<'a, Event, Theme, iced::Renderer> {
     fn from(widget: TerminalView<'a>) -> Self {
         Self::new(widget)
-    }
-}
-
-/// What the widget remembers between events.
-#[derive(Debug, Clone)]
-struct ViewState {
-    focus: bool,
-    /// The focus the cached screen was drawn with (the cursor is hollow without it).
-    drawn_focus: bool,
-    dragging: bool,
-    /// The drag goes to the program, not into a selection.
-    reporting: bool,
-    last_click: Option<Click>,
-    /// Wheel pixels short of a line.
-    scroll_pixels: f32,
-    modifiers: Modifiers,
-    /// The size and cell the grid was last fitted to.
-    size: Size,
-    cell: Size,
-    /// The cell under the mouse.
-    grid_point: GridPoint,
-}
-
-impl Default for ViewState {
-    fn default() -> Self {
-        Self {
-            focus: false,
-            drawn_focus: false,
-            dragging: false,
-            reporting: false,
-            last_click: None,
-            scroll_pixels: 0.0,
-            modifiers: Modifiers::empty(),
-            size: Size::new(0.0, 0.0),
-            cell: Size::new(0.0, 0.0),
-            grid_point: GridPoint::default(),
-        }
-    }
-}
-
-impl Focusable for ViewState {
-    fn is_focused(&self) -> bool {
-        self.focus
-    }
-
-    fn focus(&mut self) {
-        self.focus = true;
-    }
-
-    fn unfocus(&mut self) {
-        self.focus = false;
     }
 }

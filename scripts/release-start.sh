@@ -7,6 +7,9 @@
 # Before anything detaches it refuses, in seconds and compiling nothing, a tree the chain would
 # stop on later, each finding named with what fixes it: not on development, a dirty tree, the tag
 # taken, the documents (scripts/lib/release-docs.sh, the docs-gate's own check, before the bump).
+# With --push also the remotes the chain pushes to at its end (RC-110-33): `git ls-remote` of
+# origin and, where the public clone exists (RC_PUBLIC_DIR), of its origin - one that does not
+# answer within RC_RELEASE_REMOTE_TIMEOUT seconds (30) or that has the tag already.
 # A --resume continues a stopped run as it stands; its tree is the bumped one, so only the
 # version is checked.
 #
@@ -25,13 +28,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# The pinned tools a user installs (docs/development.md: shellcheck through uv) sit in
-# ~/.local/bin, which a shell started without the profile lacks; the chain's check then finds an
-# older system shellcheck and fails `shellcheck-version` (0.10.0, 2026-10-30).
-case ":$PATH:" in
-    *":$HOME/.local/bin:"*) ;;
-    *) export PATH="$HOME/.local/bin:$PATH" ;;
-esac
+# ~/.local/bin on PATH for the chain, as for check.sh (the reason is beside the function).
+# shellcheck source=lib/tool-versions.sh
+source "$ROOT/scripts/lib/tool-versions.sh"
+rc_user_tools_path
 # shellcheck source=lib/release-tag.sh
 source "$ROOT/scripts/lib/release-tag.sh"
 # shellcheck source=lib/release-docs.sh
@@ -72,6 +72,23 @@ if [[ "$chain" -eq 1 ]]; then
     exit "$status"
 fi
 
+# Whether the remote `origin` of the repository $2 answers and has no tag v$version yet; $1 names
+# it in the refusal.
+remote_ready() {
+    local name="$1" dir="$2" listed status=0
+    listed="$(timeout "${RC_RELEASE_REMOTE_TIMEOUT:-30}" git -C "$dir" ls-remote --tags origin \
+        "refs/tags/v$version" 2>&1)" || status=$?
+    if [[ "$status" -ne 0 ]]; then
+        echo "$name does not answer (git -C $dir ls-remote origin: exit $status); --push needs it:" >&2
+        printf '%s\n' "$listed" | sed -n '1,3s/^/    /p' >&2
+        return 1
+    fi
+    if [[ -n "$listed" ]]; then
+        echo "$name already has tag v$version; a release takes a new version" >&2
+        return 1
+    fi
+}
+
 # --- the preconditions ---------------------------------------------------------------------------
 if [[ " ${flags[*]} " != *" --resume "* ]]; then
     refused=0
@@ -91,6 +108,11 @@ if [[ " ${flags[*]} " != *" --resume "* ]]; then
         refused=1
     fi
     rc_release_docs_check "$version" --before-bump >&2 || refused=1
+    if [[ " ${flags[*]} " == *" --push "* ]]; then
+        remote_ready "origin" "$ROOT" || refused=1
+        public="${RC_PUBLIC_DIR:-$HOME/projects/rCommander-public}"
+        [[ ! -d "$public/.git" ]] || remote_ready "the public repository" "$public" || refused=1
+    fi
     if [[ "$refused" -ne 0 ]]; then
         echo "release $version not started; fix the above, then run scripts/release-start.sh $version again" >&2
         exit 1

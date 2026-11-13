@@ -21,6 +21,8 @@
 #   RC_PUBLIC_CI_CEILING  seconds after which a run still going is given up (21600, the six hours
 #                         a hosted job may run; every job of ci.yml has its own timeout)
 #   RC_PUBLIC_CI_POLL     seconds between two looks (60)
+#   RC_PUBLIC_CI_RERUNS   how often a run whose only red jobs never got a runner is started again
+#                         (1; 0: such a run is red at once, as before RC-110-32)
 #   RC_PUBLIC_CI_CLOCK    tests only: a file whose number is the clock both limits are read on, in
 #                         place of bash's SECONDS; the tests' stand-in gh moves it
 
@@ -29,6 +31,7 @@ PUBLIC_REPO="${RC_PUBLIC_REPO:-degoya/rCommander}"
 PUBLIC_CI_TIMEOUT="${RC_PUBLIC_CI_TIMEOUT:-900}"
 PUBLIC_CI_CEILING="${RC_PUBLIC_CI_CEILING:-21600}"
 PUBLIC_CI_POLL="${RC_PUBLIC_CI_POLL:-60}"
+PUBLIC_CI_RERUNS="${RC_PUBLIC_CI_RERUNS:-1}"
 # Every system ci.yml checks; read by the script that sources this file.
 # shellcheck disable=SC2034
 RC_PUBLIC_CI_ALL="linux,windows,macos"
@@ -80,12 +83,43 @@ rc_public_ci_json() {
     printf '[%s]\n' "$out"
 }
 
+# The tree GitHub gets of commit $2 of checkout $1: the commit's tree without the paths its own
+# scripts/public-exclude.txt names (the working tree's list for a commit from before it), as
+# scripts/export-public.sh leaves them out. The greens are recorded for this tree (RC-110-33),
+# not for the private one: a commit that changes only what is left out - a job file, a document -
+# changes nothing a public runner sees and keeps the green. Without a list it is the commit's tree.
+rc_public_tree() {
+    local root="$1" commit="$2" scratch index list line path tree
+    scratch="$(mktemp -d)" || return 1
+    index="$scratch/index"
+    if ! list="$(git -C "$root" show "$commit:scripts/public-exclude.txt" 2> /dev/null)"; then
+        list="$(cat "$root/scripts/public-exclude.txt" 2> /dev/null || true)"
+    fi
+    if ! GIT_INDEX_FILE="$index" git -C "$root" read-tree "$commit"; then
+        rm -rf "$scratch"
+        return 1
+    fi
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        path="${line%%#*}"
+        path="${path#"${path%%[![:space:]]*}"}"
+        path="${path%"${path##*[![:space:]]}"}"
+        path="${path%/}"
+        [[ -n "$path" ]] || continue
+        GIT_INDEX_FILE="$index" git -C "$root" rm -r -q --cached --ignore-unmatch -- ":(literal,top)$path" \
+            > /dev/null 2>&1 || true
+    done <<< "$list"
+    tree="$(GIT_INDEX_FILE="$index" git -C "$root" write-tree)" || tree=""
+    rm -rf "$scratch"
+    [[ -n "$tree" ]] && printf '%s\n' "$tree"
+}
+
 # The file the greens are recorded in, for checkout $1.
 rc_verified_ci_file() {
     printf '%s/rc-verified-ci\n' "$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)"
 }
 
-# Whether runner image $3 has a recorded green for tree $2 of checkout $1.
+# Whether runner image $3 has a recorded green for the exported tree $2 (rc_public_tree) of
+# checkout $1.
 rc_ci_green() {
     local file
     file="$(rc_verified_ci_file "$1")"
@@ -147,20 +181,40 @@ rc_public_ci_now() {
     if [[ -n "${RC_PUBLIC_CI_CLOCK:-}" ]]; then cat "$RC_PUBLIC_CI_CLOCK"; else echo "$SECONDS"; fi
 }
 
-# The first failed job of run $1 as "<name>: <conclusion> (<url>)", or nothing: a job red long
-# before its run ends ends the wait at once.
-rc_public_ci_failed_job() {
-    gh run view "$1" --repo "$PUBLIC_REPO" --json jobs \
-        --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled") | "\(.name): \(.conclusion) (\(.url))"' \
-        2> /dev/null < /dev/null | head -n 1 || true
+# The red jobs of run $1 (its latest attempt) in one line, or nothing: "<name>: <conclusion>
+# (<url>)" for the first job that failed, timed out or was cancelled while it ran - a job red long
+# before its run ends ends the wait at once - or "no-runner: <name>, <name>" when every red job
+# was cancelled without a single step: GitHub gave it no runner and dropped it from the queue
+# (macOS, after 15 minutes: ci/0.17.0, ci/0.18.1, ci/0.19.0).
+# shellcheck disable=SC2016  # $red is jq's
+rc_public_ci_red_jobs() {
+    gh run view "$1" --repo "$PUBLIC_REPO" --json jobs --jq '
+        def starved: .conclusion == "cancelled" and ((.steps // []) | length) == 0;
+        [.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled")] as $red
+        | if ($red | length) == 0 then empty
+          elif ($red | all(starved)) then "no-runner: " + ([$red[].name] | join(", "))
+          else ($red | map(select(starved | not))[0] | "\(.name): \(.conclusion) (\(.url))")
+          end' 2> /dev/null < /dev/null | head -n 1 || true
+}
+
+# Whether run $1 may be started again: fewer than RC_PUBLIC_CI_RERUNS of the ids $2... are its own.
+rc_public_ci_rerun_left() {
+    local id="$1" done=0 other
+    shift
+    for other in "$@"; do [[ "$other" != "$id" ]] || done=$((done + 1)); done
+    ((done < PUBLIC_CI_RERUNS))
 }
 
 # Waits for the dispatched runs on public branch $1 at commit $2 to finish. Returns 0 when every
 # one succeeded, 1 at once when a job or a run failed - its run's id then in RC_PUBLIC_CI_RED_RUN
 # for scripts/ci-log.sh - when no run appeared within RC_PUBLIC_CI_TIMEOUT, or when one was still
-# going at RC_PUBLIC_CI_CEILING. Prints what changed.
+# going at RC_PUBLIC_CI_CEILING. A run whose only red jobs never got a runner is no failure yet:
+# once it has ended, its failed jobs are started again (`gh run rerun --failed`,
+# RC_PUBLIC_CI_RERUNS times), and only the same again is red. Prints what changed.
 rc_public_ci_wait() {
-    local branch="$1" sha="$2" now deadline ceiling listed last="" seen=0 red id status line
+    local branch="$1" sha="$2" now deadline ceiling listed last="" seen=0 red line
+    local id status conclusion url jobs open settling grace=""
+    local -a reruns=()
     RC_PUBLIC_CI_RED_RUN=""
     echo "waiting for the CI of $PUBLIC_REPO on $branch at ${sha:0:12} (for as long as it runs)"
     now="$(rc_public_ci_now)"
@@ -176,19 +230,44 @@ rc_public_ci_wait() {
                 while IFS= read -r line; do echo "  $(date +%H:%M:%S) run $line"; done <<< "$listed"
                 last="$listed"
             fi
-            red="$(awk '$2 == "completed" && $3 !~ /^(success|skipped|neutral)$/ { print "run " $1 ": " $3 " (" $4 ")"; exit }' <<< "$listed")"
-            [[ -z "$red" ]] || RC_PUBLIC_CI_RED_RUN="$(awk '{ print $1 }' <<< "${red#run }")"
-            RC_PUBLIC_CI_RED_RUN="${RC_PUBLIC_CI_RED_RUN%:}"
-            while [[ -z "$red" ]] && read -r id status _; do
-                [[ "$status" != completed ]] || continue
-                red="$(rc_public_ci_failed_job "$id")"
+            # The runs started again at the last look: the list may not say so yet, once.
+            red="" open=0 settling="$grace" grace=""
+            while [[ -z "$red" ]] && read -r id status conclusion url _; do
+                if [[ "$status" != completed ]]; then
+                    open=1
+                    jobs="$(rc_public_ci_red_jobs "$id")"
+                    # Jobs without a runner wait for their run to end: only then can it run again.
+                    if [[ "$jobs" != no-runner:* ]]; then
+                        red="$jobs"
+                    elif ! rc_public_ci_rerun_left "$id" "${reruns[@]}"; then
+                        red="run $id: ${jobs#no-runner: } never got a runner ($url)"
+                    fi
+                elif [[ ! "$conclusion" =~ ^(success|skipped|neutral)$ ]]; then
+                    if [[ " $settling " == *" $id "* ]]; then
+                        open=1
+                        continue
+                    fi
+                    red="run $id: $conclusion ($url)"
+                    jobs="$(rc_public_ci_red_jobs "$id")"
+                    if [[ "$jobs" == no-runner:* ]]; then
+                        red+="; ${jobs#no-runner: } never got a runner"
+                        if rc_public_ci_rerun_left "$id" "${reruns[@]}" \
+                            && gh run rerun "$id" --repo "$PUBLIC_REPO" --failed < /dev/null; then
+                            echo "  $(date +%H:%M:%S) $red; started again"
+                            reruns+=("$id")
+                            grace+=" $id"
+                            red="" open=1 last=""
+                        fi
+                    fi
+                fi
+                # shellcheck disable=SC2034  # read by scripts/public-ci.sh
                 [[ -z "$red" ]] || RC_PUBLIC_CI_RED_RUN="$id"
             done <<< "$listed"
             if [[ -n "$red" ]]; then
                 echo "the public CI is red: $red; $branch is kept for inspection" >&2
                 return 1
             fi
-            if ! awk '$2 != "completed" { found = 1 } END { exit !found }' <<< "$listed"; then
+            if [[ "$open" -eq 0 ]]; then
                 echo "the public CI is green on ${sha:0:12}"
                 return 0
             fi

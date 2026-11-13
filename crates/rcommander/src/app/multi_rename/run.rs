@@ -177,6 +177,23 @@ impl App {
         }
     }
 
+    /// After missed events (RC-110-27): a run or undo the queue has ended, or knows no longer,
+    /// ends here too, so the dialog does not stay busy; one that still runs is left alone.
+    pub(in crate::app) fn multi_rename_resync(&mut self) -> Vec<Effect> {
+        let running = self
+            .multi_rename
+            .as_ref()
+            .and_then(|dialog| dialog.running.as_ref());
+        let Some(job) = running.map(|running| running.job) else {
+            return Vec::new();
+        };
+        match self.engine.ops().job(job) {
+            Ok(snapshot) if snapshot.state.is_finished() => self.mr_finished(job, snapshot.state),
+            Ok(_) => Vec::new(),
+            Err(_) => self.mr_finished(job, JobState::Cancelled),
+        }
+    }
+
     fn mr_finished(&mut self, job: JobId, state: JobState) -> Vec<Effect> {
         let Some(dialog) = self.multi_rename.as_mut() else {
             return Vec::new();

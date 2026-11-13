@@ -349,7 +349,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Load a saved transfer list into a new, stopped list named like it: its jobs wait until queue_start. A list with a job that overwrites needs a confirmation code. Answers with the list, its jobs and the entries not loaded (position, code: connection_not_found when the connection was deleted, invalid_entry, sensitive_path when a source is or holds a key or credential file, or a database error). A job that writes into rCommander's data folder, an SSH folder, an autostart folder or a shell's start-up file refuses the whole load with protected_target. Errors: saved_queue_not_found, database_unavailable, protected_target."
+        description = "Load a saved transfer list into a new, stopped list named like it: its jobs wait until queue_start. A list with a job that overwrites needs a confirmation code. Answers with the list, its jobs and the entries not loaded (position, code: connection_not_found when the connection was deleted, invalid_entry, sensitive_path when a source is or holds a key or credential file, or a database error). A job that writes into rCommander's data folder, an SSH folder, an autostart folder or a shell's start-up file refuses the whole load with protected_target, and so does a move that takes an entry away from such a place, from rCommander's program folder or with a folder that holds one. Errors: saved_queue_not_found, database_unavailable, protected_target."
     )]
     pub(crate) async fn queue_load(
         &self,
@@ -362,6 +362,16 @@ impl RcMcpServer {
         let guard = self.write_guard();
         for (source, place) in &places {
             if let Some(refusal) = guard.refuse_copy(source, place).await {
+                return Ok(refusal);
+            }
+        }
+        // What the list's moves take away (RC-110-19).
+        let moved = match self.context.engine.saved_queue_moved(params.saved).await {
+            Ok(moved) => moved,
+            Err(error) => return respond::<()>(Err(error)),
+        };
+        for source in &moved {
+            if let Some(refusal) = guard.refuse_taking(source).await {
                 return Ok(refusal);
             }
         }

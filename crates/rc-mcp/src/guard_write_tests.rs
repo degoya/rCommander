@@ -240,6 +240,7 @@ async fn a_link_into_a_protected_place_is_judged_where_it_leads() {
     std::os::unix::fs::symlink(root.path().join("home").join(".ssh"), &link).expect("link");
     let guard = WriteGuard {
         data_dirs: Vec::new(),
+        program_dirs: Vec::new(),
     };
     let planted = rc_engine::VfsPath::local(link.join("authorized_keys"));
     assert_eq!(guard.refuses(&planted).await, Some("an SSH folder"));

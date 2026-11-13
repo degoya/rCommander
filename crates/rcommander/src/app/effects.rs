@@ -1,6 +1,7 @@
 //! What the window does with an [`Effect`]: commands queued for the engine, tasks, the dialogs'
-//! jobs; a click's commands; storing the tabs and the geometry, and giving back what PAM systems
-//! lent, before the app ends.
+//! jobs; a click's commands; storing the tabs and the geometry before the app ends.
+
+use std::future::Future;
 
 use iced::Task;
 use rc_engine::{Command, CursorTarget, Engine, PanelId};
@@ -92,42 +93,38 @@ impl App {
         }
     }
 
-    /// Stores the panels' tabs, the window's geometry and that of an open dialog window, then
-    /// ends the app.
-    pub(super) fn save_and_exit(&self) -> Task<Message> {
-        let Some(db) = self.db.clone() else {
-            return super::startup::leave();
-        };
+    /// Stores the panels' tabs, the window's geometry and that of an open dialog window, as the
+    /// window is now; nothing without a database. The quit runs it on its way out (`quit.rs`).
+    pub(super) fn store_session(&self) -> impl Future<Output = ()> + Send + use<> {
+        let db = self.db.clone();
         let geometry = self.window.geometry();
         let dialogs = self.dialog_windows.open_geometries();
         let engine = self.engine.clone();
-        Task::perform(
-            async move {
-                // What PAM systems lent the sessions goes back before the app ends (RC-100-38).
-                engine.return_all_leases().await;
-                // Tabs and places that cannot be stored are only missing at the next start.
-                if let Err(error) = engine.save_tabs().await {
-                    tracing::warn!(%error, "the panels' tabs were not stored");
-                }
-                for (dialog, at) in dialogs {
-                    if let Err(error) = db.set(dialog.key(), &at).await {
-                        tracing::warn!(
-                            key = dialog.key(),
-                            %error,
-                            "a dialog window's place was not stored"
-                        );
-                    }
-                }
-                if let Err(error) = window_state::save(&db, geometry).await {
+        async move {
+            let Some(db) = db else {
+                return;
+            };
+            // Tabs and places that cannot be stored are only missing at the next start.
+            if let Err(error) = engine.save_tabs().await {
+                tracing::warn!(%error, "the panels' tabs were not stored");
+            }
+            for (dialog, at) in dialogs {
+                if let Err(error) = db.set(dialog.key(), &at).await {
                     tracing::warn!(
-                        key = window_state::GEOMETRY_KEY,
+                        key = dialog.key(),
                         %error,
-                        "the window's place was not stored"
+                        "a dialog window's place was not stored"
                     );
                 }
-            },
-            |_| Message::Saved,
-        )
+            }
+            if let Err(error) = window_state::save(&db, geometry).await {
+                tracing::warn!(
+                    key = window_state::GEOMETRY_KEY,
+                    %error,
+                    "the window's place was not stored"
+                );
+            }
+        }
     }
 }
 

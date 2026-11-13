@@ -4,7 +4,10 @@
 use rc_db::Db;
 use rc_engine::{
     Command, EngineEvent,
-    settings::{COPY_CTRL_C_KEY, COPY_ON_SELECT_KEY, OSC52_COPY_KEY, PASTE_CTRL_V_KEY},
+    settings::{
+        COPY_CTRL_C_KEY, COPY_ON_SELECT_KEY, OSC52_COPY_KEY, PASTE_CTRL_V_KEY,
+        PASTE_RIGHT_CLICK_KEY,
+    },
 };
 use rc_term_widget::CopySettings;
 use serde_json::json;
@@ -27,6 +30,7 @@ async fn the_settings_read_as_windows_terminal_until_changed() {
         (COPY_CTRL_C_KEY, false),
         (COPY_ON_SELECT_KEY, true),
         (PASTE_CTRL_V_KEY, false),
+        (PASTE_RIGHT_CLICK_KEY, false),
         (OSC52_COPY_KEY, false),
     ] {
         engine
@@ -40,6 +44,7 @@ async fn the_settings_read_as_windows_terminal_until_changed() {
     let expected = CopySettings {
         ctrl_c: false,
         right_click: true,
+        right_click_pastes: false,
         on_select: true,
         ctrl_v: false,
         osc52: false,
@@ -63,6 +68,7 @@ async fn a_change_is_read_and_reaches_the_terminals() {
     let copy = CopySettings {
         ctrl_c: false,
         right_click: false,
+        right_click_pastes: false,
         on_select: true,
         ctrl_v: true,
         osc52: true,

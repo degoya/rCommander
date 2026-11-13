@@ -30,7 +30,7 @@ mod upload;
 mod watch;
 
 pub use error::RemoteEditError;
-pub(crate) use open::{OpenRemote, is_server};
+pub(crate) use open::OpenRemote;
 pub use types::{
     Baseline, RemoteEditChange, RemoteEditId, RemoteEditInfo, RemoteEditQuestion, RemoteEditState,
     Stamp, UploadChoice,
@@ -55,6 +55,9 @@ struct Desk {
     polling: bool,
     /// Where the folders go instead of the unpacked copies' root: the tests' own.
     root: Option<PathBuf>,
+    /// How long a closed edit's write in place may stall instead of `upload::IN_PLACE_STALL`:
+    /// the tests' own.
+    stall: Option<std::time::Duration>,
 }
 
 /// One edited file.
@@ -80,6 +83,9 @@ struct Edit {
     /// An upload of this file runs; a save meanwhile waits for it (`again`).
     uploading: bool,
     again: bool,
+    /// Cancelled when the edit is closed: a write in place that has stalled then ends
+    /// (`upload.rs`).
+    closed: tokio_util::sync::CancellationToken,
 }
 
 impl Edit {
@@ -177,6 +183,7 @@ impl Engine {
             .edits
             .remove(&id)
             .ok_or(RemoteEditError::Unknown { id })?;
+        edit.closed.cancel();
         let dir = edit.dir;
         let _ = tokio::task::spawn_blocking(move || folder::remove(&dir))
             .await

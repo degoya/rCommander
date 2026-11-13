@@ -6,9 +6,11 @@ name: CI
 # of both architectures (RC-100-44). scripts/check.sh stays the local gate; this is the same
 # gate on the machines a workstation does not have.
 on:
-  # Branches only: a release tag has release.yml.
+  # Branches only: a release tag has release.yml. main and the exports under ci/: a pull
+  # request's branch in this repository - Dependabot's - is checked by `pull_request` alone, not
+  # once more by its push (RC-110-33).
   push:
-    branches: ["**"]
+    branches: [main, "ci/**"]
   pull_request:
   # A re-check of one fix need not wait for platforms it cannot affect: dispatched by hand, the
   # `rust` job takes only the runner images named here, and `macos-package` runs only with a
@@ -91,8 +93,6 @@ jobs:
   # Clippy (-D warnings) and every test, natively on each runner image: Linux x64 and arm64,
   # Windows with MSVC (the target the release cross-builds from WSL), macOS on Apple Silicon and
   # on Intel. Windows lints the libraries once more alone, as scripts/check.sh --windows does.
-  # Linux x64 also lints the plugins for wasm32 and builds them unsigned, with their conformance
-  # check (scripts/build-plugins.sh --development).
   rust:
     needs: checks
     strategy:
@@ -168,7 +168,8 @@ jobs:
             packages+=(-p "$(sed -n '/^name = /{s/^name = "\(.*\)"/\1/p;q}' "${manifest}")")
           done
           cargo clippy --locked --target wasm32-unknown-unknown "${packages[@]}" -- -D warnings
-      - uses: taiki-e/install-action@682ce6c3c696a4cd5168a05f98e51aa02b877941 # v2.89.1
+      # RC_WASM_TOOLS_VERSION of scripts/lib/tool-versions.sh (scripts/tests/tool-versions.sh).
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: wasm-tools@1.261.0
       - name: The plugins, unsigned, with their conformance check
@@ -183,10 +184,13 @@ jobs:
   # rCommander.app for both architectures, as release.yml builds it, with `plugins`' unsigned
   # packages (RC-100-44): the bundle's layout, Info.plist, the ad hoc signature and, on Apple Silicon, a
   # start of the binary. x86_64 is cross-compiled on the Apple Silicon runner. The zip stays a
-  # week as an artifact of the run.
+  # week as an artifact of the run. Not on a push to main (RC-110-32): that push is a release's,
+  # its tag starts release.yml at the same moment, and these two jobs then queue for the same
+  # macOS runners as its two package jobs - which build the same bundles from a tree that was
+  # packaged here as ci/X.Y.Z before the tag.
   macos-package:
     needs: [checks, plugins]
-    if: contains(needs.checks.outputs.platforms, 'macos-')
+    if: ${{ contains(needs.checks.outputs.platforms, 'macos-') && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     strategy:
       fail-fast: false
       matrix:

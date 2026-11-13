@@ -165,6 +165,68 @@ async fn a_request_without_or_with_a_wrong_token_is_refused() {
     assert!(!proof.contains(running.token.expose()), "{proof}");
 }
 
+/// The probe with a valid nonce and `headers`.
+async fn probe(running: &Running, headers: &[(&str, &str)]) -> reqwest::Response {
+    let nonce = "0123456789abcdef".repeat(2);
+    let mut request = reqwest::Client::new().get(format!(
+        "http://{}/health?nonce={nonce}",
+        running.handle.addr()
+    ));
+    for (name, value) in headers {
+        request = request.header(*name, *value);
+    }
+    request.send().await.expect("answers")
+}
+
+/// The status and the refusal's code of an answer.
+async fn refusal_of(response: reqwest::Response) -> (u16, String) {
+    let status = response.status().as_u16();
+    let body: Value = response.json().await.unwrap_or_default();
+    (status, body["code"].as_str().unwrap_or_default().to_owned())
+}
+
+/// RC-110-23: the `Host` and `Origin` checks through the real router, not as functions - a
+/// foreign host name (DNS rebinding) or a web page's origin is refused with 403 on `/mcp`, the
+/// valid token notwithstanding, and on `/health`, which the token guard does not wrap.
+#[tokio::test]
+async fn a_foreign_host_or_origin_is_refused_by_the_router() {
+    let running = start().await;
+    let bearer = format!("Bearer {}", running.token.expose());
+    let authorization = ("authorization", bearer.as_str());
+    let rebound = format!("evil.example:{}", running.handle.addr().port());
+    for (header, code) in [
+        (("host", "evil.example"), "host_rejected"),
+        (("host", rebound.as_str()), "host_rejected"),
+        (("origin", "https://evil.example"), "origin_rejected"),
+        (("origin", "null"), "origin_rejected"),
+    ] {
+        let refused = (403, code.to_owned());
+        assert_eq!(
+            refusal_of(post(&running, &[authorization, header]).await).await,
+            refused,
+            "/mcp with {header:?}"
+        );
+        // Before the token is looked at: no 401 tells a web page that it reached rCommander.
+        assert_eq!(
+            refusal_of(post(&running, &[header]).await).await,
+            refused,
+            "/mcp without a token, with {header:?}"
+        );
+        assert_eq!(
+            refusal_of(probe(&running, &[header]).await).await,
+            refused,
+            "/health with {header:?}"
+        );
+    }
+    // The same requests from this machine pass.
+    let local = format!("http://localhost:{}", running.handle.addr().port());
+    let origin = ("origin", local.as_str());
+    assert_eq!(post(&running, &[authorization, origin]).await.status(), 200);
+    assert_eq!(probe(&running, &[origin]).await.status(), 200);
+    assert_eq!(probe(&running, &[]).await.status(), 200);
+    running.handle.shutdown().await.expect("stops");
+}
+
 /// RC-080-12 (M9): after a crash another program may hold the port the instance file names. The
 /// probe sends it no token, and an answer that only claims to be rCommander is no rCommander.
 #[tokio::test]

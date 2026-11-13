@@ -441,15 +441,14 @@ impl App {
     /// whose symbols their buttons show.
     pub(in crate::app) fn button_bar_symbols(&mut self) -> Vec<Effect> {
         let size = self.button_bar.settings.icon_size;
-        let commands = super::user_commands::known::commands();
-        let wanted: Vec<SymbolKey> = self
-            .button_bar
-            .bars
-            .iter()
-            .flat_map(|bar| bar.spec.items.iter())
-            .filter_map(BarItem::button)
-            .filter_map(|button| symbols::key_among(button, size, &commands))
-            .collect();
+        let bars = &self.button_bar.bars;
+        let wanted: Vec<SymbolKey> = super::user_commands::known::with_commands(|commands| {
+            bars.iter()
+                .flat_map(|bar| bar.spec.items.iter())
+                .filter_map(BarItem::button)
+                .filter_map(|button| symbols::key_among(button, size, commands))
+                .collect()
+        });
         match self.button_bar.symbols.ask(wanted) {
             Some(task) => vec![Effect::Task(task)],
             None => Vec::new(),

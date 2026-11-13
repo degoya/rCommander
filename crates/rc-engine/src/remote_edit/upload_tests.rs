@@ -1,4 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::atomic::Ordering,
+    time::Duration,
+};
 
 use serde_json::json;
 
@@ -293,6 +297,141 @@ async fn another_owner_asks_and_overwrites_in_place() {
         0,
         "written in place"
     );
+}
+
+/// A rig with `/etc/app.conf` of mode 0664 open for editing, the server refusing every new
+/// mode: the file is someone else's. Its id.
+async fn opened_of_another(in_place: bool) -> (Rig, RemoteEditId) {
+    let rig = Rig::new(&[("/etc/app.conf", "a=1")]).await;
+    rig.server.set_mode("/etc/app.conf", 0o664);
+    rig.server.refuse_modes.store(true, Ordering::SeqCst);
+    rig.engine
+        .edit_remote(Rig::at("/etc/app.conf"), editor())
+        .await
+        .expect("opened");
+    let id = rig.edit("app.conf").id;
+    rig.engine
+        .with_edit(id, |edit| edit.in_place = in_place)
+        .expect("known");
+    (rig, id)
+}
+
+/// RC-110-25: a write in place keeps the file's mode, so none is set after it - the server
+/// would refuse it for a file that is someone else's, and the upload counted as failed with
+/// its bytes written. The next save is held against what this upload left, not asked about as
+/// a change on the server.
+#[tokio::test]
+async fn an_upload_in_place_sets_no_mode_and_counts_as_uploaded() {
+    let (rig, id) = opened_of_another(true).await;
+    rig.save(id, "a=2").await;
+    upload(&rig, id, UploadChoice::InPlace).await;
+    rig.until("app.conf", |edit| {
+        uploaded(edit) || matches!(edit.state, RemoteEditState::Failed { .. })
+    })
+    .await;
+    assert!(
+        uploaded(&rig.edit("app.conf")),
+        "{:?}",
+        rig.edit("app.conf")
+    );
+    assert_eq!(rig.server.text("/etc/app.conf").await, "a=2");
+    assert_eq!(rig.server.mode_calls.load(Ordering::SeqCst), 0, "no chmod");
+    assert_eq!(rig.server.mode("/etc/app.conf"), Some(0o664));
+
+    rig.save(id, "a=33").await;
+    upload(&rig, id, UploadChoice::Upload).await;
+    rig.until("app.conf", |edit| edit.question.is_some()).await;
+    assert_eq!(
+        rig.edit("app.conf").question,
+        Some(RemoteEditQuestion::InPlace),
+        "not the server's change"
+    );
+}
+
+/// A mode the server refuses after a replacing upload is logged; the upload is on the server
+/// and counts.
+#[tokio::test]
+async fn a_refused_mode_does_not_fail_the_upload() {
+    let (rig, id) = opened_of_another(false).await;
+    rig.save(id, "a=2").await;
+    upload(&rig, id, UploadChoice::Upload).await;
+    rig.until("app.conf", |edit| {
+        uploaded(edit) || matches!(edit.state, RemoteEditState::Failed { .. })
+    })
+    .await;
+    assert!(
+        uploaded(&rig.edit("app.conf")),
+        "{:?}",
+        rig.edit("app.conf")
+    );
+    assert_eq!(rig.server.text("/etc/app.conf").await, "a=2");
+    assert_eq!(
+        rig.server.mode_calls.load(Ordering::SeqCst),
+        1,
+        "asked once"
+    );
+}
+
+/// Waits until the server was opened to write.
+async fn until_writing(rig: &Rig) {
+    for _ in 0..500 {
+        if !rig.server.writes.lock_or_recover("test.writes").is_empty() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the server was never opened to write");
+}
+
+/// A write in place truncated the server's file: closing its edit while bytes still move must
+/// not cut it - the file is whole on the server afterwards (RC-110-25).
+#[tokio::test]
+async fn closing_the_edit_lets_a_moving_write_in_place_finish() {
+    let (rig, id) = opened_of_another(true).await;
+    rig.engine.edits().stall = Some(Duration::from_millis(500));
+    let text = "line of a config file\n".repeat(12);
+    rig.save(id, &text).await;
+    rig.server.slow_writes.store(true, Ordering::SeqCst);
+    upload(&rig, id, UploadChoice::InPlace).await;
+    until_writing(&rig).await;
+    rig.engine
+        .dispatch(Command::CloseRemoteEdit { id })
+        .await
+        .expect("closed");
+    assert_ne!(
+        rig.server.text("/etc/app.conf").await,
+        text,
+        "closed inside the write"
+    );
+    rig.until_server("/etc/app.conf", &text).await;
+}
+
+/// RC-110-26: a write in place into a server that stopped answering is let go once its edit
+/// is closed and no byte moved for the bound, not waited for.
+#[tokio::test]
+async fn closing_the_edit_ends_a_stalled_write_in_place() {
+    let (rig, id) = opened_of_another(true).await;
+    rig.engine.edits().stall = Some(Duration::from_millis(100));
+    rig.save(id, "a=2").await;
+    rig.server.stall_writes.store(true, Ordering::SeqCst);
+    upload(&rig, id, UploadChoice::InPlace).await;
+    until_writing(&rig).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        !rig.server.let_go.load(Ordering::SeqCst),
+        "open, the edit's write waits for the server"
+    );
+    rig.engine
+        .dispatch(Command::CloseRemoteEdit { id })
+        .await
+        .expect("closed");
+    for _ in 0..500 {
+        if rig.server.let_go.load(Ordering::SeqCst) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the stalled write was never let go");
 }
 
 /// Upload, Not now and Done are the person's: MCP's dispatch refuses them.

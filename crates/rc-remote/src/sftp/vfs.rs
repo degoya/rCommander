@@ -29,6 +29,7 @@ use tokio::{
 
 use super::{
     SftpCase, SftpLimits, case,
+    change::POSIX_RENAME,
     error::{SftpError, into_vfs},
     path::wire_path,
     stream::TransferFile,
@@ -54,6 +55,8 @@ pub struct SftpVfs {
     pub(super) limits: SftpLimits,
     /// Whether names that differ only in case are different names (`case.rs`).
     case_sensitive: bool,
+    /// Whether the server offers `posix-rename@openssh.com`, a rename that replaces (`change.rs`).
+    pub(super) posix_rename: bool,
     /// Set once a call or a file stream found the session gone.
     lost: Arc<AtomicBool>,
     /// The SSH session's end ([`crate::SshSession::closed_signal`]), when the caller gave it.
@@ -114,9 +117,14 @@ impl SftpVfs {
         let files = subsystem(files, &limits).await?;
         let raw = RawSftpSession::new_with_config(names, config.clone());
         let secs = limits.request_secs();
-        raw.init()
+        let version = raw
+            .init()
             .await
             .map_err(|error| session_failure(&error, secs))?;
+        let posix_rename = version
+            .extensions
+            .get(POSIX_RENAME)
+            .is_some_and(|version| version == "1");
         let files = SftpSession::new_with_config(files, config)
             .await
             .map_err(|error| session_failure(&error, secs))?;
@@ -132,13 +140,14 @@ impl SftpVfs {
             (SftpCase::Detect, Ok(wire)) => case::detect(&raw, &wire).await,
             (SftpCase::Detect, Err(_)) => true,
         };
-        tracing::debug!(case_sensitive, ?case, "SFTP backend opened");
+        tracing::debug!(case_sensitive, ?case, posix_rename, "SFTP backend opened");
         Ok(Self {
             raw: Arc::new(raw),
             files,
             home,
             limits,
             case_sensitive,
+            posix_rename,
             lost: Arc::new(AtomicBool::new(false)),
             gone: None,
             _held: None,
@@ -378,6 +387,11 @@ impl Vfs for SftpVfs {
 
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
         self.rename_entry(from, to).await
+    }
+
+    /// With `posix-rename@openssh.com` where the server offers it (RC-110-25).
+    async fn rename_replacing(&self, from: &Path, to: &Path) -> Result<()> {
+        self.rename_onto(from, to).await
     }
 
     async fn remove_file(&self, path: &Path) -> Result<()> {

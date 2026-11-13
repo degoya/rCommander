@@ -50,6 +50,7 @@
 #   RC_PUBLIC_WIKI_REMOTE    where to clone it from (default: git@github.com:degoya/rCommander.wiki.git)
 #   RC_PUBLIC_WIKI_BRANCH    the branch GitHub renders (default: master)
 #   GITLEAKS                 the gitleaks binary, as for export-public.sh
+#   RC_PUBLIC_LOCK_WAIT      seconds to wait for another export in the same clone (default: 600)
 #
 set -euo pipefail
 
@@ -73,18 +74,18 @@ DO_PUSH=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --push) DO_PUSH=1; shift ;;
-        -h|--help) sed -n '2,53p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown argument: $1" >&2; exit 2 ;;
         *)
             [[ -z "$VERSION" ]] || { echo "unexpected argument: $1" >&2; exit 2; }
             VERSION="$1"; shift ;;
     esac
 done
-if ! rc_public_version "$VERSION"; then
+if ! rc_release_version "$VERSION"; then
     echo "usage: scripts/export-wiki.sh <version> [--push]" >&2
     exit 2
 fi
-if rc_public_prerelease "$VERSION"; then
+if rc_is_prerelease "$VERSION"; then
     echo "$VERSION is a pre-release: the public wiki stays on the last stable release until the next one" >&2
     exit 2
 fi
@@ -322,6 +323,7 @@ else
 fi
 
 if [[ "$DO_PUSH" -eq 1 ]]; then
+    rc_public_verify_push HEAD
     pub push origin "$WIKI_BRANCH"
     echo "==> pushed $WIKI_BRANCH to $WIKI_REMOTE"
 else

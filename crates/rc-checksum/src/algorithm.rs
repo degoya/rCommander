@@ -1,6 +1,6 @@
 //! The hash functions and the streaming hasher every operation of this crate reads through.
 
-use std::{fmt::Write as _, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use rc_vfs::{ReadStream, Vfs};
 use serde::{Deserialize, Serialize};
@@ -171,11 +171,7 @@ impl Hasher {
 
 /// `bytes` as lowercase hex.
 fn to_hex(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        let _ = write!(hex, "{byte:02x}");
-    }
-    hex
+    ::hex::encode(bytes)
 }
 
 /// Hashes everything `reader` yields through one buffer of [`BUFFER_SIZE`], whatever its

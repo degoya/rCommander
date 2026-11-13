@@ -17,23 +17,11 @@
               guard, every block its SAFETY note"
 )]
 
-use std::{
-    ffi::OsStr,
-    os::windows::ffi::OsStrExt,
-    path::Path,
-    ptr::{null, null_mut},
-};
+use std::{ffi::OsStr, os::windows::ffi::OsStrExt, path::Path, ptr::null_mut};
 
 use windows_sys::Win32::{
-    Graphics::Gdi::{
-        BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC,
-        DeleteObject, GetDIBits, GetObjectW, HBITMAP, HDC,
-    },
     Storage::FileSystem::{
         FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_FLAGS_AND_ATTRIBUTES,
-    },
-    System::Com::{
-        COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
     },
     UI::{
         Shell::{
@@ -49,36 +37,22 @@ use super::{
     loader::IconProvider,
     pixels::{self, Rgba},
 };
+use crate::platform::gdi::{Bitmap, Com, MemoryDc};
 
 /// The largest icon side taken; a small icon is at most 64 px even at 400 %.
 const MAX_SIDE: u32 = 256;
 
 /// The shell's icons; made and used on the loader thread, which it initialises COM on.
 pub struct ShellIcons {
-    com: bool,
+    _com: Com,
 }
 
 impl ShellIcons {
     /// Initialises COM on the calling thread, the loader's.
     pub fn start() -> Self {
-        // SAFETY: called on the loader thread that owns this value for its whole life; a
-        // success is paired with `CoUninitialize` in `drop` on the same thread.
-        let result = unsafe {
-            CoInitializeEx(
-                null(),
-                (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32,
-            )
-        };
-        Self { com: result >= 0 }
-    }
-}
-
-impl Drop for ShellIcons {
-    fn drop(&mut self) {
-        if self.com {
-            // SAFETY: balances the successful `CoInitializeEx` of `start` on this thread.
-            unsafe { CoUninitialize() };
-        }
+        // The loader thread owns this value for its whole life: the guard is made and dropped
+        // on it.
+        Self { _com: Com::init() }
     }
 }
 
@@ -205,29 +179,6 @@ impl Drop for Icon {
     }
 }
 
-/// A bitmap handle this module owns; null for none.
-struct Bitmap(HBITMAP);
-
-impl Drop for Bitmap {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            // SAFETY: GetIconInfo created the bitmap for the caller, who deletes it once; it is
-            // selected into no DC.
-            unsafe { DeleteObject(self.0) };
-        }
-    }
-}
-
-/// A memory device context this module owns.
-struct MemoryDc(HDC);
-
-impl Drop for MemoryDc {
-    fn drop(&mut self) {
-        // SAFETY: made by CreateCompatibleDC below, deleted once.
-        unsafe { DeleteDC(self.0) };
-    }
-}
-
 impl Icon {
     /// The icon's pixels: its colour bitmap with alpha, or with the mask's transparency.
     fn rgba(&self) -> Option<Rgba> {
@@ -237,73 +188,22 @@ impl Icon {
         if unsafe { GetIconInfo(self.0, &mut info) } == 0 {
             return None;
         }
-        let color = Bitmap(info.hbmColor);
-        let mask = Bitmap(info.hbmMask);
+        let color = Bitmap::owned(info.hbmColor);
+        let mask = Bitmap::owned(info.hbmMask);
         // A monochrome icon has no colour bitmap; the generic icon stands in.
-        if color.0.is_null() {
-            return None;
-        }
-        let mut bitmap = BITMAP::default();
-        // SAFETY: `color.0` is a valid bitmap; the buffer is a BITMAP of the size passed.
-        let read = unsafe {
-            GetObjectW(
-                color.0,
-                size_of::<BITMAP>() as i32,
-                (&raw mut bitmap).cast(),
-            )
-        };
-        if read == 0 {
-            return None;
-        }
-        let width = u32::try_from(bitmap.bmWidth).ok()?;
-        let height = u32::try_from(bitmap.bmHeight).ok()?;
+        let (width, height) = color.dimensions()?;
+        let width = u32::try_from(width).ok()?;
+        let height = u32::try_from(height).ok()?;
         if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE {
             return None;
         }
-        // SAFETY: a null DC asks for a memory DC compatible with the screen.
-        let dc = MemoryDc(unsafe { CreateCompatibleDC(null_mut()) });
-        if dc.0.is_null() {
-            return None;
-        }
-        let colors = dib_pixels(&dc, &color, width, height)?;
-        let mask = if mask.0.is_null() {
+        let dc = MemoryDc::screen()?;
+        let colors = color.pixels(&dc, width, height)?;
+        let mask = if mask.is_null() {
             None
         } else {
-            dib_pixels(&dc, &mask, width, height)
+            mask.pixels(&dc, width, height)
         };
         pixels::from_bgra(width, height, &colors, mask.as_deref())
     }
-}
-
-/// The pixels of `bitmap` as 32-bit BGRA rows from the top.
-fn dib_pixels(dc: &MemoryDc, bitmap: &Bitmap, width: u32, height: u32) -> Option<Vec<u8>> {
-    let mut info = BITMAPINFO {
-        bmiHeader: BITMAPINFOHEADER {
-            biSize: size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: width as i32,
-            // Negative: top-down rows.
-            biHeight: -(height as i32),
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB,
-            ..BITMAPINFOHEADER::default()
-        },
-        ..BITMAPINFO::default()
-    };
-    let mut pixels = vec![0u8; width as usize * height as usize * 4];
-    // SAFETY: `pixels` holds `height` rows of `width` 32-bit pixels, exactly what a 32 bpp
-    // BI_RGB request for `height` lines writes (32 bpp rows need no padding); `info` describes
-    // that layout; the bitmap is selected into no DC; `dc` is a valid memory DC.
-    let lines = unsafe {
-        GetDIBits(
-            dc.0,
-            bitmap.0,
-            0,
-            height,
-            pixels.as_mut_ptr().cast(),
-            &mut info,
-            DIB_RGB_COLORS,
-        )
-    };
-    (u32::try_from(lines).ok() == Some(height)).then_some(pixels)
 }

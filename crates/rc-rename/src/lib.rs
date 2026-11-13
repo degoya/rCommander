@@ -42,6 +42,7 @@ mod render;
 mod replace;
 mod rule;
 mod schedule;
+mod split;
 mod subdir;
 mod target_mask;
 mod undo_log;
@@ -66,6 +67,7 @@ pub use replace::SearchReplace;
 pub use schedule::{
     RenameStep, Schedule, TEMP_PREFIX, UndoMismatch, UndoProblem, check_undo, schedule, undo_steps,
 };
+pub use split::{split_extension, split_name};
 pub use subdir::{SUBFOLDER_SEPARATOR, check_path, nested_path};
 pub use target_mask::{
     MaskSource, apply_target_mask, check_target_mask, has_wildcards, mask_targets,

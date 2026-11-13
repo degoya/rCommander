@@ -18,8 +18,21 @@ use std::{
 
 use russh::{Channel, server::Msg};
 use russh_sftp::protocol::{
-    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode, Version,
+    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Packet, Status, StatusCode, Version,
 };
+
+/// The rename that replaces its target; version "1".
+const POSIX_RENAME: &str = "posix-rename@openssh.com";
+
+/// The next string of an extended request's data: a length and its bytes.
+fn wire_string(rest: &mut &[u8]) -> Option<String> {
+    let all = *rest;
+    let (len, tail) = all.split_first_chunk::<4>()?;
+    let len = usize::try_from(u32::from_be_bytes(*len)).ok()?;
+    let (text, tail) = tail.split_at_checked(len)?;
+    *rest = tail;
+    String::from_utf8(text.to_vec()).ok()
+}
 
 /// The most bytes one `READ` answers.
 const READ_MAX: u32 = 256 * 1024;
@@ -37,6 +50,8 @@ pub struct SftpServe {
     pub block: usize,
     /// Each name of a path finds an existing entry that differs from it only in ASCII case.
     pub fold_case: bool,
+    /// Offers `posix-rename@openssh.com`, the rename that replaces, as OpenSSH does (RC-110-25).
+    pub posix_rename: bool,
 }
 
 impl SftpServe {
@@ -49,6 +64,7 @@ impl SftpServe {
             hostile_names: Vec::new(),
             block: 100,
             fold_case: false,
+            posix_rename: false,
         }
     }
 }
@@ -177,7 +193,31 @@ impl russh_sftp::server::Handler for Served {
         _version: u32,
         _extensions: HashMap<String, String>,
     ) -> Result<Version, Self::Error> {
-        Ok(Version::new())
+        let mut version = Version::new();
+        if self.options.posix_rename {
+            version
+                .extensions
+                .insert(POSIX_RENAME.to_owned(), "1".to_owned());
+        }
+        Ok(version)
+    }
+
+    async fn extended(
+        &mut self,
+        id: u32,
+        request: String,
+        data: Vec<u8>,
+    ) -> Result<Packet, Self::Error> {
+        if !self.options.posix_rename || request != POSIX_RENAME {
+            return Err(StatusCode::OpUnsupported);
+        }
+        let mut rest = data.as_slice();
+        let (Some(oldpath), Some(newpath)) = (wire_string(&mut rest), wire_string(&mut rest))
+        else {
+            return Err(StatusCode::BadMessage);
+        };
+        let (from, to) = (self.local(&oldpath), self.local(&newpath));
+        done(id, fs::rename(from, to)).map(Packet::Status)
     }
 
     async fn realpath(&mut self, id: u32, path: String) -> Result<Name, Self::Error> {

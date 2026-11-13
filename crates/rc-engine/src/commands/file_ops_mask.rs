@@ -76,14 +76,10 @@ pub(crate) fn refuse_mask_into_archive(target: &VfsPath) -> Result<(), EngineErr
 
 /// The name of `source`, the last part of its path.
 fn name_of(source: &VfsPath) -> Result<String, OpsError> {
-    source
-        .path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .ok_or_else(|| OpsError::InvalidName {
-            name: source.path.display().to_string(),
-            reason: "empty",
-        })
+    source.file_name().ok_or_else(|| OpsError::InvalidName {
+        name: source.path.display().to_string(),
+        reason: "empty",
+    })
 }
 
 impl Engine {
@@ -129,6 +125,8 @@ impl Engine {
                 options,
             })
             .collect();
+        self.refuse_in_transfer(specs.iter().map(|spec| &spec.kind))
+            .await?;
         let mut jobs = self.inner.ops.submit_batch(specs, list)?;
         Ok(if jobs.len() == 1 {
             Outcome::job(jobs.remove(0))

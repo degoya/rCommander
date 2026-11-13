@@ -17,6 +17,7 @@ portable-pty.workspace = true
 rand.workspace = true
 # A WSL distribution's login shell is asked with `wsl.exe` (`wsl_shell.rs`, RC-080-65).
 rc-process = { path = "../rc-process" }
+rc-recover = { path = "../rc-recover" }
 rc-vfs = { path = "../rc-vfs" }
 # The SSH back end drives a session channel of the connection rc-remote opened.
 russh.workspace = true

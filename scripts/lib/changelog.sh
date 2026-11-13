@@ -7,6 +7,24 @@
 #
 #   source "$ROOT/scripts/lib/changelog.sh"
 #   rc_changelog_cut CHANGELOG.md 0.6.1 2026-10-25
+#   rc_doc_section CHANGELOG.md '## [0.6.1] - ' prefix    # the section, its heading first
+#   rc_doc_section RELEASE-NOTES.md '## 0.6.1'            # ... of a heading given whole
+
+# The section of the Markdown file $1 under the `## ` heading that is exactly $2 or, with $3 =
+# prefix, begins with $2: the heading line and everything up to the next `## ` heading. Nothing
+# and 1 when there is no such heading. The one reader of a version's section (RC-110-33): the
+# docs gate (lib/release-docs.sh), the tag's message (tag-release.sh) and the GitHub release's
+# text (release-publish.sh release-text).
+rc_doc_section() {
+    awk -v heading="$2" -v mode="${3:-exact}" '
+        /^## / {
+            inside = (mode == "prefix") ? (index($0, heading) == 1) : ($0 == heading)
+            if (inside) found = 1
+        }
+        inside { print }
+        END { if (!found) exit 1 }
+    ' "$1"
+}
 
 # Cuts `## [Unreleased]` of the changelog `$1` into version `$2` of date `$3`; 1 without an
 # `## [Unreleased]` heading.

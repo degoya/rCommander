@@ -14,6 +14,8 @@
 //! the values put into the words ([`expand_posix`]) - a name with a blank, a quote or a `;` stays
 //! one argument and never becomes shell syntax; a word with `%S` becomes one word per name.
 
+use rc_rename::split_extension;
+
 use super::{UserCommandError, list_files::ListKind};
 
 /// Which panel a placeholder reads.
@@ -273,15 +275,6 @@ fn many(
                 .collect())
         }
         _ => Ok(vec![single(var, context)?]),
-    }
-}
-
-/// `name` without and with its extension: `report.pdf` is `report` and `pdf`; a name without a
-/// dot, or one that only starts with one (`.profile`), has none.
-fn split_extension(name: &str) -> (&str, &str) {
-    match name.rsplit_once('.') {
-        Some((base, extension)) if !base.is_empty() => (base, extension),
-        _ => (name, ""),
     }
 }
 

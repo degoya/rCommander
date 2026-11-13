@@ -294,6 +294,10 @@ fn check_loopback(headers: &HeaderMap) -> Result<(), Refusal> {
 }
 
 /// Whether a host name (without port) is the loopback.
+///
+/// The same three names as a plugin's `http` target (`rc-plugin-host/src/http.rs`), there on a
+/// parsed URL, here on a header's text; narrower than `rc_engine::forwards::is_loopback`, which
+/// takes all of `127.0.0.0/8` for an address a forward binds to (RC-110-30: three rules, kept).
 fn is_loopback_host(host: &str) -> bool {
     matches!(
         host.to_ascii_lowercase().as_str(),

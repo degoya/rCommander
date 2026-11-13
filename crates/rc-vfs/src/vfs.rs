@@ -141,6 +141,14 @@ pub trait Vfs: Send + Sync {
         rename_after_look(self, from, to).await
     }
 
+    /// Renames `from` onto `to` and replaces a file there in the same step, where the backend
+    /// has a rename that does (RC-110-25): SFTP's `posix-rename@openssh.com`. By default it is
+    /// [`Vfs::rename`], so a backend whose rename does not replace still answers
+    /// `AlreadyExists` and the caller removes the target itself.
+    async fn rename_replacing(&self, from: &Path, to: &Path) -> Result<()> {
+        self.rename(from, to).await
+    }
+
     /// Removes a file or a symbolic link (never its target).
     async fn remove_file(&self, path: &Path) -> Result<()>;
 

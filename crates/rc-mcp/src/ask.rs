@@ -30,6 +30,9 @@
 //! masked and clipped as the window shows them - and redeeming it runs exactly that call, pinned,
 //! whatever the panel shows by then. A panel moved elsewhere meanwhile refuses with
 //! `panel_changed`.
+//!
+//! The question about `workspaces_apply` names the workspace and where its panels go, not only
+//! its id (`workspace_shown.rs`, RC-110-21).
 
 use std::time::Duration;
 
@@ -47,6 +50,7 @@ use crate::{
     gate_settings::GateSettings,
     mask,
     server::McpContext,
+    workspace_shown,
 };
 
 /// How long a call waits for the person.
@@ -76,6 +80,12 @@ pub(crate) async fn ask(
     arguments: Option<&Map<String, Value>>,
 ) -> Result<Gate, rmcp::ErrorData> {
     let engine = &context.engine;
+    // `workspaces_apply` is asked about with its workspace's places written out (RC-110-21).
+    let described = match workspace_shown::described(engine, tool, arguments).await {
+        Ok(described) => described,
+        Err(refusal) => return Ok(Gate::Answer(refusal)),
+    };
+    let arguments = described.as_ref().or(arguments);
     if let Some(refusal) =
         too_many_to_show(tool, arguments).or_else(|| refuse_masked(tool, class, arguments, engine))
     {
@@ -123,7 +133,11 @@ pub(crate) async fn ask(
             None => engine.ask_mcp(ask, context.answer_within).await,
         };
         let refused = match verdict {
-            McpVerdict::Allowed => return Ok(Gate::Run(frozen)),
+            McpVerdict::Allowed => {
+                // Its workspace as the question showed it, or not at all (RC-110-21).
+                let changed = workspace_shown::changed(engine, tool, described.as_ref()).await;
+                return Ok(changed.map_or(Gate::Run(frozen), Gate::Answer));
+            }
             McpVerdict::AllowedForSession => {
                 if let Some((offered, target)) = offer {
                     allow_for_session(engine, session, tool, offered, target);

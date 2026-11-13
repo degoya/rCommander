@@ -10,7 +10,14 @@
 #   rc_is_prerelease 0.9.0-beta.2     # true; false for 0.9.0
 #   rc_release_base 0.9.0-beta.2      # 0.9.0
 
-RC_RELEASE_VERSION_PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-beta\.[1-9][0-9]*)?$'
+#
+# RC_VERSION_CORE is the `X.Y.Z` every version form begins with, written once (RC-110-33):
+# scripts/set-version.sh takes any pre-release suffix after it, the exports (lib/public.sh) ask
+# rc_release_version.
+
+# shellcheck disable=SC2034  # read by scripts/set-version.sh
+RC_VERSION_CORE='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+RC_RELEASE_VERSION_PATTERN="^${RC_VERSION_CORE}(-beta\.[1-9][0-9]*)?\$"
 rc_release_version() { [[ "${1:-}" =~ $RC_RELEASE_VERSION_PATTERN ]]; }
 rc_is_prerelease() { rc_release_version "${1:-}" && [[ "$1" == *-beta.* ]]; }
 rc_release_base() { printf '%s\n' "${1%%-*}"; }

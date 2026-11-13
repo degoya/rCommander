@@ -209,13 +209,15 @@ impl App {
 }
 
 fn status_text<'a>(pane: &'a Pane, tokens: &'static Tokens) -> Element<'a, Message> {
-    let (message, color) = match &pane.error {
-        Some(error) => (error.clone(), theme::DANGER),
-        None if pane.state.listing.is_some() => {
+    let (message, color) = match (&pane.error, &pane.transfer_hint) {
+        (Some(error), _) => (error.clone(), theme::DANGER),
+        // The device takes a file: its list is as it was before the transfer (RC-110-16).
+        (None, Some(hint)) => (hint.clone(), tokens.accent),
+        (None, None) if pane.state.listing.is_some() => {
             let count = crate::format::count(pane.state.entries.len() as u64);
             (t!("panel.reading", count = count), tokens.text_secondary)
         }
-        None => {
+        (None, None) => {
             let sums = pane.summary();
             let text = t!(
                 "panel.status",

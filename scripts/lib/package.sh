@@ -8,7 +8,11 @@
 #   version="$(rc_package_version "$ROOT")"   # fails on an empty or inconsistent version
 #   commit="$(rc_package_commit)"              # 1a2b3c4d, 1a2b3c4d-dirty or unknown
 #   rc_package_guard "$ZIP" "<stage>/VERSION.txt" "$commit"
+#   rc_package_begin "$ZIP" "<stage>/VERSION.txt"       # both, and RC_BUILD_COMMIT/_TIME exported
 #   list="$(rc_package_plugins "$ROOT" "$prebuilt")"   # the bundled .rcplug files, one per line
+#   rc_package_plugin_list "$ROOT" "$prebuilt"         # ... into the array `plugins`
+#   rc_package_payload "$STAGE" "$version" "$TARGET" "$profile"   # documents, plugins/, VERSION.txt
+#   rc_package_version_txt "$ZIP" ["<stage>/VERSION.txt"]         # a package's VERSION.txt
 #   rc_package_zip "$OUT" "<stage name>" "$ZIP"
 #   rc_package_unportable "$STAGE"            # rc_package_zip runs it; the tarball calls it
 #
@@ -44,10 +48,12 @@ rc_package_commit() {
     printf '%s\n' "$commit"
 }
 
-# The `commit ...` line of member $2 (VERSION.txt) in the zip or tarball $1; a failure when it
-# cannot be read.
-rc_package_built_commit() {
-    python3 -I - "$1" "$2" << 'PY'
+# The text of VERSION.txt in the zip or tarball $1: the member $2 or, without it, the one
+# `<folder>/VERSION.txt` at the archive's top folder. A failure, and nothing, when it cannot be
+# read. The one reader of a package's VERSION.txt (RC-110-33): the guard below, the release
+# chain's verify-artifacts and sign-update.sh.
+rc_package_version_txt() {
+    python3 -I - "$1" "${2:-}" << 'PY'
 import sys
 import tarfile
 import zipfile
@@ -56,18 +62,30 @@ archive, member = sys.argv[1], sys.argv[2]
 try:
     if zipfile.is_zipfile(archive):
         with zipfile.ZipFile(archive) as package:
-            text = package.read(member).decode("utf-8")
+            names = package.namelist()
+            read = package.read
+            member = member or next(n for n in names if n.count("/") == 1 and n.endswith("/VERSION.txt"))
+            text = read(member).decode("utf-8")
     else:
         with tarfile.open(archive) as package:
+            names = package.getnames()
+            member = member or next(n for n in names if n.count("/") == 1 and n.endswith("/VERSION.txt"))
             text = package.extractfile(member).read().decode("utf-8")
-except (OSError, KeyError, AttributeError, UnicodeDecodeError, tarfile.TarError, zipfile.BadZipFile):
+except (OSError, KeyError, AttributeError, StopIteration, UnicodeDecodeError, tarfile.TarError,
+        zipfile.BadZipFile):
     sys.exit(1)
-for line in text.splitlines():
-    if line.startswith("commit "):
-        print(line[len("commit "):])
-        sys.exit(0)
-sys.exit(1)
+sys.stdout.write(text)
 PY
+}
+
+# The `commit ...` line of member $2 (VERSION.txt) in the zip or tarball $1; a failure when it
+# cannot be read.
+rc_package_built_commit() {
+    local text commit
+    text="$(rc_package_version_txt "$1" "$2")" || return 1
+    commit="$(sed -n 's/^commit //p' <<< "$text" | head -n 1)"
+    [[ -n "$commit" ]] || return 1
+    printf '%s\n' "$commit"
 }
 
 # Whether the package $1 may be written for commit $3: it does not exist yet, or its member $2
@@ -87,6 +105,41 @@ rc_package_guard() {
     echo "   One version never names two builds: raise it with scripts/set-version.sh, or" >&2
     echo "   RC_REPACK=1 replaces the package. Nothing was built." >&2
     return 1
+}
+
+# What every package script does before it builds: the commit and the time, exported so the
+# binary and VERSION.txt name the same ones (build.rs takes them verbatim), after the guard - an
+# existing package $1 of this version from another build (its member $2) stops the run.
+rc_package_begin() {
+    local commit
+    commit="$(rc_package_commit)"
+    rc_package_guard "$1" "$2" "$commit" || return 1
+    RC_BUILD_COMMIT="$commit"
+    RC_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    export RC_BUILD_COMMIT RC_BUILD_TIME
+}
+
+# rc_package_plugins into the array `plugins` of the caller; its failure is this one's.
+rc_package_plugin_list() {
+    local list package
+    list="$(rc_package_plugins "$@")" || return $?
+    plugins=()
+    while IFS= read -r package; do [[ -z "$package" ]] || plugins+=("$package"); done <<< "$list"
+}
+
+# What every package carries beside the program, into the folder $1: README.md, LICENSE and
+# NOTICE of the working directory, the plugins of the array `plugins` in plugins/, and
+# VERSION.txt naming version $2, the build's commit and time (rc_package_begin), target $3 and
+# profile $4.
+rc_package_payload() {
+    local stage="$1" version="$2" target="$3" profile="$4"
+    install -m 644 README.md LICENSE NOTICE "$stage/" || return 1
+    mkdir -p "$stage/plugins" || return 1
+    if [[ "${#plugins[@]}" -gt 0 ]]; then
+        install -m 644 "${plugins[@]}" "$stage/plugins/" || return 1
+    fi
+    printf '%s\n' "rCommander $version" "commit $RC_BUILD_COMMIT" "built $RC_BUILD_TIME" \
+        "target $target, profile $profile" > "$stage/VERSION.txt"
 }
 
 # The bundled plugin packages of checkout $1, one path per line: built and signed by

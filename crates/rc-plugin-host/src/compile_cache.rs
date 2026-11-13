@@ -282,7 +282,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 /// Lower-case hex of a digest: the one encoder of the crate, also behind
 /// [`crate::format_package_digest`] and [`crate::sign::hex_sha256`].
 pub(crate) fn hex(digest: &[u8]) -> String {
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+    ::hex::encode(digest)
 }
 
 /// The stored record; an unreadable one is an empty one, which only costs compiles.

@@ -16,11 +16,14 @@
 #
 # Every command reads REF_NAME (the tag) from the step's environment; `gate` the channel's
 # secret (HOMEBREW_TAP_DEPLOY_KEY, SCOOP_BUCKET_DEPLOY_KEY, WINGET_TOKEN), `render` GH_TOKEN,
-# `winget` KOMAC_VERSION, KOMAC_SHA256, GITHUB_TOKEN and GH_TOKEN (the WINGET_TOKEN) - never from
-# the command line, and nothing here prints one. A channel whose secret is missing (a fork, or
+# `winget` GITHUB_TOKEN and GH_TOKEN (the WINGET_TOKEN) - never from the command line, and
+# nothing here prints one. komac and nfpm are pinned in scripts/lib/tool-versions.sh. A channel whose secret is missing (a fork, or
 # before the owner made it) is skipped with a notice; the release is out by then, so the jobs
 # continue on error and never fail it.
 set -euo pipefail
+
+# shellcheck source=lib/tool-versions.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/tool-versions.sh"
 
 # Only plain vX.Y.Z tags count, and sort -V orders v1.10.0 after v1.9.0.
 newest() {
@@ -78,10 +81,10 @@ push() {
 # pause; any other failure is not, so no pull request doubles.
 winget() {
     local archive fork attempt
-    archive="komac-${KOMAC_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+    archive="komac-${RC_KOMAC_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
     curl --fail --silent --show-error --location --retry 3 --output "${RUNNER_TEMP}/${archive}" \
-        "https://github.com/russellbanks/Komac/releases/download/v${KOMAC_VERSION}/${archive}"
-    echo "${KOMAC_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --quiet
+        "https://github.com/russellbanks/Komac/releases/download/v${RC_KOMAC_VERSION}/${archive}"
+    echo "${RC_KOMAC_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --quiet
     tar --extract --gzip --file "${RUNNER_TEMP}/${archive}" --directory "${RUNNER_TEMP}" komac
     fork="$(gh api user --jq .login)/winget-pkgs"
     for attempt in 1 2 3; do
@@ -103,8 +106,8 @@ winget() {
 # published checksum (rDownloader's pin).
 install_nfpm() {
     curl --fail --silent --show-error --location --output "${RUNNER_TEMP}/nfpm.tar.gz" \
-        https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
-    echo "0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783  ${RUNNER_TEMP}/nfpm.tar.gz" | sha256sum --check
+        "https://github.com/goreleaser/nfpm/releases/download/v${RC_NFPM_VERSION}/nfpm_${RC_NFPM_VERSION}_Linux_x86_64.tar.gz"
+    echo "${RC_NFPM_SHA256}  ${RUNNER_TEMP}/nfpm.tar.gz" | sha256sum --check
     tar --extract --gzip --file "${RUNNER_TEMP}/nfpm.tar.gz" --directory "${RUNNER_TEMP}" nfpm
     echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
 }

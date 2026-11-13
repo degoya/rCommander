@@ -13,11 +13,13 @@ use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(transform = crate::confirm::argument)]
 pub(crate) struct BackupParams {
-    /// The code a first call answered with, when the settings ask for one.
-    #[serde(default)]
-    #[allow(dead_code, reason = "read by the gate, not by the tool")]
-    pub confirmation: Option<String>,
+    /// Named only so that `deny_unknown_fields` lets the code through: the gate reads it from
+    /// the call's arguments, and [`crate::confirm::argument`] describes it in the schema as for
+    /// every other tool.
+    #[serde(default, rename = "confirmation")]
+    _confirmation: Option<String>,
 }
 
 #[tool_router(router = database_router, vis = "pub(crate)")]

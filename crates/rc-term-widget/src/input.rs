@@ -159,12 +159,17 @@ pub(crate) fn side(x: f32, cell: Size) -> Side {
 /// The left button, pressed or released, and moved while held, as xterm numbers them.
 pub(crate) const LEFT_BUTTON: u8 = 0;
 pub(crate) const LEFT_MOVE: u8 = 32;
+/// The middle and the right button, and the wheel away from and towards the person.
+pub(crate) const MIDDLE_BUTTON: u8 = 1;
+pub(crate) const RIGHT_BUTTON: u8 = 2;
+const WHEEL_UP: u8 = 64;
+const WHEEL_DOWN: u8 = 65;
 /// What X10 reports for a release.
 const RELEASE: u8 = 3;
 
 /// A mouse report for a program that asked for the mouse (`mode` has a mouse mode): SGR when
 /// it asked for that, X10 (UTF-8 extended or not) otherwise; `None` where X10 cannot say the
-/// cell.
+/// cell. X10 names no button on a release; the wheel (64, 65) is only ever `pressed`.
 pub(crate) fn mouse_report(
     button: u8,
     modifiers: Modifiers,
@@ -216,11 +221,32 @@ fn x10_report(point: GridPoint, code: u8, utf8: bool) -> Option<Vec<u8>> {
     Some(report)
 }
 
+/// The wheel for a program that asked for the mouse (RC-110-28): button 64 away from the
+/// person (positive `lines`), 65 towards them, in the encoding `mode` asks for. One report for
+/// each notch of [`WHEEL_LINES`] lines and at least one, as xterm reports a notch once; the
+/// wheel has no release. Empty where X10 cannot say the cell.
+pub(crate) fn wheel_report(
+    lines: i32,
+    modifiers: Modifiers,
+    point: GridPoint,
+    mode: TermMode,
+) -> Vec<u8> {
+    let button = if lines > 0 { WHEEL_UP } else { WHEEL_DOWN };
+    let Some(report) = mouse_report(button, modifiers, point, true, mode) else {
+        return Vec::new();
+    };
+    let notches = lines.unsigned_abs().div_ceil(u32::from(WHEEL_LINES)) as usize;
+    report.repeat(notches)
+}
+
+/// The lines a notch of the wheel scrolls, as the file list.
+const WHEEL_LINES: u8 = 3;
+
 /// Lines a wheel event scrolls, positive into the history; pixels below a line are kept in
-/// `pixels` for the next event. Three lines a notch, as the file list.
+/// `pixels` for the next event. [`WHEEL_LINES`] a notch.
 pub(crate) fn wheel_lines(delta: ScrollDelta, pixels: &mut f32, line_height: f32) -> i32 {
     match delta {
-        ScrollDelta::Lines { y, .. } => (y * 3.0).round() as i32,
+        ScrollDelta::Lines { y, .. } => (y * f32::from(WHEEL_LINES)).round() as i32,
         ScrollDelta::Pixels { y, .. } => {
             *pixels += y;
             let lines = (*pixels / line_height).trunc();

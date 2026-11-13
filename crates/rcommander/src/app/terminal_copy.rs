@@ -1,8 +1,9 @@
 //! How the terminals copy their selection besides Ctrl+Shift+C (owner 2026-10-25): Ctrl+C and a
 //! right click while text is selected, letting go of the mouse after selecting, Shift with the
-//! mouse and a program's OSC 52; and whether Ctrl+V pastes - the stored `terminal.copy_*`,
-//! `terminal.paste_ctrl_v`, `terminal.osc52_copy`, `terminal.osc52_remote` and
-//! `terminal.shift_selects` settings, read at the start and whenever one changes, in every widget.
+//! mouse and a program's OSC 52; and whether Ctrl+V and a right click paste - the stored
+//! `terminal.copy_*`, `terminal.paste_ctrl_v`, `terminal.paste_right_click`,
+//! `terminal.osc52_copy`, `terminal.osc52_remote` and `terminal.shift_selects` settings, read at
+//! the start and whenever one changes, in every widget.
 //!
 //! A program's copy (OSC 52, RC-080-65) reaches the clipboard only from a terminal a panel shows
 //! (a hidden one's is dropped), from an SSH terminal only with `terminal.osc52_remote`, and at
@@ -15,7 +16,7 @@ use rc_engine::{
     PanelId, TermId,
     settings::{
         COPY_CTRL_C_KEY, COPY_ON_SELECT_KEY, COPY_RIGHT_CLICK_KEY, OSC52_COPY_KEY,
-        OSC52_REMOTE_KEY, PASTE_CTRL_V_KEY, SHIFT_SELECTS_KEY, stored_bool,
+        OSC52_REMOTE_KEY, PASTE_CTRL_V_KEY, PASTE_RIGHT_CLICK_KEY, SHIFT_SELECTS_KEY, stored_bool,
     },
 };
 use rc_term_widget::CopySettings;
@@ -30,6 +31,7 @@ pub fn concerns(key: &str) -> bool {
         COPY_RIGHT_CLICK_KEY,
         COPY_ON_SELECT_KEY,
         PASTE_CTRL_V_KEY,
+        PASTE_RIGHT_CLICK_KEY,
         OSC52_COPY_KEY,
         OSC52_REMOTE_KEY,
         SHIFT_SELECTS_KEY,
@@ -42,6 +44,7 @@ async fn load(db: Db) -> CopySettings {
     CopySettings {
         ctrl_c: stored_bool(&db, COPY_CTRL_C_KEY).await,
         right_click: stored_bool(&db, COPY_RIGHT_CLICK_KEY).await,
+        right_click_pastes: stored_bool(&db, PASTE_RIGHT_CLICK_KEY).await,
         on_select: stored_bool(&db, COPY_ON_SELECT_KEY).await,
         ctrl_v: stored_bool(&db, PASTE_CTRL_V_KEY).await,
         osc52: stored_bool(&db, OSC52_COPY_KEY).await,

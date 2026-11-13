@@ -87,11 +87,8 @@ pub fn of(button: &BarButton) -> Option<Icon> {
 /// for an own command's button without a symbol - the own command's; `None` for a file, nothing,
 /// or a name the collection does not have.
 pub fn collection(button: &BarButton) -> Option<char> {
-    // The own commands are copied only for a button that needs them.
-    let own = button.icon.is_none()
-        && matches!(&button.action, ButtonAction::Command(action) if action.kind == CommandKind::Own);
-    let commands = if own { known::commands() } else { Vec::new() };
-    collection_among(button, &commands)
+    // Read in place: this runs per button at every draw (RC-110-29).
+    known::with_commands(|commands| collection_among(button, commands))
 }
 
 /// [`collection`] with the own commands `commands`.

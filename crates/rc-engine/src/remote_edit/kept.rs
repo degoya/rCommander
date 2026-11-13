@@ -10,8 +10,7 @@ use std::{
 };
 
 use super::{
-    Edit, RemoteEditChange, RemoteEditQuestion, RemoteEditState, Stamp, folder, is_server, rules,
-    watch::Watch,
+    Edit, RemoteEditChange, RemoteEditQuestion, RemoteEditState, Stamp, folder, rules, watch::Watch,
 };
 use crate::recover::LogPanic as _;
 use crate::{Engine, check_name, unpacked};
@@ -48,6 +47,7 @@ impl Engine {
                 question: Some(RemoteEditQuestion::Kept),
                 uploading: false,
                 again: false,
+                closed: tokio_util::sync::CancellationToken::new(),
             };
             if let Ok(id) = self.adopt_edit(edit).await {
                 self.announce_edit(id, RemoteEditChange::Asked);
@@ -87,7 +87,7 @@ fn take_kept(root: &Path, own: u32) -> Vec<Found> {
             continue;
         };
         let valid = check_name(&session.name).is_ok()
-            && is_server(&session.remote.backend)
+            && session.remote.backend.is_server()
             && session.shown.backend == session.remote.backend;
         let stamp = rules::local_stamp(&dir.join(&session.name));
         if !valid || stamp.is_none() || stamp == session.synced {

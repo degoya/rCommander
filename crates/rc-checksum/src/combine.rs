@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, io, path::Path, sync::Arc};
 
-use rc_vfs::{EntryKind, Vfs, VfsError, WriteMode};
+use rc_vfs::{EntryKind, Vfs, VfsError, WriteMode, case_sensitive_at};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
@@ -155,13 +155,14 @@ async fn read_crc(vfs: &Arc<dyn Vfs>, path: &Path) -> Result<Option<CrcInfo>, Ch
     crc_file::parse(path, &text).map(Some)
 }
 
-/// The parts `<stem>.001` ... in `dir` with their sizes, in order; fails on the first gap.
+/// The parts `<stem>.001` ... in `dir` with their sizes, in order; fails on the first gap. Case
+/// counts as it does in `dir`: in a WSL distribution `x.001` and `X.001` are two files.
 async fn find_parts(
     vfs: &Arc<dyn Vfs>,
     dir: &Path,
     stem: &str,
 ) -> Result<Vec<(String, u64)>, ChecksumError> {
-    let case_sensitive = vfs.capabilities().case_sensitive;
+    let case_sensitive = case_sensitive_at(vfs.capabilities().case_sensitive, dir);
     let mut found = BTreeMap::new();
     for entry in vfs.list(dir).await? {
         let Some((entry_stem, number)) = entry.name.rsplit_once('.') else {
@@ -220,9 +221,9 @@ async fn write_target(
         let mut reader = source_vfs.open_read(&path).await?;
         loop {
             control.checkpoint().await?;
-            let read = reader
-                .read(&mut buffer)
-                .await
+            let read = control
+                .or_cancel(reader.read(&mut buffer))
+                .await?
                 .map_err(|error| ChecksumError::io(&path, error))?;
             if read == 0 {
                 break;

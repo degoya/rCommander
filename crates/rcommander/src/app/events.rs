@@ -86,7 +86,9 @@ impl App {
         effects
     }
 
-    /// After missed events: every panel and the active one, read again.
+    /// After missed events: every panel and the active one, read again; then the jobs, their
+    /// questions and the queue (RC-110-27, `file_ops/resync.rs`), and the server files edited
+    /// through copies with theirs.
     pub(super) fn reload(&mut self) -> Vec<Effect> {
         self.active = self.engine.active_panel();
         let mut effects = Vec::new();
@@ -95,6 +97,8 @@ impl App {
             effects.extend(self.terminal_wanted(panel, false));
             effects.extend(self.tree_follows_panel(panel, PanelChange::Navigated));
         }
+        self.read_remote_edits();
+        effects.extend(self.resync_jobs());
         effects
     }
 

@@ -154,6 +154,20 @@ async fn f3_reads_a_text_file_from_a_7z_archive() {
     assert_eq!(window.text, "# Readme\n\nInside an archive.\n");
 }
 
+/// RC-110-26: the name is judged before a folder is made or the entry is opened - on Windows
+/// `notes.txt:x` would be written into a stream of `notes.txt`.
+#[tokio::test]
+async fn an_entry_whose_name_is_no_plain_file_name_is_not_unpacked() {
+    let (_root, engine) = engine_beside("tree.zip").await;
+    cursor_on(&engine, "tree.zip").await;
+    panel(&engine, enter()).await;
+    let folder = engine.panel(PanelId::Left).path.clone();
+    for name in ["notes.txt:x", "con", "trailing."] {
+        let unpacked = engine.unpack_to_temp(&folder.join(name)).await;
+        assert_eq!(code(unpacked), "invalid_name", "{name}");
+    }
+}
+
 #[tokio::test]
 async fn a_file_inside_an_archive_is_unpacked_read_only_for_the_system() {
     let (_root, engine) = engine_beside("tree.zip").await;

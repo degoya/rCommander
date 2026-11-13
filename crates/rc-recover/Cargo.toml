@@ -1,0 +1,18 @@
+[package]
+name = "rc-recover"
+description = "What a panic leaves behind, shared by every crate: a joined task's panic and a poisoned lock, logged by name"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

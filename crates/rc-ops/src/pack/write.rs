@@ -3,7 +3,8 @@
 //!
 //! [`Feed`] opens each source with the runtime's [`Handle`] (this runs in a blocking task) and
 //! reads it in buffers; before each buffer it waits while the job is paused and stops once it is
-//! cancelled, and after each it reports the bytes read for the progress. A source that turns out
+//! cancelled - a read under way is given up for a cancel too - and after each it reports the
+//! bytes read for the progress. A source that turns out
 //! shorter than it was when counted fails the archive instead of corrupting it (a tar header has
 //! stated its size already); one that grew goes in with its counted size and is listed in
 //! [`Grown`], so it is a failure and a move to the archive keeps it.
@@ -156,6 +157,14 @@ impl Feed {
         Ok(())
     }
 
+    /// One read of a source, unless the job is cancelled first: a backend that stalls does not
+    /// hold the cancel until its own time limit (RC-110-26), as the copy's reads do not.
+    fn read(&self, stream: &mut ReadStream, buf: &mut [u8]) -> io::Result<usize> {
+        self.handle
+            .block_on(self.control.or_cancel(stream.read(buf)))
+            .map_err(|_| cancelled())?
+    }
+
     /// Opens the member's source, buffered; it must yield exactly `member.size` bytes.
     pub(crate) fn open(&self, member: &Member) -> io::Result<BufReader<Source<'_>>> {
         self.checkpoint()?;
@@ -200,10 +209,7 @@ impl Read for Source<'_> {
             .len()
             .min(BUFFER)
             .min(usize::try_from(self.left).unwrap_or(BUFFER));
-        let read = self
-            .feed
-            .handle
-            .block_on(self.stream.read(&mut buf[..want]))?;
+        let read = self.feed.read(&mut self.stream, &mut buf[..want])?;
         if read == 0 {
             return Err(rc_vfs::VfsError::Io {
                 path: self.path.clone(),
@@ -227,7 +233,7 @@ impl Source<'_> {
     /// Past the counted size: one more byte means the file grew since it was counted.
     fn check_end(&mut self) -> io::Result<()> {
         let mut byte = [0_u8; 1];
-        let more = self.feed.handle.block_on(self.stream.read(&mut byte))?;
+        let more = self.feed.read(&mut self.stream, &mut byte)?;
         if more > 0 {
             self.feed.grown.push(self.path.clone());
         }

@@ -168,8 +168,13 @@ impl App {
             // `Saved` that follows, which finds no session folder any more.
             Message::Saved => {
                 if let Some(folder) = self.drag.temp.take_session() {
-                    let removed =
-                        Task::perform(temp::remove_off_thread(folder), |()| Message::Saved);
+                    // Within what the quit's limit leaves (RC-110-27): a folder not removed by
+                    // then is swept by a later session.
+                    let removed = super::startup::within(
+                        self.quit_time_left(),
+                        temp::remove_off_thread(folder),
+                    );
+                    let removed = Task::perform(removed, |_| Message::Saved);
                     return Some(vec![Effect::Task(removed)]);
                 }
             }

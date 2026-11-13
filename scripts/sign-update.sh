@@ -7,6 +7,13 @@
 # (scripts/update-schema-change.sh), signs with rc-pack, verifies the round trip and writes
 # artifacts/update/rcommander-update-<channel>.json. Uploading is the owner's step.
 #
+# The emergency path (RC-110-32): a release's manifest is built by release.yml over the assets it
+# publishes (scripts/release-publish.sh). The one written here names the hashes of the packages
+# built on this machine, which are not those of the release's assets - uploaded beside them it
+# replaces the workflow's manifest and every installation's update fails its hash check. It
+# belongs only to a release whose assets are these very files. `--bump` is the regular use: it
+# signs an existing manifest again, the release's own once downloaded into artifacts/update/.
+#
 # Usage:
 #   scripts/sign-update.sh <stable|beta>            # build and sign from the packages
 #   scripts/sign-update.sh <stable|beta> --bump     # sign the existing manifest again with a new
@@ -32,8 +39,9 @@ if [[ -z "${RC_PACK:-}" ]]; then
     rc_take_lock "$@"
 fi
 cd "$ROOT"
-# shellcheck source=lib/workspace-version.sh
-source "$ROOT/scripts/lib/workspace-version.sh"
+# rc_workspace_version (lib/workspace-version.sh) and rc_package_version_txt.
+# shellcheck source=lib/package.sh
+source "$ROOT/scripts/lib/package.sh"
 
 usage() {
     echo "usage: scripts/sign-update.sh <stable|beta> [--bump]" >&2
@@ -99,12 +107,7 @@ ZIP="$ROOT/artifacts/windows/rcommander-$VERSION-windows-x64.zip"
     exit 1
 }
 # The package's VERSION.txt names the version and the release profile.
-version_file="$(python3 -c '
-import sys, zipfile
-with zipfile.ZipFile(sys.argv[1]) as archive:
-    names = [name for name in archive.namelist() if name.endswith("/VERSION.txt")]
-    print(archive.read(names[0]).decode() if names else "")
-' "$ZIP")"
+version_file="$(rc_package_version_txt "$ZIP" || true)"
 if ! grep -qx "rCommander $VERSION" <<< "$version_file"; then
     echo "!! the zip's VERSION.txt is not rCommander $VERSION; nothing was written" >&2
     exit 1
@@ -141,3 +144,5 @@ pack update manifest build \
     --out "$OUT"
 pack update manifest verify "$OUT" --assets "$STAGE" "${verify_args[@]}"
 echo "==> $OUT"
+echo "!! it names the hashes of the packages in artifacts/, not of a release's assets from release.yml:" >&2
+echo "   upload it only to a release that carries these very files (docs/development.md, Publishing updates)" >&2

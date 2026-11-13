@@ -5,6 +5,13 @@
 //!
 //! Copied from rDownloader's `crates/rd-sign/src/trust.rs` at commit 26c8592a6 (RC-100-04),
 //! without the runtime key revocation and listing an update never needs.
+//!
+//! Deliberately separate from `crates/rc-plugin-host/src/sign/trust.rs` (decided in RC-110-30):
+//! the two stores share their origin and some eighty lines, and differ in what they are for - the
+//! plugin host's takes a key on first use and drops it at run time, this one has fixed keys and
+//! withdraws single documents by digest. This crate is a leaf on purpose and takes nothing from
+//! the plugin host; a third crate for the common lines would give either side's trust decisions a
+//! second place to change them from.
 
 use std::{
     collections::{HashMap, HashSet},

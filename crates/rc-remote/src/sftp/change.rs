@@ -8,12 +8,27 @@ use std::{io::SeekFrom, path::Path, sync::Arc, time::SystemTime};
 use rc_vfs::{EntryKind, Result, SetAttributes, VfsError, WriteMode, WriteStream};
 use russh_sftp::{
     client::error::Error,
-    protocol::{FileAttributes, OpenFlags},
+    protocol::{FileAttributes, OpenFlags, Packet, StatusCode},
 };
 use tokio::io::AsyncSeekExt;
 
 use super::{SftpVfs, error::is_vague, path::wire_path, stream::Settle, vfs::UPLOAD_MODE};
 use crate::tree::{self, TreeOps};
+
+/// OpenSSH's rename that replaces its target, as POSIX `rename` does; version "1".
+pub(super) const POSIX_RENAME: &str = "posix-rename@openssh.com";
+
+/// The data of an extended request that names two paths: each a length and its bytes.
+fn two_strings(first: &str, second: &str) -> Vec<u8> {
+    let mut data = Vec::with_capacity(8 + first.len() + second.len());
+    for text in [first, second] {
+        // A wire path is far below 4 GiB; one that were not is refused as a bad message.
+        let len = u32::try_from(text.len()).unwrap_or(u32::MAX);
+        data.extend_from_slice(&len.to_be_bytes());
+        data.extend_from_slice(text.as_bytes());
+    }
+    data
+}
 
 fn not_found(path: &Path) -> VfsError {
     VfsError::NotFound {
@@ -110,22 +125,52 @@ impl SftpVfs {
         let Err(error) = self.raw.rename(wire_from, wire_to).await else {
             return Ok(());
         };
+        Err(self.explain_rename(from, to, error, false).await)
+    }
+
+    /// Renames `from` onto `to`, replacing a file there in one step, where the server offers
+    /// `posix-rename@openssh.com` (OpenSSH does): the old file is never gone before the new one
+    /// has its name. Another server gets the plain `RENAME`, which answers `AlreadyExists`.
+    pub(super) async fn rename_onto(&self, from: &Path, to: &Path) -> Result<()> {
+        if !self.posix_rename {
+            return self.rename_entry(from, to).await;
+        }
+        let (wire_from, wire_to) = (wire_path(from)?, wire_path(to)?);
+        let request = two_strings(&wire_from, &wire_to);
+        let error = match self.raw.extended(POSIX_RENAME, request).await {
+            Ok(Packet::Status(status)) if status.status_code == StatusCode::Ok => return Ok(()),
+            Ok(Packet::Status(status)) => Error::from(status),
+            Ok(_) => Error::UnexpectedPacket,
+            Err(error) => error,
+        };
+        Err(self.explain_rename(from, to, error, true).await)
+    }
+
+    /// Why renaming `from` to `to` failed; `replacing` when an entry at `to` is no conflict.
+    async fn explain_rename(
+        &self,
+        from: &Path,
+        to: &Path,
+        error: Error,
+        replacing: bool,
+    ) -> VfsError {
         if let Ok(None) = self.probe_link(from).await {
-            return Err(not_found(from));
+            return not_found(from);
         }
         if let Some(parent) = to.parent()
             && let Ok(None) = self.probe(parent).await
         {
-            return Err(not_found(parent));
+            return not_found(parent);
         }
-        if is_vague(&error)
+        if !replacing
+            && is_vague(&error)
             && let Ok(Some(_)) = self.probe_link(to).await
         {
-            return Err(VfsError::AlreadyExists {
+            return VfsError::AlreadyExists {
                 path: to.to_path_buf(),
-            });
+            };
         }
-        Err(self.fail(error, from))
+        self.fail(error, from)
     }
 
     pub(super) async fn remove_one_file(&self, path: &Path) -> Result<()> {
@@ -253,3 +298,7 @@ impl TreeOps for SftpVfs {
         self.remove_empty_dir(path).await
     }
 }
+
+#[cfg(test)]
+#[path = "change_tests.rs"]
+mod tests;

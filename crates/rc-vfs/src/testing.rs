@@ -28,7 +28,8 @@ use crate::{
 /// and is a [`Vfs`] through the blanket implementation.
 ///
 /// Only the calls a backend must implement forward, with [`Vfs::list_batches`],
-/// [`Vfs::open_read_at`] and [`Vfs::open_write_sized`] overridable on top; each defaults to what
+/// [`Vfs::open_read_at`], [`Vfs::open_write_sized`] and [`Vfs::rename_replacing`] overridable
+/// on top; each defaults to what
 /// [`Vfs`]'s default does, over this backend's own `list`, `open_read` and `open_write`. Every other provided call keeps [`Vfs`]'s default
 /// - a wrapper is exactly the hand-written forward it replaces.
 ///
@@ -83,6 +84,11 @@ pub trait Forward: Send + Sync {
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
         self.inner().rename(from, to).await
     }
+    /// The wrapper's own [`Forward::rename`] unless overridden, so a wrapper that refuses or
+    /// counts renames sees this one too.
+    async fn rename_replacing(&self, from: &Path, to: &Path) -> Result<()> {
+        Forward::rename(self, from, to).await
+    }
     async fn remove_file(&self, path: &Path) -> Result<()> {
         self.inner().remove_file(path).await
     }
@@ -136,6 +142,9 @@ impl<T: Forward> Vfs for T {
     }
     async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
         Forward::rename(self, from, to).await
+    }
+    async fn rename_replacing(&self, from: &Path, to: &Path) -> Result<()> {
+        Forward::rename_replacing(self, from, to).await
     }
     async fn remove_file(&self, path: &Path) -> Result<()> {
         Forward::remove_file(self, path).await

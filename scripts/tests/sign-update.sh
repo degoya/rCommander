@@ -49,7 +49,8 @@ export RC_PACK="$PACK" RC_PACK_CALLS="$SCRATCH/calls"
 
 mkdir -p "$TREE/scripts/lib" "$TREE/artifacts/windows" "$KEY_DIR"
 cp "$ROOT/scripts/sign-update.sh" "$ROOT/scripts/update-schema-change.sh" "$TREE/scripts/"
-cp "$ROOT/scripts/lib/workspace-version.sh" "$ROOT/scripts/lib/lock.sh" "$TREE/scripts/lib/"
+cp "$ROOT/scripts/lib/workspace-version.sh" "$ROOT/scripts/lib/package.sh" "$ROOT/scripts/lib/lock.sh" \
+    "$TREE/scripts/lib/"
 printf '%s\n' '[workspace]' '' '[workspace.package]' 'version = "1.2.3"' > "$TREE/Cargo.toml"
 printf '%s\n' '# Release notes' '' '## 1.2.3' '' '- Updates install themselves.' > "$TREE/RELEASE-NOTES.md"
 git -C "$TREE" init -q

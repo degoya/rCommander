@@ -96,11 +96,13 @@ pub fn label_of(button: &BarButton, app: &App) -> String {
                 palette::label(row)
             }
             // An own command without a tooltip shows the command's (Total Commander 11.50).
-            CommandKind::Own => user_commands::known::commands()
-                .into_iter()
-                .find(|command| command.name == action.command)
-                .filter(|command| !command.tooltip.is_empty())
-                .map_or_else(|| action.command.clone(), |command| command.tooltip),
+            CommandKind::Own => user_commands::known::with_commands(|commands| {
+                commands
+                    .iter()
+                    .find(|command| command.name == action.command)
+                    .filter(|command| !command.tooltip.is_empty())
+                    .map_or_else(|| action.command.clone(), |command| command.tooltip.clone())
+            }),
             CommandKind::Program => std::path::Path::new(&action.command)
                 .file_stem()
                 .map_or_else(

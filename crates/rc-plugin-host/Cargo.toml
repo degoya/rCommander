@@ -29,9 +29,11 @@ ed25519-dalek.workspace = true
 # zip's `deflate-flate2` names no backend of its own; the workspace's flate2 brings miniz_oxide
 # (`rust_backend`), so this crate builds alone too, not only beside rc-ops and rc-vfs.
 flate2.workspace = true
+hex.workspace = true
 rand.workspace = true
 rc-plugin-api = { path = "../rc-plugin-api" }
 rc-plugin-types = { path = "../rc-plugin-types" }
+rc-recover = { path = "../rc-recover" }
 # The one list of invisible and direction characters a failure's text spells out (RC-080-43).
 rc-rename = { path = "../rc-rename" }
 # `http` of a secret source: plain HTTP to its granted loopback port (RC-100-33); of an

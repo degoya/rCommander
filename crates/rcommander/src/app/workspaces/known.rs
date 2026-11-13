@@ -7,40 +7,37 @@
 //! ([`active_themes`], `theme::themes::set_workspace_themes`): they come before the window's
 //! theme of their mode while it is active.
 
-use std::sync::RwLock;
-
 use rc_engine::{Workspace, WorkspaceId, settings::themes::ThemeMode, workspaces::theme_of};
 
-use crate::app::palette::workspaces::WorkspaceRow;
-use crate::recover::RwLockOrRecover as _;
+use crate::app::{known::Known, palette::workspaces::WorkspaceRow};
 
-static KNOWN: RwLock<Vec<Workspace>> = RwLock::new(Vec::new());
+static KNOWN: Known<Vec<Workspace>> = Known::new("known.known", Vec::new());
 /// The workspace `workspaces.on_start` names, read with the list.
-static START: RwLock<Option<WorkspaceId>> = RwLock::new(None);
+static START: Known<Option<WorkspaceId>> = Known::new("known.start", None);
 
 /// The workspaces from now on.
 pub fn set(list: Vec<Workspace>) {
-    *KNOWN.write_or_recover("known.known") = list;
+    KNOWN.set(list);
 }
 
 /// The workspace called up at the start from now on (`workspaces.on_start`), `None` for none.
 pub fn set_start(id: Option<WorkspaceId>) {
-    *START.write_or_recover("known.start") = id;
+    START.set(id);
 }
 
 /// The workspace called up at the start, as last read or set.
 pub fn start() -> Option<WorkspaceId> {
-    *START.read_or_recover("known.start")
+    START.get()
 }
 
 /// Every workspace, in the list's order.
 pub fn all() -> Vec<Workspace> {
-    KNOWN.read_or_recover("known.known").clone()
+    KNOWN.get()
 }
 
 /// The workspaces as rows of the palette, the menu and the list.
 pub fn rows() -> Vec<WorkspaceRow> {
-    rows_of(&KNOWN.read_or_recover("known.known"))
+    KNOWN.with(|list| rows_of(list.as_slice()))
 }
 
 /// `list` as rows.

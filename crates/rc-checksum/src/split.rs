@@ -41,10 +41,7 @@ pub fn part_name(stem: &str, index: u64) -> String {
 /// The name without its last extension (`disk` of `disk.iso`); the whole name when that would
 /// leave nothing (`.bashrc`).
 pub(crate) fn stem_of(name: &str) -> &str {
-    match name.rsplit_once('.') {
-        Some((stem, _)) if !stem.is_empty() => stem,
-        _ => name,
-    }
+    rc_rename::split_extension(name).0
 }
 
 /// Splits the file at `source` on `source_vfs` into parts of `part_size` bytes (the last one
@@ -235,10 +232,9 @@ impl Source {
             return Ok(());
         }
         control.checkpoint().await?;
-        let read = self
-            .reader
-            .read(&mut self.buffer)
-            .await
+        let read = control
+            .or_cancel(self.reader.read(&mut self.buffer))
+            .await?
             .map_err(|error| ChecksumError::io(path, error))?;
         self.start = 0;
         self.end = read;

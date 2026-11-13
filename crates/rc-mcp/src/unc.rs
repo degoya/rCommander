@@ -4,13 +4,16 @@
 //!
 //! Every tool is judged by its argument names ([`PATH_ARGUMENTS`]), so a new tool with a `path`
 //! is covered without a line of its own; `settings_set` also by its value when the key is a path
-//! setting (the start folders). A WSL distribution's share is no network share
+//! setting (the start folders), and `workspaces_create` and `workspaces_update` by the folders
+//! their `spec` names, which lie below the top level: each tab on this machine and each terminal's
+//! start folder (RC-110-21) - applying the workspace, by the person's click or at the start, would
+//! open them. A WSL distribution's share is no network share
 //! ([`rc_engine::network_path`]), and the share of a mapped network drive is one the person
 //! connected already (RC-010-16): both pass. What the person types or picks in the window never
 //! comes here.
 
 use rc_engine::{
-    Command, Drive, DriveKind, Engine, NetworkPath, Outcome, network_path,
+    Command, Drive, DriveKind, Engine, NetworkPath, Outcome, WorkspaceSpec, network_path,
     settings::{SettingKind, setting},
 };
 use rmcp::model::{CallToolResult, JsonObject};
@@ -102,7 +105,29 @@ fn network_arguments(tool: &str, arguments: &JsonObject) -> Vec<(String, Network
             judge(value, &mut found);
         }
     }
+    if WORKSPACE_TOOLS.contains(&tool)
+        && let Some(spec) = arguments.get("spec")
+    {
+        judge_workspace(spec, &mut found);
+    }
     found
+}
+
+/// The tools that save a workspace's `spec`.
+const WORKSPACE_TOOLS: &[&str] = &["workspaces_create", "workspaces_update"];
+
+/// The folders of this machine a workspace's `spec` names into `found` when they are on another
+/// machine. Read as the tool reads it ([`WorkspaceSpec::from_value`]), so what is judged is what
+/// would be saved; a spec that does not read is the tool's to refuse.
+fn judge_workspace(spec: &Value, found: &mut Vec<(String, NetworkPath)>) {
+    let Ok(spec) = WorkspaceSpec::from_value(spec.clone()) else {
+        return;
+    };
+    for place in spec.local_places() {
+        if let Some(network) = network_path(&place) {
+            found.push((place, network));
+        }
+    }
 }
 
 /// `value` - a text, or a list of them - into `found` when it names something on another

@@ -37,7 +37,7 @@ use crate::recover::LockOrRecover as _;
 use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError, EngineEvent, Outcome, PanelId,
-    remote_edit::{OpenRemote, is_server},
+    remote_edit::OpenRemote,
     settings::{EDITOR_KEY, VIEWER_KEY, stored_setting},
 };
 
@@ -227,7 +227,7 @@ impl Engine {
             }
             // A server file opens through a watched copy, F3 with an external viewer too, as in
             // Total Commander (RC-110-01).
-            (_, chosen) if is_server(&target.backend) => {
+            (_, chosen) if target.backend.is_server() => {
                 let listed = cursor.filter(|_| path.is_none());
                 let how = OpenRemote {
                     program: chosen,
@@ -377,3 +377,7 @@ mod tests;
 #[cfg(test)]
 #[path = "file_ops_viewer_tests.rs"]
 mod viewer_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "file_ops_case_tests.rs"]
+mod case_tests;

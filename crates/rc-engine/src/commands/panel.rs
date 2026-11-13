@@ -153,11 +153,15 @@ impl Engine {
     /// The `panel.refresh` command (Ctrl+R, F2): a flat view (Ctrl+B, find results) is left for
     /// the folder it was made from (owner, 2026-10-18: Ctrl+R brings the folders back); any other
     /// panel is read again ([`Engine::refresh`], which a changed view re-reads flat views with).
+    /// A panel on a portable device that a job writes to is refused as `device_busy` with
+    /// `panels.device_transfer_hint` on (`device_transfer.rs`).
     pub(crate) async fn refresh_command(
         &self,
         panel: Option<PanelId>,
     ) -> Result<Outcome, EngineError> {
         let id = self.resolve(panel);
+        // A device taking a transfer answers no listing until it is over (RC-110-16).
+        self.refuse_busy_device(id).await?;
         match self.flat_root(id) {
             Some(root) => self.show_path(id, root).await,
             None => self.refresh(Some(id)).await,

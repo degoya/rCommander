@@ -22,6 +22,7 @@ use crate::{
     conflict::Decision,
     pack::{
         Group,
+        follow::remove_temp,
         write::{Feed, Member, MemberKind, panicked},
     },
     runner::{Runner, Step, Stop, attempt},
@@ -277,34 +278,18 @@ impl Runner {
     /// Runs the rewrite as a blocking task, its progress followed; the sources that grew while
     /// they were read.
     async fn run_rewrite(&mut self, job: Rewrite) -> (io::Result<Stats>, Vec<PathBuf>) {
-        let (bytes, mut seen) = watch::channel(0_u64);
+        let (bytes, seen) = watch::channel(0_u64);
         let feed = match Feed::new(Arc::clone(&self.src), self.job.control.clone(), bytes) {
             Ok(feed) => feed,
             Err(error) => return (Err(error), Vec::new()),
         };
-        let current = feed.current();
         let grown = feed.grown();
-        let start = self.progress.bytes_done;
-        let mut task = tokio::task::spawn_blocking(move || rewrite(&job, &feed));
-        let joined = loop {
-            tokio::select! {
-                joined = &mut task => break joined,
-                changed = seen.changed() => {
-                    if changed.is_err() {
-                        break (&mut task).await;
-                    }
-                    let read = *seen.borrow_and_update();
-                    self.progress.bytes_done = start + read;
-                    if let Some(member) = current.get() {
-                        let at = self.src_path(&member.path);
-                        self.progress.begin_file(at, member.size);
-                        self.progress.file_bytes_done = read.saturating_sub(member.from);
-                    }
-                    self.tick(false);
-                }
-            }
-        };
-        let written = match joined.log_panic("ops.archive_update") {
+        let joined = self
+            .follow_blocking("ops.archive_update", feed, seen, move |feed| {
+                rewrite(&job, feed)
+            })
+            .await;
+        let written = match joined {
             Ok(written) => written,
             Err(_) => Err(panicked()),
         };
@@ -337,13 +322,14 @@ impl Runner {
 }
 
 /// Whether renaming onto a file failed because it is open elsewhere: Windows' sharing violation
-/// or access denied.
+/// or access denied. Anywhere else an open file is no obstacle to a rename, and access denied
+/// means what it says (a folder that may not be written to).
 fn in_use(error: &io::Error) -> bool {
     /// `ERROR_SHARING_VIOLATION`, `ERROR_LOCK_VIOLATION`.
     const SHARING: [i32; 2] = [32, 33];
-    error.kind() == io::ErrorKind::PermissionDenied
-        || (cfg!(windows)
-            && error
+    cfg!(windows)
+        && (error.kind() == io::ErrorKind::PermissionDenied
+            || error
                 .raw_os_error()
                 .is_some_and(|code| SHARING.contains(&code)))
 }
@@ -364,14 +350,6 @@ fn old_entry(old: &Old) -> Entry {
     }
 }
 
-/// Removes an unfinished new archive; one that cannot be removed is logged.
-async fn remove_temp(temp: &Path) {
-    if let Err(left) = tokio::fs::remove_file(temp).await
-        && left.kind() != io::ErrorKind::NotFound
-    {
-        tracing::warn!(
-            path = %temp.display(),
-            "an unfinished archive could not be removed: {left}"
-        );
-    }
-}
+#[cfg(test)]
+#[path = "run_tests.rs"]
+mod tests;

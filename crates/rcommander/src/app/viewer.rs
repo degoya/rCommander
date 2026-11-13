@@ -11,7 +11,8 @@
 //! - `lister.rs` - one file's view: mode, encoding, place, page; `find.rs` - its search bar;
 //!   `copy.rs` - Ctrl+A and Ctrl+C over its whole text (RC-110-06).
 //! - `load.rs` - the reads behind it; `picture.rs` - decoding a picture within limits.
-//! - `quick.rs` - Quick View's state; `draw.rs` - drawing both; `window.rs` - Lister's window.
+//! - `quick.rs` - Quick View's state, `quick_follow.rs` - it following the cursor once that
+//!   rested (RC-110-28); `draw.rs` - drawing both; `window.rs` - Lister's window.
 //! - `markdown.rs` - a Markdown file's preview, `markdown_view.rs` drawing it, `links.rs` its
 //!   links (RC-020-09), `code_lexer.rs` the colours of its code blocks (RC-110-06); `text_size.rs` - Ctrl+wheel, Ctrl++, Ctrl+- and Ctrl+0 (RC-020-12).
 //! - `document.rs` - a plugin's document with several views (RC-100-10): `spans.rs` its coloured
@@ -43,6 +44,7 @@ mod output;
 pub(in crate::app) mod picture;
 mod plugin;
 mod quick;
+mod quick_follow;
 mod run;
 mod select;
 mod selectable;
@@ -55,12 +57,11 @@ mod walk;
 mod window;
 
 use iced::{
-    Size, Task,
+    Size,
     widget::{Id, operation, text_editor::Action},
 };
 use rc_engine::{
-    Chord, Command, EngineEvent, ListerFiles, Outcome, PanelId, VfsPath,
-    settings::VIEWER_TOKEN_COLORS_KEY,
+    Chord, Command, EngineEvent, ListerFiles, PanelId, VfsPath, settings::VIEWER_TOKEN_COLORS_KEY,
 };
 
 use self::{
@@ -72,6 +73,7 @@ use self::{
     markdown::PreviewMessage,
     plugin::{PluginOpened, Plugins},
     quick::{DirSummary, Quick, QuickShown},
+    quick_follow::QuickPause,
     text_size::{TextSizeMsg, TextZoom},
     views::TokenColors,
     walk::Walk,
@@ -93,6 +95,8 @@ pub struct Viewers {
     pub text_zoom: TextZoom,
     /// `plugins.viewer_token_colors` (RC-100-10).
     pub token_colors: TokenColors,
+    /// `viewer.quick_view_pause_ms` (RC-110-28).
+    pub quick_pause: QuickPause,
     /// The viewer plugins, loaded when first needed (RC-100-13).
     plugins: Plugins,
     /// The files N and P step through, by Lister; a Lister not here steps through the panel's.
@@ -159,6 +163,10 @@ pub enum ViewerMessage {
     BarSubmit(u64),
     Toggle(u64, FindOption),
     Summary(VfsPath, Result<DirSummary, &'static str>),
+    /// The pause after the cursor's move of a turn ended: Quick View shows what is under it.
+    QuickRested(u64),
+    /// `viewer.quick_view_pause_ms` read.
+    QuickPause(QuickPause),
     Preview(u64, PreviewMessage),
     TextSize(TextSizeMsg),
     /// A plugin document's answers and inputs (RC-100-10).
@@ -190,6 +198,9 @@ impl App {
                 if key == VIEWER_TOKEN_COLORS_KEY =>
             {
                 Some(vec![Effect::Task(self.token_colors_task())])
+            }
+            Message::Engine(EngineEvent::SettingChanged { key }) if quick_follow::concerns(key) => {
+                Some(vec![Effect::Task(self.quick_pause_task())])
             }
             Message::Engine(EngineEvent::SettingChanged { key }) if plugin::concerns(key) => {
                 // Loaded again for the next file; documents open keep their sessions.
@@ -261,6 +272,11 @@ impl App {
         let id = match &message {
             ViewerMessage::TextSize(message) => return self.on_text_size(message.clone()),
             ViewerMessage::TokenColors(on) => return self.on_token_colors(*on),
+            ViewerMessage::QuickRested(turn) => return self.quick_rested(*turn),
+            ViewerMessage::QuickPause(pause) => {
+                self.viewers.quick_pause = *pause;
+                return Vec::new();
+            }
             ViewerMessage::Plugin(id, opened) => return self.on_plugin(*id, opened.clone()),
             ViewerMessage::Preview(id, _) | ViewerMessage::Document(id, _) => *id,
             ViewerMessage::Summary(path, summary) => {
@@ -328,6 +344,8 @@ impl App {
                 Vec::new()
             }
             ViewerMessage::Summary(..)
+            | ViewerMessage::QuickRested(_)
+            | ViewerMessage::QuickPause(_)
             | ViewerMessage::TextSize(_)
             | ViewerMessage::TokenColors(_)
             | ViewerMessage::Plugin(..) => Vec::new(),
@@ -389,63 +407,6 @@ impl App {
             effects.push(Effect::Task(operation::focus(Id::new(draw::BAR_ID))));
         }
         effects
-    }
-
-    /// Ctrl+Q from `panel`: Quick View of its cursor in the other panel, or off again.
-    fn toggle_quick(&mut self, panel: PanelId) -> Vec<Effect> {
-        if self.viewers.quick.take().is_some() {
-            return Vec::new();
-        }
-        self.viewers.quick = Some(Quick::new(panel));
-        self.quick_follow()
-    }
-
-    /// Quick View catches up with its panel's cursor: a new file opens, a directory is counted.
-    fn quick_follow(&mut self) -> Vec<Effect> {
-        let Some(source) = self.viewers.quick.as_ref().map(|quick| quick.source) else {
-            return Vec::new();
-        };
-        let pane = self.pane(source);
-        let entry = if pane.on_parent() {
-            None
-        } else {
-            pane.entries().get(pane.cursor())
-        };
-        let wanted = quick::wanted(&pane.state.path, entry);
-        let id = self.viewers.next_id();
-        let Some(quick) = self.viewers.quick.as_mut() else {
-            return Vec::new();
-        };
-        let Some((path, is_dir)) = wanted else {
-            quick.shown = QuickShown::Nothing;
-            return Vec::new();
-        };
-        if quick.path() == Some(&path) {
-            return Vec::new();
-        }
-        if !is_dir {
-            quick.show_file(Lister::new(id, source, path.clone()));
-            return vec![self.open_file(id, path)];
-        }
-        quick.shown = QuickShown::Dir {
-            path: path.clone(),
-            summary: None,
-        };
-        let engine = self.engine.clone();
-        let listing = Command::ListDir {
-            panel: Some(source),
-            path: Some(path.path.to_string_lossy().into_owned()),
-        };
-        let counting = async move {
-            match engine.dispatch(listing).await {
-                Ok(Outcome::Listing { entries, .. }) => Ok(DirSummary::of(&entries)),
-                Ok(_) => Ok(DirSummary::default()),
-                Err(error) => Err(error.code()),
-            }
-        };
-        vec![Effect::Task(Task::perform(counting, move |summary| {
-            wrap(ViewerMessage::Summary(path, summary))
-        }))]
     }
 
     /// A key while the Quick View panel is the active one: the viewer's keys scroll and switch

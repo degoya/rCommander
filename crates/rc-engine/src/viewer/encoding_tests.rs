@@ -249,11 +249,6 @@ fn every_caller_reads_the_same_bytes_the_same() {
         assert_eq!(shared, viewer, "decode_text {bytes:?}");
         assert_eq!(compared(bytes), viewer, "compare {bytes:?}");
         assert_eq!(
-            crate::comments::decode(bytes),
-            viewer,
-            "descript.ion {bytes:?}"
-        );
-        assert_eq!(
             crate::import::tc_ini::decode(bytes).as_str(),
             viewer,
             "wincmd.ini {bytes:?}"

@@ -7,7 +7,8 @@
 # nothing and says what to install; a run fuzzes every target (or the ones named) for the
 # seconds asked, in the build lock's jobs, from a corpus seeded with the test data, after copying
 # the main Cargo.lock in; a finding and a target that does not run fail the run and are named,
-# while the other targets still run.
+# while the other targets still run. --build only builds - every target in one cargo call, or the
+# ones named - with the run's build directory and flags, and fails when the build does.
 #
 # Pure bash: it runs in a second. check.sh --preflight runs it.
 #
@@ -39,11 +40,13 @@ echo "drwxr-xr-x 2 ftp ftp 4096 Jan 10 12:00 pub" > "$REPO/crates/rc-remote/test
 echo "manifest_version = 1" > "$REPO/plugins/a-viewer/manifest.toml"
 
 # cargo: records its arguments and CARGO_BUILD_JOBS; `fuzz --version` answers FAKE_FUZZ_VERSION
-# (fails with FAKE_NO_FUZZ); `fuzz run` leaves a finding for FAKE_FIND, breaks for FAKE_BREAK.
+# (fails with FAKE_NO_FUZZ); `fuzz run` leaves a finding for FAKE_FIND, breaks for FAKE_BREAK;
+# `fuzz build` ends with FAKE_BUILD_EXIT.
 cat > "$SCRATCH/bin/cargo" << EOF
 #!/usr/bin/env bash
 echo "cargo \$* jobs=\${CARGO_BUILD_JOBS:-}" >> "$CALLS"
 [[ "\$2 \$3" == "fuzz --version" ]] && { [[ -z "\${FAKE_NO_FUZZ:-}" ]] || exit 101; echo "cargo-fuzz \${FAKE_FUZZ_VERSION:-$RC_CARGO_FUZZ_VERSION}"; exit 0; }
+[[ "\$2 \$3" == "fuzz build" ]] && { echo "error: could not compile"; exit "\${FAKE_BUILD_EXIT:-0}"; }
 args=("\$@")
 for ((i = 0; i < \${#args[@]}; i++)); do
     [[ "\${args[i]}" == --fuzz-dir ]] && dir="\${args[i + 1]}"
@@ -125,5 +128,23 @@ expect_status "a finding or a broken target fails the run" 1
 expect_output "the finding is named" "FINDING known_hosts: $REPO/fuzz/artifacts/known_hosts/crash-1"
 expect_output "so is the broken target" "FAILED  osc: exit 101 without a finding"
 expect_true "and the targets after them still ran" 'has "$CALLS" "--debug-assertions tc_ini"'
+
+rm -f "$CALLS"
+run_status "$FUZZ_SH" --build
+expect_status "--build passes when the targets build" 0
+expect_true "every target is built in one cargo call, with the run's build directory and flags, and none is run" \
+    '[[ "$(grep -c "fuzz build" "$CALLS")" -eq 1 ]] && has "$CALLS" "cargo +$RC_FUZZ_NIGHTLY fuzz build --fuzz-dir $REPO/fuzz --target-dir $FUZZ/build --debug-assertions jobs=3" && ! has "$CALLS" "fuzz run"'
+expect_output "and it says how many" "9 fuzz targets built"
+rm -f "$CALLS"
+run_status "$FUZZ_SH" --build osc tc_ini
+expect_true "--build with targets builds only them" \
+    '[[ $status -eq 0 && "$(grep -c "fuzz build" "$CALLS")" -eq 2 ]] && has "$CALLS" "--debug-assertions osc jobs=3" && has "$CALLS" "--debug-assertions tc_ini jobs=3"'
+FAKE_BUILD_EXIT=101 run_status "$FUZZ_SH" --build
+expect_status "a target that does not build fails --build" 1
+expect_output "and the log's end is printed" "error: could not compile"
+run_status "$FUZZ_SH" --build --seconds 5
+expect_status "--build with --seconds is refused" 2
+FAKE_TOOLCHAINS="" run_status "$FUZZ_SH" --build
+expect_status "--build without the nightly builds nothing" 3
 
 finish_tests fuzz

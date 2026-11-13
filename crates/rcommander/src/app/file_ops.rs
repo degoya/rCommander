@@ -14,11 +14,13 @@
 //! again (`run.rs`). Drawing is `view.rs` - in windows of their own `window.rs` (RC-080-23) -,
 //! the function-key bar `fkey_bar.rs`, the background bar `strip.rs`.
 
+mod device_hint;
 mod dialog;
 mod fkey_bar;
 mod jobs;
 mod pace;
 mod question;
+mod resync;
 mod run;
 mod strip;
 mod submit;
@@ -79,9 +81,13 @@ pub struct FileOps {
     pub mkdir_blank: bool,
     /// `rename.selection_dialog` is off: Shift+F6 always edits in the list (RC-110-04).
     pub rename_inline: bool,
+    /// `panels.device_transfer_hint` is off: no panel says that a device takes a transfer.
+    pub hide_device_hint: bool,
     /// The jobs whose archive password was answered, until they take the answer: their prompt
     /// does not open again meanwhile (`archive_ops/password.rs`, RC-080-44).
     pub passwords_answered: Vec<JobId>,
+    /// The jobs ended after missed events whose `Finished` may still arrive (`resync.rs`).
+    pub ended_unheard: Vec<JobId>,
 }
 
 impl FileOps {
@@ -347,6 +353,8 @@ impl App {
                 self.file_ops.hide_at_once = !settings.at_once;
                 self.file_ops.hide_total_speed = !settings.total_speed;
                 self.file_ops.hide_single_lane = settings.hide_single_lane;
+                self.file_ops.hide_device_hint = !settings.device_hint;
+                self.show_device_hints();
                 self.refresh_queue_window();
             }
             FileOpsMsg::Compare(job) => return self.compare_question(job),

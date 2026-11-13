@@ -56,7 +56,7 @@ pub fn body<'a>(
     for argument in &question.arguments {
         details = details.push(
             row![
-                label_or_glyph(argument.name.as_str())
+                label_or_glyph(argument_label(&question.tool, &argument.name))
                     .color(tokens.text_secondary)
                     .width(120),
                 text(argument.value.as_str())
@@ -123,6 +123,23 @@ pub fn body<'a>(
         [],
     );
     Some(body.push(buttons).into())
+}
+
+/// The name an argument is shown under: the parts of its workspace that the MCP server writes
+/// into the question about `workspaces_apply` (RC-110-21) in the window's language, every other
+/// argument as the call names it.
+fn argument_label<'a>(tool: &str, name: &'a str) -> &'a str {
+    if tool != "workspaces_apply" {
+        return name;
+    }
+    match name {
+        "workspace" => t!("mcp_confirm.shown.workspace"),
+        "left_tabs" => t!("mcp_confirm.shown.left_tabs"),
+        "right_tabs" => t!("mcp_confirm.shown.right_tabs"),
+        "left_terminal" => t!("mcp_confirm.shown.left_terminal"),
+        "right_terminal" => t!("mcp_confirm.shown.right_terminal"),
+        _ => name,
+    }
 }
 
 /// A dialog button that only a click presses: no stop of the focus ring.

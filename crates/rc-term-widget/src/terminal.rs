@@ -93,8 +93,10 @@ impl Default for FontSettings {
 pub struct CopySettings {
     /// Ctrl+C copies a selection and clears it; without one it goes to the program.
     pub ctrl_c: bool,
-    /// A right click copies a selection and clears it; without one it pastes on Windows.
+    /// A right click copies a selection and clears it.
     pub right_click: bool,
+    /// A right click that copied nothing pastes, on Windows (RC-110-28).
+    pub right_click_pastes: bool,
     /// Letting go of the mouse after selecting copies the selection.
     pub on_select: bool,
     /// Ctrl+V pastes the clipboard's text; without text it goes to the program.
@@ -112,6 +114,7 @@ impl Default for CopySettings {
         Self {
             ctrl_c: true,
             right_click: true,
+            right_click_pastes: true,
             on_select: false,
             ctrl_v: true,
             osc52: true,

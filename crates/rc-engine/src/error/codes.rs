@@ -135,6 +135,7 @@ codes! {
         EngineError::ArchiveReadOnly => "archive_read_only",
         EngineError::NotAnArchive { .. } => "not_an_archive",
         EngineError::PropertyInvalid { .. } => "property_invalid",
+        EngineError::CommentNotEncodable { .. } => "comment_not_encodable",
         EngineError::SftpConnectionNotFound { .. } => "sftp_connection_not_found",
         EngineError::SftpConnectionAmbiguous { .. } => "sftp_connection_ambiguous",
         EngineError::SavedQueueNotFound { .. } => "saved_queue_not_found",

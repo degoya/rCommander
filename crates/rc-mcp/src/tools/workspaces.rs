@@ -1,8 +1,10 @@
 //! The `workspaces` tool group (RC-100-68): thin wrappers over the `workspaces.*` commands. A
 //! workspace is what both panels show, saved under a name: each panel's tabs with folder, sort,
 //! view and lock, the file list or a terminal, the active panel and the divider, a theme per mode.
-//! Applying one may start shells, so `workspaces_apply` has the class of `terminal_open`. The
-//! workspaces' window (`workspaces.manager`, Ctrl+Shift+W) is the person's.
+//! Applying one may start shells, so `workspaces_apply` has the class of `terminal_open`; its
+//! question names the workspace's places (`workspace_shown.rs`), and a `spec` with a folder on
+//! another machine's share is refused before it is saved (`unc.rs`, RC-110-21). The workspaces'
+//! window (`workspaces.manager`, Ctrl+Shift+W) is the person's.
 
 use rc_engine::{
     Command, CreateWorkspaceRequest, UpdateWorkspaceRequest, WorkspaceError, WorkspaceSpec,
@@ -120,7 +122,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Save a new workspace after the last one: a name and spec, the panels as workspaces_get answers them (version 1; 1 to 32 tabs a panel on this machine or on a server of the connection tree, never inside an archive; at most 64 KiB), and optionally a theme per mode. Answers its id. Errors: workspace_name, workspace_name_taken, workspace_version, workspace_invalid, workspace_tabs, workspace_terminal, workspace_location, workspace_connection, workspace_theme, workspace_too_large."
+        description = "Save a new workspace after the last one: a name and spec, the panels as workspaces_get answers them (version 1; 1 to 32 tabs a panel on this machine or on a server of the connection tree, never inside an archive; at most 64 KiB), and optionally a theme per mode. A tab or a terminal's start folder on another machine's network share is refused with network_path, as a path of any tool is. Answers its id. Errors: workspace_name, workspace_name_taken, workspace_version, workspace_invalid, workspace_tabs, workspace_terminal, workspace_location, workspace_connection, workspace_theme, workspace_too_large."
     )]
     pub(crate) async fn workspaces_create(
         &self,
@@ -211,7 +213,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Make both panels show a workspace: its tabs (after the setting workspaces.apply_mode: replace_all, the default, leaves each panel exactly the workspace's tabs; replace_keep_locked keeps the panels' locked tabs; add puts them after the panels'; a folder a panel shows already is never opened twice), the file list or its terminal (a running one of the same kind reused, else a shell started), the active panel and the divider; it becomes the active workspace. Answers skipped: the parts left out as <error code>:<what> - a connection deleted since, a server out of reach, a shell that did not start. Error: workspace_unknown."
+        description = "Make both panels show a workspace: its tabs (after the setting workspaces.apply_mode: replace_all, the default, leaves each panel exactly the workspace's tabs; replace_keep_locked keeps the panels' locked tabs; add puts them after the panels'; a folder a panel shows already is never opened twice), the file list or its terminal (a running one of the same kind reused, else a shell started), the active panel and the divider; it becomes the active workspace. The person is asked with the workspace's name, each panel's tabs and the terminal it would show, and the call runs only while the workspace reads as shown (workspace_changed otherwise; a confirmation code for other tabs asks anew); a panel whose tabs do not fit a question (1000 characters) is refused with invalid_params and is the person's to apply. Answers skipped: the parts left out as <error code>:<what> - a connection deleted since, a server out of reach, a shell that did not start. Errors: workspace_unknown, workspace_changed."
     )]
     pub(crate) async fn workspaces_apply(
         &self,

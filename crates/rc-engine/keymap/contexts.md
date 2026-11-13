@@ -144,12 +144,12 @@ progress window sends the running job to the background, where the queue window 
 
 | Key | Action |
 | --- | --- |
-| Ctrl+Shift+C / Ctrl+Shift+V | Copy / paste in the terminal (right click pastes on Windows) |
+| Ctrl+Shift+C / Ctrl+Shift+V | Copy / paste in the terminal (right click pastes on Windows, setting `terminal.paste_right_click`) |
 | Ctrl+C, right click (with selected text) | Copy the selection and clear it; without one Ctrl+C interrupts and a right click pastes (settings `terminal.copy_ctrl_c`, `terminal.copy_right_click`) |
 | Ctrl+V (with text on the clipboard) | Paste it; without text Ctrl+V goes to the program (setting `terminal.paste_ctrl_v`) |
 | Ctrl+Alt+V | The clipboard's image saved as a PNG the program can read, its path pasted (`terminal.paste_image`, setting `terminal.paste_image`; Windows) |
 | Shift + mouse | Select text even while a program such as Claude Code or vim takes the mouse (setting `terminal.shift_selects`) |
-| Shift+PgUp / Shift+PgDn, mouse wheel | Scroll back through the terminal's history |
+| Shift+PgUp / Shift+PgDn, mouse wheel | Scroll back through the terminal's history; a program that takes the mouse (tmux with `mouse on`, htop, Midnight Commander) gets the wheel and the middle and right button itself, Shift keeps them for the terminal |
 | 1-9, Enter / Esc (in the shell choice) | Start a shell / cancel |
 
 Every other key goes to the shell; only the terminal toggle (Ctrl+Ö or Ctrl+^, Ctrl+; or Ctrl+` on

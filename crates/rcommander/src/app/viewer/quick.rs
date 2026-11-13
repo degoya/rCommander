@@ -1,7 +1,8 @@
 //! Quick View (Ctrl+Q): the other panel shows the entry under this panel's cursor and follows
 //! the cursor - a file as the viewer shows it, a directory as its counts and the size of its
 //! files (the size of its subdirectories is not known until it is calculated). Ctrl+Q again
-//! gives the panel its own view back.
+//! gives the panel its own view back. It follows a cursor that rested, and ends the request
+//! of an entry the cursor left (`quick_follow.rs`, RC-110-28).
 //!
 //! The panel the cursor moves in keeps the keys; Tab into the Quick View gives them to the
 //! viewer there (scrolling, modes, search, text size), and Tab back returns them. A text size
@@ -9,7 +10,7 @@
 
 use rc_engine::{Entry, PanelId, VfsPath};
 
-use super::lister::Lister;
+use super::{lister::Lister, quick_follow::Running};
 
 /// The Quick View of one panel's cursor.
 #[derive(Debug)]
@@ -20,6 +21,10 @@ pub struct Quick {
     /// The text size the files are shown at while the cursor moves on; `None` for the
     /// settings' (RC-020-12).
     pub text_size: Option<f32>,
+    /// The moves of the panel's cursor so far: a pause counts only for the last one.
+    pub turn: u64,
+    /// The listing or the open behind what is shown; dropping it ends the request.
+    pub running: Option<Running>,
 }
 
 impl Quick {
@@ -28,7 +33,33 @@ impl Quick {
             source,
             shown: QuickShown::Nothing,
             text_size: None,
+            turn: 0,
+            running: None,
         }
+    }
+
+    /// The cursor moved: the turn of this move, which every earlier pause is too old for.
+    pub fn moved(&mut self) -> u64 {
+        self.turn += 1;
+        self.turn
+    }
+
+    /// The cursor left the entry shown: a request still running ends, and the empty view it
+    /// was to fill goes with it. What was read stays until the cursor rests.
+    pub fn leave(&mut self) {
+        if self
+            .running
+            .take()
+            .is_some_and(|running| !running.finished())
+        {
+            self.shown = QuickShown::Nothing;
+        }
+    }
+
+    /// Nothing is under the cursor: nothing is shown and nothing asked for.
+    pub fn clear(&mut self) {
+        self.running = None;
+        self.shown = QuickShown::Nothing;
     }
 
     /// `lister` shown, at the text size of the Quick View.

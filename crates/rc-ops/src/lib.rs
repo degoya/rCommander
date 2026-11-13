@@ -109,5 +109,6 @@ pub use resume::{
     DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, Reconnect, RetryPolicy, TAIL_CHECK,
     is_connection_lost,
 };
+pub use staging::{Unreplaced, replace_by_rename};
 pub use trash::{SystemTrash, Trash};
 pub use update::{ArchiveRelease, UpdateSettings};

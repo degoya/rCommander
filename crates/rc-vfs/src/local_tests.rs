@@ -2,7 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use tokio::io::AsyncWriteExt;
 
-use super::LocalFs;
+use super::{LocalFs, left_unflushed, read_only};
 use crate::{Entry, SetAttributes, Vfs, WriteMode, conformance};
 
 async fn write(fs: &LocalFs, path: &Path, mode: WriteMode, bytes: &[u8]) {
@@ -200,4 +200,30 @@ async fn a_local_listing_carries_the_last_access() {
         entry.is_some_and(|entry| entry.accessed.is_some()),
         "{entries:?}"
     );
+}
+
+/// The flush of a moved file is skipped for a read-only copy on Windows and for nothing else
+/// (RC-110-26): a file another program holds, or one the person may not write, fails the sync,
+/// and the move keeps its source.
+#[test]
+fn only_a_read_only_file_on_windows_goes_without_its_flush() {
+    let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+    assert!(left_unflushed(&denied, true, || true));
+    assert!(!left_unflushed(&denied, true, || false));
+    assert!(!left_unflushed(&denied, false, || true));
+    let missing = std::io::Error::from(std::io::ErrorKind::NotFound);
+    assert!(!left_unflushed(&missing, true, || true));
+}
+
+#[test]
+fn the_read_only_attribute_is_read_from_the_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("kept.bin");
+    std::fs::write(&file, b"x").expect("write");
+    assert!(!read_only(&file));
+    let mut permissions = std::fs::metadata(&file).expect("metadata").permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&file, permissions).expect("read-only");
+    assert!(read_only(&file));
+    assert!(!read_only(&dir.path().join("missing")));
 }

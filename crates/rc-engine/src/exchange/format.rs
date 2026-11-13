@@ -374,13 +374,7 @@ pub(crate) fn invalid(reason: &str) -> ExchangeError {
 /// `bytes` as lower-case hex.
 #[must_use]
 pub fn hex(bytes: &[u8]) -> String {
-    const DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let mut text = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        text.push(char::from(DIGITS[usize::from(byte >> 4)]));
-        text.push(char::from(DIGITS[usize::from(byte & 0x0f)]));
-    }
-    text
+    ::hex::encode(bytes)
 }
 
 /// The bytes of hex `text`, either case; `None` for an odd length or another character.

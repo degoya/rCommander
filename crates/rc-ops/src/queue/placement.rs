@@ -1,9 +1,10 @@
 //! Where a job may go: its sources on one backend, a copy never onto or into itself, names
-//! compared as the backend compares them.
+//! compared as the backend compares them - and, inside a WSL distribution, as Linux does
+//! (`rc_vfs::case_sensitive_at`, RC-110-26).
 
 use std::path::Path;
 
-use rc_vfs::{BackendId, VfsPath};
+use rc_vfs::{BackendId, VfsPath, case_sensitive_at};
 
 use crate::OpsError;
 
@@ -17,12 +18,14 @@ pub(crate) fn one_backend(sources: &[VfsPath]) -> Result<BackendId, OpsError> {
 }
 
 /// Refuses copying `source` into the directory `target` of the same backend when that puts it
-/// onto itself or into itself.
+/// onto itself or into itself. `case_sensitive` is the backend's word; the source's path may
+/// overrule it.
 pub(super) fn check_placement(
     source: &Path,
     target: &Path,
     case_sensitive: bool,
 ) -> Result<(), OpsError> {
+    let case_sensitive = case_sensitive_at(case_sensitive, source);
     let fold = |path: &Path| fold(path, case_sensitive);
     let (source_parts, target_parts) = (fold(source), fold(target));
     if source
@@ -50,6 +53,7 @@ pub(super) fn check_placement_as(
     case_sensitive: bool,
     moving: bool,
 ) -> Result<(), OpsError> {
+    let case_sensitive = case_sensitive_at(case_sensitive, source);
     let (source_parts, target_parts) = (fold(source, case_sensitive), fold(target, case_sensitive));
     if source_parts == target_parts {
         if moving && source != target {

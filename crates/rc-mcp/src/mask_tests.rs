@@ -1,6 +1,6 @@
 use rmcp::model::{CallToolResponse, CallToolResult, ContentBlock, InputRequiredResult};
 
-use super::{mask_response, mask_value};
+use super::{mask_response, mask_value, redact_string};
 
 const SECRET: &str = "0123456789abcdef-planted";
 
@@ -132,4 +132,122 @@ fn an_answer_the_mask_cannot_walk_fails_closed() {
     let text = text_of(answer);
     assert!(text.contains("answer_unmaskable"), "{text}");
     assert!(!text.contains(SECRET), "{text}");
+}
+
+/// An address alone is seen whole, as before: its credentials go, and one with nothing to hide
+/// stays as it was written, not as the parser writes it.
+#[test]
+fn an_address_alone_is_masked_as_an_address() {
+    assert_eq!(
+        redact_string(&format!("sftp://bob:{SECRET}@host.example/home")).as_deref(),
+        Some("sftp://redacted@host.example/home")
+    );
+    // A scheme the prose rules do not search for.
+    let other = redact_string(&format!("postgres://bob:{SECRET}@db.example/app"));
+    assert_eq!(other.as_deref(), Some("postgres://redacted@db.example/app"));
+    assert_eq!(redact_string("https://Example.COM"), None);
+    assert_eq!(redact_string("https://api.example/v1/items"), None);
+}
+
+/// RC-110-20: a text whose first line is an address is no address. The parser drops line breaks
+/// and tabs and encodes spaces, so each of these parses as one long address with a host and
+/// nothing to hide - and left unmasked before the fix.
+#[test]
+fn text_that_starts_with_an_address_is_masked_as_text() {
+    const FIRST: &str = "https://api.example/v1/items";
+    let begin = format!("-----BEGIN RSA {}-----", "PRIVATE KEY");
+    let end = format!("-----END RSA {}-----", "PRIVATE KEY");
+    // A token known by its shape alone, of the token alphabet throughout.
+    let prefixed = "ghp_0123456789abcdefghijklmnopqrstuv";
+    for rest in [
+        format!("\nAuthorization: Bearer {SECRET}\n"),
+        format!("\r\nAuthorization: Bearer {SECRET}\r\n"),
+        format!("\nsent with Bearer {SECRET} today"),
+        format!("\npassword={SECRET}"),
+        format!("\tpassword={SECRET}"),
+        format!(" password={SECRET}"),
+        format!("\nthe token is {prefixed} for now"),
+        format!("\n{begin}\nMIIEowIBAAKCAQEA{SECRET}\n{end}\n"),
+    ] {
+        let text = format!("{FIRST}{rest}");
+        // The premise, measured: the parser takes the whole text as one address with a host.
+        let parsed = url::Url::parse(&text).expect("parses as one address");
+        assert!(parsed.has_host(), "{text:?}");
+        let masked = redact_string(&text).unwrap_or_else(|| panic!("unmasked: {text:?}"));
+        assert!(!masked.contains(SECRET), "{masked:?}");
+        assert!(!masked.contains(prefixed), "{masked:?}");
+        assert!(masked.starts_with(FIRST), "{masked:?}");
+    }
+}
+
+/// The same through the whole mask, as `files_read_text` answers a `.http` file: in a JSON
+/// field and as a bare text block.
+#[test]
+fn a_file_that_starts_with_an_address_is_masked_in_an_answer() {
+    let file = format!(
+        "https://api.example/v1/items\nAuthorization: Bearer {SECRET}\npassword={SECRET}\n"
+    );
+    let mut answer = serde_json::json!({ "text": file });
+    assert!(mask_value(&mut answer));
+    let rendered = answer.to_string();
+    assert!(!rendered.contains(SECRET), "{rendered}");
+    let bare = Ok(CallToolResult::success(vec![ContentBlock::text(file)]).into());
+    let text = text_of(mask_response(bare, &|_: &str| None));
+    assert!(!text.contains(SECRET), "{text}");
+    assert!(text.starts_with("https://api.example/v1/items\n"), "{text}");
+}
+
+/// An address with credentials inside a text loses them where it stands, in the first line and
+/// in a later one, and the lines around it are masked as text.
+#[test]
+fn an_address_with_credentials_inside_a_text_is_masked() {
+    let text = format!(
+        "sftp://bob:{SECRET}@host.example/home\npassword={SECRET}\nmirror ftp://eve:{SECRET}@files.example/pub ok\n"
+    );
+    let masked = redact_string(&text).expect("masked");
+    assert!(!masked.contains(SECRET), "{masked}");
+    assert_eq!(
+        masked,
+        "sftp://redacted@host.example/home\npassword=[redacted]\nmirror ftp://redacted@files.example/pub ok\n"
+    );
+    // Masked once is masked for good.
+    assert_eq!(redact_string(&masked), None);
+}
+
+/// RC-110-20: an address of a scheme the text rules do not search keeps no password in a text
+/// either - alone, before further lines, inside a line of prose, twice in one text - and the
+/// white space around it stays as it was.
+#[test]
+fn an_address_of_any_scheme_is_masked_inside_a_text() {
+    const MASKED: &str = "postgres://redacted@host/db";
+    let address = format!("postgres://user:{SECRET}@host/db");
+    for (text, want) in [
+        (address.clone(), MASKED.to_owned()),
+        (
+            format!("{address}\nsslmode=require\r\n\tpool: 4\n"),
+            format!("{MASKED}\nsslmode=require\r\n\tpool: 4\n"),
+        ),
+        (
+            format!("connect to  {address} and wait"),
+            format!("connect to  {MASKED} and wait"),
+        ),
+        (
+            format!("DATABASE_URL=\"{address}\"\n\n  replica:\t(redis://:{SECRET}@cache:6379/0)\n"),
+            format!("DATABASE_URL=\"{MASKED}\"\n\n  replica:\t(redis://redacted@cache:6379/0)\n"),
+        ),
+    ] {
+        let masked = redact_string(&text).unwrap_or_else(|| panic!("unmasked: {text:?}"));
+        assert!(!masked.contains(SECRET), "{masked:?}");
+        assert_eq!(masked, want);
+        // Masked once is masked for good.
+        assert_eq!(redact_string(&masked), None, "{masked:?}");
+    }
+    // Nothing to hide: byte for byte, so `None`.
+    for text in [
+        "postgres://host/db\nsslmode=require\n",
+        "see  postgres://host:5432/db\tand (amqp://broker/vhost),\r\nthen a::b://c",
+        "mail bob@example.com about x://",
+    ] {
+        assert_eq!(redact_string(text), None, "{text:?}");
+    }
 }

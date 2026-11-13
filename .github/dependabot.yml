@@ -8,9 +8,12 @@
 # repository's settings, not here; the `security` group only bundles what they open.
 version: 2
 updates:
-  # The workflows' actions: few, small, and each one a line to copy.
+  # The workflows' actions: few, small, and each one a line to copy. "/" is .github/workflows
+  # alone; the composite actions' own pins are read only from their directories.
   - package-ecosystem: github-actions
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: weekly
     groups:

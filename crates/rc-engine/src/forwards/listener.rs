@@ -14,6 +14,7 @@ use std::{
         Arc, Weak,
         atomic::{AtomicUsize, Ordering},
     },
+    time::Duration,
 };
 
 use tokio::{
@@ -59,6 +60,7 @@ pub(crate) async fn serve(
     stop: CancellationToken,
     active: Arc<AtomicUsize>,
 ) {
+    let mut failures = AcceptFailures::default();
     loop {
         let accepted = tokio::select! {
             biased;
@@ -66,9 +68,22 @@ pub(crate) async fn serve(
             accepted = listener.accept() => accepted,
         };
         let (stream, peer) = match accepted {
-            Ok(accepted) => accepted,
+            Ok(accepted) => {
+                failures.accepted();
+                accepted
+            }
             Err(error) => {
-                tracing::warn!(forward = forward.id, kind = %error.kind(), "a port forward could not accept a connection");
+                // A failure that stays (no descriptor left) neither spins a core nor fills the
+                // log: one line per run of failures, and a pause before the next try.
+                let (first, pause) = failures.failed();
+                if first {
+                    tracing::warn!(forward = forward.id, kind = %error.kind(), "a port forward could not accept a connection");
+                }
+                tokio::select! {
+                    biased;
+                    () = stop.cancelled() => break,
+                    () = tokio::time::sleep(pause) => {}
+                }
                 continue;
             }
         };
@@ -135,6 +150,36 @@ async fn carry(
     drop(session.lease);
 }
 
+/// The pause after the first failed `accept` of a run; doubled per failure up to
+/// [`ACCEPT_PAUSE_MAX`].
+const ACCEPT_PAUSE_MIN: Duration = Duration::from_millis(50);
+const ACCEPT_PAUSE_MAX: Duration = Duration::from_millis(500);
+
+/// The failed `accept` calls in a row: how long to wait before the next, and whether this run of
+/// failures was logged yet.
+#[derive(Debug, Default)]
+struct AcceptFailures {
+    row: u32,
+}
+
+impl AcceptFailures {
+    /// Counts one failure: whether it is the first of its run (the one that is logged), and the
+    /// pause before the next `accept`.
+    fn failed(&mut self) -> (bool, Duration) {
+        let first = self.row == 0;
+        let pause = ACCEPT_PAUSE_MIN
+            .saturating_mul(1 << self.row.min(8))
+            .min(ACCEPT_PAUSE_MAX);
+        self.row = self.row.saturating_add(1);
+        (first, pause)
+    }
+
+    /// A connection was accepted: the run of failures is over.
+    fn accepted(&mut self) {
+        self.row = 0;
+    }
+}
+
 /// One connection counted as running through a forward until it drops.
 struct Counted(Arc<AtomicUsize>);
 
@@ -150,3 +195,7 @@ impl Drop for Counted {
         self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
+
+#[cfg(test)]
+#[path = "listener_tests.rs"]
+mod tests;

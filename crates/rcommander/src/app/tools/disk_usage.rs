@@ -52,7 +52,8 @@ pub struct DiskUsageWindow {
     pub panel: PanelId,
     /// The folder analysed.
     pub root: VfsPath,
-    /// Numbers the walks, so a late tick of an earlier one is dropped.
+    /// Numbers the walks over every window of the session (`ToolsUi::next_usage`), so a late
+    /// start or tick of an earlier one - an earlier window's too - is not taken for this one's.
     generation: u64,
     handle: Option<DiskUsageHandle>,
     pub choices: UsageChoices,
@@ -69,6 +70,10 @@ pub struct DiskUsageWindow {
     pub files: ListWindow,
     pub stand: Stand,
     pub truncated: bool,
+    /// The folder and the sum `rows` were built from, and the root's sum `largest` was: a tick
+    /// that finds them unchanged builds nothing.
+    seen_rows: Option<(usize, DirUsage)>,
+    seen_largest: Option<DirUsage>,
 }
 
 impl DiskUsageWindow {
@@ -89,6 +94,8 @@ impl DiskUsageWindow {
             files: ListWindow::new(ROWS),
             stand: Stand::Starting,
             truncated: false,
+            seen_rows: None,
+            seen_largest: None,
         }
     }
 
@@ -101,28 +108,27 @@ impl DiskUsageWindow {
         self.rows.get(self.list.cursor())
     }
 
-    /// The tree read again: the folder shown, its rows and the largest files.
+    /// The tree read again: the sums of the folder shown and the list of the tab shown - and that
+    /// only when its sum moved since it was built, since every entry the walk adds changes the
+    /// sum of each folder above it. The other tab's list is read when it is switched to.
     fn refresh(&mut self) {
         let Some(handle) = &self.handle else {
             return;
         };
-        let (by, folder) = (self.choices.size_by, self.folder);
-        let (rows, largest, total, relative, finished, cancelled, failed, truncated) =
-            handle.read(|tree| {
-                (
-                    tree.rows(folder, by),
-                    tree.largest(),
-                    tree.node(folder).map(|node| node.usage).unwrap_or_default(),
-                    tree.relative(folder).display().to_string(),
-                    tree.finished(),
-                    tree.cancelled(),
-                    tree.failed(),
-                    tree.truncated(),
-                )
-            });
-        let cursor = self.current().map(|row| (row.node, row.name.clone()));
-        self.rows = rows;
-        self.largest = largest;
+        let (by, folder, tab) = (self.choices.size_by, self.folder, self.tab);
+        let (seen_rows, seen_largest) = (self.seen_rows, self.seen_largest);
+        let read = handle.read(|tree| {
+            let usage = |node| tree.node(node).map(|node| node.usage).unwrap_or_default();
+            let (total, all) = (usage(folder), usage(UsageTree::ROOT));
+            let rows = (tab == UsageTab::Folders && seen_rows != Some((folder, total)))
+                .then(|| tree.rows(folder, by));
+            let largest =
+                (tab == UsageTab::Largest && seen_largest != Some(all)).then(|| tree.largest());
+            let relative = tree.relative(folder).display().to_string();
+            let ended = (tree.finished(), tree.cancelled(), tree.failed());
+            (rows, largest, total, all, relative, ended, tree.truncated())
+        });
+        let (rows, largest, total, all, relative, (finished, cancelled, failed), truncated) = read;
         self.total = total;
         self.relative = relative;
         self.truncated = truncated;
@@ -132,17 +138,26 @@ impl DiskUsageWindow {
             (true, None) if cancelled => Stand::Stopped,
             (true, None) => Stand::Done,
         };
-        // The cursor stays on its folder while the rows move with the sums.
-        let at = cursor.and_then(|(node, name)| {
-            self.rows
-                .iter()
-                .position(|row| row.node == node && row.name == name)
-        });
-        if let Some(at) = at {
-            self.list.set_cursor(at);
+        if let Some(rows) = rows {
+            let cursor = self.current().map(|row| (row.node, row.name.clone()));
+            self.rows = rows;
+            self.seen_rows = Some((folder, total));
+            // The cursor stays on its folder while the rows move with the sums.
+            let at = cursor.and_then(|(node, name)| {
+                self.rows
+                    .iter()
+                    .position(|row| row.node == node && row.name == name)
+            });
+            if let Some(at) = at {
+                self.list.set_cursor(at);
+            }
+            self.list.fit(self.list.page(), self.rows.len());
         }
-        self.list.fit(self.list.page(), self.rows.len());
-        self.files.fit(self.files.page(), self.largest.len());
+        if let Some(largest) = largest {
+            self.largest = largest;
+            self.seen_largest = Some(all);
+            self.files.fit(self.files.page(), self.largest.len());
+        }
     }
 
     /// The folder `node` is shown, the cursor on its first row - or on `back_to`, the folder it
@@ -197,30 +212,42 @@ impl App {
             return self.dialog_window_front(DialogWindow::DiskUsage);
         }
         let root = self.pane(panel).state.path.clone();
-        self.tools.usage = Some(DiskUsageWindow::new(panel, root, 1));
-        vec![Effect::Task(start(self.engine.clone(), panel, 1))]
+        let generation = self.tools.next_usage();
+        self.tools.usage = Some(DiskUsageWindow::new(panel, root, generation));
+        vec![Effect::Task(start(self.engine.clone(), panel, generation))]
     }
 
     pub(super) fn on_disk_usage(&mut self, message: UsageMsg) -> Vec<Effect> {
+        // A walk whose window closed or read again before it started has no one to stop it
+        // later: it stops here.
+        if let UsageMsg::Started(generation, started) = &message
+            && self.tools.usage.as_ref().map(|window| window.generation) != Some(*generation)
+        {
+            if let Ok((handle, _)) = started {
+                handle.cancel();
+            }
+            return Vec::new();
+        }
         let Some(window) = self.tools.usage.as_mut() else {
             return Vec::new();
         };
         match message {
-            UsageMsg::Started(generation, started) if generation == window.generation => {
-                match started {
-                    Ok((handle, choices)) => {
-                        window.choices = choices;
-                        window.handle = Some(handle.clone());
-                        window.stand = Stand::Running;
-                        window.refresh();
-                        return vec![Effect::Task(ticker(handle, generation))];
-                    }
-                    Err(code) => window.stand = Stand::Failed(error_text(code)),
+            UsageMsg::Started(generation, started) => match started {
+                Ok((handle, choices)) => {
+                    window.choices = choices;
+                    window.handle = Some(handle.clone());
+                    window.stand = Stand::Running;
+                    window.refresh();
+                    return vec![Effect::Task(ticker(handle, generation))];
                 }
-            }
+                Err(code) => window.stand = Stand::Failed(error_text(code)),
+            },
             UsageMsg::Tick(generation) if generation == window.generation => window.refresh(),
-            UsageMsg::Started(..) | UsageMsg::Tick(_) => {}
-            UsageMsg::Tab(tab) => window.tab = tab,
+            UsageMsg::Tick(_) => {}
+            UsageMsg::Tab(tab) => {
+                window.tab = tab;
+                window.refresh();
+            }
             UsageMsg::Click(index) => window.list.point_at(index, window.rows.len()),
             UsageMsg::Open(index) => {
                 window.list.point_at(index, window.rows.len());
@@ -295,13 +322,13 @@ impl App {
 
     /// Ctrl+R: the root read again from the start, the window on the same folder's root.
     fn reread_usage(&mut self) -> Vec<Effect> {
-        let Some(window) = self.tools.usage.as_mut() else {
+        let Some(window) = self.tools.usage.as_ref() else {
             return Vec::new();
         };
         stop_walk(window);
-        let generation = window.generation + 1;
         let (panel, root) = (window.panel, window.root.clone());
-        *window = DiskUsageWindow::new(panel, root.clone(), generation);
+        let generation = self.tools.next_usage();
+        self.tools.usage = Some(DiskUsageWindow::new(panel, root.clone(), generation));
         let path = Some(root.path.display().to_string());
         vec![Effect::Task(start_at(
             self.engine.clone(),

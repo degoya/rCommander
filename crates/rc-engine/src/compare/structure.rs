@@ -22,14 +22,13 @@ use rc_plugin_host::{
     BytesSource, CompareOptions, ComparePlugin, ExecutionLog, InstalledPlugin, PluginLocale,
     PluginType, SourceReader,
 };
-use rc_vfs::{VfsError, VfsPath};
+use rc_vfs::VfsPath;
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncReadExt as _;
 use tokio_util::sync::CancellationToken;
 
 pub use rc_plugin_api::compare::{Change, ChangeKind, CompareSummary, Comparison, Notice};
 
-use super::{Side, file_entry};
+use super::{Side, file_entry, read_within};
 use crate::recover::LogPanic as _;
 use crate::{
     Engine, EngineError,
@@ -109,8 +108,9 @@ impl Engine {
         let left_entry = file_entry(sides[0]).await?;
         let right_entry = file_entry(sides[1]).await?;
         let named = [
-            (file_name(left), left_entry.size),
-            (file_name(right), right_entry.size),
+            // The name, never the folder: what the plugin's `[match]` and `source.info` see.
+            (left.file_name().unwrap_or_default(), left_entry.size),
+            (right.file_name().unwrap_or_default(), right_entry.size),
         ];
         let claimed = self
             .installed_of(PluginType::Compare)
@@ -290,33 +290,6 @@ fn notice_text(codes: &BTreeMap<String, String>, notice: &Notice) -> String {
         .fold(text.clone(), |text, (key, value)| {
             text.replace(&format!("{{{key}}}"), value)
         })
-}
-
-/// The file's name, never its folder: what the plugin's `[match]` and `source.info` see.
-fn file_name(path: &VfsPath) -> String {
-    path.path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
-/// A whole file, or `None` when it is larger than `limit` bytes.
-async fn read_within(
-    side: Side<'_>,
-    limit: u64,
-    cancel: &CancellationToken,
-) -> Result<Option<Vec<u8>>, EngineError> {
-    if cancel.is_cancelled() {
-        return Err(EngineError::Cancelled);
-    }
-    let stream = side.vfs.open_read(&side.path.path).await?;
-    let mut bytes = Vec::new();
-    stream
-        .take(limit.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(|error| VfsError::from_io(error, &side.path.path))?;
-    Ok((bytes.len() as u64 <= limit).then_some(bytes))
 }
 
 #[cfg(test)]

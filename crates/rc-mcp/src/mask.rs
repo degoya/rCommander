@@ -3,7 +3,7 @@
 //! Masking each tool that happens to carry a credential today would miss the next one, so every
 //! answer passes through here on its way out of `RcMcpServer::call_tool`: every string at any
 //! depth - text content, structured content, a JSON-RPC error's message and data. A string that
-//! is an address loses its credentials through [`redact_url`]; any other string goes through
+//! is an address, without white space, loses its credentials through [`redact_url`]; any other string goes through
 //! [`redact_text`]; a JSON field whose *name* is a credential's (`"password": "..."`) loses its
 //! string value; the body of a private key block (PEM, PuTTY) in any string becomes one
 //! placeholder line (`rc_engine::viewer::secret`). A string with nothing to hide comes out
@@ -153,19 +153,84 @@ fn mask_string(text: &str, known: Known<'_>) -> Option<String> {
 
 /// The string with its credentials masked, or `None` when it has none.
 fn redact_string(text: &str) -> Option<String> {
-    let masked = match url::Url::parse(text) {
-        // Any scheme with a host, so `sftp://user:pass@host` is seen whole.
-        Ok(address) if address.has_host() => {
+    let masked = match whole_address(text) {
+        Some(address) => {
             let masked = redact_url(&address);
+            // Nothing to hide: the text as it came, not as the parser writes the address.
             if masked == address.as_str() {
-                return None;
+                text.to_owned()
+            } else {
+                masked
             }
-            masked
         }
-        _ => redact_text(text),
+        // Addresses of any scheme first, then what the text rules know.
+        None => match redact_addresses(text) {
+            Some(masked) => redact_text(&masked),
+            None => redact_text(text),
+        },
     };
     let masked = mask_private_keys(&masked).unwrap_or(masked);
     (masked != text).then_some(masked)
+}
+
+/// `text` as one address with a host - any scheme, so `sftp://user:pass@host` is seen whole -
+/// or `None`. Text with white space or a control character is never one (RC-110-20): the parser
+/// drops tabs and line breaks and encodes spaces, so a note whose first line is an address
+/// would count as that address down to its last line, and none of its lines would be masked.
+fn whole_address(text: &str) -> Option<url::Url> {
+    if text
+        .chars()
+        .any(|character| character.is_whitespace() || character.is_control())
+    {
+        return None;
+    }
+    url::Url::parse(text).ok().filter(url::Url::has_host)
+}
+
+/// `text` with the user info of every address in it masked, whatever its scheme, or `None`
+/// when it holds none: `redact_text` searches a list of schemes, and `postgres://user:pass@host`
+/// in a text is on none of them (RC-110-20). Word by word between white space, which stays
+/// exactly as it was.
+fn redact_addresses(text: &str) -> Option<String> {
+    let mut out = String::with_capacity(text.len());
+    let mut changed = false;
+    let mut rest = text;
+    while !rest.is_empty() {
+        let word = rest
+            .find(|character: char| !character.is_whitespace())
+            .unwrap_or(rest.len());
+        out.push_str(&rest[..word]);
+        rest = &rest[word..];
+        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        match redact_address_in(&rest[..end]) {
+            Some(masked) => {
+                out.push_str(&masked);
+                changed = true;
+            }
+            None => out.push_str(&rest[..end]),
+        }
+        rest = &rest[end..];
+    }
+    changed.then_some(out)
+}
+
+/// A word without white space with the user info of the address in it masked, or `None` when
+/// it holds no address with a host and user info. The address starts at its scheme (`url=` and
+/// an opening bracket or quote before it stay) and ends at a quote or angle bracket.
+fn redact_address_in(word: &str) -> Option<String> {
+    let colon = word.find("://")?;
+    let start = word[..colon]
+        .rfind(|character: char| !(character.is_ascii_alphanumeric() || "+-.".contains(character)))
+        .map_or(0, |before| before + 1);
+    let end = word[colon..]
+        .find(['"', '\'', '<', '>', '`'])
+        .map_or(word.len(), |offset| colon + offset);
+    let address = url::Url::parse(&word[start..end]).ok()?;
+    if !address.has_host() || (address.username().is_empty() && address.password().is_none()) {
+        return None;
+    }
+    let masked = redact_url(&address);
+    (masked != word[start..end]).then(|| format!("{}{masked}{}", &word[..start], &word[end..]))
 }
 
 #[cfg(test)]

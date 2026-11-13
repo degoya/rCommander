@@ -14,7 +14,10 @@ async fn settled(engine: &Engine) -> Vec<(String, DirSize)> {
     for _ in 0..200 {
         let sizes = engine.panel(PanelId::Left).dir_sizes;
         if !sizes.values().any(|size| *size == DirSize::Counting) {
-            return sizes.into_iter().collect();
+            return sizes
+                .iter()
+                .map(|(name, size)| (name.clone(), *size))
+                .collect();
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
@@ -94,4 +97,35 @@ async fn cancel_drops_what_is_still_counting() {
         .expect("cancel");
     let sizes = engine.panel(PanelId::Left).dir_sizes;
     assert!(!sizes.values().any(|size| *size == DirSize::Counting));
+}
+
+/// RC-110-29: the counted sizes are shared, not copied, with every copy of the state, and a
+/// cursor step leaves the map the same one - the window tells by the pointer that nothing was
+/// counted since.
+#[tokio::test]
+async fn copies_of_the_state_share_the_counted_sizes() {
+    let (_root, engine) = engine().await;
+    engine
+        .dispatch(Command::CountDirContent { panel: None })
+        .await
+        .expect("count");
+    settled(&engine).await;
+    let before = engine.panel(PanelId::Left);
+    engine
+        .dispatch(Command::MoveCursor {
+            panel: None,
+            step: crate::CursorStep::Down,
+        })
+        .await
+        .expect("cursor");
+    let after = engine.panel(PanelId::Left);
+    assert_ne!(before.cursor, after.cursor);
+    assert!(std::sync::Arc::ptr_eq(&before.dir_sizes, &after.dir_sizes));
+    // A copy handed out keeps its sizes when the engine counts on.
+    engine
+        .dispatch(Command::Refresh { panel: None })
+        .await
+        .expect("refresh");
+    assert_eq!(before.dir_sizes.len(), 2);
+    assert!(engine.panel(PanelId::Left).dir_sizes.is_empty());
 }

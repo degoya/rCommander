@@ -7,6 +7,7 @@ pub mod context_menu;
 pub mod dialog_window;
 pub mod drag_out;
 pub mod file_dialog;
+pub mod gdi;
 pub mod gpu_loss;
 pub mod key_label;
 pub mod locale_format;

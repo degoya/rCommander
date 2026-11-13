@@ -161,6 +161,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "viewer.text_zoom_keep",
             "viewer.exif",
             "viewer.step_through_selection",
+            "viewer.quick_view_pause_ms",
             "viewer.certificates",
             "viewer.cert_expiry_warning_days",
         ],

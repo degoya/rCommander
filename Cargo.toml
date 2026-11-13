@@ -65,7 +65,7 @@ notify = { version = "8.2.1", default-features = false, features = ["macos_fseve
 nix = { version = "0.31", default-features = false, features = ["fs", "user"] }
 # The Markdown preview (rcommander, RC-020-09): the parser iced's `markdown` feature brings, at
 # its version, read directly only to find raw HTML and show it as text; no second parser.
-pulldown-cmark = { version = "0.12", default-features = false }
+pulldown-cmark = { version = "0.13", default-features = false }
 # The local pseudo-terminal of rc-term: ConPTY on Windows, openpty elsewhere.
 portable-pty = "0.9"
 # Property tests only (dev-dependency); without the fork and timeout runners.
@@ -172,8 +172,8 @@ ed25519-dalek = { version = "3", features = ["pem", "pkcs8"] }
 # tests already build them with, which Wasmtime 50 brings (wasmparser and wasm-encoder 0.261);
 # `~` keeps `wat` on that line, so no second wasm-encoder enters the lock (RC-100-57).
 wat = "~1.261.0"
-wit-component = "0.261.0"
-wit-parser = "0.261.0"
+wit-component = "0.262.0"
+wit-parser = "0.262.0"
 # The guest side of a plugin (RC-100-12): the bundled plugins' `src/guest.rs` on wasm32 only, never
 # in `rcommander.exe`; the SDK templates ask for the same version (scripts/check-sdk-templates.sh).
 wit-bindgen = "0.63"
@@ -182,7 +182,7 @@ wit-bindgen = "0.63"
 uuid = { version = "1", features = ["v7"] }
 # A dialog's window marked transient for its owner under X11 (rcommander, Linux and BSD only,
 # RC-080-73): the pure-Rust connection, no features; the version winit already brings.
-x11rb = { version = "0.13", default-features = false }
+x11rb = { version = "0.14", default-features = false }
 # EXIF of photos (RC-100-99): the image view's EXIF tree and `file.properties` in the core, and
 # TIFF, HEIC and camera raw files in the media viewer plugin; pure Rust, BSD-2-Clause, the version
 # iced_graphics already brings into the tree.

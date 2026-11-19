@@ -11,6 +11,11 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.23.2
+
+- The built-in database engine is updated to fix a flaw a specially prepared database file could trigger when restoring a backup.
+- Updated components for SSH connections, archives and the assistant connection, with their latest fixes.
+
 ## 0.23.1
 
 - While a copy onto a phone runs, the panel showing the phone says so, Ctrl+R reports the device as busy, and copying the same file again says it is still being transferred.

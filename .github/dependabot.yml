@@ -36,3 +36,13 @@ updates:
       cargo-security:
         applies-to: security-updates
         patterns: ["*"]
+    # Pinned to the version another dependency brings, so an update alone would put a second copy
+    # into the tree (public pull requests 20 and 21): wat and wit-* follow Wasmtime's
+    # wasm-encoder and wasmparser (RC-100-57), pulldown-cmark and x11rb follow iced and winit
+    # (RC-110-13, RC-110-14). They move by hand with that upgrade; remove the entry then.
+    ignore:
+      - dependency-name: wat
+      - dependency-name: wit-component
+      - dependency-name: wit-parser
+      - dependency-name: pulldown-cmark
+      - dependency-name: x11rb

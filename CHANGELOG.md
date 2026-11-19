@@ -5,6 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-11-19
+
+### Changed
+
+- **Workflows**: taiki-e/install-action 2.90.5 (the public repository's pull request 22).
+- **Dependabot** no longer proposes wat, wit-component, wit-parser, pulldown-cmark and x11rb:
+  each is pinned to the version Wasmtime, iced or winit brings, and an update alone would add a
+  second copy (the public repository's pull requests 20 and 21, declined).
+- **Dependencies before 0.23.2**: russh 0.65.2 (with the ssh-key 0.7.0-rc.12, rsa 0.10.0 and
+  pkcs1 0.8.0 it pins), rmcp 3.11.0, sqlx 0.9.1, suppaftp 12.2.2, trash 5.4.0, wasmtime 50.0.2,
+  zip 9.7.3 and further compatible updates; zip brings nix 0.32 beside the 0.31 of rCommander and
+  russh-cryptovec. filetime stays on 0.2.29: 0.2.30 deprecates the calls `rc-vfs` and the test
+  servers use in favour of `std::fs::set_times`, which is a change of its own.
+- **chrono** is unmaintained (RUSTSEC-2026-0543): accepted in `deny.toml` until rCommander's own
+  use moves to jiff or time (RC-110-36).
+
+### Fixed
+
+- **Database: SQLite 3.54.1** (RC-110-18, RUSTSEC-2026-0459). sqlx 0.9.1 allows libsqlite3-sys
+  0.40, so the bundled SQLite no longer returns uninitialised page-cache memory for a crafted
+  database and `-wal` pair; the exception in `deny.toml` is gone.
+
 ## [0.23.1] - 2026-11-13
 
 ### Changed

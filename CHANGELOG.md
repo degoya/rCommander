@@ -5,6 +5,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.23.3] - 2026-11-19
+
+### Changed
+
+- **Workflows**: EmbarkStudios/cargo-deny-action 2.1.2 (the public repository's pull request 23).
+- **Dependencies**: nix 0.32 (the version zip brings; russh-cryptovec still brings 0.31) and
+  resvg 0.50 for the SVG viewer plugin (the public repository's pull request 24).
+- **Dependencies before 0.23.3**: wasmtime 50.0.3, libbz2-rs-sys 0.2.7, pin-project 1.2.0 and
+  further compatible updates; filetime stays on 0.2.29.
+
+### Fixed
+
+- **SVG viewer 0.1.7: its complexity budgets follow resvg 0.50**. usvg 0.50 reads a `textPath`'s
+  own `path` (SVG 2), joins every text child of a `<style>` and takes an empty or upper-case
+  `type` as CSS, and resvg draws a pattern's content at its tile's whole pixels; the count of
+  arc curves, of markers and patterns, and of pattern canvases now does the same, each with a
+  test. An empty group has no layer box any more. The upstream line references in the plugin
+  point at 0.50.
+- **Public export**: the clone's index is emptied before the new tree is staged, so a file of the
+  same size and archive time as the one it replaces is hashed anew instead of kept from the stat
+  cache; the likely cause of `scripts/tests/export-public.sh` failing once on the public `main`
+  after 0.23.2 while the same tree was green on `ci/0.23.2`.
+
 ## [0.23.2] - 2026-11-19
 
 ### Changed

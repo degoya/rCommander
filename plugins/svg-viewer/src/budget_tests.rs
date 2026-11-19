@@ -45,7 +45,7 @@ fn a_use_counts_what_it_references_each_time() {
 
 #[test]
 fn an_unprefixed_href_wins_over_xlink_href_in_any_order() {
-    // usvg 0.49 follows `href` when both are present (SVG 2); the count follows the same one, so
+    // usvg 0.50 follows `href` when both are present (SVG 2); the count follows the same one, so
     // a small `xlink:href` cannot hide a large `href`. An `href` in another namespace is none.
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
         xmlns:x="urn:other">

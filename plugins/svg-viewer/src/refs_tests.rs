@@ -5,7 +5,8 @@ use super::*;
 /// `check` on what the first element named `name` declares.
 fn with(svg: &str, name: &str, check: impl FnOnce(&Own)) {
     let doc = Document::parse(svg).expect("the test SVG parses");
-    let styles = Styles::of(&doc);
+    let texts = style_texts(&doc);
+    let styles = Styles::of(&texts);
     let node = doc
         .descendants()
         .find(|node| node.has_tag_name(name))
@@ -47,7 +48,8 @@ fn a_rule_counts_only_where_its_selector_matches_and_its_sheet_is_css() {
         <line id="y"/><line id="x"/>
     </svg>"##;
     let doc = Document::parse(svg).expect("the test SVG parses");
-    let styles = Styles::of(&doc);
+    let texts = style_texts(&doc);
+    let styles = Styles::of(&texts);
     let line = |id: &str| {
         doc.descendants()
             .find(|node| node.attribute("id") == Some(id))
@@ -74,4 +76,20 @@ fn context_paints_and_values_without_a_link_name_nothing() {
         // A marker is linked by `url(#m)` only.
         assert!(ids(own, Property::MarkerEnd).is_empty());
     });
+}
+
+#[test]
+fn a_sheet_is_read_as_usvg_0_50_reads_it() {
+    // Text after a comment or an element still counts, and an empty type or `TEXT/CSS` is CSS.
+    for style in [
+        "<style><x/>line { marker-end: url(#m) }</style>",
+        "<style>a{}<!--c-->line { marker-end: url(#m) }</style>",
+        r#"<style type="">line { marker-end: url(#m) }</style>"#,
+        r#"<style type="TEXT/CSS">line { marker-end: url(#m) }</style>"#,
+    ] {
+        let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg">{style}<line/></svg>"#);
+        with(&svg, "line", |own| {
+            assert_eq!(ids(own, Property::MarkerEnd), ["m"], "{style}")
+        });
+    }
 }

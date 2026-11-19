@@ -31,7 +31,7 @@ const RASTER_MAGIC: [&[u8]; 4] = [b"\x89PNG", b"\xff\xd8", b"GIF8", b"RIFF"];
 /// What usvg may use: the bundled font for every `font-family`, `data:` images only - an `href`
 /// to a file or a URL resolves to nothing, a gzip stream inside a `data:` URL is not inflated
 /// (usvg would do it without a limit), and an SVG inside one nested beyond [`MAX_DEPTH`] is not
-/// parsed. An SVG inside a `data:` URL draws no image of its own: usvg 0.49 would hand it this
+/// parsed. An SVG inside a `data:` URL draws no image of its own: usvg 0.50 would hand it this
 /// resolver again, one nesting inside the next, each with its own recursion on the stack. Each
 /// time usvg reads such an SVG, its expanded elements are taken from `remaining`; one that does
 /// not fit is not read.

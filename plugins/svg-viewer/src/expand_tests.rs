@@ -206,6 +206,23 @@ fn a_text_path_counts_the_curves_of_the_shape_it_follows() {
 }
 
 #[test]
+fn a_text_path_counts_the_curves_of_its_own_path() {
+    let document = svg(r#"<text><textPath path="M0 0 A1 1 0 0 1 2 0">ab</textPath></text>"#);
+    assert_eq!(curves(&document), 2);
+}
+
+#[test]
+fn a_text_path_with_a_huge_arc_in_its_own_path_is_refused_at_once() {
+    let document =
+        svg(r#"<text><textPath path="M0 0 A1e30 1e30 0 0 1 2e30 0">a</textPath></text>"#);
+    let limit = Cost {
+        elements: MAX,
+        curves: MAX_ARC_CURVES,
+    };
+    assert!(cost(&document, limit).exceeds(limit));
+}
+
+#[test]
 fn an_arc_beyond_its_own_limit_is_refused_at_once() {
     let document = svg(r#"<path d="M0 0 A1e30 1e30 0 0 1 2e30 0"/>"#);
     let limit = Cost {

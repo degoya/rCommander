@@ -79,6 +79,26 @@ fn a_pattern_inside_a_pattern_is_drawn_for_every_tile_canvas() {
 }
 
 #[test]
+fn a_pattern_inside_a_pattern_is_drawn_at_the_outer_tile_s_whole_pixels() {
+    // The outer tile is 0.6 pixels wide, drawn as one: its content at scale 1, not 0.6, so the
+    // inner tile has 10 x 10 pixels, not 6 x 6.
+    let tree = tree(&document(
+        r##"<pattern id="q" width="10" height="10" patternUnits="userSpaceOnUse">
+            <rect width="1" height="1"/>
+        </pattern>
+        <pattern id="p" width="1" height="1" patternUnits="userSpaceOnUse"
+            patternTransform="scale(0.6)">
+            <rect width="1" height="1" fill="url(#q)"/>
+        </pattern>
+        <rect width="100" height="100" fill="url(#p)"/>"##,
+    ));
+    assert_eq!(
+        pattern_pixels(&tree, Transform::identity(), ANY),
+        1 + 10 * 10
+    );
+}
+
+#[test]
 fn fill_and_stroke_each_draw_a_tile() {
     let tree = tree(&document(
         r##"<rect width="100" height="100" fill="url(#inner)" stroke="url(#inner)"/>"##,
@@ -125,7 +145,7 @@ fn a_mask_and_a_clip_path_take_canvases_of_the_group_s_size() {
         <g clip-path="url(#c)">{TWO_RECTS}</g>"##
     );
     // usvg cuts the group's canvas to the clip path (`calculate_bounding_boxes`,
-    // `usvg-0.49.0/src/tree/mod.rs:1925-1937`): 5 x 5 and the margin, twice.
+    // `usvg-0.50.0/src/tree/mod.rs:1913-1937`): 5 x 5 and the margin, twice.
     assert_eq!(layer_pixels(&clip), 2 * 9 * 9);
 }
 

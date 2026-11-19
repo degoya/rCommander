@@ -1,5 +1,5 @@
-//! Where resvg 0.49 puts its intermediate canvases, computed as resvg computes them: the canvas
-//! of an isolated group (`render_group`, `render_layer`, `resvg-0.49.0/src/render.rs:49-153`),
+//! Where resvg 0.50 puts its intermediate canvases, computed as resvg computes them: the canvas
+//! of an isolated group (`render_group`, `render_layer`, `resvg-0.50.0/src/render.rs:49-153`),
 //! the largest one a drawing allows (`max_filter_bbox`, `src/lib.rs:86-97`), a filter's region
 //! and the canvas of an `feImage` (`apply_inner`, `apply_image`, `src/filter/mod.rs:357-384,
 //! 873-901`). `None` wherever resvg draws nothing.
@@ -66,7 +66,8 @@ pub fn layer(group: &Group, transform: Transform, max_bbox: IntRect) -> Option<L
     let inverse = rest.invert()?;
     let max_bbox = max_bbox.to_rect().transform(inverse)?.round_out()?;
     let transform = inverse.pre_concat(transform);
-    let bbox = group.layer_bounding_box().transform(transform)?;
+    // usvg 0.50: an empty group has no layer box; nothing to draw, as for a failed transform.
+    let bbox = group.layer_bounding_box()?.transform(transform)?;
     let rect = if filtered {
         // The filter region is the canvas: no margin.
         IntRect::from_xywh(

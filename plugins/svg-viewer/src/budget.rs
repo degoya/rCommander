@@ -5,7 +5,7 @@
 //! inside a `data:` URL, which usvg reads while it builds the picture, takes its share from what
 //! the document left ([`Remaining`]), once each time usvg reads it (RC-100-76).
 //!
-//! The count follows usvg 0.49's own rules (`usvg-0.49.0/src/parser/svgtree/parse.rs`): the ids
+//! The count follows usvg 0.50's own rules (`usvg-0.50.0/src/parser/svgtree/parse.rs`): the ids
 //! as it maps them, the `href` it follows, the reference as `svgtypes` reads it; and since
 //! RC-100-77 the markers and patterns it instantiates (`expand.rs`). Since RC-100-78 the same
 //! pass counts the cubic curves kurbo cuts the arcs into ([`MAX_ARC_CURVES`],
@@ -148,7 +148,7 @@ impl Remaining {
 }
 
 /// Whether usvg's default resolver reads a `data:` URL of `mime` as an SVG
-/// (`ImageHrefResolver::default_data_resolver`, `src/parser/image.rs:58-76`): `image/svg+xml`
+/// (`ImageHrefResolver::default_data_resolver`, `src/parser/image.rs:59-77`): `image/svg+xml`
 /// always, `text/plain` unless it is a raster picture - which is never XML, so the parse in
 /// [`Remaining::take_svg`] tells it.
 #[must_use]

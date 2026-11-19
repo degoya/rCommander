@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.7
+
+Draws with resvg 0.50. Three ways a small file could still keep the plugin busy end with "too
+complex" again: a text path with its own path data instead of a link, a style sheet split by a
+comment or an element, and a pattern inside a pattern whose outer tile is under one pixel. Built
+against plugin contract 0.6.0.
+
 ## 0.1.6
 
 A file the viewer refuses (too large, a damaged `.svgz`, not an SVG, too complex) shows its

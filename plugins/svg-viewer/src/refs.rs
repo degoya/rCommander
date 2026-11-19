@@ -1,5 +1,5 @@
-//! Which markers and patterns an element names, gathered as usvg 0.49 gathers its presentation
-//! attributes (`src/parser/svgtree/parse.rs:233-415`): the element's own attributes, then the
+//! Which markers and patterns an element names, gathered as usvg 0.50 gathers its presentation
+//! attributes (`src/parser/svgtree/parse.rs:244-377`): the element's own attributes, then the
 //! rules of the document's style sheets that match it, then its `style` attribute. The budget
 //! does not resolve the cascade: every value any of the three declares counts, which can only
 //! count more than usvg draws, never less.
@@ -86,13 +86,13 @@ impl<'a> Own<'a> {
         } else if value.trim() == "inherit" {
             declared.inherits = true;
         } else if let Ok(link) = svgtypes::FuncIRI::from_str(value) {
-            // A marker link (`FromValue for SvgNode`, `src/parser/svgtree/mod.rs:1073-1082`).
+            // A marker link (`FromValue for SvgNode`, `src/parser/svgtree/mod.rs:1139-1148`).
             declared.ids.push(link.0);
         }
     }
 
     /// A declaration as usvg writes it (`write_declaration`, `src/parser/svgtree/parse.rs:
-    /// 346-398`): `marker` sets all three marker properties.
+    /// 394-465`): `marker` sets all three marker properties.
     fn write(&mut self, name: &str, value: &'a str) {
         if name == "marker" {
             for property in [
@@ -114,19 +114,12 @@ pub struct Styles<'a> {
 }
 
 impl<'a> Styles<'a> {
-    /// The style sheets as usvg collects them (`resolve_css`, `src/parser/svgtree/parse.rs:
-    /// 659-687`): every `<style>` without a `type` or of `text/css`, its first text.
+    /// The rules of the sheets [`style_texts`] collects, in their order.
     #[must_use]
-    pub fn of(doc: &'a Document<'_>) -> Self {
+    pub fn of(texts: &'a [String]) -> Self {
         let mut sheet = StyleSheet::new();
-        for node in doc.descendants().filter(|node| node.has_tag_name("style")) {
-            match node.attribute("type") {
-                Some("text/css") | None => {}
-                Some(_) => continue,
-            }
-            if let Some(text) = node.text() {
-                sheet.parse_more(text);
-            }
+        for text in texts {
+            sheet.parse_more(text);
         }
         let rules = sheet
             .rules
@@ -142,12 +135,32 @@ impl<'a> Styles<'a> {
     }
 }
 
+/// The style sheets as usvg 0.50 collects them (`style_texts`, `src/parser/svgtree/parse.rs:
+/// 697-711`): every `<style>` without a `type`, with an empty one or `text/css` in any case, all
+/// its text children joined - a comment or an element between them does not end the sheet.
+#[must_use]
+pub fn style_texts(doc: &Document<'_>) -> Vec<String> {
+    doc.descendants()
+        .filter(|node| node.has_tag_name("style"))
+        .filter(|node| {
+            node.attribute("type")
+                .is_none_or(|kind| kind.is_empty() || kind.eq_ignore_ascii_case("text/css"))
+        })
+        .map(|node| {
+            node.children()
+                .filter(|child| child.is_text())
+                .filter_map(|child| child.text())
+                .collect()
+        })
+        .collect()
+}
+
 /// What `node` declares itself, from all three sources.
 #[must_use]
 pub fn own<'a>(node: Node<'a, '_>, styles: &Styles<'a>) -> Own<'a> {
     let mut own = Own::default();
     for attribute in node.attributes() {
-        // The namespaces usvg copies attributes from (`src/parser/svgtree/parse.rs:235-238`).
+        // The namespaces usvg copies attributes from (`src/parser/svgtree/parse.rs:246-249`).
         if matches!(
             attribute.namespace(),
             None | Some(SVG_NS) | Some(XLINK_NS) | Some(XML_NS)
@@ -171,7 +184,7 @@ pub fn own<'a>(node: Node<'a, '_>, styles: &Styles<'a>) -> Own<'a> {
     own
 }
 
-/// A node as usvg's selectors see it (`XmlNode`, `src/parser/svgtree/parse.rs:689-718`).
+/// A node as usvg's selectors see it (`XmlNode`, `src/parser/svgtree/parse.rs:732-761`).
 struct XmlNode<'a, 'input>(Node<'a, 'input>);
 
 impl Element for XmlNode<'_, '_> {

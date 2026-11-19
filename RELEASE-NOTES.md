@@ -11,6 +11,10 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.23.3
+
+- The SVG viewer uses a newer drawing engine and still refuses specially crafted pictures that would keep it busy, including three new ways such a picture could slip past its limits.
+
 ## 0.23.2
 
 - The built-in database engine is updated to fix a flaw a specially prepared database file could trigger when restoring a backup.

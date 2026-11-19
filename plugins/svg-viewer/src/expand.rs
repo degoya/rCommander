@@ -1,35 +1,35 @@
-//! The count behind [`crate::budget::expanded`]: every element as often as usvg 0.49 builds
+//! The count behind [`crate::budget::expanded`]: every element as often as usvg 0.50 builds
 //! it, and with it the cubic curves of its arcs (`segments.rs`, RC-100-78). A `<use>` copies
 //! what it references; a shape draws the content of its markers once at the start, once at the
-//! end and once at each vertex between (`src/parser/marker.rs:41-72, 216-262`); a painted shape,
+//! end and once at each vertex between (`src/parser/marker.rs:41-66, 218-264`); a painted shape,
 //! and each glyph run of a text, takes a copy of the content of each pattern it is painted with
-//! (`Paint::to_user_coordinates`, `src/parser/paint_server.rs:964-1010`). Markers and patterns
+//! (`Paint::to_user_coordinates`, `src/parser/paint_server.rs:1005-1051`). Markers and patterns
 //! inside those, and their `<use>`, count the same way.
 //!
 //! Which markers and patterns apply is [`crate::refs`]' over-count, inherited as usvg inherits
-//! (`find_attribute`, `src/parser/svgtree/mod.rs:369-391`), through a `<use>` from where the
-//! `<use>` stands. usvg skips a marker inside its own content (`parent_markers`, `marker.rs:
-//! 63-67`) and clears a pattern's own link to itself (`fix_recursive_patterns`,
-//! `src/parser/svgtree/parse.rs:720-774`); both count nothing. Any other ring of markers and
-//! patterns is refused: usvg would recurse into it without end, or draw it to a depth this count
-//! cannot follow.
+//! (`find_attribute`, `src/parser/svgtree/mod.rs:378-400`), through a `<use>` from where the
+//! `<use>` stands. usvg drops a link that closes a ring (`find_circular_references`,
+//! `src/parser/svgtree/parse.rs:763-857`), a marker inside its own content and a pattern's own
+//! link to itself among them; both count nothing. Any other ring of markers and patterns is
+//! refused: the count cannot follow it, and refusing is never less than usvg draws.
 //!
-//! A `textPath` makes usvg convert the shape it names once more (`resolve_text_flow`,
-//! `src/parser/text.rs:365-367`): it counts that shape's curves, the largest of every element of
-//! the id, since usvg links the last one (`src/parser/svgtree/parse.rs:116-123`).
+//! A `textPath` makes usvg convert the shape it names once more (`resolve_text_flow_href`,
+//! `src/parser/text.rs:407-426`), or its own `path` (SVG 2, `resolve_text_flow_path`, 389-405):
+//! it counts the curves of either, the largest of every element of the id, since usvg links the
+//! last one (`src/parser/svgtree/parse.rs:119-125`).
 
 use std::collections::HashMap;
 
 use roxmltree::{Document, Node, NodeId};
 
 use crate::budget::{Cost, iri};
-use crate::refs::{Own, Property, Styles, own};
-use crate::segments::{Shape, shape};
+use crate::refs::{Own, Property, Styles, own, style_texts};
+use crate::segments::{Shape, shape, text_path};
 
 const XLINK: &str = "http://www.w3.org/1999/xlink";
 
 /// The shapes usvg turns into paths and may put markers on (`convert_element_impl`,
-/// `src/parser/converter.rs:678-689`).
+/// `src/parser/converter.rs:569-580`).
 const SHAPES: [&str; 7] = [
     "rect", "circle", "ellipse", "line", "polyline", "polygon", "path",
 ];
@@ -82,17 +82,18 @@ pub fn count(doc: &Document, limit: Cost) -> Cost {
         elements: limit.elements.saturating_add(1),
         curves: limit.curves.saturating_add(1),
     };
-    let mut count = Count::new(doc, cap);
+    let texts = style_texts(doc);
+    let mut count = Count::new(doc, &texts, cap);
     count.run().unwrap_or(cap)
 }
 
 struct Count<'a, 'input> {
     doc: &'a Document<'input>,
     styles: Styles<'a>,
-    /// `<use>` targets, the first element of an id (`src/parser/svgtree/parse.rs:76-83`).
+    /// `<use>` targets, the first element of an id (`src/parser/svgtree/parse.rs:79-84`).
     ids: HashMap<&'a str, Node<'a, 'input>>,
     /// Markers and patterns by id, every element of an id: usvg links the last one
-    /// (`src/parser/svgtree/parse.rs:116-123`), counting all is never less.
+    /// (`src/parser/svgtree/parse.rs:119-125`), counting all is never less.
     markers: HashMap<&'a str, Vec<NodeId>>,
     patterns: HashMap<&'a str, Vec<NodeId>>,
     /// The shapes a `textPath` may name, every element of an id.
@@ -108,7 +109,7 @@ struct Count<'a, 'input> {
 }
 
 impl<'a, 'input> Count<'a, 'input> {
-    fn new(doc: &'a Document<'input>, cap: Cost) -> Self {
+    fn new(doc: &'a Document<'input>, texts: &'a [String], cap: Cost) -> Self {
         let mut ids = HashMap::new();
         let mut markers: HashMap<&str, Vec<NodeId>> = HashMap::new();
         let mut patterns: HashMap<&str, Vec<NodeId>> = HashMap::new();
@@ -134,7 +135,7 @@ impl<'a, 'input> Count<'a, 'input> {
         let empty = Context::default();
         Self {
             doc,
-            styles: Styles::of(doc),
+            styles: Styles::of(texts),
             ids,
             markers,
             patterns,
@@ -319,8 +320,8 @@ impl<'a, 'input> Count<'a, 'input> {
         *self.shapes.entry(node.id()).or_insert_with(|| shape(node))
     }
 
-    /// The curves of the shape a `textPath` follows: of every element its `href` or `xlink:href`
-    /// may name, the most.
+    /// The curves of the shape a `textPath` follows: its own `path`, or of every element its
+    /// `href` or `xlink:href` may name, the most.
     fn followed_curves(&mut self, node: Node<'a, 'input>) -> u64 {
         let targets: Vec<NodeId> = node
             .attributes()
@@ -330,7 +331,7 @@ impl<'a, 'input> Count<'a, 'input> {
             .filter_map(|attribute| iri(attribute.value()))
             .flat_map(|id| self.shapes_by_id.get(id).into_iter().flatten().copied())
             .collect();
-        let mut most = 0;
+        let mut most = text_path(node).curves;
         for id in targets {
             if let Some(target) = self.node(id) {
                 most = most.max(self.shape(target).curves);
@@ -368,7 +369,7 @@ impl<'a, 'input> Count<'a, 'input> {
     }
 
     /// The patterns whose content `pattern` takes: the first of its `href` chain with element
-    /// children (`find_pattern_with_children`, `src/parser/paint_server.rs:260-279`), every one
+    /// children (`find_pattern_with_children`, `src/parser/paint_server.rs:257-276`), every one
     /// that may be it when an id names several.
     fn owners(&self, pattern: NodeId) -> Vec<NodeId> {
         let mut owners = Vec::new();
@@ -459,7 +460,7 @@ impl<'a, 'input> Count<'a, 'input> {
     }
 
     /// For a `<use>`, the element its `href` or `xlink:href` names in this document. As usvg
-    /// resolves it (`resolve_href`, `src/parser/svgtree/parse.rs:558-578`): an unprefixed `href`
+    /// resolves it (`resolve_href`, `src/parser/svgtree/parse.rs:593-614`): an unprefixed `href`
     /// wins over `xlink:href` in any order, and an `href` in another namespace is none.
     fn use_target(&self, node: Node<'a, 'input>) -> Option<Node<'a, 'input>> {
         if node.tag_name().name() != "use" {

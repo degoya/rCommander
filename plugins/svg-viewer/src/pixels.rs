@@ -1,10 +1,10 @@
-//! The pixel budgets of the drawing: the canvases resvg 0.49 allocates besides the picture's own,
+//! The pixel budgets of the drawing: the canvases resvg 0.50 allocates besides the picture's own,
 //! summed before anything is drawn, as resvg walks the built tree.
 //!
 //! - **Pattern tiles** (RC-100-77). resvg draws a pattern not tile by tile: each time a path is
 //!   filled or stroked with one, it draws one tile into a canvas of its own, at the scale the
 //!   path is drawn at, and repeats that canvas as a shader (`render_pattern_pixmap`,
-//!   `resvg-0.49.0/src/path.rs:179-206`). A pattern inside a tile is drawn again for every tile
+//!   `resvg-0.50.0/src/path.rs:179-208`). A pattern inside a tile is drawn again for every tile
 //!   canvas. At most [`MAX_PATTERN_PIXELS`] together.
 //! - **Intermediate canvases** (RC-100-78). A group with an opacity below 1, a clip path, a mask,
 //!   a filter or a blend mode is drawn into a canvas the size of its layer bounding box
@@ -315,8 +315,13 @@ impl Walk {
         if self.total.patterns > self.limit.patterns {
             return Err(Spent);
         }
+        // resvg 0.50 draws the content at the tile's whole pixels over its size
+        // (`render_pattern_pixmap`, `resvg-0.50.0/src/path.rs:196-198`), not at the scale.
         let tile = Frame {
-            transform: Transform::from_scale(sx, sy),
+            transform: Transform::from_scale(
+                width as f32 / rect.width(),
+                height as f32 / rect.height(),
+            ),
             max_bbox: frame.max_bbox,
             canvas: (width, height),
         };

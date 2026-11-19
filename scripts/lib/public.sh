@@ -207,6 +207,9 @@ rc_public_replace_tree() {
     echo "==> replacing the tree of $1"
     find "$1" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
     cp -a "$2"/. "$1"/
+    # An empty index hashes every file anew: `cp -a` keeps the archive's mtimes (the commit's
+    # time), so a same-size file written in the same second could pass git's stat check unread.
+    git -C "$1" read-tree --empty
     git -C "$1" add --all
     RC_PUBLIC_STAGED_TREE="$(git -C "$1" write-tree)"
 }

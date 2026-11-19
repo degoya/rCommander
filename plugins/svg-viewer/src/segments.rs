@@ -1,14 +1,14 @@
-//! What usvg 0.49 makes of a shape, from its attributes alone, before usvg builds it.
+//! What usvg 0.50 makes of a shape, from its attributes alone, before usvg builds it.
 //!
 //! - **Segments**: the vertices its markers are drawn on, one marker at the start, one at the end
-//!   and one at each vertex between (`draw_markers`, `src/parser/marker.rs:216-262`). An upper
+//!   and one at each vertex between (`draw_markers`, `src/parser/marker.rs:218-264`). An upper
 //!   bound: a `d` is walked as `svgtypes`' `SimplifyingPathParser` walks it (`svgtypes-0.16.2/
 //!   src/path.rs:750-1055`), and every elliptical arc counts the cubic curves kurbo cuts it into
 //!   (`Arc::append_iter`, `kurbo-0.13.1/src/arc.rs:77-85`) - a huge radius makes a great many.
 //! - **Curves** (RC-100-78): the cubic curves kurbo cuts the shape's arcs into, as kurbo counts
 //!   them - every `A` of a `d` (`svgtypes-0.16.2/src/path.rs:960-990`) and the four quarter arcs
 //!   of a circle, an ellipse or a rounded rect (`ellipse_to_path`, `convert_rect` and `arc_to`,
-//!   `usvg-0.49.0/src/parser/shapes.rs:69-127, 265-330`). svgtypes buffers one arc's curves and
+//!   `usvg-0.50.0/src/parser/shapes.rs:73-131, 269-334`). svgtypes buffers one arc's curves and
 //!   hands them out with `Vec::remove(0)`, so an arc costs the square of its curves: one beyond
 //!   [`MAX_CURVES_PER_ARC`] counts as `u64::MAX`, beyond any budget.
 
@@ -65,14 +65,14 @@ pub fn shape(node: Node) -> Shape {
             .fold(Shape::default(), Shape::max),
         "line" => Shape::lines(2),
         "polyline" => Shape::lines(values(node, "points").map(points).max().unwrap_or(0)),
-        // `points_to_path` and a `close` (`src/parser/shapes.rs:182-223`).
+        // `points_to_path` and a `close` (`src/parser/shapes.rs:186-227`).
         "polygon" => Shape::lines(
             values(node, "points")
                 .map(|value| points(value).saturating_add(1))
                 .max()
                 .unwrap_or(0),
         ),
-        // A move, four lines, four corner arcs and a close (`convert_rect`, `shapes.rs:69-127`);
+        // A move, four lines, four corner arcs and a close (`convert_rect`, `shapes.rs:73-131`);
         // usvg clamps the radius to half the side.
         "rect" => {
             let names = ["rx", "ry"];
@@ -88,7 +88,7 @@ pub fn shape(node: Node) -> Shape {
                 Shape::lines(5)
             }
         }
-        // A move, four quarter arcs and a close (`ellipse_to_path`, `shapes.rs:265-274`).
+        // A move, four quarter arcs and a close (`ellipse_to_path`, `shapes.rs:269-278`).
         "circle" => ellipse(node, &["r"]),
         "ellipse" => ellipse(node, &["rx", "ry"]),
         _ => Shape::default(),
@@ -104,7 +104,15 @@ fn ellipse(node: Node, names: &[&str]) -> Shape {
     }
 }
 
-/// The values of the attribute `name` usvg may read (`src/parser/svgtree/parse.rs:235-238`).
+/// The shape of a `textPath`'s own `path` (SVG 2, new in usvg 0.50: `resolve_text_flow_path`,
+/// `src/parser/text.rs:389-405`), which usvg converts before it looks at the `href`.
+pub fn text_path(node: Node) -> Shape {
+    values(node, "path")
+        .map(path)
+        .fold(Shape::default(), Shape::max)
+}
+
+/// The values of the attribute `name` usvg may read (`src/parser/svgtree/parse.rs:246-249`).
 fn values<'a>(node: Node<'a, '_>, name: &'a str) -> impl Iterator<Item = &'a str> {
     node.attributes()
         .filter(move |attribute| {
@@ -176,7 +184,7 @@ fn curves(radius: f64, sweep: f64) -> u64 {
 
 /// The segments of a `d` value - one per command, an implicit move after a close that is not
 /// followed by a move or close, and an arc's cubic curves - and the curves of its arcs. Parsing
-/// stops at the first error, as usvg's does (`convert_path`, `src/parser/shapes.rs:26-36`).
+/// stops at the first error, as usvg's does (`convert_path`, `src/parser/shapes.rs:26-71`).
 fn path(value: &str) -> Shape {
     let mut count = 0u64;
     let mut arcs = 0u64;

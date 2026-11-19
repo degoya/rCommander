@@ -62,7 +62,7 @@ notify = { version = "8.2.1", default-features = false, features = ["macos_fseve
 # The owner column of a local listing on Unix (rc-vfs, RC-060-02): user and group names through
 # safe `getpwuid_r`/`getgrgid_r` wrappers; the space of a file system (`statvfs`, RC-080-31).
 # The version russh already brings.
-nix = { version = "0.31", default-features = false, features = ["fs", "user"] }
+nix = { version = "0.32", default-features = false, features = ["fs", "user"] }
 # The Markdown preview (rcommander, RC-020-09): the parser iced's `markdown` feature brings, at
 # its version, read directly only to find raw HTML and show it as text; no second parser.
 pulldown-cmark = { version = "0.12", default-features = false }
@@ -86,7 +86,7 @@ reqwest = { version = "0.13", default-features = false, features = ["json"] }
 # 0.24 since RC-100-60, beside iced's 0.11 and 0.23, in the wasm guest only). Without system fonts
 # and memory-mapped font files: `text` with the font the plugin brings, `raster-images` for
 # `data:` PNG, JPEG, GIF, WebP.
-resvg = { version = "0.49", default-features = false, features = ["raster-images", "text"] }
+resvg = { version = "0.50", default-features = false, features = ["raster-images", "text"] }
 # rmcp 3.2+: the server macros, stdio, Streamable HTTP server and (for the stdio proxy) client.
 rmcp = { version = "3.2", default-features = false, features = ["client", "macros", "server", "transport-io", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 # The import from Remote Desktop Manager (rc-engine, RC-050-11) and the SVG viewer plugin, at

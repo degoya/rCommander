@@ -387,14 +387,14 @@ impl russh_sftp::server::Handler for Served {
             let Some(mtime) = attrs.mtime else {
                 return Ok(());
             };
-            let at = |secs: u32| {
-                filetime::FileTime::from_system_time(
-                    SystemTime::UNIX_EPOCH + Duration::from_secs(u64::from(secs)),
-                )
-            };
+            let at = |secs: u32| SystemTime::UNIX_EPOCH + Duration::from_secs(u64::from(secs));
             // Not through a `File::open` handle: Windows sets times only on a handle opened
-            // for writing attributes, and opens no directory without backup semantics.
-            filetime::set_file_times(&local, at(attrs.atime.unwrap_or(mtime)), at(mtime))
+            // for writing attributes, and opens no directory without backup semantics -
+            // `fs::set_times` opens it so.
+            let times = fs::FileTimes::new()
+                .set_accessed(at(attrs.atime.unwrap_or(mtime)))
+                .set_modified(at(mtime));
+            fs::set_times(&local, times)
         });
         done(id, changed)
     }

@@ -153,3 +153,54 @@ async fn local_names_its_link_kinds() {
     assert_eq!(links.junction, cfg!(windows));
     assert_eq!(links.shortcut, cfg!(windows));
 }
+
+/// `set_mtime` and `set_properties` change a file's and a folder's modification time (on
+/// Windows a folder opens only with backup semantics) and leave the access time alone (RC-110-45).
+#[tokio::test]
+async fn the_modification_time_is_set_on_a_file_and_a_folder_and_keeps_the_access_time() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let fs = LocalFs::new();
+    let file = dir.path().join("file");
+    write(&fs, &file, WriteMode::CreateNew, b"a").await;
+    let folder = dir.path().join("folder");
+    fs.mkdir(&folder, false).await.expect("mkdir");
+    let accessed = SystemTime::UNIX_EPOCH + Duration::from_secs(1_500_000_000);
+    let first = SystemTime::UNIX_EPOCH + Duration::from_secs(1_600_000_000);
+    let second = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    for path in [&file, &folder] {
+        std::fs::set_times(path, std::fs::FileTimes::new().set_accessed(accessed))
+            .expect("set the access time");
+        fs.set_mtime(path, first).await.expect("set_mtime");
+        assert_eq!(fs.stat(path).await.expect("stat").modified, Some(first));
+        let change = PropertyChange {
+            modified: Some(second),
+            ..PropertyChange::default()
+        };
+        fs.set_properties(path, change)
+            .await
+            .expect("set_properties");
+        let meta = std::fs::metadata(path).expect("metadata");
+        assert_eq!(
+            meta.modified().expect("mtime"),
+            second,
+            "{}",
+            path.display()
+        );
+        assert_eq!(
+            meta.accessed().expect("atime"),
+            accessed,
+            "{}",
+            path.display()
+        );
+    }
+}
+
+#[tokio::test]
+async fn setting_the_time_of_nothing_is_not_found() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let missing = dir.path().join("none");
+    assert!(matches!(
+        LocalFs::new().set_mtime(&missing, SystemTime::now()).await,
+        Err(VfsError::NotFound { .. })
+    ));
+}

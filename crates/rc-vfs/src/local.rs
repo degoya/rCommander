@@ -252,9 +252,11 @@ impl Vfs for LocalFs {
     async fn set_mtime(&self, path: &Path, modified: SystemTime) -> Result<()> {
         let shown = path.to_path_buf();
         blocking(WORK, path, move || {
-            filetime::set_file_mtime(
+            // Follows a link, as before; the access time stays. On Windows std opens with
+            // backup semantics, so a folder's time is set too.
+            std::fs::set_times(
                 long_path(&shown),
-                filetime::FileTime::from_system_time(modified),
+                std::fs::FileTimes::new().set_modified(modified),
             )
             .map_err(io_err(&shown))
         })

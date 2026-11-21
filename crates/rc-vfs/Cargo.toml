@@ -18,7 +18,6 @@ memory = []
 async-trait.workspace = true
 bzip2.workspace = true
 encoding_rs.workspace = true
-filetime.workspace = true
 flate2.workspace = true
 jiff.workspace = true
 lzma-rust2.workspace = true

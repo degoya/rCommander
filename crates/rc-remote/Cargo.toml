@@ -35,18 +35,16 @@ tokio-rustls.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 x509-parser.workspace = true
-# The testkit's test servers (`ftp::test_server`, the SFTP subsystem): files, certificate, times.
-filetime = { workspace = true, optional = true }
+# The testkit's test servers (`ftp::test_server`, the SFTP subsystem): files and certificate.
 rcgen = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 
 [features]
 # The in-process SSH server and its fixtures (`testkit`), and the in-process FTP server
 # (`ftp::test_server`), for the engine's tests.
-testkit = ["dep:filetime", "dep:rcgen", "dep:tempfile"]
+testkit = ["dep:rcgen", "dep:tempfile"]
 
 [dev-dependencies]
-filetime.workspace = true
 rc-vfs = { path = "../rc-vfs", features = ["conformance"] }
 rcgen.workspace = true
 serde_json.workspace = true

@@ -1,6 +1,9 @@
 //! What Unix keeps and refuses: modes, owners, no creation time, no Windows flags.
 
-use std::{os::unix::fs::MetadataExt, time::SystemTime};
+use std::{
+    os::unix::fs::MetadataExt,
+    time::{Duration, SystemTime},
+};
 
 use super::super::write;
 use crate::{EntryKind, LinkKind, LocalFs, PropertyChange, Vfs, VfsError, WriteMode};
@@ -100,4 +103,41 @@ async fn details_name_owner_blocks_and_links() {
     assert_eq!(details.links, Some(1));
     assert_eq!(details.allocated, Some(meta.blocks() * 512));
     assert!(details.accessed.is_some());
+}
+
+/// A link's own modification time, not its target's; the link's access time stays (RC-110-45).
+#[tokio::test]
+async fn a_symlinks_own_time_is_set_without_following_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let fs = LocalFs::new();
+    let file = dir.path().join("file");
+    write(&fs, &file, WriteMode::CreateNew, b"abc").await;
+    let link = dir.path().join("link");
+    fs.create_link(&link, std::path::Path::new("file"), LinkKind::Symlink)
+        .await
+        .expect("symlink");
+    let accessed = SystemTime::UNIX_EPOCH + Duration::from_secs(1_500_000_000);
+    std::fs::set_times_nofollow(&link, std::fs::FileTimes::new().set_accessed(accessed))
+        .expect("set the link's access time");
+    let target_before = std::fs::metadata(&file)
+        .expect("metadata")
+        .modified()
+        .expect("mtime");
+    let then = SystemTime::UNIX_EPOCH + Duration::from_secs(1_600_000_000);
+    let change = PropertyChange {
+        modified: Some(then),
+        ..PropertyChange::default()
+    };
+    fs.set_properties(&link, change)
+        .await
+        .expect("set_properties");
+    let own = std::fs::symlink_metadata(&link).expect("symlink_metadata");
+    assert_eq!(own.modified().expect("mtime"), then);
+    assert_eq!(own.accessed().expect("atime"), accessed);
+    let target = std::fs::metadata(&file).expect("metadata");
+    assert_eq!(
+        target.modified().expect("mtime"),
+        target_before,
+        "the target is untouched"
+    );
 }

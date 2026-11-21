@@ -318,7 +318,7 @@ impl Session {
         });
         match parsed {
             Some((time, (ftp, local))) if local.exists() => {
-                filetime::set_file_mtime(&local, filetime::FileTime::from_system_time(time))?;
+                std::fs::set_times(&local, std::fs::FileTimes::new().set_modified(time))?;
                 self.reply(&format!("213 Modify={}; {ftp}", stamp(time)))
                     .await
             }

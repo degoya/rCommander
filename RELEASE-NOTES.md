@@ -11,6 +11,11 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.24.3
+
+- On Windows a panel now notices when the folder it shows is deleted, and reads the folder again when Windows drops change notices, as it already did on Linux.
+- Updated components for folder watching, FTP and FTPS connections, plugins and SSH connections, with their latest fixes.
+
 ## 0.24.2
 
 - Every open SFTP, FTP or FTPS connection gets its own button in the drive bar: a click takes you back to the folder you left, a right click disconnects it. A setting turns the buttons off.

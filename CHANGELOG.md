@@ -5,6 +5,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-11-21
+
+### Changed
+
+- **`deny.toml` without the rsa exception**: RUSTSEC-2023-0071 (the Marvin timing attack) is fixed
+  in rsa 0.10.0, which the lock holds; `cargo deny` reported the exception as no longer matching.
+- **notify 9.0.0** (RC-110-42): the panels' folder watcher on notify 9 instead of 8.2.2, same
+  features (FSEvents on macOS, no kqueue). No code change: none of notify 9's breaking changes
+  touches the calls `rc-engine` makes. A deleted watched folder is now reported on Windows too,
+  and lost notices there come as a rescan; both read the panel again as on Linux. New
+  dependency `xxhash-rust` (BSL-1.0).
+- **suppaftp 13.0.0** (RC-110-43): FTP/FTPS on suppaftp 13 instead of 12.2. Its one break
+  (`mdtm` and its listing parser on jiff instead of chrono) touches nothing rCommander calls, so
+  no code changed; suppaftp no longer brings chrono, and `deny.toml`'s chrono exception names
+  the four crates left.
+- **Wasmtime 51** (RC-110-44): the plugin host on wasmtime 51.0.0 (Cranelift 0.138) instead of
+  50.0.3, and its test components' `wat` 1.263, `wit-component` and `wit-parser` 0.263 with it,
+  the wasm-tools line Wasmtime 51 brings, so the lock keeps one host-side wasm-encoder. No call
+  of the host changed; the limits (memory, tables, fuel, epoch deadline), the compile cache and
+  the plugin contract are as before. `wit-bindgen` stays on 0.63, the newest; wasmtime's cache
+  moves from directories-next to directories and zstd 0.13 to 0.14.
+- **File times through `std::fs`** (RC-110-45): `rc-vfs` and the test servers of `rc-remote` set
+  modification times with `std::fs::set_times` and `set_times_nofollow` (stable since Rust 1.99)
+  instead of the `filetime` crate, which no workspace crate depends on any more (tar still
+  brings it into the lock). A symlink's own time is still set without following it, a folder's
+  time on Windows still opens with backup semantics, the access time stays untouched.
+- **Compatible updates before 0.24.3**: russh 0.65.3; filetime 0.2.30, which only tar still
+  brings now (generic-array 1.4.5 leaves the lock).
+
 ## [0.24.2] - 2026-11-21
 
 ### Changed

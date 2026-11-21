@@ -2,7 +2,7 @@
 
 use std::{
     collections::HashMap,
-    fs::{self, Metadata, Permissions},
+    fs::{self, FileTimes, Metadata, Permissions},
     io,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::Path,
@@ -120,7 +120,7 @@ pub(super) fn details(meta: &Metadata, _real: &Path) -> Details {
     }
 }
 
-/// Mode and read-only through `set_attributes`, the modification time through `filetime`;
+/// Mode and read-only through `set_attributes`, the modification time through `std::fs`;
 /// the Windows flags and the creation time are refused before anything changes.
 pub(super) fn set_properties(path: &Path, change: PropertyChange) -> Result<()> {
     if change.touches_windows_flags() || change.created.is_some() {
@@ -141,17 +141,10 @@ pub(super) fn set_properties(path: &Path, change: PropertyChange) -> Result<()> 
         },
     )?;
     if let Some(modified) = change.modified {
-        let real = long_path(path);
-        let modified = filetime::FileTime::from_system_time(modified);
-        let meta = fs::symlink_metadata(&real).map_err(|error| VfsError::from_io(error, path))?;
-        let set = if meta.file_type().is_symlink() {
-            // The link's own time: following it would change a file outside the selection.
-            let accessed = filetime::FileTime::from_last_access_time(&meta);
-            filetime::set_symlink_file_times(&real, accessed, modified)
-        } else {
-            filetime::set_file_mtime(&real, modified)
-        };
-        set.map_err(|error| VfsError::from_io(error, path))?;
+        // A link's own time: following it would change a file outside the selection. The
+        // access time is left alone (`UTIME_OMIT`).
+        fs::set_times_nofollow(long_path(path), FileTimes::new().set_modified(modified))
+            .map_err(|error| VfsError::from_io(error, path))?;
     }
     Ok(())
 }

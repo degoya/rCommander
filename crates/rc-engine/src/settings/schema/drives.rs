@@ -6,7 +6,8 @@
 //! own switch, off by default. Neither is protected. Portable devices (phones over MTP) in the
 //! drive bar (RC-100-61, owner 2026-11-01): on by default; off, the system is not asked for them.
 //! While a copy or move onto a device runs, the panels say so (RC-110-16, `device_transfer.rs`):
-//! on by default, not protected.
+//! on by default, not protected. The open connections as buttons of their own in the drive bar
+//! (RC-110-38, `drives.connections`): on by default, not protected.
 
 use super::{SettingKind, SettingPage, SettingSpec};
 
@@ -82,6 +83,19 @@ pub(super) const DEVICE_TRANSFER_HINT: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.panels.device_transfer_hint",
     help: "setting.panels.device_transfer_hint.help",
+    protected: false,
+    restart: false,
+};
+
+/// Whether the drive bar shows each open connection as a button of its own (RC-110-38).
+pub const SHOW_CONNECTIONS_KEY: &str = "drive_bar.show_connections";
+
+pub(super) const SHOW_CONNECTIONS: SettingSpec = SettingSpec {
+    key: SHOW_CONNECTIONS_KEY,
+    page: SettingPage::Folders,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.drive_bar.show_connections",
+    help: "setting.drive_bar.show_connections.help",
     protected: false,
     restart: false,
 };

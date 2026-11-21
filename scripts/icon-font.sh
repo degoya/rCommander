@@ -75,6 +75,25 @@ GLYPHS=(
     history_20_regular           # Folder history
     power_20_regular             # Quit
     checkbox_checked_20_regular  # Select all
+    # The dialogs' other buttons (RC-110-39).
+    arrow_left_20_regular        # Back
+    edit_20_regular              # Edit
+    arrow_upload_20_regular      # Upload
+    arrow_download_20_regular    # Download
+    arrow_export_ltr_20_regular  # Export
+    arrow_reset_20_regular       # Reset
+    arrow_undo_20_regular        # Discard, Roll back
+    eraser_20_regular            # Clear
+    keyboard_20_regular          # A shortcut's key
+    key_20_regular               # An SSH key
+    image_20_regular             # Choose symbol
+    checkbox_unchecked_20_regular # Select none
+    clock_20_regular             # Now, Later
+    arrow_right_20_regular       # Go to
+    calculator_20_regular        # Count sizes
+    usb_stick_20_regular         # Make portable
+    arrow_minimize_20_regular    # Into the background
+    panel_left_20_regular        # Show in the panel
 )
 
 mode="${1:-}"

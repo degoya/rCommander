@@ -411,8 +411,9 @@ impl App {
         let clicks = app.click_clears_task();
         // Whether Enter checks a checksum file (RC-020-10).
         let checksum_enter = app.checksum_enter_task();
-        // Whether the dialogs' access keys are always underlined (RC-080-16).
-        let access_keys = app.access_keys_task();
+        // Whether the dialogs' access keys are always underlined (RC-080-16), and whether their
+        // buttons show icons (RC-110-39).
+        let access_keys = Task::batch([app.access_keys_task(), app.button_icons_task()]);
         // What Ctrl+wheel, Ctrl++ and Ctrl+- do in the viewer (RC-020-12).
         let text_zoom = app.text_zoom_task();
         // Whether a plugin document's text shows its colours (RC-100-10).

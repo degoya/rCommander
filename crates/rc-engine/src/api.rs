@@ -21,9 +21,12 @@ pub use crate::connections::{
 };
 pub use crate::drives::{
     DETAIL_TIMEOUT, Drive, DriveGroup, DriveKind, DriveSpace, DriveState, NETWORK_DRIVES,
-    NetworkDriveError, devices::DEVICE_SCHEME, drive_of, suggest_letter,
+    NETWORK_MOUNT_POINTS, NetworkDriveError, OpenConnection, devices::DEVICE_SCHEME, drive_of,
+    suggest_letter,
 };
-pub use crate::error::EngineError;
+pub use crate::error::{
+    CompareError, EngineError, ImportError, MultiRenameError, SessionError, SettingsError,
+};
 pub use crate::event::{EngineEvent, PanelChange, TerminalChange};
 pub use crate::file_filter::FileFilter;
 pub use crate::flat::{FlatSource, FlatView, MAX_FLAT_ENTRIES};

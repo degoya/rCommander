@@ -1,6 +1,7 @@
 //! A stand-in for the system's drives, for the tests: drives that answer at once, slowly or
 //! not at all, and a count of the questions; network drives mapped, disconnected and connected
-//! again as Windows would, with files open on some; portable devices behind a [`FakeHub`].
+//! again as Windows would, with files open on some; network shares mounted under `/Volumes` and
+//! unmounted as macOS would (RC-110-40); portable devices behind a [`FakeHub`].
 
 use std::{
     collections::HashMap,
@@ -38,6 +39,8 @@ pub(crate) struct FakeDrives {
     listed: AtomicUsize,
     /// The portable devices; none unless set.
     devices: Option<Arc<FakeHub>>,
+    /// Network shares are mounted at mount points, as on macOS.
+    mount_points: bool,
 }
 
 impl FakeDrives {
@@ -77,6 +80,12 @@ impl FakeDrives {
     /// `id` takes `delay` to answer.
     pub(crate) fn slow(mut self, id: &str, delay: Duration) -> Self {
         self.slow.insert(id.to_owned(), delay);
+        self
+    }
+
+    /// Network shares are mounted under `/Volumes`, as on macOS.
+    pub(crate) fn mount_points(mut self) -> Self {
+        self.mount_points = true;
         self
     }
 
@@ -207,6 +216,55 @@ impl DriveSource for FakeDrives {
             return Err(53);
         }
         lock(&self.disconnected).retain(|drive| *drive != id);
+        Ok(())
+    }
+
+    fn mounts_shares(&self) -> bool {
+        self.mount_points
+    }
+
+    /// Mounts as macOS does: a server `offline` is `fnfErr`, a share `cancel` the person closing
+    /// the credential dialog, a share `secret` `EAUTH`; a share mounted already stays as it is.
+    fn mount_share(&self, url: &str) -> Result<(), i32> {
+        let Some((_, share)) = url.rsplit_once('/') else {
+            return Err(22);
+        };
+        if url.starts_with("smb://offline/") {
+            return Err(-43);
+        }
+        match share {
+            "cancel" => return Err(-128),
+            "secret" => return Err(80),
+            _ => {}
+        }
+        let id = format!("/Volumes/{share}");
+        let mut drives = lock(&self.drives);
+        if drives.iter().all(|drive| drive.id != id) {
+            drives.push(RawDrive {
+                id: id.clone(),
+                label: share.to_owned(),
+                kind: DriveKind::Network,
+                root: PathBuf::from(&id),
+                remote: Some(url.to_owned()),
+            });
+        }
+        Ok(())
+    }
+
+    /// Unmounts as macOS does: `EINVAL` where no network share is mounted, `EBUSY` for a busy
+    /// one without force.
+    fn unmount_share(&self, point: &Path, force: bool) -> Result<(), i32> {
+        let mut drives = lock(&self.drives);
+        let Some(at) = drives
+            .iter()
+            .position(|drive| drive.root == point && drive.kind == DriveKind::Network)
+        else {
+            return Err(22);
+        };
+        if !force && self.busy.contains(&drives[at].id) {
+            return Err(16);
+        }
+        drives.remove(at);
         Ok(())
     }
 

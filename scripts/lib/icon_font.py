@@ -48,7 +48,25 @@ def subset_to(source: str, unicodes: list[int], target: str, family: str, postsc
         (6, postscript),
     ):
         table.setName(value, name_id, 3, 1, 0x409)
+    set_bearings(font)
     font.save(target)
+
+
+def set_bearings(font) -> None:
+    """Gives every glyph the left side bearing its outline has (RC-110-39).
+
+    Upstream's `hmtx` says 0 for every glyph while the outlines start 45 to 136 units in. A
+    TrueType rasterizer (FreeType, and skrifa under iced's text) puts the glyph's left phantom
+    point, the outline's left edge minus the bearing, at the pen's origin: with 0 it draws every
+    icon moved left by its own margin, 1.5 to 3 pixels at 16 to 24, off the middle of its
+    button. With the bearing equal to the outline's left edge the outline stays where its
+    designer put it in the em square.
+    """
+    glyf, hmtx = font["glyf"], font["hmtx"]
+    for name in font.getGlyphOrder():
+        glyph = glyf[name]
+        advance, _ = hmtx[name]
+        hmtx[name] = (advance, glyph.xMin if glyph.numberOfContours != 0 else 0)
 
 
 def main(argv: list[str]) -> int:

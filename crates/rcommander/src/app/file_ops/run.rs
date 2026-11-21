@@ -17,7 +17,7 @@ use super::{
     jobs::{self, Tracked},
 };
 use crate::{
-    app::{App, Effect},
+    app::{App, Effect, cert_trust::Again},
     i18n::{error_text, t},
 };
 
@@ -47,7 +47,8 @@ impl App {
     /// each from the queue's own snapshot, which holds what the job did and asked before this
     /// message came. Of several, the first that has not finished goes into the progress window,
     /// the next ones follow it there (`jobs.rs`). One a locked vault refused goes to the unlock
-    /// prompt, which submits it again once the vault is open.
+    /// prompt, which submits it again once the vault is open; one a certificate or plain FTP
+    /// question stopped waits for the answer, which submits it again (RC-110-37).
     pub(super) fn submitted(&mut self, submitted: Submitted) -> Vec<Effect> {
         let Submitted {
             panel,
@@ -56,6 +57,7 @@ impl App {
             result,
             detail,
             refused,
+            asked,
         } = submitted;
         if let Some(command) = refused {
             return self.ops_refused(Submit {
@@ -64,6 +66,15 @@ impl App {
                 follow,
                 background,
             });
+        }
+        if let Some((question, command)) = asked {
+            let submit = Submit {
+                panel,
+                command,
+                follow,
+                background,
+            };
+            return self.cert_refused(question, panel, Again::Ops(Box::new(submit)));
         }
         let snapshots = match result {
             Ok(snapshots) => snapshots,

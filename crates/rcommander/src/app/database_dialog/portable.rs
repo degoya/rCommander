@@ -12,7 +12,7 @@ use super::{DatabaseDialog, DatabaseJob, DatabaseMsg, DialogMode, Phase};
 use crate::{
     app::{App, Effect, Message, quit::QuitMsg},
     i18n::t,
-    theme::{Tokens, fit::prose, layout},
+    theme::{Tokens, fit::prose, icon::Icon, layout},
 };
 
 /// Where the portable step stands.
@@ -114,7 +114,8 @@ pub(super) fn offer<'a>(dialog: &DatabaseDialog) -> Vec<Element<'a, Message>> {
         return Vec::new();
     }
     let idle = dialog.phase != Phase::Running;
-    vec![layout::secondary_button(
+    vec![layout::secondary_icon_button(
+        Icon::Portable,
         t!("db.portable_offer"),
         idle.then(|| msg(PortableMsg::Ask)),
     )]
@@ -130,13 +131,21 @@ pub(super) fn body<'a>(
         PortableStep::Idle => return None,
         PortableStep::Asking => (
             prose(t!("db.portable_question")).color(tokens.text),
-            layout::primary_button(t!("db.portable_confirm"), Some(msg(PortableMsg::Confirm))),
-            layout::secondary_button(t!("db.portable_cancel"), Some(msg(PortableMsg::Cancel))),
+            layout::primary_icon_button(
+                Icon::Portable,
+                t!("db.portable_confirm"),
+                Some(msg(PortableMsg::Confirm)),
+            ),
+            layout::secondary_icon_button(
+                Icon::Close,
+                t!("db.portable_cancel"),
+                Some(msg(PortableMsg::Cancel)),
+            ),
         ),
         PortableStep::Copying => (
             prose(t!("db.portable_running")).color(tokens.text_secondary),
-            layout::primary_button(t!("db.portable_confirm"), None),
-            layout::secondary_button(t!("db.portable_cancel"), None),
+            layout::primary_icon_button(Icon::Portable, t!("db.portable_confirm"), None),
+            layout::secondary_icon_button(Icon::Close, t!("db.portable_cancel"), None),
         ),
         PortableStep::Made => {
             let done = match &dialog.phase {
@@ -145,8 +154,13 @@ pub(super) fn body<'a>(
             };
             (
                 prose(done).color(tokens.accent),
-                layout::primary_button(t!("db.portable_restart"), Some(msg(PortableMsg::Restart))),
-                layout::secondary_button(
+                layout::primary_icon_button(
+                    Icon::Refresh,
+                    t!("db.portable_restart"),
+                    Some(msg(PortableMsg::Restart)),
+                ),
+                layout::secondary_icon_button(
+                    Icon::Close,
                     t!("db.close"),
                     Some(Message::Database(DatabaseMsg::Close)),
                 ),

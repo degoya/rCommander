@@ -10,12 +10,16 @@
 //! and the dialog asks whether to disconnect anyway, which sends the command again with `force`.
 //! What the engine refuses (`network_path_invalid`, `drive_letter_in_use`, ...) shows in the
 //! dialog; closing Windows' credential dialog just returns to the form.
+//!
+//! On macOS ([`NETWORK_MOUNT_POINTS`], RC-110-40) the system mounts the share under `/Volumes`
+//! and asks for the credentials itself, keeping them in the keychain: the map dialog asks for no
+//! letter and offers no reconnect, and the disconnect dialog lists the shares by name.
 
 use iced::{
     Task,
     widget::{Id, operation},
 };
-use rc_engine::{Chord, Command, Drive, PanelId, suggest_letter};
+use rc_engine::{Chord, Command, Drive, NETWORK_MOUNT_POINTS, PanelId, suggest_letter};
 
 use super::{
     DriveMessage,
@@ -47,11 +51,19 @@ pub struct MapForm {
     /// The chosen letter; `None` when every letter is taken.
     pub letter: Option<char>,
     pub reconnect: bool,
+    /// The system chooses the mount point (macOS): no letter, no reconnect.
+    pub mount_points: bool,
     pub phase: Phase,
 }
 
 impl MapForm {
     pub fn new(drives: &[Drive]) -> Self {
+        Self::with_mount_points(drives, NETWORK_MOUNT_POINTS)
+    }
+
+    /// The form for a platform that mounts shares at mount points (`mount_points`) or maps them
+    /// to letters.
+    pub fn with_mount_points(drives: &[Drive], mount_points: bool) -> Self {
         let letters = free_letters(drives);
         let letter = suggest_letter(drives).or_else(|| letters.last().copied());
         Self {
@@ -60,45 +72,76 @@ impl MapForm {
             letter,
             // Windows' own dialog keeps a drive by default.
             reconnect: true,
+            mount_points,
             phase: Phase::Editing,
         }
     }
+
+    /// Whether Connect can send: a letter is chosen, or none is needed.
+    pub fn ready(&self) -> bool {
+        self.mount_points || self.letter.is_some()
+    }
+}
+
+/// A network drive of the disconnect dialog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkEntry {
+    /// What the engine takes: the letter (`Z:`), or the mount point on macOS.
+    pub id: String,
+    /// What the dialog shows: the letter, or the volume's name on macOS.
+    pub label: String,
+    /// The folder it is mapped to; empty when unknown.
+    pub remote: String,
 }
 
 /// The disconnect dialog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnmapForm {
-    /// The network drives: id and folder.
-    pub drives: Vec<(String, String)>,
+    /// The network drives.
+    pub drives: Vec<NetworkEntry>,
     pub cursor: usize,
     /// The engine answered that files on the chosen drive are open: the dialog asks whether to
     /// disconnect anyway.
     pub in_use: bool,
+    /// The drives are shares at mount points (macOS).
+    pub mount_points: bool,
     pub phase: Phase,
 }
 
 impl UnmapForm {
     /// The network drives of `drives`, the cursor on `chosen` when it is one of them.
     pub fn new(drives: &[Drive], chosen: Option<&str>) -> Self {
-        let drives: Vec<(String, String)> = drives
+        let drives: Vec<NetworkEntry> = drives
             .iter()
             .filter(|drive| is_network(drive))
-            .map(|drive| (drive.id.clone(), drive.remote.clone().unwrap_or_default()))
+            .map(|drive| NetworkEntry {
+                id: drive.id.clone(),
+                label: drive.label.clone(),
+                remote: drive.remote.clone().unwrap_or_default(),
+            })
             .collect();
         let cursor = chosen
-            .and_then(|id| drives.iter().position(|(drive, _)| drive == id))
+            .and_then(|id| drives.iter().position(|drive| drive.id == id))
             .unwrap_or(0);
         Self {
             drives,
             cursor,
             in_use: false,
+            mount_points: NETWORK_MOUNT_POINTS,
             phase: Phase::Editing,
         }
     }
 
     /// The chosen drive's id.
     pub fn chosen(&self) -> Option<&str> {
-        self.drives.get(self.cursor).map(|(id, _)| id.as_str())
+        self.drives.get(self.cursor).map(|drive| drive.id.as_str())
+    }
+
+    /// The chosen drive's name, as the dialog shows it.
+    pub fn chosen_label(&self) -> Option<&str> {
+        self.drives
+            .get(self.cursor)
+            .map(|drive| drive.label.as_str())
     }
 
     /// Another drive is chosen: the question about open files was about the last one.
@@ -217,7 +260,7 @@ impl App {
                     form.in_use = true;
                     form.phase = Phase::Editing;
                 } else if code == "cancelled" {
-                    // The person closed Windows' credential dialog.
+                    // The person closed the system's credential dialog.
                     *dialog.phase_mut() = Phase::Editing;
                 } else {
                     *dialog.phase_mut() = Phase::Failed(error_text(code));
@@ -318,6 +361,12 @@ impl App {
             return Vec::new();
         };
         let command = match &dialog.form {
+            // The system chooses the mount point: no letter goes with the share.
+            NetworkForm::Map(form) if form.mount_points => Command::MapNetworkDrive {
+                remote: form.remote.clone(),
+                letter: String::new(),
+                reconnect: false,
+            },
             NetworkForm::Map(form) => {
                 let Some(letter) = form.letter else {
                     return Vec::new();

@@ -30,3 +30,30 @@ fn a_failed_version_is_remembered_once_and_the_list_is_bounded() {
     assert_eq!(state.failed.len(), 8);
     assert!(!state.failed_before("1.2.0"));
 }
+
+/// The stored setting keeps its text: a state chrono wrote reads, and writes back the same
+/// (RC-110-36).
+#[test]
+fn a_stored_state_keeps_its_dates() {
+    let stored = serde_json::json!({
+        "floors": { "stable": 1_790_000_000_u64, "beta": null },
+        "last_check": "2026-09-21T14:13:20.123456700Z",
+        "last_code": null,
+        "offer": {
+            "version": "1.8.0",
+            "channel": "stable",
+            "released_at": "2026-09-21T14:13:20Z",
+            "notes": "",
+            "artifact": null,
+            "schema_change": true
+        },
+        "failed": [],
+        "announced": null
+    });
+    let state = UpdateState::from_value(Some(stored.clone()));
+    assert_eq!(
+        state.last_check,
+        Some(Timestamp::new(1_790_000_000, 123_456_700).expect("instant"))
+    );
+    assert_eq!(serde_json::to_value(&state).expect("value"), stored);
+}

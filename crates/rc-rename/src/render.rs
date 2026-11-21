@@ -1,6 +1,6 @@
 //! A parsed mask applied to one entry.
 
-use chrono::{Datelike, NaiveDateTime, Timelike};
+use jiff::civil::DateTime;
 
 use crate::case::{CaseMode, lower_small_words};
 use crate::clock::{self, TimeSource, TimeSwitch};
@@ -46,11 +46,11 @@ pub(crate) struct Fields<'a> {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Times {
     /// The entry's modification time.
-    pub modified: Option<NaiveDateTime>,
+    pub modified: Option<DateTime>,
     /// The time the dialog was opened.
-    pub opened: Option<NaiveDateTime>,
+    pub opened: Option<DateTime>,
     /// The time the options last changed.
-    pub changed: Option<NaiveDateTime>,
+    pub changed: Option<DateTime>,
 }
 
 /// The switches a mask sets for what follows, in the extension mask too: `[I]` and `[T...]`.
@@ -122,7 +122,7 @@ pub(crate) fn render(
 }
 
 /// The time a date placeholder reads after `switch`.
-fn moment(fields: &Fields<'_>, switch: TimeSwitch) -> Result<NaiveDateTime, NoTimestamp> {
+fn moment(fields: &Fields<'_>, switch: TimeSwitch) -> Result<DateTime, NoTimestamp> {
     let time = match switch.source {
         TimeSource::Modified => fields.times.modified,
         TimeSource::Opened => fields.times.opened,
@@ -215,8 +215,8 @@ pub(crate) fn from_root(dir: &str) -> Vec<&str> {
     parts
 }
 
-fn date(part: DatePart, time: NaiveDateTime) -> String {
-    let (pm, hour12) = time.hour12();
+fn date(part: DatePart, time: DateTime) -> String {
+    let (pm, hour12) = clock::hour12(time);
     match part {
         DatePart::Year => format!("{:04}", time.year()),
         DatePart::Year2 => format!("{:02}", time.year().rem_euclid(100)),

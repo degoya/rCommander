@@ -4,7 +4,11 @@
 
 use std::{sync::OnceLock, time::SystemTime};
 
-use chrono::{DateTime, Local};
+use jiff::{
+    Timestamp,
+    civil::DateTime,
+    tz::{AmbiguousOffset, TimeZone},
+};
 use rc_engine::{Entry, EntryKind};
 
 use crate::i18n::t;
@@ -60,11 +64,25 @@ pub fn date(modified: Option<SystemTime>) -> String {
     date_in(modified, pattern)
 }
 
-/// `modified` written with the chrono `pattern`.
+/// `modified` in local time, written with the `strftime` `pattern`; nothing for a time beyond
+/// the years -9999 to 9999 or a pattern that does not write.
 pub fn date_in(modified: Option<SystemTime>, pattern: &str) -> String {
-    modified.map_or_else(String::new, |time| {
-        DateTime::<Local>::from(time).format(pattern).to_string()
-    })
+    modified
+        .and_then(|time| Timestamp::try_from(time).ok())
+        .and_then(|time| {
+            jiff::fmt::strtime::format(pattern, TimeZone::system().to_datetime(time)).ok()
+        })
+        .unwrap_or_default()
+}
+
+/// A local date and time as an instant: the earlier of two when the clock went back, none when
+/// it skipped the hour.
+pub fn from_local(time: DateTime) -> Option<Timestamp> {
+    let ambiguous = TimeZone::system().to_ambiguous_timestamp(time);
+    match ambiguous.offset() {
+        AmbiguousOffset::Gap { .. } => None,
+        _ => ambiguous.earlier().ok(),
+    }
 }
 
 /// The locale dates follow: the POSIX variables for time first, then the system's.

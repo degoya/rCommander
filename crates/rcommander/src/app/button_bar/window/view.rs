@@ -98,8 +98,16 @@ pub fn body<'a>(
         top = top.push(
             row![
                 fit::label(t!("button_bar.delete_question")).width(Length::Fill),
-                layout::secondary_button(t!("button_bar.yes"), Some(win(WinMsg::Confirm(true)))),
-                layout::secondary_button(t!("button_bar.no"), Some(win(WinMsg::Confirm(false)))),
+                layout::secondary_icon_button(
+                    Icon::Confirm,
+                    t!("button_bar.yes"),
+                    Some(win(WinMsg::Confirm(true)))
+                ),
+                layout::secondary_icon_button(
+                    Icon::Close,
+                    t!("button_bar.no"),
+                    Some(win(WinMsg::Confirm(false)))
+                ),
             ]
             .spacing(8)
             .align_y(Alignment::Center),
@@ -227,7 +235,8 @@ fn items_side<'a>(
             t!("button_bar.add_button"),
             Some(win(WinMsg::AddButton)),
         ))
-        .push(layout::secondary_button(
+        .push(layout::secondary_icon_button(
+            Icon::Add,
             t!("button_bar.add_separator"),
             Some(win(WinMsg::AddSeparator)),
         ))
@@ -343,7 +352,8 @@ fn form_side<'a>(
     if let Some(browse) = browse::button(PathField::ButtonIcon, icon_path, true) {
         symbol = symbol.push(browse);
     }
-    symbol = symbol.push(layout::secondary_button(
+    symbol = symbol.push(layout::secondary_icon_button(
+        Icon::Symbol,
         t!("symbol_picker.open"),
         Some(win(WinMsg::ChooseSymbol)),
     ));
@@ -367,7 +377,8 @@ fn import_page<'a>(import: &'a Import, tokens: &'static Tokens) -> Element<'a, M
     if let Some(browse) = browse::button(PathField::BarImport, &import.path, true) {
         line = line.push(browse);
     }
-    line = line.push(layout::secondary_button(
+    line = line.push(layout::secondary_icon_button(
+        Icon::ViewFile,
         t!("button_bar.import_read"),
         (!import.path.trim().is_empty()).then(|| win(WinMsg::ImportRead)),
     ));
@@ -384,7 +395,8 @@ fn import_page<'a>(import: &'a Import, tokens: &'static Tokens) -> Element<'a, M
             t!("button_bar.import_run"),
             import.preview.as_ref().map(|_| win(WinMsg::ImportRun)),
         ),
-        layout::secondary_button(
+        layout::secondary_icon_button(
+            Icon::Close,
             t!("button_bar.import_cancel"),
             Some(win(WinMsg::ImportCancel))
         ),

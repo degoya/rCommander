@@ -8,7 +8,7 @@ use super::view::{hint, label};
 use crate::{
     app::{Message, thumbnails::ThumbsMsg},
     i18n::t,
-    theme::{Tokens, layout},
+    theme::{Tokens, icon::Icon, layout},
 };
 
 /// The disk cache's block: the bytes it holds (`None`: not measured yet) and "Clear cache".
@@ -24,7 +24,7 @@ pub(super) fn cache<'a>(bytes: Option<u64>, tokens: &'static Tokens) -> Element<
     column![
         label(t!("settings.thumbnails.cache")),
         hint(held, tokens),
-        layout::secondary_button(t!("settings.thumbnails.clear"), clear),
+        layout::secondary_icon_button(Icon::Clear, t!("settings.thumbnails.clear"), clear),
     ]
     .spacing(6)
     .into()

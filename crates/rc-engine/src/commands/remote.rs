@@ -7,7 +7,7 @@ use rc_vfs::{BackendId, VfsPath};
 
 use super::panel::resolve_path;
 use crate::{
-    ConnectionId, Engine, EngineError, Outcome, PanelId,
+    ConnectionId, Engine, EngineError, Outcome, PanelId, SessionError,
     drives::devices::DEVICE_SCHEME,
     remote::{sftp::strip_sftp_scheme, split_location, strip_ftp_scheme, strip_scheme},
 };
@@ -43,15 +43,15 @@ impl Engine {
         let connection = match found.len() {
             1 => found.remove(0),
             0 => {
-                return Err(EngineError::FtpConnectionNotFound {
+                return Err(EngineError::Session(SessionError::FtpConnectionNotFound {
                     connection: name.to_owned(),
-                });
+                }));
             }
             count => {
-                return Err(EngineError::FtpConnectionAmbiguous {
+                return Err(EngineError::Session(SessionError::FtpConnectionAmbiguous {
                     connection: name.to_owned(),
                     count,
-                });
+                }));
             }
         };
         match path {

@@ -183,8 +183,12 @@ fn pack_view<'a>(pack: &'a PackDialog, tokens: &'static Tokens) -> Element<'a, M
             t!("archive_ops.confirm_yes")
         }
     };
-    body.push(buttons(confirm, pack.step != PackStep::Checking))
-        .into()
+    body.push(buttons(
+        Icon::Pack,
+        confirm,
+        pack.step != PackStep::Checking,
+    ))
+    .into()
 }
 
 fn extract_view<'a>(extract: &'a ExtractDialog, tokens: &'static Tokens) -> Element<'a, Message> {
@@ -235,7 +239,7 @@ fn extract_view<'a>(extract: &'a ExtractDialog, tokens: &'static Tokens) -> Elem
             ArchiveMsg::KeepPaths
         ),
         conflict,
-        buttons(t!("archive_ops.extract_ok"), true),
+        buttons(Icon::Unpack, t!("archive_ops.extract_ok"), true),
     ]
     .spacing(10)
     .into()
@@ -252,7 +256,7 @@ fn delete_view<'a>(prompt: &'a DeletePrompt, tokens: &'static Tokens) -> Element
         ))
         .color(tokens.text),
         prose(t!("archive_ops.delete_warning")).color(theme::DANGER),
-        buttons(t!("archive_ops.delete_ok"), true),
+        buttons(Icon::Delete, t!("archive_ops.delete_ok"), true),
     ]
     .spacing(10)
     .into()
@@ -279,14 +283,16 @@ fn password_view<'a>(prompt: &'a PasswordPrompt, tokens: &'static Tokens) -> Ele
     }
     body.push(field)
         .push(prose(t!("archive_ops.password_note")).color(tokens.text_secondary))
-        .push(buttons(t!("archive_ops.password_ok"), true))
+        .push(buttons(Icon::Unpack, t!("archive_ops.password_ok"), true))
         .into()
 }
 
-/// OK (`confirm`, the primary, disabled unless `enabled`) and Cancel at the right.
-fn buttons<'a>(confirm: &'static str, enabled: bool) -> Element<'a, Message> {
+/// OK (`confirm` with its action's `icon`, the primary, disabled unless `enabled`) and Cancel at
+/// the right.
+fn buttons<'a>(icon: Icon, confirm: &'static str, enabled: bool) -> Element<'a, Message> {
     layout::button_row(
-        Some(layout::primary_button(
+        Some(layout::primary_icon_button(
+            icon,
             confirm,
             enabled.then(|| wrap(ArchiveMsg::Confirm)),
         )),

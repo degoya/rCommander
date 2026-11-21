@@ -12,8 +12,8 @@ use std::{
     time::SystemTime,
 };
 
-use chrono::{Local, NaiveDate, TimeZone};
 use encoding_rs::Encoding;
+use jiff::tz::{AmbiguousOffset, TimeZone};
 use zip::{
     DateTime, HasZipMetadata, System, ZipArchive, extra_fields::ExtraField, read::ZipFile,
     result::ZipError,
@@ -174,20 +174,27 @@ fn modified<R: Read>(member: &ZipFile<'_, R>) -> Option<SystemTime> {
     exact.or_else(|| member.last_modified().and_then(dos_time))
 }
 
-/// A DOS date and time, as local time.
+/// A DOS date and time, as local time: the earlier of two when the clock went back, none when
+/// it skipped the hour.
 pub(crate) fn dos_time(stamp: DateTime) -> Option<SystemTime> {
-    let naive = NaiveDate::from_ymd_opt(
-        i32::from(stamp.year()),
-        u32::from(stamp.month()),
-        u32::from(stamp.day()),
-    )?
-    .and_hms_opt(
-        u32::from(stamp.hour()),
-        u32::from(stamp.minute()),
-        u32::from(stamp.second()),
-    )?;
-    let local = Local.from_local_datetime(&naive).earliest()?;
-    Some(SystemTime::from(local))
+    let local = jiff::civil::DateTime::new(
+        i16::try_from(stamp.year()).ok()?,
+        i8::try_from(stamp.month()).ok()?,
+        i8::try_from(stamp.day()).ok()?,
+        i8::try_from(stamp.hour()).ok()?,
+        i8::try_from(stamp.minute()).ok()?,
+        i8::try_from(stamp.second()).ok()?,
+        0,
+    )
+    .ok()?;
+    let ambiguous = TimeZone::system().to_ambiguous_timestamp(local);
+    match ambiguous.offset() {
+        AmbiguousOffset::Gap { .. } => None,
+        _ => ambiguous
+            .earlier()
+            .ok()
+            .and_then(|time| SystemTime::try_from(time).ok()),
+    }
 }
 
 fn link_target<R: Read + Seek>(archive: &mut ZipArchive<R>, index: u64) -> Option<String> {

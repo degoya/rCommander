@@ -1,11 +1,9 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use jiff::civil::{DateTime, date};
 
 use super::{OffsetUnit, TimeOffset, local, shifted};
 
-fn at(year: i32, month: u32, day: u32, hour: u32) -> NaiveDateTime {
-    NaiveDate::from_ymd_opt(year, month, day)
-        .and_then(|date| date.and_hms_opt(hour, 4, 5))
-        .expect("a valid time")
+fn at(year: i16, month: i8, day: i8, hour: i8) -> DateTime {
+    date(year, month, day).at(hour, 4, 5, 0)
 }
 
 #[test]

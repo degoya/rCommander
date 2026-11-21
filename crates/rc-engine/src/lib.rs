@@ -246,6 +246,9 @@ struct State {
     show_hidden: bool,
     /// The directory each panel last showed on each drive, by [`PanelId::index`] and drive id.
     last_dirs: [BTreeMap<String, VfsPath>; 2],
+    /// The directory either panel last showed on each drive: where an open connection's button
+    /// returns (RC-110-38).
+    last_shown: BTreeMap<String, VfsPath>,
     /// The terminal session each panel shows in its terminal view, by [`PanelId::index`]; kept
     /// while the panel shows its files, so the toggle returns to the same shell.
     shown: [Option<TermId>; 2],
@@ -307,6 +310,7 @@ impl Engine {
                     page_tiles: [1; 2],
                     show_hidden: false,
                     last_dirs: Default::default(),
+                    last_shown: BTreeMap::new(),
                     shown: [None; 2],
                     tabs,
                     counting: Default::default(),

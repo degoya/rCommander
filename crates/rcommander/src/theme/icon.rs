@@ -3,7 +3,7 @@
 //! `NOTICE`), compiled in as the font `resources/icons/rcommander-icons.ttf` and handed to iced
 //! when the window opens. An icon is a glyph of text, so it takes the colour of the button it
 //! sits in - the theme's in light and dark, dimmed with a disabled button - and stays sharp at
-//! every size and scaling; a font of 9 KB instead of iced's `svg` feature and its SVG renderer.
+//! every size and scaling; a font of 12 KB instead of iced's `svg` feature and its SVG renderer.
 //!
 //! `scripts/icon-font.sh` writes the font; the tests hold its glyphs and [`Icon`] to each other.
 //! [`super::layout::icon_button`] puts an icon before a label.
@@ -38,17 +38,17 @@ pub enum Icon {
     Open,
     /// Import (`arrow_import`).
     Import,
-    /// Into the queue (`list`).
+    /// Into the queue, into a list (`list`).
     Queue,
     /// Move (`arrow_move`).
     Move,
-    /// Pause (`pause`).
+    /// Pause, Disable (`pause`).
     Pause,
     /// Connect (`plug_connected`).
     Connect,
     /// Disconnect (`plug_disconnected`).
     Disconnect,
-    /// Resume, Run, Start (`play`).
+    /// Resume, Run, Start, Enable (`play`).
     Resume,
     /// Rename (`rename`).
     Rename,
@@ -106,12 +106,48 @@ pub enum Icon {
     Quit,
     /// Select all (`checkbox_checked`).
     SelectAll,
+    /// Back (`arrow_left`, RC-110-39).
+    Back,
+    /// Edit (`edit`).
+    Edit,
+    /// Upload (`arrow_upload`).
+    Upload,
+    /// Download (`arrow_download`).
+    Download,
+    /// Export (`arrow_export_ltr`).
+    Export,
+    /// Reset (`arrow_reset`).
+    Reset,
+    /// Discard changes, Roll back (`arrow_undo`).
+    Undo,
+    /// Clear (`eraser`).
+    Clear,
+    /// A shortcut's key: record, add, change (`keyboard`).
+    Shortcut,
+    /// An SSH key (`key`).
+    Key,
+    /// Choose a symbol (`image`).
+    Symbol,
+    /// Select none (`checkbox_unchecked`).
+    SelectNone,
+    /// Now, Later, Not now (`clock`).
+    Clock,
+    /// Go to, Answer (`arrow_right`).
+    GoTo,
+    /// Count sizes (`calculator`).
+    Count,
+    /// Make portable (`usb_stick`).
+    Portable,
+    /// Into the background (`arrow_minimize`).
+    Background,
+    /// Show in the panel (`panel_left`).
+    Panel,
 }
 
 impl Icon {
     /// Every icon, in the order of `scripts/icon-font.sh` (the font test holds the two together).
     #[cfg(test)]
-    pub const ALL: [Self; 42] = [
+    pub const ALL: [Self; 60] = [
         Self::Add,
         Self::Confirm,
         Self::Copy,
@@ -154,6 +190,24 @@ impl Icon {
         Self::History,
         Self::Quit,
         Self::SelectAll,
+        Self::Back,
+        Self::Edit,
+        Self::Upload,
+        Self::Download,
+        Self::Export,
+        Self::Reset,
+        Self::Undo,
+        Self::Clear,
+        Self::Shortcut,
+        Self::Key,
+        Self::Symbol,
+        Self::SelectNone,
+        Self::Clock,
+        Self::GoTo,
+        Self::Count,
+        Self::Portable,
+        Self::Background,
+        Self::Panel,
     ];
 
     /// The icon's character in [`FONT`]: the upstream code point the script prints.
@@ -201,6 +255,24 @@ impl Icon {
             Self::History => '\u{F47E}',
             Self::Quit => '\u{F60E}',
             Self::SelectAll => '\u{F28D}',
+            Self::Back => '\u{F15B}',
+            Self::Edit => '\u{F3DD}',
+            Self::Upload => '\u{F1A4}',
+            Self::Download => '\u{F150}',
+            Self::Export => '\u{E0C7}',
+            Self::Reset => '\u{F19F}',
+            Self::Undo => '\u{F199}',
+            Self::Clear => '\u{E5E4}',
+            Self::Shortcut => '\u{F4B8}',
+            Self::Key => '\u{F4B6}',
+            Self::Symbol => '\u{F488}',
+            Self::SelectNone => '\u{F291}',
+            Self::Clock => '\u{F2DD}',
+            Self::GoTo => '\u{F181}',
+            Self::Count => '\u{F20A}',
+            Self::Portable => '\u{F83F}',
+            Self::Background => '\u{F165}',
+            Self::Panel => '\u{E8B0}',
         }
     }
 }

@@ -36,8 +36,9 @@ impl Engine {
 
     /// `panel.change_drive`: the panel shows the other panel's folder when that panel is on the
     /// drive and this one is not (Total Commander; `drives.follow_other_panel`, on by default),
-    /// else the directory it last showed on the drive, else the drive's root - each one that is
-    /// gone is passed over. A drive letter is asked first, at most [`crate::DETAIL_TIMEOUT`]: one
+    /// else - on a server with a session open - the folder either panel last showed there
+    /// (RC-110-38), else the directory it last showed on the drive, else the drive's root - each
+    /// one that is gone is passed over. A drive letter is asked first, at most [`crate::DETAIL_TIMEOUT`]: one
     /// that does not answer leaves the panel where it is, after a network drive that answered
     /// "not ready" was connected again where Windows remembers it. A panel showing its tree
     /// shows its files on the new drive, as a click on a drive button does in Total Commander.
@@ -67,6 +68,9 @@ impl Engine {
             return Err(EngineError::BackendUnavailable);
         };
         let announce = self.announces_locked_vault();
+        // Asked before the server below connects: a session that was lost reconnects as a
+        // saved server does, an open one returns where a panel last was on it (RC-110-38).
+        let session_dir = self.session_dir(&drive.id);
         if drive.group == DriveGroup::Devices {
             root = self.device_start(&drive.id).await?;
         }
@@ -100,14 +104,16 @@ impl Engine {
             }
         }
         let followed = self.followed_dir(id, &drive.id, typed).await;
-        let remembered = self.state().last_dirs[id.index()]
-            .get(&drive.id)
-            .cloned()
-            .filter(|dir| *dir != root && Some(dir) != followed.as_ref());
-        for dir in followed.into_iter().chain(remembered) {
-            if let Ok(outcome) = self.show_path(id, dir).await {
+        let remembered = self.state().last_dirs[id.index()].get(&drive.id).cloned();
+        let mut tried: Vec<VfsPath> = Vec::with_capacity(3);
+        for dir in followed.into_iter().chain(session_dir).chain(remembered) {
+            if dir == root || tried.contains(&dir) {
+                continue;
+            }
+            if let Ok(outcome) = self.show_path(id, dir.clone()).await {
                 return Ok(outcome);
             }
+            tried.push(dir);
         }
         self.show_path(id, root).await
     }

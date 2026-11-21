@@ -58,8 +58,9 @@ asks by.
 | `diagnostics.error_log` | read | `diagnostics_error_log` | The stored warn and error lines, newest first, masked; by level or text |
 | `diagnostics.get_retention` | read | `diagnostics_get_retention` | The row and age limits of each growing table, with defaults and bounds |
 | `diagnostics.set_retention` | write (destructive when a limit is lowered below the one in force) | `diagnostics_set_retention` | Change the row or age limit of a growing table, within its bounds |
+| `drives.connections` | read | `drives_connections` | The connections with a session open now (SSH, FTP, FTPS), each with the folder last shown there |
 | `drives.list` | read | `drives_list` | The drive bar: drives with kind, volume and free space, portable devices, WSL distributions, servers |
-| `drives.map_network` | gui_only | omitted: GUI only: human decision | Map a network share to a free drive letter; Windows asks the person for the credentials |
+| `drives.map_network` | gui_only | omitted: GUI only: human decision | Map a network share to a free drive letter (on macOS: mount it under /Volumes); the system asks the person for the credentials |
 | `drives.unmap_network` | destructive | `drives_unmap_network` | Disconnect a network drive; with open files only when forced, which may lose unsaved data |
 | `file.associations` | gui_only | omitted: GUI only: human decision | Open the internal associations' window |
 | `file.combine` | write | `files_combine` | Put split parts (.001 or .crc) back together into a new file, CRC checked |
@@ -337,4 +338,4 @@ asks by.
 | `view.toggle_button_bar` | read | omitted: agents switch a bar with settings_set | Show or hide the button bar above the panels (Total Commander's cm_VisButtonBar) |
 | `view.toggle_vertical_button_bar` | read | omitted: agents switch a bar with settings_set | Show or hide the vertical button bar between the panels (Total Commander's cm_VisButtonBar2) |
 
-326 commands: 215 covered, 111 omitted.
+327 commands: 216 covered, 111 omitted.

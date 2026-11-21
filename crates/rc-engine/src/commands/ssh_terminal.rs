@@ -21,7 +21,7 @@ use rc_vfs::{BackendId, VfsError};
 use super::{ssh_login::LoginRunCell, terminal::Remote};
 use crate::{
     ConnectionId, ConnectionKind, Engine, EngineError, LoginScriptId, Outcome, PanelId,
-    SessionChannel,
+    SessionChannel, SessionError,
 };
 
 /// The terminal type the server is told.
@@ -47,7 +47,9 @@ impl Engine {
         };
         let record = self.db()?.connection(connection).await?;
         if record.kind != ConnectionKind::Ssh {
-            return Err(EngineError::ConnectionNotSsh { id: connection });
+            return Err(EngineError::Session(SessionError::ConnectionNotSsh {
+                id: connection,
+            }));
         }
         let cwd = cwd
             .or(record.start_directory)

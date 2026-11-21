@@ -14,15 +14,19 @@
 //! (RC-080-67): "Send this time", "Send until rCommander ends" and "Cancel", nothing stored.
 //!
 //! The answers are the engine's `GuiOnly` command `certificates.answer`; the dialog only sends
-//! the choices it shows. While a question is open the dialog has the keys - Tab and the arrows
-//! move between the buttons, Enter chooses, Escape cancels - and the clicks.
+//! the choices it shows. A yes runs the window's own connection the question stopped again
+//! (`retry.rs`, RC-110-37). While a question is open the dialog has the keys - Tab and the
+//! arrows move between the buttons, Enter chooses, Escape cancels - and the clicks.
 
+mod retry;
 mod view;
 
 use rc_engine::{
     CertificateAnswer, CertificateQuestion, CertificateQuestionKind, Chord, Command, Engine,
-    EngineEvent, Outcome,
+    EngineEvent, Outcome, PanelId,
 };
+
+pub use self::retry::{Again, Attempts, asked};
 
 use super::{
     App, Effect, Message,
@@ -69,9 +73,9 @@ pub type CertTrustDialogs = QuestionQueue<CertificateQuestion>;
 
 /// A Unix time as the dialog shows it, `YYYY-MM-DD HH:MM UTC`.
 pub fn date(seconds: i64) -> String {
-    chrono::DateTime::from_timestamp(seconds, 0).map_or_else(
-        || seconds.to_string(),
-        |time| time.format("%Y-%m-%d %H:%M UTC").to_string(),
+    jiff::Timestamp::from_second(seconds).map_or_else(
+        |_| seconds.to_string(),
+        |time| time.strftime("%Y-%m-%d %H:%M UTC").to_string(),
     )
 }
 
@@ -88,6 +92,13 @@ pub enum CertTrustMsg {
         /// A plain FTP connection's question (RC-080-67).
         plaintext: bool,
         result: Box<Result<Outcome, &'static str>>,
+    },
+    /// The window's connection on `panel` that the open question `question` stopped, with what
+    /// runs it again after a yes (RC-110-37).
+    Refused {
+        question: u64,
+        panel: PanelId,
+        again: Again,
     },
 }
 
@@ -148,21 +159,22 @@ impl App {
     /// A message of the dialogs.
     pub(super) fn on_cert_trust(&mut self, message: CertTrustMsg) -> Vec<Effect> {
         match message {
-            CertTrustMsg::Choose(id, choice) => {
-                if self.cert_trust.shown_id() == Some(id) {
-                    return self.cert_trust_choice(choice);
-                }
+            CertTrustMsg::Choose(id, choice) if self.cert_trust.shown_id() == Some(id) => {
+                self.cert_trust_choice(choice)
             }
+            CertTrustMsg::Choose(..) => Vec::new(),
             CertTrustMsg::Finished {
                 id,
                 server,
                 plaintext,
                 result,
-            } => {
-                self.cert_trust_finished(id, &server, plaintext, *result);
-            }
+            } => self.cert_trust_finished(id, &server, plaintext, *result),
+            CertTrustMsg::Refused {
+                question,
+                panel,
+                again,
+            } => self.cert_refused(question, panel, again),
         }
-        Vec::new()
     }
 
     /// A key while a dialog is open: Tab and the arrows move, Enter chooses, Escape cancels.
@@ -198,37 +210,43 @@ impl App {
     }
 
     /// The engine's answer: the question goes and the status bar says what happened, or the
-    /// dialog stays with the reason. The engine's close event may have come first.
+    /// dialog stays with the reason. The engine's close event may have come first. A yes runs
+    /// the connections the question stopped again; a no, or a question gone, drops them.
     fn cert_trust_finished(
         &mut self,
         id: u64,
         server: &str,
         plaintext: bool,
         result: Result<Outcome, &'static str>,
-    ) {
-        let result = result.map(|outcome| {
-            let answer = match outcome {
-                Outcome::CertificateAnswered { answer, .. } => answer,
-                _ => CertificateAnswer::Cancel,
-            };
-            match (plaintext, answer) {
-                (false, CertificateAnswer::AcceptOnce) => t!("certs.info_once", host = server),
-                (false, CertificateAnswer::TrustAndSave) => t!("certs.info_saved", host = server),
-                (false, CertificateAnswer::Cancel) => t!("certs.info_cancelled", host = server),
-                (true, CertificateAnswer::AcceptOnce) => {
-                    t!("certs.plaintext_info_once", host = server)
-                }
-                (true, CertificateAnswer::TrustAndSave) => {
-                    t!("certs.plaintext_info_always", host = server)
-                }
-                (true, CertificateAnswer::Cancel) => {
-                    t!("certs.plaintext_info_cancelled", host = server)
-                }
+    ) -> Vec<Effect> {
+        let answer = match result {
+            Ok(Outcome::CertificateAnswered { answer, .. }) => Ok(answer),
+            Ok(_) => Ok(CertificateAnswer::Cancel),
+            Err(code) => Err(code),
+        };
+        let info = answer.map(|answer| match (plaintext, answer) {
+            (false, CertificateAnswer::AcceptOnce) => t!("certs.info_once", host = server),
+            (false, CertificateAnswer::TrustAndSave) => t!("certs.info_saved", host = server),
+            (false, CertificateAnswer::Cancel) => t!("certs.info_cancelled", host = server),
+            (true, CertificateAnswer::AcceptOnce) => t!("certs.plaintext_info_once", host = server),
+            (true, CertificateAnswer::TrustAndSave) => {
+                t!("certs.plaintext_info_always", host = server)
+            }
+            (true, CertificateAnswer::Cancel) => {
+                t!("certs.plaintext_info_cancelled", host = server)
             }
         });
-        if let Some(info) = self.cert_trust.finished(id, result, QUESTION_GONE) {
+        if let Some(info) = self.cert_trust.finished(id, info, QUESTION_GONE) {
             self.info = Some(info);
         }
+        let connect = match answer {
+            Ok(answer) => answer != CertificateAnswer::Cancel,
+            // The question went without an answer: nothing runs again.
+            Err(code) if code == QUESTION_GONE => false,
+            // The dialog stays with the reason, and the attempts with it.
+            Err(_) => return Vec::new(),
+        };
+        self.cert_attempts_answered(id, connect)
     }
 }
 

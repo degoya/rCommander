@@ -1,7 +1,7 @@
 use super::*;
 
-fn at(minutes: i64) -> DateTime<Utc> {
-    DateTime::from_timestamp(1_790_000_000, 0).expect("timestamp") + TimeDelta::minutes(minutes)
+fn at(minutes: i64) -> Timestamp {
+    Timestamp::from_second(1_790_000_000 + minutes * 60).expect("timestamp")
 }
 
 fn ready(mode: AutoMode) -> Moment<'static> {
@@ -14,7 +14,7 @@ fn ready(mode: AutoMode) -> Moment<'static> {
     }
 }
 
-const IDLE: TimeDelta = TimeDelta::minutes(30);
+const IDLE: SignedDuration = SignedDuration::from_mins(30);
 
 #[test]
 fn off_never_installs() {

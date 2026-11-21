@@ -15,7 +15,7 @@ use rc_remote::ssh::{
     exec_command,
 };
 
-use crate::{Engine, EngineError, Outcome, SessionChannel, SshExecRequest};
+use crate::{Engine, EngineError, Outcome, SessionChannel, SessionError, SshExecRequest};
 
 /// The longest command, in bytes.
 pub const MAX_EXEC_COMMAND: usize = 8 * 1024;
@@ -54,8 +54,10 @@ impl Engine {
 
 /// The request's bounds checked, as the run's limits.
 fn limits(request: &SshExecRequest) -> Result<ExecLimits, EngineError> {
-    let invalid = |reason: &str| EngineError::ExecInvalid {
-        reason: reason.to_owned(),
+    let invalid = |reason: &str| {
+        EngineError::Session(SessionError::ExecInvalid {
+            reason: reason.to_owned(),
+        })
     };
     let command = &request.command;
     if command.trim().is_empty() {

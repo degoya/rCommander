@@ -25,7 +25,7 @@ use rc_vfs::{BackendId, Vfs, VfsPath};
 pub(crate) use self::kept::KeptSftp;
 use self::kept::{Leases, Use};
 use crate::{
-    ConnectionId, ConnectionKind, Engine, EngineError,
+    ConnectionId, ConnectionKind, Engine, EngineError, SessionError,
     remote::{fold, location, strip_scheme},
     sessions::{ChannelLease, SessionChannel},
     settings::{SFTP_CASE_KEY, SFTP_UPLOAD_RIGHTS_KEY, stored_setting},
@@ -199,16 +199,18 @@ impl Engine {
         found.retain(|connection| connection.kind == ConnectionKind::Ssh);
         let id = match found.len() {
             1 => found.remove(0).id,
-            0 => self
-                .quick_named(name)
-                .ok_or_else(|| EngineError::SftpConnectionNotFound {
+            0 => self.quick_named(name).ok_or_else(|| {
+                EngineError::Session(SessionError::SftpConnectionNotFound {
                     connection: name.to_owned(),
-                })?,
+                })
+            })?,
             count => {
-                return Err(EngineError::SftpConnectionAmbiguous {
-                    connection: name.to_owned(),
-                    count,
-                });
+                return Err(EngineError::Session(
+                    SessionError::SftpConnectionAmbiguous {
+                        connection: name.to_owned(),
+                        count,
+                    },
+                ));
             }
         };
         match path {

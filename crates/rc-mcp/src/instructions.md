@@ -146,7 +146,9 @@ needs a confirmation code like deleting.
 
 `drives_list` reads the drive bar (drives with kind, state, volume and free space, then WSL
 distributions and saved servers); `panel_change_drive` shows a drive in a panel, in the directory
-the panel last showed on it; `connections_set_favourite` chooses which connections the drive bar
+the panel last showed on it; `drives_connections` lists the connections with a session open now
+(SSH, FTP, FTPS), each with the folder last shown there, where `panel_change_drive` returns while
+the session is open; `connections_set_favourite` chooses which connections the drive bar
 lists as servers, `connections_set_folder_favourite` which folders are buttons for their servers.
 
 A panel shows its files or one of its terminals: `terminal_open` shows the new terminal in its

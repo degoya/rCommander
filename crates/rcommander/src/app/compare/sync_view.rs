@@ -177,13 +177,18 @@ fn buttons(dialog: &SyncDialog) -> Element<'_, Message> {
             Some(wrap(CompareMsg::SyncStop)),
         )
     } else {
-        layout::primary_button(t!("sync.compare"), Some(wrap(CompareMsg::SyncCompare)))
+        layout::primary_icon_button(
+            Icon::Compare,
+            t!("sync.compare"),
+            Some(wrap(CompareMsg::SyncCompare)),
+        )
     };
     let can_run = dialog.plan.is_some() && !comparing && dialog.phase != Phase::Starting;
     layout::button_row(
         Some(compare),
         [
             button(
+                Icon::Synchronize,
                 t!("sync.synchronize"),
                 can_run.then_some(CompareMsg::SyncAsk),
             ),
@@ -439,7 +444,8 @@ fn confirmation_body(confirm: &Confirm) -> Element<'_, Message> {
     ));
     // Enter runs.
     body.push(layout::button_row(
-        Some(layout::primary_button(
+        Some(layout::primary_icon_button(
+            Icon::Synchronize,
             t!("sync.confirm_run"),
             Some(wrap(CompareMsg::SyncRun)),
         )),

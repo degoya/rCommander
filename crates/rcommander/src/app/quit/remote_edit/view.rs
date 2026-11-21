@@ -14,7 +14,9 @@ use crate::{
     theme::{
         self, Tokens,
         fit::{self, label, label_or_glyph},
-        focus, layout,
+        focus,
+        icon::Icon,
+        layout,
     },
 };
 
@@ -66,7 +68,8 @@ impl App {
                     t!("remote_edit.discard.keep"),
                     Some(wrap(RemoteEditMsg::Discard(false))),
                 )),
-                [layout::secondary_button(
+                [layout::secondary_icon_button(
+                    Icon::Undo,
                     t!("remote_edit.discard.discard"),
                     Some(wrap(RemoteEditMsg::Discard(true))),
                 )],
@@ -112,13 +115,18 @@ impl App {
             .map(|edit| wrap(RemoteEditMsg::Upload(edit.id, UploadChoice::Upload)));
         let done = chosen.map(|edit| wrap(RemoteEditMsg::Done(edit.id)));
         let buttons = layout::button_row(
-            Some(layout::primary_button(
+            Some(layout::primary_icon_button(
+                Icon::Close,
                 t!("remote_edit.list.close"),
                 Some(wrap(RemoteEditMsg::CloseList)),
             )),
             [
-                layout::secondary_button(t!("remote_edit.list.upload_now"), upload),
-                layout::secondary_button(t!("remote_edit.list.done"), done),
+                layout::secondary_icon_button(
+                    Icon::Upload,
+                    t!("remote_edit.list.upload_now"),
+                    upload,
+                ),
+                layout::secondary_icon_button(Icon::Confirm, t!("remote_edit.list.done"), done),
             ],
             [],
         );
@@ -146,11 +154,13 @@ fn question<'a>(
         RemoteEditQuestion::Upload => (
             t!("remote_edit.ask.upload", name = name, server = server),
             layout::button_row(
-                Some(layout::primary_button(
+                Some(layout::primary_icon_button(
+                    Icon::Upload,
                     t!("remote_edit.ask.upload_button"),
                     upload(UploadChoice::Upload),
                 )),
-                [layout::secondary_button(
+                [layout::secondary_icon_button(
+                    Icon::Clock,
                     t!("remote_edit.ask.not_now"),
                     skip,
                 )],
@@ -164,13 +174,19 @@ fn question<'a>(
                 server = server
             ),
             layout::button_row(
-                Some(layout::primary_button(t!("remote_edit.ask.not_now"), skip)),
+                Some(layout::primary_icon_button(
+                    Icon::Clock,
+                    t!("remote_edit.ask.not_now"),
+                    skip,
+                )),
                 [
-                    layout::secondary_button(
+                    layout::secondary_icon_button(
+                        Icon::Upload,
                         t!("remote_edit.ask.overwrite"),
                         upload(UploadChoice::Overwrite),
                     ),
-                    layout::secondary_button(
+                    layout::secondary_icon_button(
+                        Icon::Copy,
                         t!("remote_edit.ask.as_copy"),
                         upload(UploadChoice::AsCopy),
                     ),
@@ -181,8 +197,13 @@ fn question<'a>(
         RemoteEditQuestion::ServerGone => (
             t!("remote_edit.ask.server_gone", name = name, server = server),
             layout::button_row(
-                Some(layout::primary_button(t!("remote_edit.ask.not_now"), skip)),
-                [layout::secondary_button(
+                Some(layout::primary_icon_button(
+                    Icon::Clock,
+                    t!("remote_edit.ask.not_now"),
+                    skip,
+                )),
+                [layout::secondary_icon_button(
+                    Icon::Upload,
                     t!("remote_edit.ask.upload_anyway"),
                     upload(UploadChoice::Overwrite),
                 )],
@@ -192,8 +213,13 @@ fn question<'a>(
         RemoteEditQuestion::InPlace => (
             t!("remote_edit.ask.in_place", name = name, server = server),
             layout::button_row(
-                Some(layout::primary_button(t!("remote_edit.ask.cancel"), skip)),
-                [layout::secondary_button(
+                Some(layout::primary_icon_button(
+                    Icon::Close,
+                    t!("remote_edit.ask.cancel"),
+                    skip,
+                )),
+                [layout::secondary_icon_button(
+                    Icon::Upload,
                     t!("remote_edit.ask.in_place_button"),
                     upload(UploadChoice::InPlace),
                 )],
@@ -203,16 +229,18 @@ fn question<'a>(
         RemoteEditQuestion::Kept => (
             t!("remote_edit.ask.kept", name = name, server = server),
             layout::button_row(
-                Some(layout::primary_button(
+                Some(layout::primary_icon_button(
+                    Icon::Upload,
                     t!("remote_edit.ask.upload_button"),
                     upload(UploadChoice::Upload),
                 )),
                 [
-                    layout::secondary_button(
+                    layout::secondary_icon_button(
+                        Icon::Undo,
                         t!("remote_edit.ask.discard"),
                         Some(wrap(RemoteEditMsg::Close(id))),
                     ),
-                    layout::secondary_button(t!("remote_edit.ask.later"), skip),
+                    layout::secondary_icon_button(Icon::Clock, t!("remote_edit.ask.later"), skip),
                 ],
                 [],
             ),
@@ -270,8 +298,8 @@ fn state_text(state: &RemoteEditState) -> String {
         RemoteEditState::Changed => t!("remote_edit.state.changed").to_owned(),
         RemoteEditState::Uploading => t!("remote_edit.state.uploading").to_owned(),
         RemoteEditState::Uploaded { at } => {
-            let time = chrono::DateTime::<chrono::Local>::from(*at).format("%H:%M");
-            t!("remote_edit.state.uploaded", time = time.to_string())
+            let time = crate::format::date_in(Some(*at), "%H:%M");
+            t!("remote_edit.state.uploaded", time = time)
         }
         RemoteEditState::Conflict => t!("remote_edit.state.conflict").to_owned(),
         RemoteEditState::Failed { code } => {

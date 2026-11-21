@@ -11,7 +11,7 @@
 //! Adapted from rDownloader's `crates/rd-update/src/auto_install.rs` and `auto_restart.rs` at
 //! commit 26c8592a6: no time window - at a desk, quitting and idleness take its place.
 
-use chrono::{DateTime, TimeDelta, Utc};
+use jiff::{SignedDuration, Timestamp};
 use serde::{Deserialize, Serialize};
 
 /// The setting `update.auto_install`.
@@ -56,7 +56,7 @@ pub struct Moment<'a> {
     /// The install of that version failed or was taken back before.
     pub failed_before: bool,
     /// When the last key or click arrived.
-    pub last_input: Option<DateTime<Utc>>,
+    pub last_input: Option<Timestamp>,
     /// A job runs, waits or is paused in the queue.
     pub jobs: bool,
     /// A terminal or an SSH session is open.
@@ -137,7 +137,7 @@ fn common(moment: &Moment<'_>) -> Result<(), Wait> {
 #[derive(Clone, Debug, Default)]
 pub struct IdleClock {
     /// Since when nothing broke the quiet; `None` while something does.
-    quiet_since: Option<DateTime<Utc>>,
+    quiet_since: Option<Timestamp>,
 }
 
 impl IdleClock {
@@ -149,8 +149,8 @@ impl IdleClock {
     pub fn observe(
         &mut self,
         moment: &Moment<'_>,
-        idle: TimeDelta,
-        now: DateTime<Utc>,
+        idle: SignedDuration,
+        now: Timestamp,
     ) -> Result<(), Wait> {
         if let Err(wait) = common(moment) {
             self.quiet_since = None;
@@ -166,7 +166,10 @@ impl IdleClock {
             Some(Wait::Sessions)
         } else if moment.dialog {
             Some(Wait::Dialog)
-        } else if moment.last_input.is_some_and(|input| now - input < idle) {
+        } else if moment
+            .last_input
+            .is_some_and(|input| now.duration_since(input) < idle)
+        {
             Some(Wait::Input)
         } else {
             None
@@ -178,7 +181,7 @@ impl IdleClock {
         let since = *self.quiet_since.get_or_insert(now);
         // The quiet counts from the later of the last input and the first quiet observation.
         let since = moment.last_input.map_or(since, |input| since.max(input));
-        if now - since >= idle {
+        if now.duration_since(since) >= idle {
             Ok(())
         } else {
             Err(Wait::Settling)

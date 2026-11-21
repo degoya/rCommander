@@ -28,10 +28,7 @@ use crate::{
         fit::{self, line},
         focus,
         icon::Icon,
-        layout::{
-            self, button_row, primary_button, primary_icon_button, secondary_button,
-            secondary_icon_button,
-        },
+        layout::{self, button_row, primary_icon_button, secondary_button, secondary_icon_button},
     },
 };
 
@@ -309,19 +306,24 @@ impl App {
             )
         };
         // Waiting jobs leave the queue; started ones are cancelled after a yes.
-        let remove = match chosen[..] {
-            [one] if super::selection::started(one) => t!("ops.cancel"),
-            _ => t!("queue.remove"),
+        let (remove_icon, remove) = match chosen[..] {
+            [one] if super::selection::started(one) => (Icon::Close, t!("ops.cancel")),
+            _ => (Icon::Delete, t!("queue.remove")),
         };
-        let reorder = |label: &'static str, step: Reorder| {
-            secondary_button(label, waiting.then(|| msg(QueueMsg::Move(step))))
+        let reorder = |icon: Icon, label: &'static str, step: Reorder| {
+            secondary_icon_button(icon, label, waiting.then(|| msg(QueueMsg::Move(step))))
         };
         let mut job = vec![
-            reorder(t!("queue.up"), Reorder::Up),
-            reorder(t!("queue.down"), Reorder::Down),
-            reorder(t!("queue.front"), Reorder::Front),
+            reorder(Icon::MoveUp, t!("queue.up"), Reorder::Up),
+            reorder(Icon::MoveDown, t!("queue.down"), Reorder::Down),
+            // To the front: the arrow up to the line.
+            reorder(Icon::Upload, t!("queue.front"), Reorder::Front),
             pause,
-            secondary_button(remove, (!chosen.is_empty()).then(|| msg(QueueMsg::Remove))),
+            secondary_icon_button(
+                remove_icon,
+                remove,
+                (!chosen.is_empty()).then(|| msg(QueueMsg::Remove)),
+            ),
         ];
         job.extend(super::lists_view::move_to(window));
         let answer = selected
@@ -329,7 +331,8 @@ impl App {
                 entry.job.question.is_some() && self.file_ops.jobs.get(entry.job.id).is_some()
             })
             .map(|entry| {
-                primary_button(
+                primary_icon_button(
+                    Icon::GoTo,
                     t!("queue.answer"),
                     Some(msg(QueueMsg::Answer(entry.job.id))),
                 )
@@ -348,7 +351,8 @@ impl App {
         };
         let queue = [
             secondary_icon_button(icon, label, all),
-            secondary_button(
+            secondary_icon_button(
+                Icon::Delete,
                 t!("queue.clear_finished"),
                 Some(msg(QueueMsg::ClearFinished)),
             ),

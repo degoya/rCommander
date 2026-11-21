@@ -327,8 +327,8 @@ fn buttons(dialog: &SearchDialog) -> Element<'_, Message> {
             Some(wrap(SearchMsg::Close)),
         )],
         [
-            layout::secondary_button(t!("search.go_to"), on_hits(SearchMsg::GoTo)),
-            layout::secondary_button(t!("search.feed"), on_hits(SearchMsg::Feed)),
+            layout::secondary_icon_button(Icon::GoTo, t!("search.go_to"), on_hits(SearchMsg::GoTo)),
+            layout::secondary_icon_button(Icon::Queue, t!("search.feed"), on_hits(SearchMsg::Feed)),
         ],
     )
 }

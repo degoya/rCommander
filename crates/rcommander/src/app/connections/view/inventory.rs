@@ -189,13 +189,19 @@ fn report_view<'a>(report: &InventoryReport) -> Element<'a, Message> {
 pub(super) fn actions<'a>(page: &InventoryPage) -> Actions<'a> {
     let chosen = page.editing.is_some() && !page.busy;
     Actions {
-        left: vec![layout::secondary_button(
+        left: vec![layout::secondary_icon_button(
+            Icon::Delete,
             t!("inventory.delete"),
             chosen.then(|| msg(InventoryMsg::Delete)),
         )],
         right: vec![
-            layout::secondary_button(t!("inventory.back"), Some(msg(InventoryMsg::Back))),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Back,
+                t!("inventory.back"),
+                Some(msg(InventoryMsg::Back)),
+            ),
+            layout::secondary_icon_button(
+                Icon::QuickView,
                 t!("inventory.preview"),
                 chosen.then(|| msg(InventoryMsg::Preview)),
             ),
@@ -204,7 +210,8 @@ pub(super) fn actions<'a>(page: &InventoryPage) -> Actions<'a> {
                 t!("inventory.sync"),
                 chosen.then(|| msg(InventoryMsg::Sync)),
             ),
-            layout::primary_button(
+            layout::primary_icon_button(
+                Icon::Save,
                 t!("inventory.save"),
                 page.can_save().then(|| msg(InventoryMsg::Save)),
             ),

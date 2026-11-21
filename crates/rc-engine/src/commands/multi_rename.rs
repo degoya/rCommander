@@ -46,7 +46,8 @@ use serde::{Deserialize, Serialize};
 
 use super::panel::resolve_path;
 use crate::{
-    Engine, EngineError, Outcome, PanelId, PanelState, settings::RENAME_UNDO_ON_FAILURE_KEY,
+    Engine, EngineError, MultiRenameError, Outcome, PanelId, PanelState,
+    settings::RENAME_UNDO_ON_FAILURE_KEY,
 };
 
 /// What `multi_rename.preview` and `multi_rename.apply` take.
@@ -256,7 +257,7 @@ impl Engine {
         // Refuses a plan with conflicts before anything is written.
         let schedule = rc_rename::schedule(&plan, &run)?;
         if schedule.steps.is_empty() {
-            return Err(EngineError::RenameNoChanges);
+            return Err(EngineError::MultiRename(MultiRenameError::NoChanges));
         }
         let pairs: Vec<(&str, &str)> = schedule
             .steps
@@ -351,7 +352,7 @@ impl Engine {
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_err()
         {
-            return Err(EngineError::RenameBusy);
+            return Err(EngineError::MultiRename(MultiRenameError::Busy));
         }
         let claim = RenameClaim(flag);
         let running = self
@@ -361,7 +362,7 @@ impl Engine {
             .iter()
             .any(|job| matches!(job.kind, JobKind::Rename { .. }) && !job.state.is_finished());
         if running {
-            return Err(EngineError::RenameBusy);
+            return Err(EngineError::MultiRename(MultiRenameError::Busy));
         }
         Ok(claim)
     }

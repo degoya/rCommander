@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AgentIdentity, AgentSourceKind, ArchiveInfo, BackupReport, Connection, ConnectionFolder,
     ConnectionId, ConnectionKind, ConnectionTree, Drive, EngineError, ErrorLogEntry, ExecOutput,
-    HostKeyAnswer, ImportReport, LoginScriptDeletion, LoginScriptId, LoginScriptInfo, QuickFilter,
-    RestoreReport, RetentionStatus, SearchHit, SearchStats, SessionPrefs, SessionStatus,
-    SessionTestReport, SettingValue, SortOrder, SshConfigReport, TerminalInfo, TreeItem,
-    VaultStatus,
+    HostKeyAnswer, ImportReport, LoginScriptDeletion, LoginScriptId, LoginScriptInfo,
+    OpenConnection, QuickFilter, RestoreReport, RetentionStatus, SearchHit, SearchStats,
+    SessionPrefs, SessionStatus, SessionTestReport, SettingValue, SortOrder, SshConfigReport,
+    TerminalInfo, TreeItem, VaultStatus,
     compare::FileComparison,
     flat::FlatView,
     properties::{DirSize, PathUsage, PropertiesReport},
@@ -326,6 +326,8 @@ pub enum Outcome {
     FileHex(HexWindow),
     /// The drive bar's entries: drives, devices, WSL distributions, servers, in this order.
     Drives { drives: Vec<Drive> },
+    /// The connections with a session open now (`drives.connections`, RC-110-38), by id.
+    OpenConnections { connections: Vec<OpenConnection> },
     /// Settings with their values: every one, or the one read or changed.
     Settings { settings: Vec<SettingValue> },
     /// The keys in force (RC-100-21), and the stored deviations a newer standard no longer fits.

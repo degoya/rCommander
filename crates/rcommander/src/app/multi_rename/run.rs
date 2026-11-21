@@ -155,6 +155,7 @@ impl App {
             result: Ok(vec![queued.job]),
             detail: None,
             refused: None,
+            asked: None,
         };
         let mut effects = self.on_file_ops(FileOpsMsg::Submitted(Box::new(submitted)));
         // A job over before this answer came: its end was announced already.

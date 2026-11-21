@@ -40,7 +40,11 @@ pub(super) fn page<'a>(
             .on_input(|path| msg(RdmImportMsg::Path(path)))
             .on_submit(msg(RdmImportMsg::Read)),
         browse::button(PathField::RdmExport, &dialog.path, true),
-        layout::secondary_button(t!("rdm_import.read"), Some(msg(RdmImportMsg::Read))),
+        layout::secondary_icon_button(
+            Icon::ViewFile,
+            t!("rdm_import.read"),
+            Some(msg(RdmImportMsg::Read))
+        ),
     ]
     .spacing(6)
     .align_y(Alignment::Center);
@@ -70,7 +74,11 @@ pub(super) fn actions<'a>(dialog: &RdmImportDialog) -> Actions<'a> {
     Actions {
         left: Vec::new(),
         right: vec![
-            layout::secondary_button(t!("rdm_import.back"), Some(msg(RdmImportMsg::Back))),
+            layout::secondary_icon_button(
+                Icon::Back,
+                t!("rdm_import.back"),
+                Some(msg(RdmImportMsg::Back)),
+            ),
             layout::primary_icon_button(
                 Icon::Import,
                 t!("rdm_import.run"),

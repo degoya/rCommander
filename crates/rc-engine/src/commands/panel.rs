@@ -118,6 +118,7 @@ impl Engine {
         let (snapshot, placed) = {
             let mut state = self.state();
             if let Some(drive) = drive {
+                state.last_shown.insert(drive.clone(), path.clone());
                 state.last_dirs[id.index()].insert(drive, path.clone());
             }
             let active = state.active == id;

@@ -125,6 +125,7 @@ impl Engine {
             let mut guard = self.state();
             let state = &mut *guard;
             if let Some(drive) = drive {
+                state.last_shown.insert(drive.clone(), path.clone());
                 state.last_dirs[id.index()].insert(drive, path.clone());
             }
             let (panel, tabs) = split(state, id);

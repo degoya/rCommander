@@ -10,7 +10,7 @@ use rc_remote::{SshError, SshSession};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    ConnectionId, ConnectionKind, Engine, EngineError, EngineEvent, Inner, Outcome,
+    ConnectionId, ConnectionKind, Engine, EngineError, EngineEvent, Inner, Outcome, SessionError,
     sessions::{
         ChannelLease, Live, SessionChange, SessionChannel, SessionPrefs, SessionStatus,
         SessionTestReport,
@@ -36,9 +36,9 @@ impl Engine {
     /// `connections.disconnect`: closes the session and cancels a setup under way; for an FTP
     /// connection the session its panels and calls share (Ctrl+Shift+F on an `ftp://` panel):
     /// every control connection of it says `QUIT` and closes, and its end is announced as an SSH
-    /// session's is ([`SessionChange::Closed`]). Every panel on the server leaves it for a local
-    /// folder ([`Engine::leave_server`]); going there again logs in again. A quick connection is
-    /// forgotten too, its secrets with it.
+    /// session's is ([`SessionChange::Closed`], by [`Engine::forget_remote`]). Every panel on the
+    /// server leaves it for a local folder ([`Engine::leave_server`]); going there again logs in
+    /// again. A quick connection is forgotten too, its secrets with it.
     pub(crate) async fn disconnect_session(
         &self,
         id: ConnectionId,
@@ -56,12 +56,6 @@ impl Engine {
         let ftp = self.forget_remote(id).await;
         // What a PAM system lent the connection goes back (RC-100-38).
         self.return_leases(id).await;
-        if ftp {
-            self.publish(EngineEvent::Session {
-                connection: id,
-                change: SessionChange::Closed,
-            });
-        }
         if quick {
             self.forget_quick(id);
             self.publish(EngineEvent::Drives);
@@ -255,7 +249,7 @@ impl Engine {
         }
         let connection = self.login_connection(id).await?;
         if connection.kind != ConnectionKind::Ssh {
-            return Err(EngineError::ConnectionNotSsh { id });
+            return Err(EngineError::Session(SessionError::ConnectionNotSsh { id }));
         }
         // Directly, or through its jump hosts (RC-110-03, `sessions_chain.rs`).
         // Boxed: the chain's handshakes make a large future, and an SFTP copy awaits it deep

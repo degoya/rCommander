@@ -485,6 +485,7 @@ impl App {
                 result: Ok(vec![job]),
                 detail: None,
                 refused: None,
+                asked: None,
             };
             effects.extend(self.on_file_ops(FileOpsMsg::Submitted(Box::new(submitted))));
         }

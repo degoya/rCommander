@@ -41,16 +41,23 @@ pub fn buttons<'a>(window: &'a DiffWindow, tokens: &'static Tokens) -> Element<'
     let session = window.session.as_ref();
     let can = |side: CompareSide| editing && fresh && session.is_some_and(|s| s.editable(side));
     let mut extra = vec![
-        button(t!("compare.reload"), Some(edit(EditMsg::Reload))),
         button(
+            Icon::Refresh,
+            t!("compare.reload"),
+            Some(edit(EditMsg::Reload)),
+        ),
+        button(
+            Icon::Edit,
             t!("compare.edit_mode"),
             session.is_some().then_some(edit(EditMsg::Toggle)),
         ),
         button(
+            Icon::MoveUp,
             t!("compare.previous"),
             text_view.then_some(CompareMsg::DiffPrevious),
         ),
         button(
+            Icon::MoveDown,
             t!("compare.next"),
             text_view.then_some(CompareMsg::DiffNext),
         ),
@@ -59,18 +66,22 @@ pub fn buttons<'a>(window: &'a DiffWindow, tokens: &'static Tokens) -> Element<'
         let undo = editing && session.is_some_and(|s| s.can_undo());
         extra.extend([
             button(
+                Icon::Copy,
                 t!("compare.copy_right"),
                 can(CompareSide::Right).then_some(edit(EditMsg::Copy(Direction::LeftToRight))),
             ),
             button(
+                Icon::Copy,
                 t!("compare.copy_left"),
                 can(CompareSide::Left).then_some(edit(EditMsg::Copy(Direction::RightToLeft))),
             ),
             button(
+                Icon::Undo,
                 t!("compare.undo"),
                 undo.then_some(edit(EditMsg::Undo(true))),
             ),
             button(
+                Icon::Save,
                 t!("compare.save"),
                 window.dirty().then_some(edit(EditMsg::Save)),
             ),
@@ -93,16 +104,36 @@ fn question<'a>(ask: Ask, tokens: &'static Tokens) -> Element<'a, Message> {
     let (text, first, second) = match ask {
         Ask::Unsaved(_) => (
             t!("compare.ask_unsaved").to_owned(),
-            layout::primary_button(t!("compare.answer_save"), answer(Answer::Save)),
-            layout::secondary_button(t!("compare.answer_discard"), answer(Answer::Discard)),
+            layout::primary_icon_button(
+                Icon::Save,
+                t!("compare.answer_save"),
+                answer(Answer::Save),
+            ),
+            layout::secondary_icon_button(
+                Icon::Undo,
+                t!("compare.answer_discard"),
+                answer(Answer::Discard),
+            ),
         ),
         Ask::Changed(side) => (
             t!("compare.ask_changed", side = side_name(side)),
-            layout::primary_button(t!("compare.answer_overwrite"), answer(Answer::Overwrite)),
-            layout::secondary_button(t!("compare.answer_reload"), answer(Answer::Reload)),
+            layout::primary_icon_button(
+                Icon::Save,
+                t!("compare.answer_overwrite"),
+                answer(Answer::Overwrite),
+            ),
+            layout::secondary_icon_button(
+                Icon::Refresh,
+                t!("compare.answer_reload"),
+                answer(Answer::Reload),
+            ),
         ),
     };
-    let cancel = layout::secondary_button(t!("compare.answer_cancel"), answer(Answer::Cancel));
+    let cancel = layout::secondary_icon_button(
+        Icon::Close,
+        t!("compare.answer_cancel"),
+        answer(Answer::Cancel),
+    );
     let label: Element<'a, Message> = line(text).color(tokens.accent).into();
     layout::button_row(Some(first), [second, cancel], [label])
 }

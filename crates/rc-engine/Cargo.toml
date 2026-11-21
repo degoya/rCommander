@@ -16,11 +16,11 @@ anyhow.workspace = true
 # The journal of a rename job (rc_ops::StepJournal), the SSH session's host-key gate and
 # credentials (rc-remote's traits), and the stream-only test backends.
 async-trait.workspace = true
-# The dates of `clipboard.copy_names` details, in local time (RC-020-06).
-chrono.workspace = true
 directories.workspace = true
 encoding_rs.workspace = true
 hex.workspace = true
+# The dates of `clipboard.copy_names` details, in local time (RC-020-06).
+jiff.workspace = true
 # The EXIF of photos: the image view's EXIF tree and `file.properties` (RC-100-99).
 kamadak-exif.workspace = true
 # The panels' file watcher (`watch/native.rs`, RC-110-02).
@@ -71,6 +71,11 @@ zeroize.workspace = true
 # Whether the process of an unpacked or edited copy still runs (`unpacked.rs`): signal 0, which
 # macOS answers too (it has no `/proc`); the crate and its `signal` feature are rc-term's already.
 nix = { workspace = true, features = ["signal"] }
+
+# Unmounting a network share on macOS: unmount(2), whose errno tells open files apart
+# (`drives/macos.rs`, RC-110-40); a feature of the crate already in the tree.
+[target.'cfg(target_os = "macos")'.dependencies]
+nix = { workspace = true, features = ["mount"] }
 
 # The drive letters and their kinds (`drives/windows.rs`); Total Commander's registry key
 # (`import/total_commander_path/windows.rs`).

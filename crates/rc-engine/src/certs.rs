@@ -6,8 +6,9 @@
 //! fails the connection with `certificate_unknown`, `certificate_changed` or
 //! `certificate_expired` - the fingerprint in the error - and becomes a [`CertificateQuestion`],
 //! announced as [`EngineEvent::CertificateQuestion`] ([`Engine::certificate_refused`]). The GUI's
-//! dialog answers it with `certificates.answer` (accept once, trust and save, cancel), and the
-//! person connects again; an "accept once" is spent by that connection.
+//! dialog answers it with `certificates.answer` (accept once, trust and save, cancel), and after
+//! a yes the window runs its own connection again (RC-110-37); an MCP call is not repeated, the
+//! agent calls again. An "accept once" is spent by the next connection.
 //!
 //! A changed certificate takes no yes at all: the stored one is removed first, on purpose and
 //! apart (`certificates.remove`), and the next connection asks as for a new server. An expired

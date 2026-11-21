@@ -3,14 +3,14 @@
 
 use std::fs;
 
-use chrono::{NaiveDate, NaiveDateTime};
+use jiff::civil::{DateTime, date};
 use rc_rename::{Change, Conflict, RenameContext, RenamePlan, RenameRule};
 
 use super::{MultiRenameRequest, with_moments};
 use crate::{Command, Engine, Outcome, test_support};
 
-fn moment(hour: u32, minute: u32) -> Option<NaiveDateTime> {
-    NaiveDate::from_ymd_opt(2026, 11, 7).and_then(|date| date.and_hms_opt(hour, minute, 0))
+fn moment(hour: i8, minute: i8) -> Option<DateTime> {
+    Some(date(2026, 11, 7).at(hour, minute, 0, 0))
 }
 
 fn masked(names: &[&str], name_mask: &str, context: RenameContext) -> MultiRenameRequest {

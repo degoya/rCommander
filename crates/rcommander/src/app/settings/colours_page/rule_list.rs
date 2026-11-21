@@ -15,12 +15,7 @@ use crate::{
         settings::{SettingsMessage, draft::Draft, view::hint, wrap},
     },
     i18n::t,
-    theme::{
-        Tokens,
-        colours::parse_hex,
-        icon::Icon,
-        layout::{secondary_button, secondary_icon_button},
-    },
+    theme::{Tokens, colours::parse_hex, icon::Icon, layout::secondary_icon_button},
 };
 
 /// One rule as typed: mask, light colour, dark colour (empty: the light one).
@@ -141,8 +136,16 @@ pub(in crate::app::settings) fn rules<'a>(
                     PickTarget::Rule { index, dark: true },
                 ))
                 .push(dark_field)
-                .push(secondary_button(t!("settings.colours.up"), up))
-                .push(secondary_button(t!("settings.colours.down"), down))
+                .push(secondary_icon_button(
+                    Icon::MoveUp,
+                    t!("settings.colours.up"),
+                    up,
+                ))
+                .push(secondary_icon_button(
+                    Icon::MoveDown,
+                    t!("settings.colours.down"),
+                    down,
+                ))
                 .push(secondary_icon_button(
                     Icon::Delete,
                     t!("settings.colours.remove"),

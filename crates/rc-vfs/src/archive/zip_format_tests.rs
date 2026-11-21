@@ -1,6 +1,6 @@
 use std::{path::Path, time::SystemTime};
 
-use chrono::{Local, TimeZone};
+use jiff::{civil::date, tz::TimeZone};
 
 use super::dos_time;
 use crate::{
@@ -77,9 +77,12 @@ async fn encrypted_entries_are_marked_and_need_a_password() {
 #[test]
 fn a_dos_time_is_local_time() {
     let stamp = zip::DateTime::from_date_and_time(2024, 5, 17, 12, 34, 56).expect("valid");
-    let local = Local
-        .with_ymd_and_hms(2024, 5, 17, 12, 34, 56)
-        .earliest()
+    let local = date(2024, 5, 17)
+        .at(12, 34, 56, 0)
+        .to_zoned_datetime(TimeZone::system())
         .expect("a local time");
-    assert_eq!(dos_time(stamp), Some(SystemTime::from(local)));
+    assert_eq!(
+        dos_time(stamp),
+        SystemTime::try_from(local.timestamp()).ok()
+    );
 }

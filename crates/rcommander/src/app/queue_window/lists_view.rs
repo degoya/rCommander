@@ -22,7 +22,8 @@ use crate::{
         self, Tokens,
         fit::{self, line},
         focus,
-        layout::{self, button_row, secondary_button},
+        icon::Icon,
+        layout::{self, button_row, secondary_button, secondary_icon_button},
     },
 };
 
@@ -50,9 +51,17 @@ pub(super) fn lists_bar<'a>(
     // The default list is neither renamed nor deleted.
     let own = (window.list != DEFAULT_LIST).then_some(());
     let start = if started {
-        secondary_button(t!("queue.list.stop"), Some(msg(ListMsg::Start(false))))
+        secondary_icon_button(
+            Icon::Stop,
+            t!("queue.list.stop"),
+            Some(msg(ListMsg::Start(false))),
+        )
     } else {
-        secondary_button(t!("queue.list.start"), Some(msg(ListMsg::Start(true))))
+        secondary_icon_button(
+            Icon::Resume,
+            t!("queue.list.start"),
+            Some(msg(ListMsg::Start(true))),
+        )
     };
     let show = |choice: ListChoice| msg(ListMsg::Show(choice.id));
     let moves = focus::moves(&choices, chosen.as_ref(), &show);
@@ -66,16 +75,23 @@ pub(super) fn lists_bar<'a>(
         layout::keyed(focus::Stop::pick(picker, list, moves), list),
         line(state).color(tokens.text_secondary),
         start,
-        secondary_button(
+        secondary_icon_button(
+            Icon::Add,
             t!("queue.list.new"),
             Some(msg(ListMsg::Name(NameAction::Create)))
         ),
-        secondary_button(
+        secondary_icon_button(
+            Icon::Rename,
             t!("queue.list.rename"),
             own.map(|()| msg(ListMsg::Name(NameAction::Rename)))
         ),
-        secondary_button(t!("queue.list.delete"), own.map(|()| msg(ListMsg::Delete))),
-        secondary_button(
+        secondary_icon_button(
+            Icon::Delete,
+            t!("queue.list.delete"),
+            own.map(|()| msg(ListMsg::Delete))
+        ),
+        secondary_icon_button(
+            Icon::Save,
             t!("queue.list.save"),
             Some(msg(ListMsg::Name(NameAction::Save)))
         ),
@@ -103,8 +119,13 @@ pub(super) fn lists_bar<'a>(
             focus::Stop::pick(saved_picker, saved_label, moves),
             saved_label
         ),
-        secondary_button(t!("queue.load"), picked.map(|()| msg(ListMsg::Load))),
-        secondary_button(
+        secondary_icon_button(
+            Icon::Open,
+            t!("queue.load"),
+            picked.map(|()| msg(ListMsg::Load))
+        ),
+        secondary_icon_button(
+            Icon::Delete,
             t!("queue.delete_saved"),
             picked.map(|()| msg(ListMsg::DeleteSaved))
         ),
@@ -147,11 +168,13 @@ pub(super) fn lists_bar<'a>(
             ));
         }
         let field = field
-            .push(secondary_button(
+            .push(secondary_icon_button(
+                Icon::Confirm,
                 t!("queue.name.ok"),
                 Some(msg(ListMsg::NameSubmit)),
             ))
-            .push(secondary_button(
+            .push(secondary_icon_button(
+                Icon::Close,
                 t!("queue.name.cancel"),
                 Some(msg(ListMsg::NameCancel)),
             ));
@@ -161,7 +184,8 @@ pub(super) fn lists_bar<'a>(
         bar = bar.push(button_row(
             None,
             [
-                secondary_button(
+                secondary_icon_button(
+                    Icon::Delete,
                     t!("queue.delete_saved_yes"),
                     Some(msg(ListMsg::ConfirmDeleteSaved)),
                 ),

@@ -181,6 +181,8 @@ pub struct App {
     ssh_exec: Option<ssh_exec::ExecDialog>,
     /// The open FTPS certificate questions and their dialog (RC-070-02).
     cert_trust: cert_trust::CertTrustDialogs,
+    /// The window's connections those questions stopped, run again after a yes (RC-110-37).
+    cert_attempts: cert_trust::Attempts,
     /// The offer to remove the vault, open after the last secret went (RC-050-03).
     vault_offer: bool,
     /// A checksum dialog or the result list of checks, while one is open (RC-020-05).
@@ -266,6 +268,7 @@ impl App {
             quick: None,
             ssh_exec: None,
             cert_trust: cert_trust::CertTrustDialogs::default(),
+            cert_attempts: cert_trust::Attempts::default(),
             vault_offer: false,
             checksum: None,
             multi_rename: None,
@@ -465,6 +468,7 @@ impl App {
             Message::DialogWindows(own) => self.dialog_windows.own = own,
             Message::DialogWindow(message) => return self.on_dialog_window(message),
             Message::AccessKeys(always) => theme::mnemonic::set_always(always),
+            Message::ButtonIcons(on) => theme::layout::set_icons(on),
         }
         Vec::new()
     }

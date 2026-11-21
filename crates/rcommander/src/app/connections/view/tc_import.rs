@@ -48,7 +48,11 @@ pub(super) fn page<'a>(
             .on_input(|path| msg(TcImportMsg::Ftp(path)))
             .on_submit(msg(TcImportMsg::Read)),
         browse::button(PathField::WcxFtp, &dialog.ftp, true),
-        layout::secondary_button(t!("tc_import.read"), Some(msg(TcImportMsg::Read))),
+        layout::secondary_icon_button(
+            Icon::ViewFile,
+            t!("tc_import.read"),
+            Some(msg(TcImportMsg::Read))
+        ),
     ]
     .spacing(6)
     .align_y(Alignment::Center);
@@ -88,7 +92,11 @@ pub(super) fn actions<'a>(dialog: &TcImportDialog) -> Actions<'a> {
         left: vec![replace, passwords],
         // A wizard's Back stands directly left of its primary.
         right: vec![
-            layout::secondary_button(t!("tc_import.back"), Some(msg(TcImportMsg::Back))),
+            layout::secondary_icon_button(
+                Icon::Back,
+                t!("tc_import.back"),
+                Some(msg(TcImportMsg::Back)),
+            ),
             layout::primary_icon_button(
                 Icon::Import,
                 t!("tc_import.run"),

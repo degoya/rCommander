@@ -42,6 +42,7 @@ mod render;
 mod replace;
 mod rule;
 mod schedule;
+mod serde_time;
 mod split;
 mod subdir;
 mod target_mask;

@@ -111,7 +111,7 @@ pub use update::{
     UPDATE_AUTO_KEY, UPDATE_CHANNEL_KEY, UPDATE_CHECK_KEY, UPDATE_IDLE_KEY, UPDATE_INTERVAL_KEY,
     UPDATE_PROXY_KEY, UPDATE_RETENTION_KEY, UPDATE_SOURCE_KEY, UPDATE_WHATS_NEW_KEY,
 };
-pub use windows::{DIALOG_WINDOWS_KEY, GPU_LOSS_NOTICE_KEY};
+pub use windows::{BUTTON_ICONS_KEY, DIALOG_WINDOWS_KEY, GPU_LOSS_NOTICE_KEY};
 
 /// The longest text or path a setting takes.
 const MAX_TEXT: usize = 4096;
@@ -277,6 +277,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     drives::REFRESH_ON_FOCUS_NETWORK,
     drives::PORTABLE_DEVICES,
     drives::DEVICE_TRANSFER_HINT,
+    drives::SHOW_CONNECTIONS,
     git::STATUS,
     git::IGNORED,
     git::BRANCH,
@@ -412,6 +413,7 @@ pub const SETTINGS: &[SettingSpec] = &[
     transfers::HIDE_SINGLE_LANE,
     transfers::TOOLS_AT_ONCE,
     windows::DIALOG_WINDOWS,
+    windows::BUTTON_ICONS,
     colours::LIGHT_TEXT,
     colours::LIGHT_BACKGROUND,
     colours::LIGHT_STRIPE,

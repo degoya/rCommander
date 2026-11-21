@@ -9,7 +9,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use chrono::Utc;
+use jiff::Timestamp;
 use rc_update::{
     Fetcher, HttpFetcher, ProxyChoice, Sources, Target,
     install::{Journal, recover},
@@ -76,7 +76,7 @@ impl Engine {
         let _one = self.desk().checking.lock().await;
         self.load_update_state().await;
         let config = self.update_config().await;
-        let now = Utc::now();
+        let now = Timestamp::now();
         let trust = match self.desk().trust.get() {
             Some(trust) => Ok(trust.clone()),
             None => manifest::release_trust(now),
@@ -127,7 +127,7 @@ impl Engine {
     /// Stores the end of a check: when, its code, the offer; the notice put away is shown again.
     async fn record_check(
         &self,
-        now: chrono::DateTime<Utc>,
+        now: Timestamp,
         code: Option<&'static str>,
         offer: Option<rc_update::Offer>,
     ) {

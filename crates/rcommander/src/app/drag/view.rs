@@ -66,7 +66,8 @@ fn fetch_body<'a>(fetch: &Fetch, tokens: &'static Tokens) -> Element<'a, Message
         None => t!("drag.fetch_question_unknown", count = count),
     };
     let buttons = layout::button_row(
-        Some(layout::primary_button(
+        Some(layout::primary_icon_button(
+            Icon::Download,
             t!("drag.fetch_start"),
             Some(wrap(DragMsg::Fetch(true))),
         )),

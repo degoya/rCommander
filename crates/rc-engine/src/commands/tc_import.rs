@@ -20,8 +20,8 @@ use rc_vfs::BackendId;
 
 use crate::recover::LogPanic as _;
 use crate::{
-    AuthMethod, ConnectionDraft, Engine, EngineError, Outcome, PanelId, SecretKind, SecretParam,
-    TreeChange, TreeItem,
+    AuthMethod, ConnectionDraft, Engine, EngineError, ImportError, Outcome, PanelId, SecretKind,
+    SecretParam, TreeChange, TreeItem,
     import::{
         tc_password::{TcPassword, reveal},
         total_commander::{self as tc, TcConnection},
@@ -129,9 +129,11 @@ async fn read(wanted: Wanted) -> Result<Loaded, EngineError> {
     tokio::task::spawn_blocking(move || load(&wanted, caller))
         .await
         .log_panic("engine.tc_import_read")
-        .map_err(|error| EngineError::TcIniUnreadable {
-            path: String::new(),
-            source: std::io::Error::other(error),
+        .map_err(|error| {
+            EngineError::Import(ImportError::TcIniUnreadable {
+                path: String::new(),
+                source: std::io::Error::other(error),
+            })
         })?
 }
 
@@ -343,7 +345,7 @@ impl Engine {
         })
         .await?;
         let Some((path, ini)) = &loaded.ftp else {
-            return Err(EngineError::TcIniNotFound);
+            return Err(EngineError::Import(ImportError::TcIniNotFound));
         };
         let source = source_of(path);
         let found = tc::connections(ini);

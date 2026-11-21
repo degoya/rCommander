@@ -16,7 +16,7 @@ use rc_rename::{RenameStep, SUBFOLDER_SEPARATOR, nested_path};
 use rc_vfs::VfsPath;
 
 use super::multi_rename::{Direction, Journal, fs_rules};
-use crate::{Engine, EngineError, Outcome};
+use crate::{Engine, EngineError, MultiRenameError, Outcome};
 
 /// How many runs an undo looks back past runs undone already.
 pub(super) const MAX_UNDO_DEPTH: usize = 32;
@@ -41,11 +41,11 @@ impl Engine {
         let mut logged = db
             .latest_rename_run()
             .await?
-            .ok_or(EngineError::RenameNothingToUndo)?;
+            .ok_or(EngineError::MultiRename(MultiRenameError::NothingToUndo))?;
         let mut depth = 0;
         let found = loop {
             if !logged.is_complete() {
-                return Err(EngineError::RenameUndoIncomplete);
+                return Err(EngineError::MultiRename(MultiRenameError::UndoIncomplete));
             }
             let found = self.undoable(logged).await?;
             if found.applied > 0 {
@@ -54,7 +54,7 @@ impl Engine {
             depth += 1;
             logged = match db.rename_run_before(&found.logged.run).await? {
                 Some(before) if depth < MAX_UNDO_DEPTH => before,
-                _ => return Err(EngineError::RenameNothingToUndo),
+                _ => return Err(EngineError::MultiRename(MultiRenameError::NothingToUndo)),
             };
         };
         let Undoable {
@@ -68,7 +68,9 @@ impl Engine {
         let undo = rc_rename::undo_steps(&steps[..applied]);
         let mismatches = rc_rename::check_undo(&undo, &present, &fs);
         if !mismatches.is_empty() {
-            return Err(EngineError::RenameUndoMismatch { mismatches });
+            return Err(EngineError::MultiRename(MultiRenameError::UndoMismatch {
+                mismatches,
+            }));
         }
         if applied != logged.marked() {
             // A crash between a rename and its mark: the log follows the folder.
@@ -85,8 +87,8 @@ impl Engine {
 
     /// How far `logged` got, read off its marks and its folder as it is now.
     async fn undoable(&self, logged: RenameRun) -> Result<Undoable, EngineError> {
-        let dir: VfsPath =
-            serde_json::from_str(&logged.dir).map_err(|_| EngineError::RenameUndoIncomplete)?;
+        let dir: VfsPath = serde_json::from_str(&logged.dir)
+            .map_err(|_| EngineError::MultiRename(MultiRenameError::UndoIncomplete))?;
         let vfs = self.vfs(&dir)?;
         let mut present: Vec<String> = vfs
             .list(&dir.path)

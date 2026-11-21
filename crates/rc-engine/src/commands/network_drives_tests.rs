@@ -148,14 +148,103 @@ async fn mcp_cannot_map_and_disconnecting_is_destructive() {
     assert_eq!(unmap("Y", false).spec().class, CommandClass::Destructive);
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 #[tokio::test]
-async fn the_system_outside_windows_maps_nothing() {
+async fn the_system_outside_windows_and_macos_maps_nothing() {
     let (_root, engine) = crate::test_support::engine(&[]).await;
     assert_eq!(
         code(&engine, map(r"\\nas\media", "Z")).await,
         "network_drives_unsupported"
     );
+}
+
+/// `/` and the share `/Volumes/media` (`smb://nas/media`, files open on it), mounted as macOS
+/// mounts them.
+async fn mounted() -> (tempfile::TempDir, Engine) {
+    let root = tempfile::tempdir().expect("temp dir");
+    let fake = FakeDrives::default()
+        .mount_points()
+        .with("/", DriveKind::Fixed, root.path())
+        .network("/Volumes/media", "/Volumes/media", "smb://nas/media")
+        .busy("/Volumes/media");
+    let engine = engine(fake, root.path()).await;
+    (root, engine)
+}
+
+/// RC-110-40: on macOS the share is mounted where the system chooses; no letter is asked for.
+#[tokio::test]
+async fn a_mounted_share_appears_under_volumes_and_is_announced() {
+    let (_root, engine) = mounted().await;
+    let mut events = engine.subscribe();
+    let drives = expect_drives(
+        engine
+            .dispatch(map("smb://nas/My%20Backup", ""))
+            .await
+            .expect("mounted"),
+    );
+    let share = drives
+        .iter()
+        .find(|drive| drive.id == "/Volumes/My%20Backup")
+        .expect("the share");
+    assert_eq!(share.kind, DriveKind::Network);
+    assert_eq!(share.remote.as_deref(), Some("smb://nas/My%20Backup"));
+    assert_eq!(events.try_recv().ok(), Some(EngineEvent::Drives));
+    // Written with backslashes it is the same share; a letter is not used.
+    engine
+        .dispatch(map(r"\\nas\photos", "1"))
+        .await
+        .expect("mounted");
+}
+
+#[tokio::test]
+async fn a_share_is_checked_before_macos_sees_it_and_its_refusals_keep_their_meaning() {
+    let (_root, engine) = mounted().await;
+    for invalid in [
+        r"\\nas\media\films",
+        "smb://alex@nas/media",
+        "smb://nas/me*dia",
+        r"\\files@SSL\dav",
+    ] {
+        assert_eq!(
+            code(&engine, map(invalid, "")).await,
+            "network_path_invalid",
+            "{invalid}"
+        );
+    }
+    assert_eq!(
+        code(&engine, map("smb://offline/media", "")).await,
+        "network_path_not_found"
+    );
+    assert_eq!(
+        code(&engine, map("smb://nas/secret", "")).await,
+        "network_access_denied"
+    );
+    let cancelled = engine
+        .dispatch(map("smb://nas/cancel", ""))
+        .await
+        .expect_err("cancelled");
+    assert!(matches!(cancelled, EngineError::Cancelled), "{cancelled:?}");
+}
+
+/// Acceptance on macOS: files open on the share - refused, then unmounted with force.
+#[tokio::test]
+async fn a_busy_share_is_unmounted_only_with_force() {
+    let (_root, engine) = mounted().await;
+    assert_eq!(
+        code(&engine, unmap("/Volumes/media", false)).await,
+        "network_drive_in_use"
+    );
+    let drives = expect_drives(
+        engine
+            .dispatch(unmap("/Volumes/media", true))
+            .await
+            .expect("forced"),
+    );
+    assert!(
+        drives.iter().all(|drive| drive.id != "/Volumes/media"),
+        "{drives:?}"
+    );
+    assert_eq!(code(&engine, unmap("/", true)).await, "drive_not_network");
 }
 
 fn change(drive: &str) -> Command {

@@ -29,10 +29,10 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
   { id = "RUSTSEC-2026-0371", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
   { id = "RUSTSEC-2026-0372", reason = "unmaintained zbus part under iced_winit; no vulnerability" },
-  # chrono unmaintained (2026-11-19), no known vulnerability and no successor release. rCommander
-  # uses it in 48 source files; rmcp, russh-sftp, russh-util, schemars and suppaftp bring it too, so
-  # the own move to jiff or time (RC-110-36) does not yet take it out of the tree.
-  { id = "RUSTSEC-2026-0543", reason = "unmaintained, no vulnerability; also brought by rmcp, russh-sftp, russh-util, schemars and suppaftp (RC-110-36)" },
+  # chrono unmaintained (2026-11-19), no known vulnerability and no successor release. rCommander's
+  # own crates use jiff since RC-110-36; rmcp, russh-sftp, russh-util, schemars and suppaftp still
+  # bring chrono. Drop this once `cargo tree -i chrono` is empty.
+  { id = "RUSTSEC-2026-0543", reason = "unmaintained, no vulnerability; brought by rmcp, russh-sftp, russh-util, schemars and suppaftp (RC-110-36)" },
 ]
 
 [licenses]

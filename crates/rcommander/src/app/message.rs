@@ -153,6 +153,9 @@ pub enum Message {
     /// The setting `keys.underline_access_keys`, read: the access keys of the dialogs' buttons
     /// underlined always, not only while Alt is held (RC-080-16).
     AccessKeys(bool),
+    /// The setting `appearance.button_icons`, read: the dialogs' buttons with their icons or
+    /// with their labels alone (RC-110-39).
+    ButtonIcons(bool),
     /// The self-update: its notice, the Updates page, the background (RC-100-05).
     Update(UpdateMsg),
     /// The switches of the panels' refresh, read when the app came back from another program

@@ -1,7 +1,9 @@
 use rc_db::{DbError, RetentionError};
 use rc_vfs::VfsError;
 
-use super::EngineError;
+use super::{
+    CompareError, EngineError, ImportError, MultiRenameError, SessionError, SettingsError,
+};
 use crate::{ConnectionError, TermError};
 
 /// One error of every variant. The match stops compiling when a variant is added: give it a
@@ -46,15 +48,15 @@ fn one_of_each_own() -> Vec<EngineError> {
             path: "/x".to_owned(),
             source: std::io::Error::other("x"),
         },
-        EngineError::RetentionUnknownTable {
+        EngineError::Settings(SettingsError::RetentionUnknownTable {
             table: "settings".to_owned(),
-        },
-        EngineError::RetentionOutOfRange {
+        }),
+        EngineError::Settings(SettingsError::RetentionOutOfRange {
             key: "retention.error_log.max_rows",
             value: 0,
             min: 100,
             max: 50_000,
-        },
+        }),
         EngineError::MasterPasswordTooShort { min: 8 },
         EngineError::SecretEmpty,
         EngineError::KeyFormatUnknown,
@@ -71,73 +73,73 @@ fn one_of_each_own() -> Vec<EngineError> {
         EngineError::KeyPathRefused {
             path: r"\\server\share\key".to_owned(),
         },
-        EngineError::SshConfigPathRefused {
+        EngineError::Import(ImportError::SshConfigPathRefused {
             path: "/x".to_owned(),
-        },
-        EngineError::SshConfigKeyMaterial {
+        }),
+        EngineError::Import(ImportError::SshConfigKeyMaterial {
             path: "/x".to_owned(),
-        },
-        EngineError::SshConfigUnreadable {
+        }),
+        EngineError::Import(ImportError::SshConfigUnreadable {
             path: "/x".to_owned(),
             source: std::io::Error::other("x"),
-        },
-        EngineError::SshConfigHostUnknown {
+        }),
+        EngineError::Import(ImportError::SshConfigHostUnknown {
             alias: "x".to_owned(),
-        },
-        EngineError::TcIniPathRefused {
+        }),
+        EngineError::Import(ImportError::TcIniPathRefused {
             path: "/x".to_owned(),
-        },
-        EngineError::TcIniUnreadable {
-            path: "/x".to_owned(),
-            source: std::io::Error::other("x"),
-        },
-        EngineError::TcIniTooLarge {
-            path: "/x".to_owned(),
-            max: 1,
-        },
-        EngineError::TcIniNotFound,
-        EngineError::RdmPathRefused {
-            path: "/x".to_owned(),
-        },
-        EngineError::RdmUnreadable {
+        }),
+        EngineError::Import(ImportError::TcIniUnreadable {
             path: "/x".to_owned(),
             source: std::io::Error::other("x"),
-        },
-        EngineError::RdmTooLarge {
+        }),
+        EngineError::Import(ImportError::TcIniTooLarge {
             path: "/x".to_owned(),
             max: 1,
-        },
-        EngineError::RdmEncrypted {
+        }),
+        EngineError::Import(ImportError::TcIniNotFound),
+        EngineError::Import(ImportError::RdmPathRefused {
             path: "/x".to_owned(),
-        },
-        EngineError::RdmInvalid {
+        }),
+        EngineError::Import(ImportError::RdmUnreadable {
+            path: "/x".to_owned(),
+            source: std::io::Error::other("x"),
+        }),
+        EngineError::Import(ImportError::RdmTooLarge {
+            path: "/x".to_owned(),
+            max: 1,
+        }),
+        EngineError::Import(ImportError::RdmEncrypted {
+            path: "/x".to_owned(),
+        }),
+        EngineError::Import(ImportError::RdmInvalid {
             path: "/x".to_owned(),
             line: 1,
-        },
-        EngineError::RdmNotAnExport {
+        }),
+        EngineError::Import(ImportError::RdmNotAnExport {
             path: "/x".to_owned(),
-        },
+        }),
         EngineError::InvalidSearch {
             reason: "x".to_owned(),
         },
         EngineError::Cancelled,
-        EngineError::CompareNeedsFiles,
-        EngineError::CompareChanged {
+        EngineError::Compare(CompareError::CompareNeedsFiles),
+        EngineError::Compare(CompareError::CompareChanged {
             name: "a.txt".to_owned(),
-        },
-        EngineError::CompareNotEditable {
+        }),
+        EngineError::Compare(CompareError::CompareNotEditable {
             name: "a.txt".to_owned(),
             reason: "too_large",
-        },
-        EngineError::CompareBlockNotFound { block: 3 },
-        EngineError::SyncDeletesUnconfirmed { count: 1 },
-        EngineError::SyncActionInvalid {
+        }),
+        EngineError::Compare(CompareError::CompareBlockNotFound { block: 3 }),
+        EngineError::Compare(CompareError::SyncDeletesUnconfirmed { count: 1 }),
+        EngineError::Compare(CompareError::SyncActionInvalid {
             row: 1,
             action: crate::sync::SyncAction::DeleteLeft,
-        },
-        EngineError::SyncRowNotFound {
+        }),
+        EngineError::Compare(CompareError::SyncRowNotFound {
             path: "x".to_owned(),
-        },
+        }),
         EngineError::OpenFailed {
             name: "setup.exe".to_owned(),
         },
@@ -147,53 +149,53 @@ fn one_of_each_own() -> Vec<EngineError> {
         EngineError::DriveNotReady {
             drive: "D:".to_owned(),
         },
-        EngineError::SettingUnknown {
+        EngineError::Settings(SettingsError::SettingUnknown {
             key: "x.y".to_owned(),
-        },
-        EngineError::SettingProtected {
+        }),
+        EngineError::Settings(SettingsError::SettingProtected {
             key: "mcp.policy".to_owned(),
-        },
-        EngineError::SettingInvalid {
+        }),
+        EngineError::Settings(SettingsError::SettingInvalid {
             key: "appearance.theme".to_owned(),
             reason: "expected one of system, light, dark".to_owned(),
-        },
+        }),
         EngineError::SensitivePath {
             path: "/x".to_owned(),
             reason: "x",
         },
         EngineError::EndpointChangeNeedsGui { id: 1 },
-        EngineError::RenameBusy,
-        EngineError::RenameNoChanges,
-        EngineError::RenameNothingToUndo,
-        EngineError::RenameUndoIncomplete,
-        EngineError::RenameUndoMismatch {
+        EngineError::MultiRename(MultiRenameError::Busy),
+        EngineError::MultiRename(MultiRenameError::NoChanges),
+        EngineError::MultiRename(MultiRenameError::NothingToUndo),
+        EngineError::MultiRename(MultiRenameError::UndoIncomplete),
+        EngineError::MultiRename(MultiRenameError::UndoMismatch {
             mismatches: Vec::new(),
-        },
-        EngineError::RenamePresetInvalid {
+        }),
+        EngineError::MultiRename(MultiRenameError::PresetInvalid {
             reason: "empty name".to_owned(),
-        },
-        EngineError::RenamePresetNotFound {
+        }),
+        EngineError::MultiRename(MultiRenameError::PresetNotFound {
             name: "Photos".to_owned(),
-        },
-        EngineError::ConnectionNotSsh {
+        }),
+        EngineError::Session(SessionError::ConnectionNotSsh {
             id: crate::ConnectionId(1),
-        },
-        EngineError::ExecInvalid {
+        }),
+        EngineError::Session(SessionError::ExecInvalid {
             reason: "empty command".to_owned(),
-        },
-        EngineError::SessionPrefsInvalid {
+        }),
+        EngineError::Session(SessionError::SessionPrefsInvalid {
             reason: "x".to_owned(),
-        },
+        }),
         EngineError::PasswordNotStored {
             connection: crate::ConnectionId(1),
         },
-        EngineError::FtpConnectionNotFound {
+        EngineError::Session(SessionError::FtpConnectionNotFound {
             connection: "nas".to_owned(),
-        },
-        EngineError::FtpConnectionAmbiguous {
+        }),
+        EngineError::Session(SessionError::FtpConnectionAmbiguous {
             connection: "nas".to_owned(),
             count: 2,
-        },
+        }),
         EngineError::McpQuestionNotFound { question: 1 },
         EngineError::McpAnswerNotOffered { question: 1 },
         EngineError::CommandLineInvalid { reason: "empty" },
@@ -214,13 +216,13 @@ fn one_of_each_own() -> Vec<EngineError> {
         EngineError::CommentNotEncodable {
             encoding: "Windows-1252",
         },
-        EngineError::SftpConnectionNotFound {
+        EngineError::Session(SessionError::SftpConnectionNotFound {
             connection: "web".to_owned(),
-        },
-        EngineError::SftpConnectionAmbiguous {
+        }),
+        EngineError::Session(SessionError::SftpConnectionAmbiguous {
             connection: "web".to_owned(),
             count: 2,
-        },
+        }),
         EngineError::SavedQueueNotFound { saved: 3 },
         EngineError::SavedQueueChanged { saved: 3 },
         EngineError::QueueListEmpty,
@@ -261,13 +263,13 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::RemoteEdit(_)
             | EngineError::Forward(_)
             | EngineError::Hop { .. }
-            | EngineError::RenameBusy
-            | EngineError::RenameNoChanges
-            | EngineError::RenameNothingToUndo
-            | EngineError::RenameUndoIncomplete
-            | EngineError::RenameUndoMismatch { .. }
-            | EngineError::RenamePresetInvalid { .. }
-            | EngineError::RenamePresetNotFound { .. }
+            | EngineError::MultiRename(MultiRenameError::Busy)
+            | EngineError::MultiRename(MultiRenameError::NoChanges)
+            | EngineError::MultiRename(MultiRenameError::NothingToUndo)
+            | EngineError::MultiRename(MultiRenameError::UndoIncomplete)
+            | EngineError::MultiRename(MultiRenameError::UndoMismatch { .. })
+            | EngineError::MultiRename(MultiRenameError::PresetInvalid { .. })
+            | EngineError::MultiRename(MultiRenameError::PresetNotFound { .. })
             | EngineError::Ssh(_)
             | EngineError::LoginScript(_)
             | EngineError::LoginScriptInvalid(_)
@@ -300,34 +302,34 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::TotpSeedInvalid { .. }
             | EngineError::KeyFileUnreadable { .. }
             | EngineError::KeyPathRefused { .. }
-            | EngineError::SshConfigPathRefused { .. }
-            | EngineError::SshConfigKeyMaterial { .. }
-            | EngineError::SshConfigUnreadable { .. }
-            | EngineError::SshConfigHostUnknown { .. }
+            | EngineError::Import(ImportError::SshConfigPathRefused { .. })
+            | EngineError::Import(ImportError::SshConfigKeyMaterial { .. })
+            | EngineError::Import(ImportError::SshConfigUnreadable { .. })
+            | EngineError::Import(ImportError::SshConfigHostUnknown { .. })
             | EngineError::InvalidSearch { .. }
             | EngineError::Cancelled
-            | EngineError::CompareNeedsFiles
-            | EngineError::CompareChanged { .. }
-            | EngineError::CompareNotEditable { .. }
-            | EngineError::CompareBlockNotFound { .. }
-            | EngineError::SyncDeletesUnconfirmed { .. }
-            | EngineError::SyncActionInvalid { .. }
-            | EngineError::SyncRowNotFound { .. }
+            | EngineError::Compare(CompareError::CompareNeedsFiles)
+            | EngineError::Compare(CompareError::CompareChanged { .. })
+            | EngineError::Compare(CompareError::CompareNotEditable { .. })
+            | EngineError::Compare(CompareError::CompareBlockNotFound { .. })
+            | EngineError::Compare(CompareError::SyncDeletesUnconfirmed { .. })
+            | EngineError::Compare(CompareError::SyncActionInvalid { .. })
+            | EngineError::Compare(CompareError::SyncRowNotFound { .. })
             | EngineError::SensitivePath { .. }
             | EngineError::EndpointChangeNeedsGui { .. }
-            | EngineError::ConnectionNotSsh { .. }
-            | EngineError::ExecInvalid { .. }
-            | EngineError::SessionPrefsInvalid { .. }
+            | EngineError::Session(SessionError::ConnectionNotSsh { .. })
+            | EngineError::Session(SessionError::ExecInvalid { .. })
+            | EngineError::Session(SessionError::SessionPrefsInvalid { .. })
             | EngineError::PasswordNotStored { .. }
-            | EngineError::FtpConnectionNotFound { .. }
-            | EngineError::FtpConnectionAmbiguous { .. } => {}
-            EngineError::RetentionUnknownTable { .. } | EngineError::RetentionOutOfRange { .. } => {
-            }
+            | EngineError::Session(SessionError::FtpConnectionNotFound { .. })
+            | EngineError::Session(SessionError::FtpConnectionAmbiguous { .. }) => {}
+            EngineError::Settings(SettingsError::RetentionUnknownTable { .. })
+            | EngineError::Settings(SettingsError::RetentionOutOfRange { .. }) => {}
             EngineError::OpenFailed { .. } => {}
             EngineError::DriveNotFound { .. } | EngineError::DriveNotReady { .. } => {}
-            EngineError::SettingUnknown { .. }
-            | EngineError::SettingProtected { .. }
-            | EngineError::SettingInvalid { .. }
+            EngineError::Settings(SettingsError::SettingUnknown { .. })
+            | EngineError::Settings(SettingsError::SettingProtected { .. })
+            | EngineError::Settings(SettingsError::SettingInvalid { .. })
             | EngineError::McpQuestionNotFound { .. }
             | EngineError::McpAnswerNotOffered { .. } => {}
             EngineError::CommandLineInvalid { .. }
@@ -336,8 +338,8 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::FilterInvalid { .. } => {}
             EngineError::ArchiveReadOnly | EngineError::NotAnArchive { .. } => {}
             EngineError::PropertyInvalid { .. } | EngineError::CommentNotEncodable { .. } => {}
-            EngineError::SftpConnectionNotFound { .. }
-            | EngineError::SftpConnectionAmbiguous { .. } => {}
+            EngineError::Session(SessionError::SftpConnectionNotFound { .. })
+            | EngineError::Session(SessionError::SftpConnectionAmbiguous { .. }) => {}
             EngineError::SavedQueueNotFound { .. }
             | EngineError::SavedQueueChanged { .. }
             | EngineError::QueueListEmpty => {}
@@ -348,16 +350,16 @@ fn one_of_each_own() -> Vec<EngineError> {
             | EngineError::ThemeInUse { .. }
             | EngineError::ThemeNameTaken { .. }
             | EngineError::ThemeInvalid { .. } => {}
-            EngineError::TcIniPathRefused { .. }
-            | EngineError::TcIniUnreadable { .. }
-            | EngineError::TcIniTooLarge { .. }
-            | EngineError::TcIniNotFound => {}
-            EngineError::RdmPathRefused { .. }
-            | EngineError::RdmUnreadable { .. }
-            | EngineError::RdmTooLarge { .. }
-            | EngineError::RdmEncrypted { .. }
-            | EngineError::RdmInvalid { .. }
-            | EngineError::RdmNotAnExport { .. } => {}
+            EngineError::Import(ImportError::TcIniPathRefused { .. })
+            | EngineError::Import(ImportError::TcIniUnreadable { .. })
+            | EngineError::Import(ImportError::TcIniTooLarge { .. })
+            | EngineError::Import(ImportError::TcIniNotFound) => {}
+            EngineError::Import(ImportError::RdmPathRefused { .. })
+            | EngineError::Import(ImportError::RdmUnreadable { .. })
+            | EngineError::Import(ImportError::RdmTooLarge { .. })
+            | EngineError::Import(ImportError::RdmEncrypted { .. })
+            | EngineError::Import(ImportError::RdmInvalid { .. })
+            | EngineError::Import(ImportError::RdmNotAnExport { .. }) => {}
         }
     }
     samples
@@ -372,3 +374,7 @@ fn all_codes_lists_every_own_code_once() {
 // The wrapped failures keep their codes; a file of its own to stay under 500 lines.
 #[path = "error_wrap_tests.rs"]
 mod wrap;
+
+// Every own code and text against the table written before the split into groups (RC-110-35).
+#[path = "error_table_tests.rs"]
+mod table;

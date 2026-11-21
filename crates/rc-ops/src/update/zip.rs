@@ -9,7 +9,7 @@ use std::{
     time::SystemTime,
 };
 
-use chrono::{Local, NaiveDate, TimeZone};
+use jiff::tz::{AmbiguousOffset, TimeZone};
 use zip::{DateTime, ZipArchive, ZipWriter};
 
 use super::{Old, Paced, Refused, Rewrite, Stats, normalize, open_old, refused};
@@ -113,20 +113,27 @@ pub(super) fn verify(job: &Rewrite, stats: &Stats) -> io::Result<()> {
     Ok(())
 }
 
-/// A DOS date and time, as this machine's local time: what the conflict question shows.
+/// A DOS date and time, as this machine's local time: what the conflict question shows. The
+/// earlier of two when the clock went back, none when it skipped the hour.
 fn dos_time(stamp: DateTime) -> Option<SystemTime> {
-    let naive = NaiveDate::from_ymd_opt(
-        i32::from(stamp.year()),
-        u32::from(stamp.month()),
-        u32::from(stamp.day()),
-    )?
-    .and_hms_opt(
-        u32::from(stamp.hour()),
-        u32::from(stamp.minute()),
-        u32::from(stamp.second()),
-    )?;
-    let local = Local.from_local_datetime(&naive).earliest()?;
-    Some(SystemTime::from(local))
+    let local = jiff::civil::DateTime::new(
+        i16::try_from(stamp.year()).ok()?,
+        i8::try_from(stamp.month()).ok()?,
+        i8::try_from(stamp.day()).ok()?,
+        i8::try_from(stamp.hour()).ok()?,
+        i8::try_from(stamp.minute()).ok()?,
+        i8::try_from(stamp.second()).ok()?,
+        0,
+    )
+    .ok()?;
+    let ambiguous = TimeZone::system().to_ambiguous_timestamp(local);
+    match ambiguous.offset() {
+        AmbiguousOffset::Gap { .. } => None,
+        _ => ambiguous
+            .earlier()
+            .ok()
+            .and_then(|time| SystemTime::try_from(time).ok()),
+    }
 }
 
 #[cfg(test)]

@@ -34,7 +34,7 @@ use std::{
     },
 };
 
-use chrono::NaiveDateTime;
+use jiff::civil::DateTime;
 use rc_engine::{
     Command, EngineEvent, JobId, PanelId, RenameContext, RenamePreset, RenameRule, VfsPath,
 };
@@ -139,8 +139,8 @@ pub struct MultiRenameDialog {
     /// The editor's file of names (Edit names), until Take names or Cancel.
     pub edited: Option<PathBuf>,
     /// When the dialog opened (`[T2]`) and the rule last changed (`[T3]`).
-    opened_at: NaiveDateTime,
-    changed_at: NaiveDateTime,
+    opened_at: DateTime,
+    changed_at: DateTime,
     /// The clipboard's text `[X]` reads, read again when a rule field changes.
     clipboard: Option<String>,
     /// The local date and time formats of `[d]` and `[t]`.

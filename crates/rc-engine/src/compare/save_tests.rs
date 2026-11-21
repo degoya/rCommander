@@ -127,7 +127,10 @@ async fn a_save_on_a_server_backend_writes_in_place_and_refuses_a_changed_file()
     let bytes = edits.encoded(CompareSide::Left).expect("encodes");
     let refused = save(&vfs, edits.origin(CompareSide::Left), &bytes, false).await;
     assert!(
-        matches!(refused, Err(EngineError::CompareChanged { .. })),
+        matches!(
+            refused,
+            Err(EngineError::Compare(CompareError::CompareChanged { .. }))
+        ),
         "{refused:?}"
     );
     assert_eq!(read(&vfs, "/a.txt").await, b"theirs, longer\n");

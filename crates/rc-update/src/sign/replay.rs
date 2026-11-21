@@ -8,7 +8,9 @@
 //!
 //! Copied from rDownloader's `crates/rd-sign/src/replay.rs` at commit 26c8592a6 (RC-100-04).
 
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
+
+use crate::time::utc_text;
 
 /// How far ahead of local time an `issued_at` may sit before it stops being clock skew.
 pub(crate) const MAX_CLOCK_SKEW_MINUTES: i64 = 60;
@@ -19,9 +21,9 @@ pub struct Freshness {
     /// The publisher's monotonic counter for this document kind.
     pub sequence: u64,
     /// When the publisher says it signed this.
-    pub issued_at: DateTime<Utc>,
+    pub issued_at: Timestamp,
     /// After this instant the document is stale even if nothing newer has been seen.
-    pub not_after: Option<DateTime<Utc>>,
+    pub not_after: Option<Timestamp>,
 }
 
 /// Why a document was refused as stale.
@@ -29,10 +31,13 @@ pub struct Freshness {
 pub enum StaleError {
     #[error("document sequence {saw} is not newer than the {known} already accepted")]
     Replayed { saw: u64, known: u64 },
-    #[error("document expired at {expired_at}")]
-    Expired { expired_at: DateTime<Utc> },
-    #[error("document is issued {issued_at}, further ahead than clock skew explains")]
-    FromTheFuture { issued_at: DateTime<Utc> },
+    #[error("document expired at {}", utc_text(*.expired_at))]
+    Expired { expired_at: Timestamp },
+    #[error(
+        "document is issued {}, further ahead than clock skew explains",
+        utc_text(*.issued_at)
+    )]
+    FromTheFuture { issued_at: Timestamp },
 }
 
 /// Checks `candidate` against the highest sequence already accepted, if any; `known` is `None`
@@ -41,11 +46,7 @@ pub enum StaleError {
 /// # Errors
 ///
 /// See [`StaleError`].
-pub fn check(
-    candidate: Freshness,
-    known: Option<u64>,
-    now: DateTime<Utc>,
-) -> Result<(), StaleError> {
+pub fn check(candidate: Freshness, known: Option<u64>, now: Timestamp) -> Result<(), StaleError> {
     if let Some(known) = known
         && candidate.sequence <= known
     {
@@ -59,7 +60,7 @@ pub fn check(
     {
         return Err(StaleError::Expired { expired_at });
     }
-    if candidate.issued_at > now + Duration::minutes(MAX_CLOCK_SKEW_MINUTES) {
+    if candidate.issued_at.duration_since(now) > SignedDuration::from_mins(MAX_CLOCK_SKEW_MINUTES) {
         return Err(StaleError::FromTheFuture {
             issued_at: candidate.issued_at,
         });

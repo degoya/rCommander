@@ -11,6 +11,8 @@
 
 mod access;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use iced::{
     Alignment, Background, Border, Color, Element, Font, Length, Pixels,
     advanced::widget::Id,
@@ -41,6 +43,20 @@ pub const BUTTON_PADDING: [u16; 2] = [6, 16];
 pub const BUTTON_SPACING: f32 = 8.0;
 /// The space between a button's icon and its label.
 pub const ICON_SPACING: f32 = 6.0;
+
+/// The setting `appearance.button_icons` (RC-110-39), read at the start and on every change: off,
+/// a dialog button shows its label alone.
+static ICONS: AtomicBool = AtomicBool::new(true);
+
+/// Whether the dialogs' buttons show their icons.
+pub fn set_icons(on: bool) {
+    ICONS.store(on, Ordering::Relaxed);
+}
+
+/// The icon a button's face shows: `icon` while the setting has them on, none while it is off.
+fn shown(icon: Option<Icon>, on: bool) -> Option<Icon> {
+    icon.filter(|_| on)
+}
 
 /// The space between a card's head and its content.
 const HEAD_SPACING: f32 = 10.0;
@@ -336,7 +352,8 @@ fn dialog_button<'a, Message: Clone + 'a>(
 /// without a colour of its own, so it draws in the button's text colour - the theme's in light
 /// and dark, dimmed with the label when the button is disabled - and in the label's line height,
 /// so a button with an icon is as tall as one without. Every button with an icon has this face,
-/// also one in a style of its own.
+/// also one in a style of its own; with the setting `appearance.button_icons` off it shows the
+/// label alone ([`set_icons`]). A [`glyph_button`] has no label and keeps its icon.
 pub fn icon_button<'a, Message: 'a>(
     icon: impl Into<Option<Icon>>,
     label: impl text::IntoFragment<'a>,
@@ -348,7 +365,7 @@ fn face<'a, Message: 'a>(
     icon: impl Into<Option<Icon>>,
     label: Element<'a, Message>,
 ) -> Element<'a, Message> {
-    let Some(icon) = icon.into() else {
+    let Some(icon) = shown(icon.into(), ICONS.load(Ordering::Relaxed)) else {
         return label;
     };
     let line = text::LineHeight::default().to_absolute(Pixels(TEXT_SIZE));

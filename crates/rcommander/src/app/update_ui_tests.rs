@@ -168,7 +168,7 @@ fn offered(status: UpdateStatus) -> UpdateStatus {
     let offer = rc_update::Offer {
         version: "9.1.0".to_owned(),
         channel: rc_update::Channel::Stable,
-        released_at: chrono::Utc::now(),
+        released_at: jiff::Timestamp::now(),
         notes: String::new(),
         artifact: Some(rc_update::Artifact {
             platform: "windows".to_owned(),

@@ -19,6 +19,7 @@ use crate::{
         self, Tokens,
         fit::line,
         focus,
+        icon::Icon,
         layout::{self},
     },
 };
@@ -85,9 +86,16 @@ pub fn body<'a>(dialog: &'a SelectDuplicates, tokens: &'static Tokens) -> Elemen
         SelTab::Files => files(dialog),
         SelTab::Folders => folders(dialog, tokens),
     };
-    let ok = layout::primary_button(t!("select_duplicates.ok"), Some(wrap(SelMsg::Ok)));
-    let cancel =
-        layout::secondary_button(t!("select_duplicates.cancel"), Some(wrap(SelMsg::Cancel)));
+    let ok = layout::primary_icon_button(
+        Icon::Confirm,
+        t!("select_duplicates.ok"),
+        Some(wrap(SelMsg::Ok)),
+    );
+    let cancel = layout::secondary_icon_button(
+        Icon::Close,
+        t!("select_duplicates.cancel"),
+        Some(wrap(SelMsg::Cancel)),
+    );
     let apply = layout::secondary_button(t!("select_duplicates.apply"), Some(wrap(SelMsg::Apply)));
     column![
         tabs,
@@ -224,11 +232,13 @@ fn folders<'a>(dialog: &'a SelectDuplicates, tokens: &'static Tokens) -> Element
         row![
             layout::caption(t!("select_duplicates.pattern"), None),
             pattern,
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::SelectAll,
                 t!("select_duplicates.pattern_select"),
                 Some(wrap(SelMsg::PatternMark(true)))
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::SelectNone,
                 t!("select_duplicates.pattern_remove"),
                 Some(wrap(SelMsg::PatternMark(false)))
             ),
@@ -251,9 +261,21 @@ fn folders<'a>(dialog: &'a SelectDuplicates, tokens: &'static Tokens) -> Element
         ]
         .spacing(16),
         row![
-            layout::secondary_button(t!("select_duplicates.all"), Some(wrap(SelMsg::All))),
-            layout::secondary_button(t!("select_duplicates.none"), Some(wrap(SelMsg::Nothing))),
-            layout::secondary_button(t!("select_duplicates.reverse"), Some(wrap(SelMsg::Reverse))),
+            layout::secondary_icon_button(
+                Icon::SelectAll,
+                t!("select_duplicates.all"),
+                Some(wrap(SelMsg::All))
+            ),
+            layout::secondary_icon_button(
+                Icon::SelectNone,
+                t!("select_duplicates.none"),
+                Some(wrap(SelMsg::Nothing))
+            ),
+            layout::secondary_icon_button(
+                Icon::InvertSelection,
+                t!("select_duplicates.reverse"),
+                Some(wrap(SelMsg::Reverse))
+            ),
         ]
         .spacing(8),
     ]

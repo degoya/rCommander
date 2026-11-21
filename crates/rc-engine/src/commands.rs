@@ -54,6 +54,7 @@ pub(crate) mod multi_rename_presets;
 mod multi_rename_undo;
 mod network_drives;
 mod open;
+mod open_connections;
 mod ops;
 mod panel;
 mod panel_listing;

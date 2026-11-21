@@ -1,6 +1,6 @@
 use rc_engine::{Drive, DriveGroup, DriveKind, DriveState, PanelId, VfsPath};
 
-use super::{MapForm, NetworkForm, NetworkMsg, Phase, UnmapForm, free_letters};
+use super::{MapForm, NetworkEntry, NetworkForm, NetworkMsg, Phase, UnmapForm, free_letters};
 use crate::app::{
     Effect, Message,
     drive_bar::{DriveMessage, actions::DriveAction},
@@ -83,16 +83,67 @@ fn the_map_form_offers_the_free_letters_and_proposes_the_last() {
 #[test]
 fn the_unmap_form_lists_the_network_drives_with_the_chosen_one() {
     let form = UnmapForm::new(&drives(), Some("Z:"));
+    let entry = |id: &str, remote: &str| NetworkEntry {
+        id: id.to_owned(),
+        label: id.to_owned(),
+        remote: remote.to_owned(),
+    };
     assert_eq!(
         form.drives,
-        [
-            ("Y:".to_owned(), r"\\nas\media".to_owned()),
-            ("Z:".to_owned(), r"\\nas\backup".to_owned()),
-        ]
+        [entry("Y:", r"\\nas\media"), entry("Z:", r"\\nas\backup")]
     );
     assert_eq!(form.chosen(), Some("Z:"));
     assert_eq!(UnmapForm::new(&drives(), Some("C:")).chosen(), Some("Y:"));
     assert_eq!(UnmapForm::new(&drives()[..1], None).chosen(), None);
+}
+
+/// RC-110-40: where the system chooses the mount point (macOS) Connect needs no letter, and the
+/// command carries none.
+#[tokio::test]
+async fn a_share_mounted_at_a_mount_point_is_connected_without_a_letter() {
+    let full: Vec<Drive> = ('A'..='Z')
+        .map(|letter| drive(&format!("{letter}:"), DriveKind::Fixed, None))
+        .collect();
+    assert!(!MapForm::with_mount_points(&full, false).ready());
+    assert!(MapForm::with_mount_points(&full, true).ready());
+
+    let (_root, mut harness) = harness().await;
+    harness
+        .send(Message::Drive(DriveMessage::Run(
+            PanelId::Left,
+            DriveAction::MapNetwork,
+            None,
+        )))
+        .await;
+    if let Some(dialog) = harness.app.drive_bar.dialog.as_mut()
+        && let NetworkForm::Map(map) = &mut dialog.form
+    {
+        map.mount_points = true;
+        map.letter = None;
+    }
+    harness
+        .send(network(NetworkMsg::Remote("smb://nas/photos".into())))
+        .await;
+    let effects = harness.app.apply(network(NetworkMsg::Confirm));
+    assert!(matches!(effects.as_slice(), [Effect::Task(_)]));
+    let NetworkForm::Map(map) = form(&harness) else {
+        panic!("the map dialog");
+    };
+    assert_eq!(map.phase, Phase::Running);
+}
+
+/// On macOS the disconnect dialog names a share by its volume, not by its mount point.
+#[test]
+fn the_unmap_form_names_a_mounted_share_by_its_volume() {
+    let mut share = drive(
+        "/Volumes/media",
+        DriveKind::Network,
+        Some("smb://nas/media"),
+    );
+    share.label = "media".to_owned();
+    let form = UnmapForm::new(&[share], None);
+    assert_eq!(form.chosen(), Some("/Volumes/media"));
+    assert_eq!(form.chosen_label(), Some("media"));
 }
 
 /// Acceptance (window half): open files - the question, then the forced disconnect.

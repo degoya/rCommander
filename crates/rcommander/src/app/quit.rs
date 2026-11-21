@@ -54,7 +54,7 @@ use crate::{
     gpu_loss,
     i18n::t,
     platform,
-    theme::{self, Tokens, fit::label, layout},
+    theme::{self, Tokens, fit::label, icon::Icon, layout},
 };
 
 /// What F10 does, as the setting `keys.f10` says.
@@ -293,11 +293,13 @@ impl App {
             None => t!("quit.confirm"),
         };
         let buttons = layout::button_row(
-            Some(layout::primary_button(
+            Some(layout::primary_icon_button(
+                Icon::Close,
                 t!("quit.cancel"),
                 Some(Message::Quit(QuitMsg::Cancel)),
             )),
-            [layout::secondary_button(
+            [layout::secondary_icon_button(
+                Icon::Quit,
                 confirm,
                 Some(Message::Quit(QuitMsg::Confirm)),
             )],

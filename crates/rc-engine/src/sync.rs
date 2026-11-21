@@ -18,7 +18,7 @@ use std::{path::PathBuf, time::SystemTime};
 use rc_vfs::VfsPath;
 use serde::{Deserialize, Serialize};
 
-use crate::EngineError;
+use crate::{CompareError, EngineError};
 pub use apply::SyncOperation;
 pub use mask::Masks;
 pub use plan::plan;
@@ -314,7 +314,10 @@ impl SyncPlan {
                 row.action = action;
                 Ok(())
             }
-            _ => Err(EngineError::SyncActionInvalid { row: index, action }),
+            _ => Err(EngineError::Compare(CompareError::SyncActionInvalid {
+                row: index,
+                action,
+            })),
         }
     }
 

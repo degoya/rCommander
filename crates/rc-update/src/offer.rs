@@ -8,7 +8,7 @@
 //! Copied and adapted from rDownloader's `crates/rd-update/src/offer.rs` at commit 26c8592a6:
 //! no installer kinds, no agent, no changelog link.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use semver::{Prerelease, Version};
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,8 @@ use crate::manifest::{Artifact, Channel, UpdateManifest, kind};
 pub struct Offer {
     pub version: String,
     pub channel: Channel,
-    pub released_at: DateTime<Utc>,
+    #[serde(with = "crate::time::serde_rfc3339")]
+    pub released_at: Timestamp,
     /// Plain text, one `- ` point per line.
     pub notes: String,
     /// The file for this platform and architecture, when the release has one.

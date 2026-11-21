@@ -172,3 +172,20 @@ fn the_access_key_is_underlined_only_while_it_shows() {
     let underlined = tag(marked_label(Label::parse("&Skip"), true));
     assert_ne!(underlined, plain);
 }
+
+/// RC-110-39: with `appearance.button_icons` off a dialog button shows its label alone, its
+/// height and its stop unchanged; on, its icon again.
+#[test]
+fn the_setting_takes_the_icons_off_the_buttons() {
+    assert_eq!(super::shown(Some(Icon::Save), true), Some(Icon::Save));
+    assert_eq!(super::shown(Some(Icon::Save), false), None);
+    assert_eq!(super::shown(None, true), None);
+    super::set_icons(false);
+    let face: Row<'_> = icon_button(Icon::Save, "Save");
+    assert_eq!(children(&face), 0, "the label alone");
+    let button = secondary_icon_button(Icon::Close, "Cancel", Some(()));
+    assert_eq!(face_parts(&button), 0);
+    super::set_icons(true);
+    let face: Row<'_> = icon_button(Icon::Save, "Save");
+    assert_eq!(children(&face), 2, "the icon and the label");
+}

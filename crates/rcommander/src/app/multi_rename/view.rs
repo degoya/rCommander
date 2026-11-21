@@ -104,7 +104,9 @@ fn masks(dialog: &MultiRenameDialog, danger: Color) -> Element<'_, Message> {
 fn placeholders(locked: bool) -> Element<'static, Message> {
     let mut buttons = Row::new().spacing(6).align_y(Alignment::Center);
     for placeholder in Placeholder::BUTTONS {
+        // A placeholder is the mask's own text: its button shows that text alone.
         buttons = buttons.push(small_button(
+            None,
             placeholder.label(),
             (!locked).then_some(MrMsg::Insert(placeholder)),
         ));
@@ -367,7 +369,11 @@ fn buttons(dialog: &MultiRenameDialog) -> Element<'_, Message> {
             dialog.can_start().then(|| wrap(MrMsg::Start)),
         )),
         [
-            small_button(t!("multi_rename.undo"), idle.then_some(MrMsg::Undo)),
+            small_button(
+                Icon::Undo,
+                t!("multi_rename.undo"),
+                idle.then_some(MrMsg::Undo),
+            ),
             layout::secondary_icon_button(
                 Icon::Close,
                 t!("multi_rename.close"),
@@ -375,8 +381,16 @@ fn buttons(dialog: &MultiRenameDialog) -> Element<'_, Message> {
             ),
         ],
         [
-            small_button(t!("multi_rename.move_up"), Some(MrMsg::MoveUp)),
-            small_button(t!("multi_rename.move_down"), Some(MrMsg::MoveDown)),
+            small_button(
+                Icon::MoveUp,
+                t!("multi_rename.move_up"),
+                Some(MrMsg::MoveUp),
+            ),
+            small_button(
+                Icon::MoveDown,
+                t!("multi_rename.move_down"),
+                Some(MrMsg::MoveDown),
+            ),
         ],
     )
 }

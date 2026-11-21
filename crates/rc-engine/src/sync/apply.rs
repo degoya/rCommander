@@ -6,7 +6,7 @@ use rc_vfs::VfsPath;
 use serde::{Deserialize, Serialize};
 
 use super::{ItemKind, SyncAction, SyncPlan, SyncRow};
-use crate::EngineError;
+use crate::{CompareError, EngineError};
 
 /// One operation of a synchronization.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,9 +93,9 @@ impl SyncPlan {
             index += if whole { 1 + below } else { 1 };
         }
         if !deletes.is_empty() && !deletes_confirmed {
-            return Err(EngineError::SyncDeletesUnconfirmed {
+            return Err(EngineError::Compare(CompareError::SyncDeletesUnconfirmed {
                 count: deletes.len(),
-            });
+            }));
         }
         let copies = copies
             .into_iter()

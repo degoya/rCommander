@@ -119,7 +119,11 @@ pub(super) fn key_row<'a>(stored: bool, key: Option<String>) -> Option<Element<'
     let shown = key.unwrap_or_else(|| t!("user_commands.key_none").to_owned());
     let line = row![
         fit::label(shown).width(Length::Fill),
-        layout::secondary_button(t!("user_commands.add_key"), Some(wrap(UcMsg::AddKey))),
+        layout::secondary_icon_button(
+            Icon::Shortcut,
+            t!("user_commands.add_key"),
+            Some(wrap(UcMsg::AddKey))
+        ),
     ]
     .spacing(8)
     .align_y(Alignment::Center);

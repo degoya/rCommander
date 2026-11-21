@@ -24,7 +24,7 @@ use super::{
 use crate::{
     app::{App, Effect, Message},
     platform::colour_picker,
-    theme::{Tokens, colours::parse_hex, layout::secondary_button},
+    theme::{Tokens, colours::parse_hex, icon::Icon, layout::secondary_icon_button},
 };
 
 /// A colour the system's dialog is opened for.
@@ -114,8 +114,9 @@ fn hex_of([red, green, blue]: [u8; 3]) -> String {
 
 /// The button that opens the dialog for `target`, on a platform that has it.
 fn choose<'a>(label: &'a str, target: PickTarget) -> Option<Element<'a, Message>> {
-    colour_picker::AVAILABLE
-        .then(|| secondary_button(label, Some(wrap(SettingsMessage::Pick(target)))))
+    colour_picker::AVAILABLE.then(|| {
+        secondary_icon_button(Icon::Edit, label, Some(wrap(SettingsMessage::Pick(target))))
+    })
 }
 
 fn text_of<'a>(draft: &'a Draft, key: &str) -> &'a str {

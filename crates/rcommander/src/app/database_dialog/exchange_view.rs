@@ -17,7 +17,9 @@ use crate::{
     theme::{
         self, Tokens,
         fit::{cell, line, prose, table_row},
-        focus, layout,
+        focus,
+        icon::Icon,
+        layout,
         mnemonic::Label,
     },
 };
@@ -318,11 +320,13 @@ pub fn choose_all<'a>(dialog: &DatabaseDialog) -> Vec<Element<'a, Message>> {
         return Vec::new();
     }
     vec![
-        layout::secondary_button(
+        layout::secondary_icon_button(
+            Icon::SelectAll,
             t!("exchange.choose_all"),
             Some(msg(ExchangeMsg::ChooseAll(true))),
         ),
-        layout::secondary_button(
+        layout::secondary_icon_button(
+            Icon::SelectNone,
             t!("exchange.choose_none"),
             Some(msg(ExchangeMsg::ChooseAll(false))),
         ),

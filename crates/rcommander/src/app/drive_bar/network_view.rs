@@ -34,6 +34,9 @@ use crate::{
 
 const CONTEXT_WIDTH: f32 = 300.0;
 const LABEL_WIDTH: f32 = 120.0;
+/// The name column of the disconnect dialog: a letter, or a volume's name on macOS.
+const LETTER_WIDTH: f32 = 40.0;
+const VOLUME_WIDTH: f32 = 120.0;
 
 /// `base` with the open context menu or dialog over it.
 pub(super) fn with_network<'a>(
@@ -167,13 +170,23 @@ fn context_card<'a>(
 
 fn map_card<'a>(form: &'a MapForm, tokens: &'static Tokens) -> Element<'a, Message> {
     let editing = form.phase != Phase::Running;
-    let mut remote = text_input(t!("network.folder_hint"), &form.remote)
+    let hint = if form.mount_points {
+        t!("network.share_hint")
+    } else {
+        t!("network.folder_hint")
+    };
+    let mut remote = text_input(hint, &form.remote)
         .id(REMOTE_FIELD)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([4, 8]);
     if editing {
         remote = remote.on_input(|typed| network(NetworkMsg::Remote(typed)));
+    }
+    let folder = t!("network.folder");
+    let remote = layout::keyed(focus::Stop::field(remote, folder), folder);
+    if form.mount_points {
+        return mount_card(form, remote, editing, tokens);
     }
     let letter: Element<'a, Message> = if form.letters.is_empty() {
         prose(t!("network.no_letter"))
@@ -197,8 +210,6 @@ fn map_card<'a>(form: &'a MapForm, tokens: &'static Tokens) -> Element<'a, Messa
     let reconnect = layout::check(t!("network.reconnect"), form.reconnect, editing, |on| {
         network(NetworkMsg::Reconnect(on))
     });
-    let folder = t!("network.folder");
-    let remote = layout::keyed(focus::Stop::field(remote, folder), folder);
     let mut body = column![
         labelled(folder, remote, tokens),
         labelled(t!("network.letter"), letter, tokens),
@@ -207,8 +218,28 @@ fn map_card<'a>(form: &'a MapForm, tokens: &'static Tokens) -> Element<'a, Messa
     ]
     .spacing(8);
     body = push_phase(body, &form.phase, t!("network.waiting"), tokens);
-    let connect = (editing && form.letter.is_some()).then_some(NetworkMsg::Confirm);
-    body.push(buttons(t!("network.connect"), connect)).into()
+    let connect = (editing && form.ready()).then_some(NetworkMsg::Confirm);
+    body.push(buttons(Icon::Connect, t!("network.connect"), connect))
+        .into()
+}
+
+/// The map dialog where the system chooses the mount point (macOS, RC-110-40): the share, and
+/// where it will appear instead of a letter and the reconnect choice.
+fn mount_card<'a>(
+    form: &'a MapForm,
+    remote: Element<'a, Message>,
+    editing: bool,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    let mut body = column![
+        labelled(t!("network.folder"), remote, tokens),
+        prose(t!("network.mount_note")).color(tokens.text_secondary),
+    ]
+    .spacing(8);
+    body = push_phase(body, &form.phase, t!("network.waiting_mount"), tokens);
+    let connect = editing.then_some(NetworkMsg::Confirm);
+    body.push(buttons(Icon::Connect, t!("network.connect"), connect))
+        .into()
 }
 
 fn unmap_card<'a>(form: &'a UnmapForm, tokens: &'static Tokens) -> Element<'a, Message> {
@@ -216,13 +247,20 @@ fn unmap_card<'a>(form: &'a UnmapForm, tokens: &'static Tokens) -> Element<'a, M
     let mut body = column![].spacing(8);
     if form.drives.is_empty() {
         body = body.push(prose(t!("network.none")).color(tokens.text_secondary));
-        return body.push(buttons(t!("network.disconnect"), None)).into();
+        return body
+            .push(buttons(Icon::Disconnect, t!("network.disconnect"), None))
+            .into();
     }
-    let rows = form.drives.iter().enumerate().map(|(index, (id, remote))| {
+    let name_width = if form.mount_points {
+        VOLUME_WIDTH
+    } else {
+        LETTER_WIDTH
+    };
+    let rows = form.drives.iter().enumerate().map(|(index, drive)| {
         let face = container(
             row![
-                line(id.as_str()).width(40),
-                fit::path_line(remote.as_str(), tokens.text, tokens)
+                line(drive.label.as_str()).width(name_width),
+                fit::path_line(drive.remote.as_str(), tokens.text, tokens)
             ]
             .spacing(8)
             .padding([0, 8])
@@ -240,10 +278,14 @@ fn unmap_card<'a>(form: &'a UnmapForm, tokens: &'static Tokens) -> Element<'a, M
     });
     // The drives are one stop of the ring; the dialog moves the choice with the arrows.
     body = body.push(focus::choice(column(rows), "network.drives", None, None));
-    let (question, confirm) = match form.chosen() {
+    let (question, confirm) = match form.chosen_label() {
         Some(drive) if form.in_use => (
             t!("network.in_use", drive = drive),
             t!("network.disconnect_anyway"),
+        ),
+        _ if form.mount_points => (
+            t!("network.unmount_text").to_owned(),
+            t!("network.disconnect"),
         ),
         _ => (
             t!("network.unmap_text").to_owned(),
@@ -257,8 +299,12 @@ fn unmap_card<'a>(form: &'a UnmapForm, tokens: &'static Tokens) -> Element<'a, M
         question
     });
     body = push_phase(body, &form.phase, t!("network.disconnecting"), tokens);
-    body.push(buttons(confirm, editing.then_some(NetworkMsg::Confirm)))
-        .into()
+    body.push(buttons(
+        Icon::Disconnect,
+        confirm,
+        editing.then_some(NetworkMsg::Confirm),
+    ))
+    .into()
 }
 
 /// What the dialog is waiting for, or why the last try failed.
@@ -275,10 +321,18 @@ fn push_phase<'a>(
     }
 }
 
-/// The confirming button (the primary, disabled without `message`) and Cancel, on the right.
-fn buttons<'a>(confirm: &'static str, message: Option<NetworkMsg>) -> Element<'a, Message> {
+/// The confirming button with `icon` (the primary, disabled without `message`) and Cancel, on the right.
+fn buttons<'a>(
+    icon: Icon,
+    confirm: &'static str,
+    message: Option<NetworkMsg>,
+) -> Element<'a, Message> {
     layout::button_row(
-        Some(layout::primary_button(confirm, message.map(network))),
+        Some(layout::primary_icon_button(
+            icon,
+            confirm,
+            message.map(network),
+        )),
         [layout::secondary_icon_button(
             Icon::Close,
             t!("network.cancel"),

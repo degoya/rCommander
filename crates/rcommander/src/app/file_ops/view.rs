@@ -335,7 +335,8 @@ pub(super) fn progress_card<'a>(
         None,
         [
             pause,
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Background,
                 t!("ops.to_background"),
                 Some(wrap(FileOpsMsg::Background(id))),
             ),

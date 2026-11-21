@@ -1,5 +1,6 @@
 //! The page Appearance: the large dialogs in windows of their own (RC-080-15, owner 2026-10-18),
-//! and the question after a lost graphics device (owner 2026-10-22).
+//! the question after a lost graphics device (owner 2026-10-22) and the icons on the dialogs'
+//! buttons (RC-110-39).
 //!
 //! On, the connection manager, find files, multi-rename and compare/synchronize open as native
 //! windows beside the main window - title bar, close X, moved and resized, their place kept;
@@ -32,6 +33,20 @@ pub(super) const GPU_LOSS_NOTICE: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.appearance.gpu_loss_notice",
     help: "setting.appearance.gpu_loss_notice.help",
+    protected: false,
+    restart: false,
+};
+
+/// Whether the dialogs' buttons show their action's icon before the label. On by default; off,
+/// they show the label alone. Not protected: it changes only the look.
+pub const BUTTON_ICONS_KEY: &str = "appearance.button_icons";
+
+pub(super) const BUTTON_ICONS: SettingSpec = SettingSpec {
+    key: BUTTON_ICONS_KEY,
+    page: SettingPage::Appearance,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.appearance.button_icons",
+    help: "setting.appearance.button_icons.help",
     protected: false,
     restart: false,
 };

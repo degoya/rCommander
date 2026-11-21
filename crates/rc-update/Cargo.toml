@@ -26,13 +26,13 @@ async-trait.workspace = true
 base64.workspace = true
 # The checked copy of the database before an update and its digest in the journal (RC-100-06).
 blake3.workspace = true
-# Dates of manifests, journals and the stored state, written as RFC 3339.
-chrono = { workspace = true, features = ["serde"] }
 clap.workspace = true
 ed25519-dalek.workspace = true
 # The portable Linux archive (`.tar.gz`) the switch unpacks.
 flate2.workspace = true
 hex.workspace = true
+# Dates of manifests, journals and the stored state, written as RFC 3339 (`src/time.rs`).
+jiff.workspace = true
 rand.workspace = true
 rc-process = { path = "../rc-process" }
 # The update check and the download over https (RC-100-05): rustls with the platform verifier,

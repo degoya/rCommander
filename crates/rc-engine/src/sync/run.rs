@@ -7,7 +7,7 @@ use rc_ops::{ConflictChoice, DeleteMode, ErrorPolicy, JobKind, JobOptions, JobSp
 use serde::{Deserialize, Serialize};
 
 use super::{SyncAction, SyncOperation, SyncOptions, SyncPlan};
-use crate::EngineError;
+use crate::{CompareError, EngineError};
 
 /// One row's action, named by its path below both roots.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,15 +82,15 @@ impl SyncPlan {
             let mut chosen = Vec::with_capacity(actions.len());
             for wanted in actions {
                 let Some(&index) = rows.get(wanted.path.as_path()) else {
-                    return Err(EngineError::SyncRowNotFound {
+                    return Err(EngineError::Compare(CompareError::SyncRowNotFound {
                         path: wanted.path.display().to_string(),
-                    });
+                    }));
                 };
                 if !self.rows[index].allows(wanted.action) {
-                    return Err(EngineError::SyncActionInvalid {
+                    return Err(EngineError::Compare(CompareError::SyncActionInvalid {
                         row: index,
                         action: wanted.action,
-                    });
+                    }));
                 }
                 chosen.push((index, wanted.action));
             }

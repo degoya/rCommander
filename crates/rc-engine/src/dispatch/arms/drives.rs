@@ -4,6 +4,7 @@
 macro_rules! arms {
     ($next:ident, $state:tt, $self:ident, { $($done:tt)* }) => {
         $next! { $state, $self, { $($done)*
+            Command::ListOpenConnections => Ok($self.list_open_connections().await),
             Command::ListDrives { refresh } => Ok($self.list_drives(refresh).await),
             Command::MapNetworkDrive {
                 remote,

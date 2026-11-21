@@ -3,7 +3,7 @@
 use rc_db::RetentionError;
 use rc_rename::UndoMismatch;
 
-use super::EngineError;
+use super::{EngineError, SettingsError};
 
 /// The first few mismatches as `from -> to (problem)`.
 pub(super) fn describe_mismatches(mismatches: &[UndoMismatch]) -> String {
@@ -28,18 +28,20 @@ pub(super) fn describe_mismatches(mismatches: &[UndoMismatch]) -> String {
 impl From<RetentionError> for EngineError {
     fn from(error: RetentionError) -> Self {
         match error {
-            RetentionError::UnknownTable { table } => Self::RetentionUnknownTable { table },
+            RetentionError::UnknownTable { table } => {
+                Self::Settings(SettingsError::RetentionUnknownTable { table })
+            }
             RetentionError::OutOfRange {
                 key,
                 value,
                 min,
                 max,
-            } => Self::RetentionOutOfRange {
+            } => Self::Settings(SettingsError::RetentionOutOfRange {
                 key,
                 value,
                 min,
                 max,
-            },
+            }),
         }
     }
 }

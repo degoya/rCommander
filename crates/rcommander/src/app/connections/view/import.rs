@@ -41,7 +41,11 @@ pub(super) fn page<'a>(
             .on_input(|path| msg(ImportMsg::Path(path)))
             .on_submit(msg(ImportMsg::Read)),
         browse::button(PathField::SshConfig, &dialog.path, true),
-        layout::secondary_button(t!("connections.import.read"), Some(msg(ImportMsg::Read))),
+        layout::secondary_icon_button(
+            Icon::ViewFile,
+            t!("connections.import.read"),
+            Some(msg(ImportMsg::Read))
+        ),
     ]
     .spacing(6)
     .align_y(Alignment::Center);
@@ -95,7 +99,11 @@ pub(super) fn actions<'a>(dialog: &ImportDialog) -> Actions<'a> {
     Actions {
         left: Vec::new(),
         right: vec![
-            layout::secondary_button(t!("connections.import.back"), Some(msg(ImportMsg::Back))),
+            layout::secondary_icon_button(
+                Icon::Back,
+                t!("connections.import.back"),
+                Some(msg(ImportMsg::Back)),
+            ),
             layout::primary_icon_button(
                 Icon::Import,
                 t!("connections.import.run"),
@@ -224,7 +232,8 @@ fn key_line<'a>(at: usize, row: &'a KeyRow, tokens: &'static Tokens) -> Element<
                     })
                     .on_submit_maybe(again.clone()),
             )
-            .push(layout::secondary_button(
+            .push(layout::secondary_icon_button(
+                Icon::Key,
                 t!("connections.import.take_again"),
                 again,
             ));

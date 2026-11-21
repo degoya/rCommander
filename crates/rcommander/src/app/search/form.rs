@@ -6,7 +6,7 @@
 //! "Find duplicate files" with its three criteria sits on the second tab (RC-100-98): name and size
 //! are ticked at first, as in Total Commander.
 
-use chrono::{Local, NaiveDate, TimeZone};
+use jiff::{Span, civil::Date};
 use rc_engine::{
     SearchQuery,
     search::{ContentQuery, DuplicateQuery, Filters, KindFilter, TextEncoding},
@@ -301,11 +301,11 @@ fn optional<T>(field: &str, parse: impl FnOnce(&str) -> Option<T>) -> Option<Opt
 
 /// The Unix time of local midnight starting `day` (`YYYY-MM-DD`), `days_later` days on.
 fn day_start(day: &str, days_later: u64) -> Option<u64> {
-    let date = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
-    let date = date.checked_add_days(chrono::Days::new(days_later))?;
-    let midnight = date.and_hms_opt(0, 0, 0)?;
-    let local = Local.from_local_datetime(&midnight).earliest()?;
-    u64::try_from(local.timestamp()).ok()
+    let date = Date::strptime("%Y-%m-%d", day).ok()?;
+    let later = Span::new().try_days(i64::try_from(days_later).ok()?).ok()?;
+    let midnight = date.checked_add(later).ok()?.at(0, 0, 0, 0);
+    let local = crate::format::from_local(midnight)?;
+    u64::try_from(local.as_second()).ok()
 }
 
 #[cfg(test)]

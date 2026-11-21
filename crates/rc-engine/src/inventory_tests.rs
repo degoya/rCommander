@@ -2,7 +2,7 @@
 //! plans, a sync creates the folder and its connections, a second one changes nothing, the
 //! schedule syncs only what is due, and MCP lists and syncs but never sets a source up.
 
-use chrono::{Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use rc_db::Db;
 use rc_plugin_api::inventory::{InventoryHost, Protocol};
 use rc_plugin_host::{
@@ -264,11 +264,11 @@ fn a_source_is_due_after_its_minutes() {
         last_outcome: None,
         slots: Vec::new(),
     };
-    let now = Utc::now();
+    let now = Timestamp::now();
     let stamp = |minutes_ago: i64| {
         Some(
-            (now - Duration::minutes(minutes_ago))
-                .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            (now - SignedDuration::from_mins(minutes_ago))
+                .strftime("%Y-%m-%dT%H:%M:%S%.3fZ")
                 .to_string(),
         )
     };

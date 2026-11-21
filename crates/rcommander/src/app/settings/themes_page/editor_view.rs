@@ -29,7 +29,7 @@ use crate::{
         fit::line,
         focus,
         icon::Icon,
-        layout::{primary_icon_button, secondary_button, secondary_icon_button},
+        layout::{primary_icon_button, secondary_icon_button},
     },
 };
 
@@ -51,7 +51,8 @@ fn colour_line<'a>(
         .spacing(8)
         .align_y(Alignment::Center);
     if colour_picker::AVAILABLE {
-        line = line.push(secondary_button(
+        line = line.push(secondary_icon_button(
+            Icon::Edit,
             t!("settings.colours.choose"),
             Some(edit(EditorMsg::Pick(slot))),
         ));
@@ -62,7 +63,8 @@ fn colour_line<'a>(
             .width(110),
     );
     if let Slot::Token(key) = slot {
-        line = line.push(secondary_button(
+        line = line.push(secondary_icon_button(
+            Icon::Reset,
             t!("settings.colours.reset"),
             editor.changed(key).then(|| edit(EditorMsg::Reset(key))),
         ));

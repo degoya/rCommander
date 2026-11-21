@@ -16,7 +16,7 @@ use super::{DirTree, TreeCall, TreeId, TreeMsg, loads, tree_of, view::tree_list}
 use crate::{
     app::{App, Effect, Message, field_walk},
     i18n::t,
-    theme::{self, Tokens, focus, layout},
+    theme::{self, Tokens, focus, icon::Icon, layout},
 };
 
 /// The card's height over the main window, the list's room with the buttons.
@@ -83,8 +83,16 @@ pub fn body<'a>(dialog: &'a TreeDialog, tokens: &'static Tokens) -> Element<'a, 
         .style(move |_| theme::panel(tokens, true));
     // The arrows move the tree's cursor in the dialog's own keys.
     let list = focus::choice(list, t!("tree.dialog.list"), None, None);
-    let ok = layout::primary_button(t!("tree.dialog.ok"), Some(Message::Tree(TreeMsg::DialogOk)));
-    let cancel = layout::secondary_button(t!("tree.dialog.cancel"), Some(Message::close_dialog()));
+    let ok = layout::primary_icon_button(
+        Icon::Confirm,
+        t!("tree.dialog.ok"),
+        Some(Message::Tree(TreeMsg::DialogOk)),
+    );
+    let cancel = layout::secondary_icon_button(
+        Icon::Close,
+        t!("tree.dialog.cancel"),
+        Some(Message::close_dialog()),
+    );
     column![list, layout::button_row(Some(ok), [cancel], [])]
         .spacing(12)
         .height(Length::Fill)

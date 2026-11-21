@@ -10,7 +10,7 @@
 //! Copied and adapted from rDownloader's `crates/rd-sign/src/roots.rs` at commit 26c8592a6
 //! (RC-100-04): one role instead of four.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 
 use super::trust::TrustStore;
 
@@ -55,13 +55,14 @@ pub const REVOKED_DOCUMENTS: &[RevokedDocument] = &[];
 
 /// The configured, unexpired keys of `table` at `now`.
 #[must_use]
-pub fn keys_at(table: &[EmbeddedKey], now: DateTime<Utc>) -> Vec<&EmbeddedKey> {
+pub fn keys_at(table: &[EmbeddedKey], now: Timestamp) -> Vec<&EmbeddedKey> {
     table
         .iter()
         .filter(|entry| !entry.public_key.is_empty() && entry.public_key != PLACEHOLDER_KEY)
         .filter(|entry| match entry.not_after {
-            Some(text) => DateTime::parse_from_rfc3339(text)
-                .map(|expiry| now <= expiry.with_timezone(&Utc))
+            Some(text) => text
+                .parse::<Timestamp>()
+                .map(|expiry| now <= expiry)
                 // A root that cannot be dated is not one to rely on.
                 .unwrap_or(false),
             None => true,
@@ -78,7 +79,7 @@ pub fn keys_at(table: &[EmbeddedKey], now: DateTime<Utc>) -> Vec<&EmbeddedKey> {
 pub fn trust_store_at(
     keys: &[EmbeddedKey],
     revoked: &[RevokedDocument],
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> anyhow::Result<TrustStore> {
     let store = TrustStore::new();
     for entry in keys_at(keys, now) {

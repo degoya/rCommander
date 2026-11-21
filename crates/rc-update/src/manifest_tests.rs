@@ -1,7 +1,7 @@
 //! What a manipulated, replayed or misplaced manifest does: it is refused, with the code that says
 //! why (RC-100-04). Every test signs with a throw-away key against a store of its own.
 
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 
 use super::*;
 use crate::sign::{SigningKey, StaleError, TrustStore, sign_document};
@@ -20,8 +20,9 @@ pub(crate) fn trust_for(key: &SigningKey) -> TrustStore {
     trust
 }
 
-pub(crate) fn at(days: i64) -> DateTime<Utc> {
-    DateTime::from_timestamp(1_790_000_000, 0).expect("timestamp") + Duration::days(days)
+pub(crate) fn at(days: i64) -> Timestamp {
+    Timestamp::from_second(1_790_000_000).expect("timestamp")
+        + SignedDuration::from_hours(days * 24)
 }
 
 pub(crate) const PREFIX: &str = "https://github.com/degoya/rCommander/releases/download/";
@@ -70,6 +71,21 @@ fn a_signed_manifest_verifies_and_round_trips() {
     assert_eq!(read.version, "1.8.0");
     assert_eq!(read.sequence, 5);
     assert_eq!(read.artifacts, original.artifacts);
+}
+
+/// The dates are written as chrono wrote them, so a manifest signed after the move reads as one
+/// signed before, and a published one still reads (RC-110-36).
+#[test]
+fn the_dates_keep_their_text() {
+    let mut original = manifest(Channel::Stable, "1.8.0", 5);
+    original.released_at = Timestamp::new(1_790_000_000, 250_000_000).expect("instant");
+    let value = serde_json::to_value(&original).expect("writes");
+    assert_eq!(value["issued_at"], "2026-09-21T14:13:20Z");
+    assert_eq!(value["not_after"], "2027-03-20T14:13:20Z");
+    assert_eq!(value["released_at"], "2026-09-21T14:13:20.250Z");
+    let read: UpdateManifest = serde_json::from_value(value).expect("reads");
+    assert_eq!(read.issued_at, original.issued_at);
+    assert_eq!(read.released_at, original.released_at);
 }
 
 /// A forged signature (same id, other key) is tampering; a foreign key id is untrusted.

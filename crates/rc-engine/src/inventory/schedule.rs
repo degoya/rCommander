@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde_json::Value;
 
 use super::InventorySource;
@@ -44,7 +44,7 @@ impl Engine {
         let Ok(sources) = sources.await else {
             return 0;
         };
-        let now = Utc::now();
+        let now = Timestamp::now();
         let mut synced = 0;
         for source in sources.iter().filter(|source| due(source, minutes, now)) {
             match self.refresh_inventory(source.id, false).await {
@@ -59,14 +59,14 @@ impl Engine {
 }
 
 /// Whether `source` is due at `now`: synced before, and at least `minutes` ago.
-pub(crate) fn due(source: &InventorySource, minutes: u64, now: DateTime<Utc>) -> bool {
+pub(crate) fn due(source: &InventorySource, minutes: u64, now: Timestamp) -> bool {
     let Some(last) = source
         .last_sync_at
         .as_deref()
-        .and_then(|text| DateTime::parse_from_rfc3339(text).ok())
+        .and_then(|text| text.parse::<Timestamp>().ok())
     else {
         return false;
     };
     let minutes = i64::try_from(minutes).unwrap_or(i64::MAX);
-    now.signed_duration_since(last).num_minutes() >= minutes
+    now.duration_since(last).as_mins() >= minutes
 }

@@ -20,6 +20,7 @@
 //! * [`portable_mode`] - the marker that keeps the data beside a portable program, and where it
 //!   is refused (RC-100-95).
 //! * [`retention`] - what stays of the copies after a proven update (RC-100-07).
+//! * [`time`] - instants written as RFC 3339, as the stored and published formats have them.
 //!
 //! No database, no engine, no iced: the updater runs this before the new version is known to
 //! start. Copied and adapted from rDownloader (`crates/rd-update`, `crates/rd-sign`) at commit
@@ -40,6 +41,7 @@ pub mod portable_mode;
 pub mod retention;
 pub mod sign;
 pub mod state;
+pub mod time;
 
 pub use check::{CheckReport, Floors, Sources, check};
 pub use download::{Progress, check_space, download_verified, verified_file};

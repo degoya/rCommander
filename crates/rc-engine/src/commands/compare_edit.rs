@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::archive::refuse_archive_change;
 use crate::{
-    Engine, EngineError, EngineEvent, Outcome,
+    CompareError, Engine, EngineError, EngineEvent, Outcome,
     compare::{
         self, ApplyBlocksRequest, ByContentRequest, CompareSide, EditSession, FileStamp, Origin,
         ReadOnly, Side, edit, external, save,
@@ -141,9 +141,9 @@ impl Engine {
         ] {
             let origin = session.origin(side);
             if !as_expected(origin, expected) {
-                return Err(EngineError::CompareChanged {
+                return Err(EngineError::Compare(CompareError::CompareChanged {
                     name: shown_path(&origin.path).display().to_string(),
-                });
+                }));
             }
         }
         if let Some(reason) = session.read_only(to) {
@@ -156,9 +156,9 @@ impl Engine {
             .blocks
             .iter()
             .map(|&block| {
-                all.get(block)
-                    .cloned()
-                    .ok_or(EngineError::CompareBlockNotFound { block })
+                all.get(block).cloned().ok_or(EngineError::Compare(
+                    CompareError::CompareBlockNotFound { block },
+                ))
             })
             .collect::<Result<Vec<_>, _>>()?;
         session.copy_blocks(&diff, &chosen, request.direction);
@@ -227,10 +227,10 @@ fn as_expected(origin: &Origin, expected: FileStamp) -> bool {
 }
 
 fn not_editable(path: &VfsPath, reason: &'static str) -> EngineError {
-    EngineError::CompareNotEditable {
+    EngineError::Compare(CompareError::CompareNotEditable {
         name: shown_path(path).display().to_string(),
         reason,
-    }
+    })
 }
 
 fn read_only_reason(reason: ReadOnly) -> &'static str {

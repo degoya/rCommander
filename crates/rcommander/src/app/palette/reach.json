@@ -36,6 +36,7 @@
   { "command": "diagnostics.error_log", "omitted": "a read-out for diagnosis over MCP; a log viewer in the window is a feature of its own" },
   { "command": "diagnostics.get_retention", "shown": "the settings dialog's limits of the growing tables" },
   { "command": "diagnostics.set_retention", "via": "window:settings", "how": "the settings dialog: the limits of the growing tables" },
+  { "command": "drives.connections", "shown": "the drive bar's buttons of the open connections and their mark in the drive menus (Alt+F1, Alt+F2); a right click or Shift+F10 on one disconnects it" },
   { "command": "drives.list", "shown": "the drive bar and the drive menus (Alt+F1, Alt+F2), which list every drive, also those behind the bar's »" },
   { "command": "drives.map_network", "via": "panel.drive_menu", "how": "Map network drive... under the drives of the drive menu (Alt+F1, Alt+F2), a drive's context menu (Shift+F10 on it in the drive menu, or a right click), or the command palette" },
   { "command": "drives.unmap_network", "via": "panel.drive_menu", "how": "Disconnect network drive... in the drive menu (Alt+F1, Alt+F2), a network drive's context menu (Shift+F10 on it in the drive menu, or a right click), or the command palette" },

@@ -1,6 +1,6 @@
 use crate::test_support;
 use crate::test_support::engine_with_db;
-use crate::{Command, EngineError, LogLevel, Outcome, RetentionLimits};
+use crate::{Command, EngineError, LogLevel, Outcome, RetentionLimits, SettingsError};
 
 #[tokio::test]
 async fn without_a_database_the_commands_say_so() {
@@ -68,7 +68,10 @@ async fn set_retention_refuses_unlimited_and_unknown_tables() {
         .await
         .expect_err("over the ceiling");
     assert!(
-        matches!(error, EngineError::RetentionOutOfRange { max: 50_000, .. }),
+        matches!(
+            error,
+            EngineError::Settings(SettingsError::RetentionOutOfRange { max: 50_000, .. })
+        ),
         "{error:?}"
     );
     assert_eq!(error.code(), "retention_out_of_range");

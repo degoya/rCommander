@@ -16,6 +16,7 @@ use crate::{
     theme::{
         self, Tokens,
         fit::{label, prose},
+        icon::Icon,
         layout,
     },
 };
@@ -54,7 +55,7 @@ pub(in crate::app) fn page<'a>(
                 label(t!(
                     "update.page.offer",
                     version = offer.version,
-                    date = offer.released_at.format("%Y-%m-%d"),
+                    date = offer.released_at.strftime("%Y-%m-%d"),
                     size = size
                 ))
                 .font(theme::UI_FONT_STRONG),
@@ -93,11 +94,11 @@ fn last_check(status: &UpdateStatus) -> String {
         (None, _) => t!("update.page.never_checked").to_owned(),
         (Some(at), None) => t!(
             "update.page.checked",
-            time = at.format("%Y-%m-%d %H:%M UTC")
+            time = at.strftime("%Y-%m-%d %H:%M UTC")
         ),
         (Some(at), Some(code)) => t!(
             "update.page.check_failed",
-            time = at.format("%Y-%m-%d %H:%M UTC"),
+            time = at.strftime("%Y-%m-%d %H:%M UTC"),
             reason = error_text(code)
         ),
     }
@@ -182,22 +183,46 @@ fn buttons<'a>(status: &UpdateStatus) -> Element<'a, Message> {
     let row = page_buttons(status)
         .into_iter()
         .fold(Row::new().spacing(8), |row, shown| {
-            let (caption, message) = match shown.action {
-                PageAction::CheckNow => (t!("update.page.check_now"), UpdateMsg::CheckNow),
-                PageAction::Download => (t!("update.page.download"), UpdateMsg::Download),
-                PageAction::OpenFolder => (t!("update.page.open_folder"), UpdateMsg::OpenFolder),
-                PageAction::CopyAddress => (t!("update.page.copy_address"), UpdateMsg::CopyAddress),
-                PageAction::CopyCommand => (t!("update.page.copy_command"), UpdateMsg::CopyCommand),
-                PageAction::Install => (t!("update.page.install"), UpdateMsg::Install),
-                PageAction::InstallWhenEmpty => {
-                    (t!("update.page.install_when_empty"), UpdateMsg::Install)
+            let (icon, caption, message) = match shown.action {
+                PageAction::CheckNow => (
+                    Icon::Refresh,
+                    t!("update.page.check_now"),
+                    UpdateMsg::CheckNow,
+                ),
+                PageAction::Download => (
+                    Icon::Download,
+                    t!("update.page.download"),
+                    UpdateMsg::Download,
+                ),
+                PageAction::OpenFolder => (
+                    Icon::Open,
+                    t!("update.page.open_folder"),
+                    UpdateMsg::OpenFolder,
+                ),
+                PageAction::CopyAddress => (
+                    Icon::Copy,
+                    t!("update.page.copy_address"),
+                    UpdateMsg::CopyAddress,
+                ),
+                PageAction::CopyCommand => (
+                    Icon::Copy,
+                    t!("update.page.copy_command"),
+                    UpdateMsg::CopyCommand,
+                ),
+                PageAction::Install => {
+                    (Icon::Resume, t!("update.page.install"), UpdateMsg::Install)
                 }
+                PageAction::InstallWhenEmpty => (
+                    Icon::Resume,
+                    t!("update.page.install_when_empty"),
+                    UpdateMsg::Install,
+                ),
             };
             let message = shown.enabled.then(|| wrap(message));
             row.push(if shown.primary {
-                layout::primary_button(caption, message)
+                layout::primary_icon_button(icon, caption, message)
             } else {
-                layout::secondary_button(caption, message)
+                layout::secondary_icon_button(icon, caption, message)
             })
         });
     column![row].into()

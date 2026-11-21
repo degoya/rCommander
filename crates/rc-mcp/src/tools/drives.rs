@@ -1,7 +1,8 @@
-//! The `drives` tool group: the drive bar (`drives.list`), changing a panel's drive
+//! The `drives` tool group: the drive bar (`drives.list`), the connections open now
+//! (`drives.connections`, RC-110-38), changing a panel's drive
 //! (`panel.change_drive`) and disconnecting a network drive (`drives.unmap_network`,
 //! destructive). The drive menu (`panel.drive_menu`) is the window's, and so is mapping a network
-//! drive (`drives.map_network`): Windows' credential dialog needs a person.
+//! drive (`drives.map_network`): the system's credential dialog needs a person.
 
 use rc_engine::Command;
 use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
@@ -30,7 +31,8 @@ pub(crate) struct ChangeDriveParams {
 #[derive(Deserialize, schemars::JsonSchema)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct UnmapNetworkParams {
-    /// The network drive: its letter (Z, Z:, Z:\), as drives_list lists it with kind network.
+    /// The network drive, as drives_list lists it with kind network: its letter (Z, Z:, Z:\) on
+    /// Windows, its id (the mount point, /Volumes/<share>) on macOS.
     pub drive: String,
     /// Disconnect even while files on the drive are open; programs may lose unsaved data.
     /// Default false: open files fail with network_drive_in_use.
@@ -54,7 +56,14 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Show a drive in a panel, as a click in the drive bar does: when the other panel shows that drive and this panel is on another one, the panel goes to the other panel's folder (as in Total Commander; setting drives.follow_other_panel, on by default); else it returns to the directory it last showed on that drive, else the drive's root. Answers the panel's new state. Errors: drive_not_found (no such entry), drive_not_ready (no medium, unreachable, or no answer within 2 seconds; the panel stays), backend_unavailable. A server (id server:<connection id>) opens in the directory last shown there, else its start directory or where its login starts: an SSH server over SFTP, its login failing with the codes of connections_connect; an FTP or FTPS server over FTP, failing with the FTP codes (ftp_login_failed, certificate_unknown, ...), vault_locked or password_not_stored."
+        description = "List the connections with a session open now, which the drive bar shows as buttons of their own: an SSH connection whose session is up (its files open over SFTP) and an FTP or FTPS connection whose session is kept. Each has drive (server:<connection id>, what panel_change_drive takes), connection_id, name, kind (ssh, ftp, ftps, ftps_implicit) and last_dir: the folder a panel showed last on it, where panel_change_drive returns while the session is open (absent before any). connections_disconnect ends a session. The window's quick connections are not listed."
+    )]
+    pub(crate) async fn drives_connections(&self) -> ToolResult {
+        self.dispatch_mcp(Command::ListOpenConnections).await
+    }
+
+    #[tool(
+        description = "Show a drive in a panel, as a click in the drive bar does: when the other panel shows that drive and this panel is on another one, the panel goes to the other panel's folder (as in Total Commander; setting drives.follow_other_panel, on by default); else it returns to the directory it last showed on that drive, else the drive's root. Answers the panel's new state. Errors: drive_not_found (no such entry), drive_not_ready (no medium, unreachable, or no answer within 2 seconds; the panel stays), backend_unavailable. A server (id server:<connection id>) with a session open (drives_connections) returns to the folder either panel showed last on it; otherwise it opens in the directory this panel last showed there, else its start directory or where its login starts: an SSH server over SFTP, its login failing with the codes of connections_connect; an FTP or FTPS server over FTP, failing with the FTP codes (ftp_login_failed, certificate_unknown, ...), vault_locked or password_not_stored."
     )]
     pub(crate) async fn panel_change_drive(
         &self,
@@ -68,7 +77,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Disconnect a network drive (Windows; kind network in drives_list, remote is its \\\\server\\share) and forget it for the next sign-in. Destructive: the first call answers with a question and a confirmation code; ask the person, and only if they agree call again with confirmation set to the code. Without force, open files on the drive fail with network_drive_in_use - ask the person before calling again with force=true. Answers the drive bar as it is afterwards. Mapping a network drive is for the person in the rCommander window only (Windows asks for the credentials). Errors: drive_not_found, drive_not_network, network_drive_in_use, network_drives_unsupported, network_drive_failed."
+        description = "Disconnect a network drive (kind network in drives_list): on Windows a drive letter, remote its \\\\server\\share, also forgotten for the next sign-in; on macOS a share mounted under /Volumes (id the mount point, remote its smb://server/share), unmounted. Destructive: the first call answers with a question and a confirmation code; ask the person, and only if they agree call again with confirmation set to the code. Without force, open files on the drive fail with network_drive_in_use - ask the person before calling again with force=true. Answers the drive bar as it is afterwards. Mapping a network drive is for the person in the rCommander window only (the system asks for the credentials). Linux has no network drive commands. Errors: drive_not_found, drive_not_network, network_drive_in_use, network_drives_unsupported, network_drive_failed."
     )]
     pub(crate) async fn drives_unmap_network(
         &self,

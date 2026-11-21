@@ -315,17 +315,20 @@ fn details<'a>(
         .any(|version| version.state == "previous");
     let buttons = row![
         if plugin.enabled {
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Pause,
                 t!("settings.plugins.disable"),
                 on(PluginsMsg::Enable(id.clone(), false)),
             )
         } else {
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Resume,
                 t!("settings.plugins.enable"),
                 on(PluginsMsg::Enable(id.clone(), true)),
             )
         },
-        layout::secondary_button(
+        layout::secondary_icon_button(
+            Icon::Undo,
             t!("settings.plugins.rollback"),
             on(PluginsMsg::Rollback(id.clone())).filter(|_| has_previous),
         ),

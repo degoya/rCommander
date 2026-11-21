@@ -174,9 +174,10 @@ pub(crate) fn parse_time(text: &str) -> Option<SystemTime> {
     if text.trim().eq_ignore_ascii_case("now") {
         return Some(SystemTime::now());
     }
-    chrono::DateTime::parse_from_rfc3339(text.trim())
+    text.trim()
+        .parse::<jiff::Timestamp>()
         .ok()
-        .map(SystemTime::from)
+        .and_then(|time| SystemTime::try_from(time).ok())
 }
 
 /// Octal permission bits an agent may set: at most 777 - no set-uid, set-gid or sticky bit,

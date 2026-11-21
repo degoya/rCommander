@@ -262,7 +262,8 @@ fn field(value: &str) -> text_input::TextInput<'_, Message> {
 /// OK (`confirm`, the primary, disabled unless `enabled`) and Cancel at the right.
 fn buttons<'a>(confirm: &'static str, enabled: bool) -> Element<'a, Message> {
     layout::button_row(
-        Some(layout::primary_button(
+        Some(layout::primary_icon_button(
+            Icon::Confirm,
             confirm,
             enabled.then(|| wrap(ChecksumMsg::Confirm)),
         )),

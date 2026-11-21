@@ -22,7 +22,7 @@ use super::{
     },
 };
 use crate::{
-    EngineError,
+    EngineError, ImportError,
     read_guard::{ReadGuard, TC_FTP_PASSWORDS},
 };
 
@@ -67,18 +67,18 @@ pub(crate) struct Wanted {
 
 fn read(path: &Path) -> Result<Ini, EngineError> {
     tc_ini::read_file(path).map_err(|error| match error {
-        IniError::TooLarge => EngineError::TcIniTooLarge {
+        IniError::TooLarge => EngineError::Import(ImportError::TcIniTooLarge {
             path: path.display().to_string(),
             max: tc_ini::MAX_FILE_BYTES,
-        },
-        IniError::NotAFile => EngineError::TcIniUnreadable {
+        }),
+        IniError::NotAFile => EngineError::Import(ImportError::TcIniUnreadable {
             path: path.display().to_string(),
             source: std::io::Error::other("not a regular file"),
-        },
-        IniError::Io(source) => EngineError::TcIniUnreadable {
+        }),
+        IniError::Io(source) => EngineError::Import(ImportError::TcIniUnreadable {
             path: path.display().to_string(),
             source,
-        },
+        }),
     })
 }
 
@@ -97,9 +97,9 @@ fn allowed(caller: Caller, path: &Path, name: &str) -> bool {
 fn named(caller: Caller, named: &str, name: &str) -> Result<(PathBuf, Ini), EngineError> {
     let path = PathBuf::from(named.trim());
     if !allowed(caller, &path, name) {
-        return Err(EngineError::TcIniPathRefused {
+        return Err(EngineError::Import(ImportError::TcIniPathRefused {
             path: path.display().to_string(),
-        });
+        }));
     }
     let ini = read(&path)?;
     Ok((path, ini))
@@ -167,7 +167,7 @@ pub(crate) fn load(wanted: &Wanted, caller: Caller) -> Result<Loaded, EngineErro
         warnings.push("ftp_ini_not_found".to_owned());
     }
     if wincmd.is_none() && ftp.is_none() {
-        return Err(EngineError::TcIniNotFound);
+        return Err(EngineError::Import(ImportError::TcIniNotFound));
     }
     // Total Commander keeps it in the folder of wincmd.ini.
     let usercmd = match (&wincmd, wanted.usercmd) {

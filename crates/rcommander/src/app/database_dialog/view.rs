@@ -58,25 +58,25 @@ pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<
         return portable;
     }
     let running = dialog.phase == Phase::Running;
-    let (label, confirm, browsed) = match dialog.mode {
+    let (label, (icon, confirm), browsed) = match dialog.mode {
         DialogMode::Backup => (
             t!("db.path_backup"),
-            t!("db.confirm_backup"),
+            (Icon::Save, t!("db.confirm_backup")),
             PathField::Backup,
         ),
         DialogMode::Restore => (
             t!("db.path_restore"),
-            t!("db.confirm_restore"),
+            (Icon::Undo, t!("db.confirm_restore")),
             PathField::Restore,
         ),
         DialogMode::Export => (
             t!("exchange.path_export"),
-            t!("exchange.confirm_export"),
+            (Icon::Export, t!("exchange.confirm_export")),
             PathField::ConfigExport,
         ),
         DialogMode::Import => (
             t!("exchange.path_import"),
-            t!("exchange.confirm_import"),
+            (Icon::Import, t!("exchange.confirm_import")),
             PathField::ConfigImport,
         ),
     };
@@ -123,7 +123,8 @@ pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<
         field = field.on_input(|path| Message::Database(DatabaseMsg::Path(path)));
     }
     let read = (dialog.mode == DialogMode::Import).then(|| {
-        layout::secondary_button(
+        layout::secondary_icon_button(
+            Icon::ViewFile,
             t!("exchange.read"),
             (!running).then_some(Message::Database(DatabaseMsg::Exchange(ExchangeMsg::Read))),
         )
@@ -181,7 +182,8 @@ pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<
     let finished = matches!(dialog.phase, Phase::Done(_));
     let ready = dialog.mode != DialogMode::Import || exchange_view::can_import(dialog);
     let buttons = layout::button_row(
-        Some(layout::primary_button(
+        Some(layout::primary_icon_button(
+            icon,
             confirm,
             (!running && !finished && ready).then(|| Message::Database(DatabaseMsg::Confirm)),
         )),

@@ -83,6 +83,7 @@ pub const APPEARANCE: &[(Tab, &[&str])] = &[
             "appearance.command_line",
             "appearance.status_bar",
             "appearance.dialog_windows",
+            "appearance.button_icons",
             "appearance.gpu_loss_notice",
         ],
     ),

@@ -90,7 +90,8 @@ pub fn body<'a>(
     let chosen = window.cursor.is_some();
     let idle = !window.busy;
     let buttons = Row::new()
-        .push(layout::secondary_button(
+        .push(layout::secondary_icon_button(
+            Icon::Save,
             t!("workspaces.capture"),
             (chosen && idle).then(|| wrap(WsMsg::Capture)),
         ))

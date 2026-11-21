@@ -11,6 +11,15 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.24.2
+
+- Every open SFTP, FTP or FTPS connection gets its own button in the drive bar: a click takes you back to the folder you left, a right click disconnects it. A setting turns the buttons off.
+- After you allow a plain FTP login or accept a server's certificate, the connection opens right away in the same panel, without an error first and without connecting again.
+- On macOS you can now map and disconnect network shares; macOS asks for the user name and password itself and can keep them in the keychain, rCommander never sees them.
+- Almost every dialog button now shows an icon before its label; a setting switches the icons off.
+- The symbols on the button bar now sit in the middle of their buttons instead of slightly to the left.
+- Updated components, among them the one for ZIP archives, with their latest fixes.
+
 ## 0.23.3
 
 - The SVG viewer uses a newer drawing engine and still refuses specially crafted pictures that would keep it busy, including three new ways such a picture could slip past its limits.

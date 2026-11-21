@@ -5,7 +5,8 @@
 //! and `..`. These two run what the keymap's rows `root_folder` and `parent_folder` run
 //! (`panel.navigate` to `/` and `..`), their tooltips name those rows' keys, and they are disabled
 //! where there is no folder above (a root) and while the panel shows its terminal. The settings
-//! `panels.drive_line_volume` and `panels.drive_line_buttons` hide the name and the buttons.
+//! `panels.drive_line_volume` and `panels.drive_line_buttons` hide the name and the buttons; they
+//! are read with the drive bar's `drive_bar.show_connections` (RC-110-38).
 //!
 //! The name and the free space share what the buttons leave, each shortened in the middle
 //! (`docs/design.md`); only then does the whole line show in a tooltip.
@@ -18,7 +19,7 @@ use iced::{
 use rc_db::Db;
 use rc_engine::{
     Command, Drive, DriveGroup, Keymap, PanelId, PanelView, VfsPath,
-    settings::{DRIVE_LINE_BUTTONS_KEY, DRIVE_LINE_VOLUME_KEY, stored_bool},
+    settings::{DRIVE_LINE_BUTTONS_KEY, DRIVE_LINE_VOLUME_KEY, SHOW_CONNECTIONS_KEY, stored_bool},
 };
 
 use super::{
@@ -45,13 +46,16 @@ const NAME_MIN: f32 = 64.0;
 /// How much wider the volume name's semibold runs than the estimate of the regular face.
 const STRONG: f32 = 1.08;
 
-/// What the drive line shows besides the drive and its free space; both on until read.
+/// What the drive line shows besides the drive and its free space, and whether the drive bar
+/// shows the open connections; all on until read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LineSettings {
     /// `panels.drive_line_volume`: the volume name in brackets.
     pub volume: bool,
     /// `panels.drive_line_buttons`: `\` and `..` at the line's end.
     pub buttons: bool,
+    /// `drive_bar.show_connections`: each open connection a button of its own (RC-110-38).
+    pub connections: bool,
 }
 
 impl Default for LineSettings {
@@ -59,6 +63,7 @@ impl Default for LineSettings {
         Self {
             volume: true,
             buttons: true,
+            connections: true,
         }
     }
 }
@@ -110,7 +115,7 @@ impl LineStep {
 
 /// Whether the setting `key` is one of the drive line's.
 pub fn concerns(key: &str) -> bool {
-    key == DRIVE_LINE_VOLUME_KEY || key == DRIVE_LINE_BUTTONS_KEY
+    key == DRIVE_LINE_VOLUME_KEY || key == DRIVE_LINE_BUTTONS_KEY || key == SHOW_CONNECTIONS_KEY
 }
 
 /// The stored settings of the line; each on unless switched off.
@@ -118,6 +123,7 @@ pub async fn load(db: Db) -> LineSettings {
     LineSettings {
         volume: stored_bool(&db, DRIVE_LINE_VOLUME_KEY).await,
         buttons: stored_bool(&db, DRIVE_LINE_BUTTONS_KEY).await,
+        connections: stored_bool(&db, SHOW_CONNECTIONS_KEY).await,
     }
 }
 

@@ -1,4 +1,7 @@
-use super::{NetworkDriveError, from_system, parse_letter, parse_remote, suggest_letter};
+use super::{
+    NetworkDriveError, from_mount, from_system, from_unmount, parse_letter, parse_remote,
+    suggest_letter,
+};
 use crate::{Drive, DriveGroup, DriveKind, DriveState, EngineError};
 
 fn drive(id: &str, group: DriveGroup) -> Drive {
@@ -40,6 +43,26 @@ fn a_share_and_a_folder_below_it_are_network_folders() {
         parse_remote(r"\\files@SSL@443\DavWWWRoot").expect("WebDAV"),
         r"\\files@SSL@443\DavWWWRoot"
     );
+}
+
+/// RC-110-40: an `smb://` address is the same folder, checked the same way.
+#[test]
+fn an_smb_address_is_a_network_folder_too() {
+    assert_eq!(
+        parse_remote("smb://nas/media").expect("share"),
+        r"\\nas\media"
+    );
+    assert_eq!(
+        parse_remote(" SMB://nas.local/My%20Share/films/ ").expect("folder"),
+        r"\\nas.local\My Share\films"
+    );
+    assert!(reason("smb://nas").contains("server and a share"));
+    assert!(reason("smb://nas/me*dia").contains("character"));
+    assert!(reason("smb://nas/me%3Adia").contains("character"));
+    assert!(reason("smb://nas/media/../x").contains(". or .."));
+    assert!(reason("smb://alex@nas/media").contains("user name"));
+    let long = format!("smb://nas/{}", "a".repeat(1100));
+    assert!(reason(&long).contains("too long"));
 }
 
 #[test]
@@ -134,6 +157,32 @@ fn windows_answers_become_stable_codes() {
     assert_eq!(code(31), "network_drive_failed");
     let failed = from_system(31, 'Z', r"\\nas\media");
     assert!(failed.to_string().contains("31"), "{failed}");
+}
+
+#[test]
+fn macos_answers_become_stable_codes() {
+    let mount = |answer: i32| from_mount(answer, "smb://nas/media").code();
+    assert!(matches!(
+        from_mount(-128, "smb://nas/media"),
+        EngineError::Cancelled
+    ));
+    assert_eq!(mount(-43), "network_path_not_found");
+    assert_eq!(mount(-36), "network_path_not_found");
+    assert_eq!(mount(65), "network_path_not_found");
+    assert_eq!(mount(80), "network_access_denied");
+    assert_eq!(mount(-5000), "network_access_denied");
+    assert_eq!(
+        mount(crate::drives::share::MOUNT_UNSUPPORTED),
+        "network_drives_unsupported"
+    );
+    assert_eq!(mount(-6602), "network_drive_failed");
+    let failed = from_mount(-6602, "smb://nas/media");
+    assert!(failed.to_string().contains("-6602"), "{failed}");
+
+    let unmount = |errno: i32| from_unmount(errno, "media").code();
+    assert_eq!(unmount(16), "network_drive_in_use");
+    assert_eq!(unmount(22), "drive_not_network");
+    assert_eq!(unmount(1), "network_drive_failed");
 }
 
 #[test]

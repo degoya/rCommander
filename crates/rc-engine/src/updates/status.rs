@@ -1,7 +1,7 @@
 //! What `update.status` answers and the window shows (RC-100-05 ... RC-100-07), and why an
 //! update command was refused. Paths, versions, codes and sizes: no secret, no installation id.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// The self-update as `update.status` answers it.
@@ -17,7 +17,8 @@ pub struct UpdateStatus {
     /// `official` (the GitHub releases) or the mirror's address.
     pub source: String,
     /// When the last check ended, and its refusal's code (`None`: it went through).
-    pub last_check: Option<DateTime<Utc>>,
+    #[serde(default, with = "rc_update::time::serde_rfc3339::option")]
+    pub last_check: Option<Timestamp>,
     pub last_code: Option<String>,
     /// The verified offer of the last check, with its notes.
     pub offer: Option<rc_update::Offer>,

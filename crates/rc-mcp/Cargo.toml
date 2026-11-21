@@ -13,7 +13,7 @@ axum.workspace = true
 # The health probe's challenge: a keyed hash proves the token without sending it (RC-080-12).
 blake3.workspace = true
 # The times files_set_attributes takes as RFC 3339 (RC-020-06).
-chrono.workspace = true
+jiff.workspace = true
 rand.workspace = true
 rc-db = { path = "../rc-db" }
 rc-engine = { path = "../rc-engine" }

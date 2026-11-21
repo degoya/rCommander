@@ -9,7 +9,7 @@ use std::{
     time::SystemTime,
 };
 
-use chrono::{Datelike, Local, Timelike};
+use jiff::{Timestamp, tz::TimeZone};
 use zip::{CompressionMethod, DateTime, ZipWriter, write::SimpleFileOptions};
 
 use super::write::{Feed, Member, MemberKind};
@@ -78,7 +78,7 @@ fn options(member: &Member, level: u32) -> SimpleFileOptions {
 /// after 2107, or unknown).
 pub(super) fn dos_time(time: Option<SystemTime>) -> DateTime {
     time.and_then(|time| {
-        let local = chrono::DateTime::<Local>::from(time);
+        let local = TimeZone::system().to_datetime(Timestamp::try_from(time).ok()?);
         DateTime::from_date_and_time(
             u16::try_from(local.year()).ok()?,
             u8::try_from(local.month()).ok()?,

@@ -340,7 +340,8 @@ impl Editor {
                 )
                 .secure(true)
                 .on_input(|value| Message::SecretValue(value.into())),
-                secondary_button(
+                secondary_icon_button(
+                    Icon::Save,
                     t!("login_scripts.store_secret"),
                     saved.then_some(Message::StoreSecret)
                 ),

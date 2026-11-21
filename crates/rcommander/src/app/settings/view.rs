@@ -287,7 +287,11 @@ fn import<'a>(draft: &Draft, tokens: &'static Tokens) -> Element<'a, Message> {
         label(t!("settings.import.rcommander")),
         hint(t!("settings.import.rcommander_help"), tokens),
         row![
-            layout::secondary_button(t!("settings.import.export"), exchange(DialogMode::Export)),
+            layout::secondary_icon_button(
+                Icon::Export,
+                t!("settings.import.export"),
+                exchange(DialogMode::Export)
+            ),
             layout::secondary_icon_button(
                 Icon::Import,
                 t!("settings.import.import"),
@@ -362,7 +366,8 @@ fn setting_row<'a>(
         SettingKind::Font { .. } => fonts_page::control(key, draft, tokens),
         SettingKind::ColourRules { .. } => super::colours_page::rules(draft, tokens),
         // The rules are the window's to edit, beside the settings (RC-100-91).
-        SettingKind::FileAssociations { .. } => layout::secondary_button(
+        SettingKind::FileAssociations { .. } => layout::secondary_icon_button(
+            Icon::Edit,
             t!("settings.associations.edit"),
             Some(Message::Associations(AssocMsg::Open)),
         ),

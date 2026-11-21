@@ -4,7 +4,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chrono::{Duration as Days, Utc};
+use jiff::{SignedDuration, Timestamp};
 use rc_db::Db;
 use rc_update::{
     Artifact, Channel, MemoryFetcher, Sources, UpdateManifest,
@@ -35,13 +35,13 @@ fn signed(version: &str, sequence: u64) -> Vec<u8> {
 
 /// The signed stable manifest of `version` whose one artifact has `sha256` and `size`.
 pub(crate) fn signed_for(version: &str, sequence: u64, sha256: &str, size: u64) -> Vec<u8> {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let target = rc_update::Target::current();
     let manifest = UpdateManifest {
         schema_version: UPDATE_MANIFEST_SCHEMA_VERSION,
         sequence,
         issued_at: now,
-        not_after: now + Days::days(30),
+        not_after: now + SignedDuration::from_hours(30 * 24),
         channel: Channel::Stable,
         version: version.to_owned(),
         released_at: now,
@@ -133,6 +133,14 @@ async fn a_missing_manifest_is_recorded_as_its_code() {
     let status = status_of(engine.dispatch(Command::CheckForUpdates {}).await);
     assert_eq!(status.last_code.as_deref(), Some("update.not_published"));
     assert!(status.last_check.is_some());
+    // `update.status` answers the time as it always did: RFC 3339 in UTC, as chrono wrote it
+    // (RC-110-36; the text itself is pinned in rc-update's `time` tests).
+    let answer = serde_json::to_value(&status).expect("answer");
+    let last_check = status.last_check.expect("checked");
+    assert_eq!(
+        answer["last_check"],
+        rc_update::time::rfc3339(last_check).as_str()
+    );
 }
 
 #[tokio::test]
@@ -309,7 +317,7 @@ fn the_notice_shows_an_offer_until_later_and_updated_to_only_for_the_running_ver
     let offer = rc_update::Offer {
         version: "99.0.0".to_owned(),
         channel: Channel::Stable,
-        released_at: Utc::now(),
+        released_at: Timestamp::now(),
         notes: String::new(),
         artifact: None,
         schema_change: true,

@@ -127,7 +127,7 @@ impl Engine {
             report.skipped = skipped;
             content.hotlist = Some(part);
         }
-        let created_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let created_at = format!("{:.0}", jiff::Timestamp::now());
         let encode = |error: serde_json::Error| unwritable(std::io::Error::other(error));
         let file = match &password {
             Some(password) => {

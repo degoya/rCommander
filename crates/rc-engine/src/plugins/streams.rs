@@ -28,7 +28,8 @@ impl WindowSource {
     pub(crate) fn new(file: Arc<FileWindow>, name: &str) -> Self {
         let modified = file
             .modified()
-            .map(|time| chrono::DateTime::<chrono::Utc>::from(time).to_rfc3339());
+            .and_then(|time| jiff::Timestamp::try_from(time).ok())
+            .map(rc_update::time::rfc3339_offset);
         let info = SourceInfo {
             name: name.to_owned(),
             size: file.size(),

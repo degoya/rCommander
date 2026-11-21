@@ -1,7 +1,7 @@
 use rc_db::Db;
 use rc_engine::{
     Command, Drive, DriveGroup, DriveKind, DriveState, Keymap, PanelId, PanelView, VfsPath,
-    settings::{DRIVE_LINE_BUTTONS_KEY, DRIVE_LINE_VOLUME_KEY, THEME_KEY},
+    settings::{DRIVE_LINE_BUTTONS_KEY, DRIVE_LINE_VOLUME_KEY, SHOW_CONNECTIONS_KEY, THEME_KEY},
 };
 
 use super::{
@@ -146,6 +146,7 @@ fn the_buttons_are_disabled_at_a_root_and_over_a_terminal() {
 fn the_line_reads_its_own_settings_only() {
     assert!(concerns(DRIVE_LINE_BUTTONS_KEY));
     assert!(concerns(DRIVE_LINE_VOLUME_KEY));
+    assert!(concerns(SHOW_CONNECTIONS_KEY));
     assert!(!concerns(THEME_KEY));
 }
 
@@ -157,7 +158,8 @@ async fn both_parts_show_until_a_setting_hides_them() {
         LineSettings::default(),
         LineSettings {
             volume: true,
-            buttons: true
+            buttons: true,
+            connections: true,
         }
     );
     db.set(DRIVE_LINE_BUTTONS_KEY, &false)
@@ -167,15 +169,18 @@ async fn both_parts_show_until_a_setting_hides_them() {
         load(db.clone()).await,
         LineSettings {
             volume: true,
-            buttons: false
+            buttons: false,
+            connections: true,
         }
     );
     db.set(DRIVE_LINE_VOLUME_KEY, &false).await.expect("stored");
+    db.set(SHOW_CONNECTIONS_KEY, &false).await.expect("stored");
     assert_eq!(
         load(db).await,
         LineSettings {
             volume: false,
-            buttons: false
+            buttons: false,
+            connections: false,
         }
     );
 }
@@ -206,6 +211,7 @@ async fn a_click_goes_up_in_its_panel_and_the_settings_reach_the_line() {
     let hidden = LineSettings {
         volume: false,
         buttons: false,
+        connections: false,
     };
     harness
         .send(Message::Drive(DriveMessage::Line(hidden)))

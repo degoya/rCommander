@@ -17,7 +17,7 @@
 //! Copied and adapted from rDownloader's `crates/rd-update/src/check.rs` at commit 26c8592a6:
 //! rCommander's repository and names, the mirror, typed fetch refusals.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -172,7 +172,7 @@ pub async fn check(
     trust: &TrustStore,
     channel: Channel,
     floors: Floors,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> CheckReport {
     let mut report = CheckReport {
         manifests: Vec::new(),
@@ -218,7 +218,7 @@ fn record(
     fetched: Result<Vec<u8>, UpdateError>,
     (trust, sources): (&TrustStore, &Sources),
     channel: Channel,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) {
     let verified = fetched
         .and_then(|bytes| {

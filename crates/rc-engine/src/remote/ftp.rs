@@ -26,8 +26,9 @@ use rc_vfs::{BackendId, Vfs, VfsPath};
 
 use crate::{
     AuthMethod, Connection, ConnectionError, ConnectionId, ConnectionKind, Engine, EngineError,
-    FtpDataMode, FtpEncoding, SecretKind, SecretRef,
+    EngineEvent, FtpDataMode, FtpEncoding, SecretKind, SecretRef, SessionError,
     remote::fold,
+    sessions::SessionChange,
     settings::{FTP_ASK_PLAINTEXT_KEY, FTP_RESOLVE_LINKS_KEY, stored_bool},
 };
 
@@ -92,9 +93,9 @@ pub(crate) fn ftp_config(
 
 /// The refusal of a connection that is not an FTP one where an FTP connection is needed.
 pub(crate) fn not_ftp(connection: &Connection) -> EngineError {
-    EngineError::FtpConnectionNotFound {
+    EngineError::Session(SessionError::FtpConnectionNotFound {
         connection: connection.name.clone(),
-    }
+    })
 }
 
 impl Engine {
@@ -222,6 +223,9 @@ impl Engine {
             };
             match kept {
                 Some(Ok(())) => {
+                    // Announced as an SSH session's start is: the drive bar shows it as an open
+                    // connection (RC-110-38).
+                    self.announce_ftp(id, SessionChange::Connected);
                     self.warn_if_plain_ftp(id).await;
                     return Ok(opened);
                 }
@@ -271,7 +275,8 @@ impl Engine {
 
     /// Drops the kept session of the FTP connection `id` and takes it from the operations
     /// queue, then closes it ([`FtpVfs::disconnect`]): its idle connections say `QUIT` at once,
-    /// whoever still holds a clone; running transfers finish their call. Whether one was kept.
+    /// whoever still holds a clone; running transfers finish their call. Its end is announced as
+    /// an SSH session's is ([`SessionChange::Closed`]). Whether one was kept.
     pub(crate) async fn forget_ftp(&self, id: ConnectionId) -> bool {
         let kept = {
             let mut kept = self.inner.remotes.ftp();
@@ -283,6 +288,7 @@ impl Engine {
         match kept {
             Some(session) => {
                 session.disconnect().await;
+                self.announce_ftp(id, SessionChange::Closed);
                 true
             }
             None => false,
@@ -299,7 +305,16 @@ impl Engine {
         for (id, session) in kept {
             self.inner.ops.unregister(&backend(ConnectionId(id)));
             session.disconnect().await;
+            self.announce_ftp(ConnectionId(id), SessionChange::Closed);
         }
+    }
+
+    /// Announces the start or end of the kept FTP session of `id`.
+    fn announce_ftp(&self, id: ConnectionId, change: SessionChange) {
+        self.publish(EngineEvent::Session {
+            connection: id,
+            change,
+        });
     }
 }
 

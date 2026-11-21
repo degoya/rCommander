@@ -6,7 +6,7 @@
 
 use std::sync::atomic::Ordering;
 
-use chrono::{DateTime, TimeDelta, Utc};
+use jiff::{SignedDuration, Timestamp};
 use rc_update::auto_install::{self, Moment, Wait};
 
 use super::{DownloadState, RUNNING};
@@ -18,7 +18,7 @@ impl Engine {
     pub fn note_input(&self) {
         self.desk()
             .last_input
-            .store(Utc::now().timestamp(), Ordering::Relaxed);
+            .store(Timestamp::now().as_second(), Ordering::Relaxed);
     }
 
     /// Whether a terminal or an SSH session is open.
@@ -83,10 +83,10 @@ impl Engine {
     /// to end, and this answers `true`.
     pub async fn update_idle_tick(&self, dialog_open: bool) -> bool {
         let (mode, ready, installs_itself, failed_before) = self.auto_moment().await;
-        let idle = TimeDelta::minutes(i64::from(self.update_config().await.idle_minutes));
-        let last_input =
-            DateTime::from_timestamp(self.desk().last_input.load(Ordering::Relaxed), 0)
-                .filter(|at| at.timestamp() > 0);
+        let idle = SignedDuration::from_mins(i64::from(self.update_config().await.idle_minutes));
+        let last_input = Timestamp::from_second(self.desk().last_input.load(Ordering::Relaxed))
+            .ok()
+            .filter(|at| at.as_second() > 0);
         let moment = Moment {
             mode,
             installs_itself,
@@ -99,7 +99,7 @@ impl Engine {
         };
         let decided = {
             let mut state = self.desk_state();
-            let decided = state.idle.observe(&moment, idle, Utc::now());
+            let decided = state.idle.observe(&moment, idle, Timestamp::now());
             state.waiting = decided.err();
             decided
         };

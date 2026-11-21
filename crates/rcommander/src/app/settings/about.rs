@@ -55,10 +55,10 @@ impl AboutPage {
     pub(in crate::app) fn set_update_facts(&mut self, status: &rc_engine::UpdateStatus) {
         let checked = match (&status.last_check, &status.last_code) {
             (None, _) => t!("settings.about.update_never").to_owned(),
-            (Some(at), None) => at.format("%Y-%m-%d %H:%M UTC").to_string(),
+            (Some(at), None) => at.strftime("%Y-%m-%d %H:%M UTC").to_string(),
             (Some(at), Some(code)) => format!(
                 "{} ({})",
-                at.format("%Y-%m-%d %H:%M UTC"),
+                at.strftime("%Y-%m-%d %H:%M UTC"),
                 crate::i18n::error_text(code)
             ),
         };

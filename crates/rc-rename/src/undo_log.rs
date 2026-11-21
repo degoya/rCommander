@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::names::FsRules;
@@ -28,7 +28,8 @@ pub struct UndoRecord {
     /// The directory the run renamed in.
     pub dir: String,
     /// When the run started.
-    pub started: DateTime<Utc>,
+    #[serde(with = "crate::serde_time::instant")]
+    pub started: Timestamp,
     /// The steps carried out, in order: all of them, or those done before a cancel.
     pub steps: Vec<RenameStep>,
 }

@@ -17,7 +17,7 @@ use super::{
     total_commander_report::{TcLookRow, TcRowStatus},
 };
 use crate::{
-    Engine, EngineError,
+    Engine, EngineError, SettingsError,
     settings::{
         COLOUR_RULES_KEY, ColourRule, LIST_FONT_KEY, LIST_FONT_SIZE_KEY, MAX_COLOUR_RULES,
         colour_key, parse_colour_rules, stored_setting, write_colour_rules,
@@ -71,9 +71,11 @@ impl Engine {
             let (value, status) = match &look.kind {
                 Err(skip) => (String::new(), skipped(*skip)),
                 Ok(TcLookKind::Colour { dark, token, value }) => {
-                    let key = colour_key(*dark, token).ok_or(EngineError::SettingUnknown {
-                        key: (*token).to_owned(),
-                    })?;
+                    let key = colour_key(*dark, token).ok_or(EngineError::Settings(
+                        SettingsError::SettingUnknown {
+                            key: (*token).to_owned(),
+                        },
+                    ))?;
                     (
                         value.clone(),
                         compare(&self.setting_text(key).await?, value),

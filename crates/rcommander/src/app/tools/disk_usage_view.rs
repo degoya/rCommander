@@ -325,13 +325,23 @@ fn buttons(window: &DiskUsageWindow) -> Element<'_, Message> {
             Some(wrap(UsageMsg::Close)),
         )
     };
-    let reread = layout::secondary_button(t!("disk_usage.reread"), Some(wrap(UsageMsg::Reread)));
-    let up = layout::secondary_button(t!("disk_usage.up"), folders.then(|| wrap(UsageMsg::Up)));
-    let show = layout::secondary_button(
+    let reread = layout::secondary_icon_button(
+        Icon::Refresh,
+        t!("disk_usage.reread"),
+        Some(wrap(UsageMsg::Reread)),
+    );
+    let up = layout::secondary_icon_button(
+        Icon::ParentFolder,
+        t!("disk_usage.up"),
+        folders.then(|| wrap(UsageMsg::Up)),
+    );
+    let show = layout::secondary_icon_button(
+        Icon::Panel,
         t!("disk_usage.show_in_panel"),
         folders.then(|| wrap(UsageMsg::ShowInPanel)),
     );
-    let feed = layout::secondary_button(
+    let feed = layout::secondary_icon_button(
+        Icon::Queue,
         t!("disk_usage.feed"),
         (!folders && !window.largest.is_empty()).then(|| wrap(UsageMsg::Feed)),
     );

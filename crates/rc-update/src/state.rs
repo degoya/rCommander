@@ -4,7 +4,7 @@
 //! `mcp.token`; no table, nothing that grows with use) and leaves it out of the export, since it
 //! belongs to this installation.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::{check::Floors, offer::Offer};
@@ -22,8 +22,8 @@ pub struct UpdateState {
     #[serde(default)]
     pub floors: Floors,
     /// When the last check ended.
-    #[serde(default)]
-    pub last_check: Option<DateTime<Utc>>,
+    #[serde(default, with = "crate::time::serde_rfc3339::option")]
+    pub last_check: Option<Timestamp>,
     /// Its refusal's code, `None` when it went through.
     #[serde(default)]
     pub last_code: Option<String>,

@@ -6,8 +6,9 @@
 //! Symbol and Segoe UI Emoji on Windows), so no icon files ship. A folder of the connection tree
 //! is one button that opens the menu at its servers; in the menu its servers stand under its
 //! name. A network drive is named by the folder it is mapped to; a right click on a drive opens
-//! its context menu, which `network_view.rs` draws with the network drive dialogs. The open menu
-//! is `menu_view.rs`'s; each button a menu opens from carries the id it is measured by
+//! its context menu, which `network_view.rs` draws with the network drive dialogs. An open
+//! connection shows the plug in place of the server's symbol (RC-110-38, `connections.rs`). The
+//! open menu is `menu_view.rs`'s; each button a menu opens from carries the id it is measured by
 //! (`place.rs`).
 
 use iced::{
@@ -21,14 +22,14 @@ use iced::{
 use rc_engine::{Drive, DriveGroup, DriveKind, DriveState, PanelId};
 
 use super::{
-    DriveBarLayout, DriveMessage, line, menu_view, network_view,
+    DriveBar, DriveBarLayout, DriveMessage, line, menu_view, network_view,
     overflow::{self, BarItem},
     place::{self, Button},
 };
 use crate::{
     app::{App, Message},
     i18n::t,
-    theme::{self, Tokens},
+    theme::{self, Tokens, ellipsis::middle_ellipsis},
 };
 
 pub(super) const SMALL: f32 = 12.0;
@@ -39,6 +40,11 @@ const FOLDER: &str = "\u{1f4c1}";
 pub(super) const FOLDER_ARROW: &str = "\u{25be}";
 /// The overflow button of a bar too narrow for its drives.
 const MORE: &str = "\u{bb}";
+/// An open connection's symbol, in place of its kind's (RC-110-38).
+pub(super) const CONNECTED: &str = "\u{1f50c}";
+/// The widest a server's name on its button gets before its middle gives way: a quick
+/// connection's `user@host:port` or a long connection name never leaves its button (RC-110-38).
+const SERVER_NAME_MAX: f32 = 180.0;
 
 /// What goes above both panels: the one shared bar, or nothing.
 pub(in crate::app) fn above_panels<'a>(
@@ -82,14 +88,15 @@ pub(in crate::app) fn with_menu<'a>(
 /// unseen). The right-most bar ends with the layout button.
 fn bar<'a>(app: &'a App, panel: Option<PanelId>, tokens: &'static Tokens) -> Element<'a, Message> {
     let target = panel.unwrap_or(app.active);
-    let drives = &app.drive_bar.drives;
+    let drive_bar = &app.drive_bar;
+    let drives = &drive_bar.drives;
     let buttons = responsive(move |size| {
         let items = overflow::bar_items(drives);
         let shown = shown(drives, &items, size.width);
         let current = app.current_drive(target);
         let buttons = items[..shown]
             .iter()
-            .map(|item| bar_button(drives, *item, current, target, tokens));
+            .map(|item| bar_button(drive_bar, *item, current, target, tokens));
         let mut line = Row::with_children(buttons)
             .spacing(overflow::SPACING)
             .align_y(Alignment::Center);
@@ -122,19 +129,21 @@ fn item_width(drives: &[Drive], item: BarItem<'_>) -> f32 {
         }
         BarItem::Drive(index) => {
             let drive = &drives[index];
-            overflow::button_width(&[kind_symbol(drive.kind), short_label(drive)], SMALL)
+            let label = button_label(drive);
+            overflow::button_width(&[kind_symbol(drive.kind), label.as_str()], SMALL)
         }
     }
 }
 
 /// One of the bar's items for `target`, whose drive is `current`.
 fn bar_button<'a>(
-    drives: &'a [Drive],
+    bar: &'a DriveBar,
     item: BarItem<'a>,
     current: Option<&Drive>,
     target: PanelId,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
+    let drives = &bar.drives;
     match item {
         BarItem::Gap => Space::new().width(GROUP_GAP).into(),
         BarItem::Folder(path) => {
@@ -144,7 +153,7 @@ fn bar_button<'a>(
         BarItem::Drive(index) => {
             let drive = &drives[index];
             let shown = current.is_some_and(|current| current.id == drive.id);
-            drive_button(drive, target, shown, tokens)
+            drive_button(drive, target, shown, bar.is_open(&drive.id), tokens)
         }
     }
 }
@@ -161,14 +170,21 @@ fn more_button<'a>(target: PanelId, shown: usize, tokens: &'static Tokens) -> El
     with_tooltip(button.into(), t!("drives.more").to_owned(), tokens)
 }
 
+/// A drive's button; an `open` connection shows the plug, and its tooltip says how to disconnect.
 fn drive_button<'a>(
     drive: &'a Drive,
     target: PanelId,
     current: bool,
+    open: bool,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
+    let symbol = if open {
+        CONNECTED
+    } else {
+        kind_symbol(drive.kind)
+    };
     let face = container(
-        row![small(kind_symbol(drive.kind)), small(short_label(drive))]
+        row![small(symbol), small(button_label(drive))]
             .spacing(4)
             .align_y(Alignment::Center),
     )
@@ -182,7 +198,12 @@ fn drive_button<'a>(
             drive.id.clone(),
         )))
         .interaction(Interaction::Pointer);
-    with_tooltip(button.into(), tooltip_text(drive), tokens)
+    let hint = if open {
+        t!("drives.connected_tip", name = display_name(drive))
+    } else {
+        tooltip_text(drive)
+    };
+    with_tooltip(button.into(), hint, tokens)
 }
 
 /// The name a folder's button shows: the folder's own, its last on the path.
@@ -262,6 +283,16 @@ pub(super) fn short_label(drive: &Drive) -> &str {
     match drive.group {
         DriveGroup::Drives if drive.label.len() > 1 => drive.label.trim_end_matches(':'),
         _ => &drive.label,
+    }
+}
+
+/// What a drive's button shows: [`short_label`], a server's shortened in the middle to
+/// [`SERVER_NAME_MAX`]; the tooltip names it whole.
+fn button_label(drive: &Drive) -> String {
+    let label = short_label(drive);
+    match drive.group {
+        DriveGroup::Servers => middle_ellipsis(label, SERVER_NAME_MAX, SMALL).into_owned(),
+        _ => label.to_owned(),
     }
 }
 

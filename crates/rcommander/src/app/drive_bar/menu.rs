@@ -7,7 +7,9 @@
 //!
 //! What the menu lists depends on where it was opened (RC-100-62, [`Scope`]): from the drive line
 //! and the keys every entry and the actions; from `»` the bar's items it had no room for; from a
-//! folder's button that folder's servers. The keys work on the list shown, nothing else.
+//! folder's button that folder's servers; as an open connection's context menu (a right click on
+//! its button, Shift+F10 on its row, RC-110-38) the connection and "Disconnect". The keys work on
+//! the list shown, nothing else.
 
 use rc_engine::{Chord, Drive, DriveGroup, PanelId};
 
@@ -28,6 +30,9 @@ pub enum Scope {
     /// A folder's button: the servers of the folder with this path from the root, its
     /// subfolders' under their headings (RC-100-63: any marked folder, not only a top-level one).
     Folder(Vec<String>),
+    /// The context menu of the open connection with this drive id (RC-110-38): its entry, then
+    /// "Disconnect".
+    Connection(String),
 }
 
 /// The open menu: whose it is, what it lists and where its cursor stands.
@@ -55,13 +60,17 @@ pub enum MenuAction {
     Switch(PanelId),
     /// The context menu of the entry with this id opens.
     Context(String),
+    /// The session of the open connection with this drive id ends; the menu closes.
+    Disconnect(String),
 }
 
-/// A place of the cursor: a drive by its index among the entries, or an action.
+/// A place of the cursor: a drive by its index among the entries, an action, or "Disconnect"
+/// for the drive at this index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stop {
     Drive(usize),
     Action(DriveAction),
+    Disconnect(usize),
 }
 
 impl DriveMenu {
@@ -131,6 +140,7 @@ impl DriveMenu {
             "Enter" | "Space" if plain => match stops.get(self.cursor) {
                 Some(Stop::Drive(index)) => MenuAction::Pick(drives[*index].id.clone()),
                 Some(Stop::Action(action)) => MenuAction::Run(*action),
+                Some(Stop::Disconnect(index)) => MenuAction::Disconnect(drives[*index].id.clone()),
                 None => MenuAction::Stay,
             },
             key if plain && key.chars().count() == 1 => self.letter(key, drives, &stops),
@@ -140,6 +150,10 @@ impl DriveMenu {
 
     /// The context menu of the drive under the cursor; nothing on an action.
     fn context(&self, drives: &[Drive], stops: &[Stop]) -> MenuAction {
+        // A connection's context menu closes on its key, as a drive's does.
+        if matches!(self.scope, Scope::Connection(_)) {
+            return MenuAction::Close;
+        }
         match stops.get(self.cursor) {
             Some(Stop::Drive(index)) => MenuAction::Context(drives[*index].id.clone()),
             _ => MenuAction::Stay,
@@ -172,7 +186,7 @@ impl DriveMenu {
         let count = stops.len();
         let starts = |stop: &Stop| match stop {
             Stop::Drive(index) => drives[*index].label.to_lowercase().starts_with(key),
-            Stop::Action(_) => false,
+            Stop::Action(_) | Stop::Disconnect(_) => false,
         };
         if let Some(next) = (1..=count)
             .map(|step| (self.cursor + step) % count)
@@ -199,6 +213,11 @@ pub enum MenuLine<'a> {
     },
     Actions,
     Action(usize, DriveAction),
+    /// "Disconnect" for the open connection at index `drive` of the entries.
+    Disconnect {
+        stop: usize,
+        drive: usize,
+    },
 }
 
 /// The menu's lines as built, with the stops counted.
@@ -288,6 +307,16 @@ pub fn lines<'a>(drives: &'a [Drive], menu: &DriveMenu) -> Vec<MenuLine<'a>> {
             }
         }
         Scope::Folder(path) => built.folder(drives, path, path.len()),
+        Scope::Connection(id) => {
+            if let Some(index) = drives.iter().position(|drive| drive.id == *id) {
+                built.plain(index);
+                built.lines.push(MenuLine::Disconnect {
+                    stop: built.stops,
+                    drive: index,
+                });
+                built.stops += 1;
+            }
+        }
     }
     built.lines
 }
@@ -299,6 +328,7 @@ fn stops(drives: &[Drive], menu: &DriveMenu) -> Vec<Stop> {
         .filter_map(|line| match line {
             MenuLine::Entry { drive, .. } => Some(Stop::Drive(drive)),
             MenuLine::Action(_, action) => Some(Stop::Action(action)),
+            MenuLine::Disconnect { drive, .. } => Some(Stop::Disconnect(drive)),
             _ => None,
         })
         .collect()
@@ -311,7 +341,9 @@ pub fn cursor_line(drives: &[Drive], menu: &DriveMenu) -> (usize, usize) {
     let at = lines
         .iter()
         .position(|line| match line {
-            MenuLine::Entry { stop, .. } | MenuLine::Action(stop, _) => *stop == menu.cursor,
+            MenuLine::Entry { stop, .. }
+            | MenuLine::Action(stop, _)
+            | MenuLine::Disconnect { stop, .. } => *stop == menu.cursor,
             _ => false,
         })
         .unwrap_or(0);

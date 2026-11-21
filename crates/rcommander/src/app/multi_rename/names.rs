@@ -20,11 +20,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use chrono::NaiveDateTime;
 use iced::{
     Alignment, Element,
     widget::{column, row},
 };
+use jiff::civil::DateTime;
 
 use super::{
     Answer, Call, Field, MrMsg, MultiRenameDialog, PresetChoice, Status,
@@ -38,7 +38,7 @@ use crate::{
     },
     i18n::{error_text, t},
     platform::file_dialog,
-    theme::{fit::line, layout},
+    theme::{fit::line, icon::Icon, layout},
 };
 
 /// How many runs back the dialog keeps the names for its undo, as many as the engine undoes.
@@ -88,8 +88,8 @@ impl MrMsg {
 }
 
 /// The local time now, as the date placeholders read times.
-pub(super) fn now() -> NaiveDateTime {
-    chrono::Local::now().naive_local()
+pub(super) fn now() -> DateTime {
+    jiff::ZonedDateTime::now().datetime()
 }
 
 impl MultiRenameDialog {
@@ -260,6 +260,7 @@ fn stamp() -> u128 {
 pub(super) fn more_row(dialog: &MultiRenameDialog) -> Element<'_, Message> {
     let names = |message| Some(MrMsg::Names(message));
     let mut commands = row![small_button(
+        None,
         t!("multi_rename.more"),
         names(NamesMsg::Toggle)
     )]
@@ -269,21 +270,25 @@ pub(super) fn more_row(dialog: &MultiRenameDialog) -> Element<'_, Message> {
         let idle = !dialog.busy() && dialog.edited.is_none();
         if file_dialog::AVAILABLE {
             let open = Message::Browse(BrowseMsg::Open(PathField::RenameNames, String::new()));
-            commands = commands.push(layout::secondary_button(
+            commands = commands.push(layout::secondary_icon_button(
+                Icon::Open,
                 t!("multi_rename.names_from_file"),
                 idle.then_some(open),
             ));
         }
         commands = commands
             .push(small_button(
+                Icon::Import,
                 t!("multi_rename.names_from_clipboard"),
                 names(NamesMsg::FromClipboard).filter(|_| idle),
             ))
             .push(small_button(
+                Icon::Edit,
                 t!("multi_rename.edit_names"),
                 names(NamesMsg::Edit).filter(|_| idle),
             ))
             .push(small_button(
+                Icon::GoTo,
                 t!("multi_rename.next_step"),
                 names(NamesMsg::NextStep).filter(|_| dialog.can_next_step()),
             ));
@@ -293,6 +298,7 @@ pub(super) fn more_row(dialog: &MultiRenameDialog) -> Element<'_, Message> {
         state = state
             .push(line(t!("multi_rename.names_in_use", count = list.len())))
             .push(small_button(
+                Icon::Reset,
                 t!("multi_rename.names_clear"),
                 names(NamesMsg::Clear),
             ));
@@ -301,10 +307,12 @@ pub(super) fn more_row(dialog: &MultiRenameDialog) -> Element<'_, Message> {
         state = state
             .push(line(t!("multi_rename.edited_names")))
             .push(small_button(
+                Icon::Confirm,
                 t!("multi_rename.take_names"),
                 names(NamesMsg::Take),
             ))
             .push(small_button(
+                Icon::Close,
                 t!("multi_rename.cancel_edit"),
                 names(NamesMsg::Cancel),
             ));

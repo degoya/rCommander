@@ -160,7 +160,8 @@ impl App {
                 t!("user_commands.ask.run"),
                 Some(wrap(AskMsg::Run)),
             )),
-            [layout::secondary_button(
+            [layout::secondary_icon_button(
+                Icon::Close,
                 t!("user_commands.ask.cancel"),
                 Some(wrap(AskMsg::Cancel)),
             )],

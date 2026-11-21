@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
 use crate::recover::LockOrRecover as _;
-use crate::{ConnectionId, EngineError};
+use crate::{ConnectionId, EngineError, SessionError};
 
 pub(crate) use sources::{EngineCredentials, EngineGate, beside_certificate};
 pub(crate) use totp::check_seed;
@@ -95,8 +95,10 @@ impl Default for SessionPrefs {
 impl SessionPrefs {
     /// The settings checked and in their stored form.
     pub(crate) fn checked(&self) -> Result<StoredSessionPrefs, EngineError> {
-        let invalid = |reason: &str| EngineError::SessionPrefsInvalid {
-            reason: reason.to_owned(),
+        let invalid = |reason: &str| {
+            EngineError::Session(SessionError::SessionPrefsInvalid {
+                reason: reason.to_owned(),
+            })
         };
         if self.auth_order.is_empty() {
             return Err(invalid("auth_order names no method"));

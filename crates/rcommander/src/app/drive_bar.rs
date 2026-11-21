@@ -18,9 +18,11 @@
 //! a folder's button its servers (`menu::Scope`).
 //!
 //! The list is read off the job queue, so a slow drive never holds a key press: on start, every
-//! few seconds (new drives appear), and when the engine announces a change.
+//! few seconds (new drives appear), and when the engine announces a change. The connections with a
+//! session open are read with it and are buttons of their own (`connections.rs`, RC-110-38).
 
 pub mod actions;
+mod connections;
 mod line;
 mod menu;
 mod menu_view;
@@ -41,7 +43,9 @@ use iced::{
     futures::{Stream, stream},
 };
 use rc_db::Db;
-use rc_engine::{Chord, Command, Drive, EngineEvent, NETWORK_DRIVES, Outcome, PanelId, drive_of};
+use rc_engine::{
+    Chord, Command, Drive, EngineEvent, NETWORK_DRIVES, OpenConnection, Outcome, PanelId, drive_of,
+};
 use serde::{Deserialize, Serialize};
 
 pub(super) use self::line::concerns as line_concerns;
@@ -112,6 +116,11 @@ pub enum DriveMessage {
     Poll,
     /// The entries, or the error code of the list.
     Listed(Result<Vec<Drive>, &'static str>),
+    /// The connections with a session open, or the error code of their list (RC-110-38).
+    Connections(Result<Vec<OpenConnection>, &'static str>),
+    /// "Disconnect" in an open connection's context menu: the session of the entry with this id
+    /// ends.
+    Disconnect(PanelId, String),
     /// A drive button or a menu row: the panel shows the drive with this id.
     Pick(PanelId, String),
     /// The drive line was clicked: the panel's drive menu opens.
@@ -144,8 +153,13 @@ pub enum DriveMessage {
 /// What the window knows of the drives.
 #[derive(Debug)]
 pub struct DriveBar {
-    /// The entries as last listed.
+    /// The entries as the bar shows them: as last listed, each open connection a button of its
+    /// own (`connections.rs`).
     pub drives: Vec<Drive>,
+    /// The entries as last listed.
+    listed: Vec<Drive>,
+    /// The connections with a session open, as last listed.
+    connections: Vec<OpenConnection>,
     pub layout: DriveBarLayout,
     /// The open drive menu.
     pub menu: Option<DriveMenu>,
@@ -180,6 +194,8 @@ impl Default for DriveBar {
     fn default() -> Self {
         Self {
             drives: Vec::new(),
+            listed: Vec::new(),
+            connections: Vec::new(),
             layout: DriveBarLayout::default(),
             menu: None,
             context: None,
@@ -196,7 +212,10 @@ impl Default for DriveBar {
 
 /// Whether the drive bar takes `event` rather than the panels.
 pub fn concerns(event: &EngineEvent) -> bool {
-    matches!(event, EngineEvent::Drives | EngineEvent::DriveMenu { .. })
+    matches!(
+        event,
+        EngineEvent::Drives | EngineEvent::DriveMenu { .. } | EngineEvent::Session { .. }
+    )
 }
 
 impl App {
@@ -207,18 +226,16 @@ impl App {
                 self.drive_bar.listing = false;
                 // A failed list keeps what the bar had; the next poll tries again.
                 if let Ok(drives) = listed {
-                    self.drive_bar.drives = drives;
+                    self.drive_bar.listed = drives;
+                    self.drive_bar.merge();
                 }
-                if let Some(menu) = &mut self.drive_bar.menu {
-                    if menu.scope == Scope::All {
-                        menu.actions = menu_actions(&self.drive_bar.drives, self.drive_bar.network);
-                    }
-                    menu.clamp(&self.drive_bar.drives);
-                }
+                self.drive_menu_follows();
                 if std::mem::take(&mut self.drive_bar.again) {
                     return self.list_drives();
                 }
             }
+            DriveMessage::Connections(listed) => return self.on_open_connections(listed),
+            DriveMessage::Disconnect(panel, id) => return self.disconnect_drive(panel, &id),
             DriveMessage::Pick(panel, id) => {
                 self.drive_bar.menu = None;
                 return self.pick_drive(panel, &id);
@@ -258,7 +275,11 @@ impl App {
                 let commands = line::step_commands(step, panel, self.active);
                 return vec![Effect::Dispatch(panel, commands)];
             }
-            DriveMessage::Line(settings) => self.drive_bar.line = settings,
+            DriveMessage::Line(settings) => {
+                self.drive_bar.line = settings;
+                self.drive_bar.merge();
+                self.drive_menu_follows();
+            }
             DriveMessage::Stored => {}
         }
         Vec::new()
@@ -291,6 +312,7 @@ impl App {
             MenuAction::Run(action) => self.run_drive_action(panel, action, None),
             MenuAction::Switch(other) => self.open_drive_menu(other, Scope::All, None),
             MenuAction::Context(id) => self.open_drive_context(panel, &id),
+            MenuAction::Disconnect(id) => self.disconnect_drive(panel, &id),
         }
     }
 
@@ -329,9 +351,13 @@ impl App {
 
     /// The context menu of the drive `id`, when it offers anything, in place of the drive menu
     /// and where it stood; from a bar button under that button. A drive without one (a WSL
-    /// distribution, a server) leaves both as they are, as a Win32 menu entry without a context
-    /// menu does.
+    /// distribution, a server without a session) leaves both as they are, as a Win32 menu entry
+    /// without a context menu does.
     fn open_drive_context(&mut self, panel: PanelId, id: &str) -> Vec<Effect> {
+        // An open connection's is the drive menu's scope of its own (RC-110-38).
+        if let Some(effects) = self.connection_context(panel, id) {
+            return effects;
+        }
         let actions = self
             .drive_bar
             .drives
@@ -391,6 +417,7 @@ impl App {
             return Vec::new();
         }
         self.drive_bar.listing = true;
+        let connections = self.list_connections();
         let engine = self.engine.clone();
         let listed = Task::perform(
             async move {
@@ -405,7 +432,7 @@ impl App {
             },
             |listed| Message::Drive(DriveMessage::Listed(listed)),
         );
-        vec![Effect::Task(listed)]
+        vec![Effect::Task(listed), connections]
     }
 
     /// Reads what the drive lines show: at the start and after a change of one of their settings.

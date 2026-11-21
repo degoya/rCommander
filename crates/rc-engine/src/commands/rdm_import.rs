@@ -22,8 +22,8 @@ use rc_vfs::BackendId;
 
 use crate::recover::LogPanic as _;
 use crate::{
-    AuthMethod, ConnectionDraft, ConnectionKind, Engine, EngineError, Outcome, TreeChange,
-    TreeItem,
+    AuthMethod, ConnectionDraft, ConnectionKind, Engine, EngineError, ImportError, Outcome,
+    TreeChange, TreeItem,
     import::{
         rdm::{self, RdmEntry, RdmError, RdmExport},
         rdm_report::{DEFAULT_FOLDER, RdmImportReport, RdmRow, SOURCE},
@@ -126,28 +126,30 @@ fn read(path: &Path, mcp: Option<Option<ReadGuard>>) -> Result<RdmExport, Engine
                 .is_some_and(|reason| reason != RDM_EXPORT_PASSWORDS)
         });
         if !named || refused {
-            return Err(EngineError::RdmPathRefused { path: shown() });
+            return Err(EngineError::Import(ImportError::RdmPathRefused {
+                path: shown(),
+            }));
         }
     }
     rdm::read_file(path).map_err(|error| match error {
-        RdmError::TooLarge => EngineError::RdmTooLarge {
+        RdmError::TooLarge => EngineError::Import(ImportError::RdmTooLarge {
             path: shown(),
             max: rdm::MAX_FILE_BYTES,
-        },
-        RdmError::NotAFile => EngineError::RdmUnreadable {
+        }),
+        RdmError::NotAFile => EngineError::Import(ImportError::RdmUnreadable {
             path: shown(),
             source: io::Error::other("not a regular file"),
-        },
-        RdmError::Io(source) => EngineError::RdmUnreadable {
+        }),
+        RdmError::Io(source) => EngineError::Import(ImportError::RdmUnreadable {
             path: shown(),
             source,
-        },
-        RdmError::Encrypted => EngineError::RdmEncrypted { path: shown() },
-        RdmError::Invalid { line } => EngineError::RdmInvalid {
+        }),
+        RdmError::Encrypted => EngineError::Import(ImportError::RdmEncrypted { path: shown() }),
+        RdmError::Invalid { line } => EngineError::Import(ImportError::RdmInvalid {
             path: shown(),
             line,
-        },
-        RdmError::NotAnExport => EngineError::RdmNotAnExport { path: shown() },
+        }),
+        RdmError::NotAnExport => EngineError::Import(ImportError::RdmNotAnExport { path: shown() }),
     })
 }
 
@@ -188,9 +190,11 @@ impl Engine {
         let found = tokio::task::spawn_blocking(move || read(&path, mcp))
             .await
             .log_panic("engine.rdm_import_read")
-            .map_err(|error| EngineError::RdmUnreadable {
-                path: shown.clone(),
-                source: io::Error::other(error),
+            .map_err(|error| {
+                EngineError::Import(ImportError::RdmUnreadable {
+                    path: shown.clone(),
+                    source: io::Error::other(error),
+                })
             })??;
         let only = request.only.as_deref();
         let mut rows: Vec<RdmRow> = found

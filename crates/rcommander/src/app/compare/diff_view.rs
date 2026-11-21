@@ -23,7 +23,9 @@ use crate::{
     theme::{
         self, Tokens,
         fit::{self, line},
-        focus, layout,
+        focus,
+        icon::Icon,
+        layout,
     },
 };
 
@@ -281,9 +283,13 @@ fn drawn(line: &str) -> String {
         .replace('\t', TAB)
 }
 
-/// A dialog button (`docs/design.md`); `None` draws it disabled.
-pub(super) fn button<'a>(label: &'static str, message: Option<CompareMsg>) -> Element<'a, Message> {
-    layout::secondary_button(label, message.map(wrap))
+/// A dialog button with its action's `icon` (`docs/design.md`); `None` draws it disabled.
+pub(super) fn button<'a>(
+    icon: Icon,
+    label: &'static str,
+    message: Option<CompareMsg>,
+) -> Element<'a, Message> {
+    layout::secondary_icon_button(icon, label, message.map(wrap))
 }
 
 /// A checkbox, a stop of the focus ring (RC-080-16), whose label is no catalogue text of its own

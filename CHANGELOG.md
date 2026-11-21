@@ -5,6 +5,87 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-11-21
+
+### Changed
+
+- **Compatible updates before 0.24.2**: cc 1.11.3, clap 4.6.9, form_urlencoded 1.2.3, jiff
+  1.0.2, postcard 1.2.0, toml 1.2.2 (toml_edit 0.25.20, toml_parser 1.1.6), url 2.5.9, walkdir
+  2.5.1, zcheapstr 1.4.0, zerocopy 0.8.64, zip 9.8.1. filetime stays on 0.2.29: 0.2.30
+  deprecates the calls `rc-vfs` makes in favour of `std::fs::set_times`, a change of its own
+  (RC-110-45).
+
+## [0.24.1] - 2026-11-21
+
+### Changed
+
+- **jiff 1.0.1** (RC-110-41): dates and times on jiff 1.0 instead of 0.2.46. `Zoned` is
+  `ZonedDateTime` now, and turning a point in time into a `SystemTime` can fail: a file time
+  outside what the system can hold is shown as none, where it panicked before. Every stored and
+  published text and every date pattern is unchanged, held by the tests of RC-110-36.
+
+## [0.24.0] - 2026-11-21
+
+### Changed
+
+- **Engine errors in groups** (RC-110-35): the own variants of the imports, the comparison and
+  synchronization, the session requests, the settings and the multi-rename are groups of
+  `EngineError` (`ImportError`, `CompareError`, `SessionError`, `SettingsError`,
+  `MultiRenameError` under `rc-engine`'s `error/`); `error.rs` is down from 499 to 381 lines.
+  Every code and message is unchanged, held by a table written before the split.
+- **Dates and times on jiff instead of chrono** (RC-110-36): chrono is unmaintained
+  (RUSTSEC-2026-0543). Every crate of the workspace reads and writes times with jiff 0.2; the
+  stored and published texts (update manifest, `update.state`, the install journal,
+  `update.status`, the multi-rename's moments and undo log) and every date pattern stay as they
+  were, each pinned by a test. chrono stays in the tree through rmcp, russh-sftp, russh-util,
+  schemars and suppaftp, and so does its exception in `deny.toml`.
+### Fixed
+
+- **FTP and FTPS connect right after the answer** (RC-110-37): a connection the question before a
+  password in clear (`ftp.ask_plaintext`) or about an untrusted, changed or expired certificate
+  stopped no longer puts `ftp_plaintext_unconfirmed` or `certificate_*` into the panel's status
+  line while the dialog asks. The window keeps the attempt - a drive change, a path, a hotlist
+  entry, "Open in panel" or a copy onto the server - and "Send this time", "Send until rCommander
+  ends", "Accept once" and "Trust and save" run it again in the same panel; "Cancel" and a panel
+  that moved meanwhile drop it. The answer texts no longer say "Connect again". MCP calls are
+  unchanged: they fail with the code and are not repeated.
+### Added
+
+- **Network shares on macOS** (RC-110-40): "Map network drive" and "Disconnect network drive"
+  work on macOS. The share (`smb://server/share` or `\\server\share`) is mounted under
+  `/Volumes` through AppleScript's `mount volume`, so macOS asks for the user name and password
+  in its own dialog and keeps them in the keychain - rCommander never sees them; the dialog asks
+  for no letter. Disconnecting unmounts the volume (`unmount(2)`), with open files only on
+  "Disconnect anyway". A mounted SMB, AFP, NFS or WebDAV volume is listed as a network drive with
+  its share. `drives.map_network` takes `smb://` addresses on every platform; Linux stays
+  unsupported.
+- **Icons on every dialog button** (RC-110-39): the dialog buttons that showed only their label -
+  Back, Edit, Upload, Download, Export, Reset, Discard, Clear, Refresh, Record key, Select none,
+  Not now, Go to, Count sizes and over a hundred more - show their action's icon, 18 glyphs more
+  in the icon font. Text stays where the label is the content (the collision question's answers,
+  a login script's step kinds), on Keep and on Apply beside OK. The setting
+  `appearance.button_icons` (Appearance, on by default) shows the labels alone.
+
+### Fixed
+
+- **Button bar: the symbols sit in the middle of their buttons** (RC-110-39). The bundled icon
+  fonts gave every glyph a left bearing of 0 while its outline starts inside the em square, so
+  the text renderer drew every symbol moved left by its own margin (1.5 to 3 pixels at 16 to 24);
+  the fonts carry each glyph's bearing now, which also moves the dialog buttons' icons to their
+  place. The vertical bar centres its buttons.
+### Added
+
+- **Open connections in the drive bar** (RC-110-38): every connection with a session open now -
+  SFTP, FTP, FTPS, a quick connection too - is a button of its own in the drive bar, with a plug
+  for its symbol, and is marked "Connected" in the drive menu. A click returns the panel to the
+  folder last open on that session without a new login (a session lost meanwhile reconnects as
+  any saved server does); its context menu (right click, Shift+F10 on its menu row) is the
+  connection and "Disconnect", which ends the session also when no panel shows it. New engine
+  command `drives.connections` with the MCP tool `drives_connections`; an FTP session's start and
+  end are announced as an SSH session's are, so the bar follows at once. Setting
+  `drive_bar.show_connections` (on). Long server names on drive buttons are shortened in the
+  middle.
+
 ## [0.23.3] - 2026-11-19
 
 ### Changed

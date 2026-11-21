@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use jiff::civil::{DateTime, date};
 
 use super::{Fields, NoTimestamp, Switches, Times, from_root, path_levels, render};
 use crate::clock::{DEFAULT_DATE_FORMAT, DEFAULT_TIME_FORMAT};
@@ -12,15 +12,13 @@ const FILE_NAME: &str = "abcd01xyT060306Pqrst.mp3";
 static LEVELS: [&str; 3] = ["Podcasts", "TechPodcast", "Download"];
 static FROM_ROOT: [&str; 4] = ["C", "Podcasts", "TechPodcast", "Download"];
 
-fn time(hour: u32, minute: u32, second: u32) -> NaiveDateTime {
-    NaiveDate::from_ymd_opt(2019, 1, 2)
-        .and_then(|date| date.and_hms_opt(hour, minute, second))
-        .expect("a valid date")
+fn time(hour: i8, minute: i8, second: i8) -> DateTime {
+    date(2019, 1, 2).at(hour, minute, second, 0)
 }
 
 /// `<NAME>.mp3` of 1234 bytes in `C:\Podcasts\TechPodcast\Download`, the counter at `index` of
 /// `count`.
-fn fields(index: u64, count: u64, modified: Option<NaiveDateTime>) -> Fields<'static> {
+fn fields(index: u64, count: u64, modified: Option<DateTime>) -> Fields<'static> {
     Fields {
         name: NAME,
         extension: "mp3",
@@ -52,7 +50,7 @@ fn rendered_with(
     mask: &str,
     index: u64,
     count: u64,
-    modified: Option<NaiveDateTime>,
+    modified: Option<DateTime>,
 ) -> Result<String, NoTimestamp> {
     render_fields(mask, &fields(index, count, modified))
 }
@@ -285,9 +283,8 @@ fn fractional_counter_moves_every_hundred() {
 
 #[test]
 fn t2_t3_and_offsets() {
-    let at = |day: u32, hour: u32, minute: u32, second: u32| {
-        NaiveDate::from_ymd_opt(2024, 5, day)
-            .and_then(|date| date.and_hms_opt(hour, minute, second))
+    let at = |day: i8, hour: i8, minute: i8, second: i8| {
+        DateTime::new(2024, 5, day, hour, minute, second, 0).ok()
     };
     let timed = Fields {
         times: Times {

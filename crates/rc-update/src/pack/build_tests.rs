@@ -76,8 +76,8 @@ fn a_built_manifest_verifies_under_its_key_and_lists_the_archives() {
         .trust_base64(UPDATE_KEY_ID.to_owned(), &public)
         .expect("trust");
     let bytes = std::fs::read(&out).expect("manifest");
-    let read =
-        manifest::verify_with(&bytes, &trust, Channel::Stable, None, Utc::now()).expect("verifies");
+    let read = manifest::verify_with(&bytes, &trust, Channel::Stable, None, Timestamp::now())
+        .expect("verifies");
     assert_eq!(read.version, "1.2.0");
     assert_eq!(read.sequence, 7);
     assert_eq!(read.notes, "- New.");

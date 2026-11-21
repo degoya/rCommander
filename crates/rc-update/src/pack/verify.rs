@@ -5,8 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
-use chrono::Utc;
 use clap::Args;
+use jiff::Timestamp;
 use rc_update::{
     Channel, UpdateManifest, manifest,
     sign::{self, TrustStore, UPDATE_KEY_ID},
@@ -31,7 +31,7 @@ pub(crate) fn run(args: &VerifyArgs) -> Result<()> {
     let channel = channel(args)?;
     let bytes = std::fs::read(&args.file)
         .with_context(|| format!("read manifest {}", args.file.display()))?;
-    let now = Utc::now();
+    let now = Timestamp::now();
     let verified = match &args.public_key {
         Some(given) => {
             let text = match std::fs::read_to_string(given) {
@@ -58,7 +58,7 @@ pub(crate) fn run(args: &VerifyArgs) -> Result<()> {
         verified.version,
         verified.artifacts.len(),
         verified.sequence,
-        verified.not_after.to_rfc3339()
+        rc_update::time::rfc3339_offset(verified.not_after)
     );
     if let Some(directory) = &args.assets {
         check_assets(&verified, directory)?;

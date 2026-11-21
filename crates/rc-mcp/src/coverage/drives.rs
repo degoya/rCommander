@@ -3,6 +3,10 @@
 use super::Coverage;
 
 pub(super) const ROWS: &[(&str, Coverage)] = &[
+    (
+        "drives.connections",
+        Coverage::Covered("drives_connections"),
+    ),
     ("drives.list", Coverage::Covered("drives_list")),
     (
         "drives.map_network",

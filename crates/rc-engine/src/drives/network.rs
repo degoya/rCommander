@@ -1,21 +1,27 @@
 //! Network drives: a share mapped to a drive letter and disconnected again (RC-010-16), as Total
-//! Commander's *Net - Connect network drive / Disconnect network drive* do it, through Windows'
-//! own functions.
+//! Commander's *Net - Connect network drive / Disconnect network drive* do it, through the
+//! system's own functions; on macOS a share mounted under `/Volumes` (RC-110-40).
 //!
-//! Mapping goes through `WNetAddConnection2W` with `CONNECT_INTERACTIVE | CONNECT_PROMPT`: Windows
-//! asks for the user and the password itself and keeps them in its Credential Manager, so
-//! rCommander never touches a password (and never runs `net use`, which shows one in the process
-//! list). Disconnecting is `WNetCancelConnection2W`; open files make Windows refuse, and only a
-//! second call with `force` disconnects anyway. The calls are `drives/wnet.rs`, Windows only;
-//! elsewhere [`super::DriveSource`] answers [`UNSUPPORTED`].
+//! On Windows mapping goes through `WNetAddConnection2W` with `CONNECT_INTERACTIVE |
+//! CONNECT_PROMPT`: Windows asks for the user and the password itself and keeps them in its
+//! Credential Manager, so rCommander never touches a password (and never runs `net use`, which
+//! shows one in the process list). Disconnecting is `WNetCancelConnection2W`; open files make
+//! Windows refuse, and only a second call with `force` disconnects anyway. The calls are
+//! `drives/wnet.rs`, Windows only.
 //!
-//! What the commands take is checked here first, on every platform: a folder `\\server\share`,
-//! deeper folders allowed, and a drive letter A to Z that no drive has. What Windows answers is a
-//! Win32 error code; [`from_system`] turns it into the engine's error.
+//! On macOS there is no letter: the system mounts the share under `/Volumes` and asks for the
+//! credentials in its own dialog, keeping them in the keychain (`drives/macos.rs`); disconnecting
+//! unmounts the mount point. Elsewhere [`super::DriveSource`] answers [`UNSUPPORTED`].
+//!
+//! What the commands take is checked here first, on every platform: a folder `\\server\share`
+//! or `smb://server/share`, deeper folders allowed on Windows, and a drive letter A to Z that no
+//! drive has.
+//! What Windows answers is a Win32 error code ([`from_system`]), what macOS answers an AppleScript
+//! error or an errno ([`from_mount`], [`from_unmount`]); each turns into the engine's error.
 
 use thiserror::Error;
 
-use super::{Drive, DriveGroup, letter_id};
+use super::{Drive, DriveGroup, letter_id, share};
 use crate::EngineError;
 
 /// Windows' `ERROR_NOT_SUPPORTED`: what a platform without network drives answers.
@@ -30,8 +36,8 @@ const FORBIDDEN: &[char] = &['<', '>', ':', '"', '|', '?', '*', '/'];
 /// A network drive refused or failed; its code is stable.
 #[derive(Debug, Error)]
 pub enum NetworkDriveError {
-    /// The folder is not `\\server\share[\...]`.
-    #[error("{reason}; a network folder is written \\\\server\\share")]
+    /// The folder is not `\\server\share[\...]` or `smb://server/share[/...]`.
+    #[error("{reason}; a network folder is written \\\\server\\share or smb://server/share")]
     PathInvalid { reason: &'static str },
     /// Not a drive letter A to Z.
     #[error("{letter:?} is not a drive letter from A to Z")]
@@ -58,11 +64,11 @@ pub enum NetworkDriveError {
     #[error("the server refused access to {remote}")]
     AccessDenied { remote: String },
     /// This platform maps no network drives.
-    #[error("network drives can only be mapped on Windows")]
+    #[error("network drives can only be mapped on Windows and macOS")]
     Unsupported,
-    /// Any other answer of Windows.
-    #[error("Windows answered error {code}")]
-    Failed { code: u32 },
+    /// Any other answer of the system: a Win32 error code, an AppleScript error or an errno.
+    #[error("the system answered error {code}")]
+    Failed { code: i64 },
 }
 
 impl NetworkDriveError {
@@ -105,15 +111,24 @@ impl From<NetworkDriveError> for EngineError {
 }
 
 /// `text` as a network folder `\\server\share[\...]`, with `/` read as `\` and a trailing `\`
-/// dropped. A device path (`\\?\`, `\\.\`), an empty part, `.` or `..`, and characters no name
-/// has are refused.
+/// dropped; `smb://server/share[/...]` (percent escapes undone) is the same folder. A device path
+/// (`\\?\`, `\\.\`), an empty part, `.` or `..`, characters no name has, and a user name in an
+/// `smb://` address are refused.
 ///
 /// # Errors
 ///
 /// [`NetworkDriveError::PathInvalid`] with the reason.
 pub fn parse_remote(text: &str) -> Result<String, NetworkDriveError> {
+    let text = text.trim();
+    match share::strip_scheme(text) {
+        Some(address) => parse_unc(&share::unc_of(address)?),
+        None => parse_unc(&text.replace('/', "\\")),
+    }
+}
+
+/// `text`, slashes already read as backslashes, as a network folder.
+fn parse_unc(text: &str) -> Result<String, NetworkDriveError> {
     let invalid = |reason| Err(NetworkDriveError::PathInvalid { reason });
-    let text = text.trim().replace('/', "\\");
     if text.chars().count() > MAX_REMOTE {
         return invalid("the folder is too long");
     }
@@ -203,7 +218,40 @@ pub(crate) fn from_system(code: u32, letter: char, remote: &str) -> EngineError 
         // ERROR_NOT_CONNECTED
         2250 => NetworkDriveError::NotNetwork { drive },
         UNSUPPORTED => NetworkDriveError::Unsupported,
-        code => NetworkDriveError::Failed { code },
+        code => NetworkDriveError::Failed { code: code.into() },
+    };
+    error.into()
+}
+
+/// macOS's answer `code` to mounting `remote` (`smb://server/share`): the AppleScript error of
+/// `mount volume`, or an errno its NetFS passed on. The person closing the credential dialog is
+/// [`EngineError::Cancelled`].
+pub(crate) fn from_mount(code: i32, remote: &str) -> EngineError {
+    let remote = remote.to_owned();
+    let error = match code {
+        // userCanceledErr; ECANCELED
+        -128 | 89 => return EngineError::Cancelled,
+        // nsvErr, ioErr ("There was a problem connecting to the server"), fnfErr; ENOENT,
+        // ENETUNREACH, ETIMEDOUT, ECONNREFUSED, EHOSTDOWN, EHOSTUNREACH
+        -35 | -36 | -43 | 2 | 51 | 60 | 61 | 64 | 65 => NetworkDriveError::PathNotFound { remote },
+        // afpAccessDenied, afpUserNotAuth; EPERM, EACCES, EAUTH
+        -5000 | -5023 | 1 | 13 | 80 => NetworkDriveError::AccessDenied { remote },
+        share::MOUNT_UNSUPPORTED => NetworkDriveError::Unsupported,
+        code => NetworkDriveError::Failed { code: code.into() },
+    };
+    error.into()
+}
+
+/// macOS's errno `errno` to unmounting the share `drive` (its name).
+pub(crate) fn from_unmount(errno: i32, drive: &str) -> EngineError {
+    let drive = drive.to_owned();
+    let error = match errno {
+        // EBUSY
+        16 => NetworkDriveError::InUse { drive },
+        // ENOENT, EINVAL: no mount point there
+        2 | 22 => NetworkDriveError::NotNetwork { drive },
+        share::MOUNT_UNSUPPORTED => NetworkDriveError::Unsupported,
+        code => NetworkDriveError::Failed { code: code.into() },
     };
     error.into()
 }

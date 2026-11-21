@@ -340,6 +340,7 @@ pub(super) fn one_of_each() -> Vec<Command> {
             panel: None,
             step: CursorStep::Right,
         },
+        Command::ListOpenConnections,
         Command::ListDrives { refresh: true },
         Command::ChangeDrive {
             panel: Some(PanelId::Left),

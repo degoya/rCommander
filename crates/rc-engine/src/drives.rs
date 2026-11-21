@@ -21,18 +21,33 @@
 //!
 //! A network drive shows the folder it is mapped to (`\\server\share`, Windows'
 //! `WNetGetConnectionW`); mapping one and disconnecting it is `drives/network.rs` (RC-010-16).
+//! On macOS a network share is a volume under `/Volumes` showing its `smb://server/share`, mounted
+//! and unmounted through the system (`drives/share.rs`, `drives/macos.rs`, RC-110-40).
 //!
 //! Portable devices - phones over MTP - are a group of their own (`drives/devices.rs`,
 //! RC-100-61), each with its name and the phone symbol.
+//!
+//! The connections with a session open now are [`OpenConnection`]s (`drives.connections`,
+//! RC-110-38): the drive bar shows each as a button of its own, which returns to the folder last
+//! shown there or disconnects it.
 
 mod catalog;
 pub(crate) mod devices;
 #[cfg(test)]
 pub(crate) mod fake;
 // The parsing of `/proc/mounts` compiles and is tested everywhere; only Unix reads the file.
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg_attr(windows, allow(dead_code, reason = "only Unix reads /proc/mounts"))]
 mod mounts;
 pub(crate) mod network;
+// The addresses, the mount table and osascript's answer compile and are tested everywhere; only
+// macOS mounts shares.
+#[cfg_attr(
+    not(target_os = "macos"),
+    allow(dead_code, reason = "only macOS mounts shares")
+)]
+pub(crate) mod share;
 #[cfg(not(windows))]
 mod unix;
 #[cfg(windows)]
@@ -50,6 +65,8 @@ use std::{
 use rc_vfs::{BackendId, DeviceHub, VfsPath};
 use serde::{Deserialize, Serialize};
 
+use crate::{ConnectionId, ConnectionKind};
+
 pub(crate) use catalog::DriveCatalog;
 pub use network::{NetworkDriveError, suggest_letter};
 
@@ -58,7 +75,11 @@ pub const DETAIL_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Whether this platform maps network drives (`drives.map_network`, `drives.unmap_network`);
 /// elsewhere both answer `network_drives_unsupported` and the window offers neither.
-pub const NETWORK_DRIVES: bool = cfg!(windows);
+pub const NETWORK_DRIVES: bool = cfg!(any(windows, target_os = "macos"));
+
+/// Whether a network share is a mount point the system chooses (macOS, under `/Volumes`) rather
+/// than a drive letter: `drives.map_network` takes no letter, and the window asks for none.
+pub const NETWORK_MOUNT_POINTS: bool = cfg!(target_os = "macos");
 
 /// The group of the drive bar an entry belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -154,6 +175,22 @@ pub struct Drive {
     /// connected; `None` for every other entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<String>,
+}
+
+/// A connection with a session open now (RC-110-38): an SSH session, whose files open over SFTP,
+/// or a kept FTP or FTPS session. The drive bar shows each as a button of its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenConnection {
+    /// Its entry of the drive bar, `server:<connection id>`: what `panel.change_drive` takes.
+    pub drive: String,
+    pub connection_id: ConnectionId,
+    /// The connection's name; a quick connection's `user@host`.
+    pub name: String,
+    pub kind: ConnectionKind,
+    /// The folder a panel showed last on it, where `panel.change_drive` returns; `None` before
+    /// any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_dir: Option<VfsPath>,
 }
 
 /// The entry of `drives` the location `path` lies on: the one whose key [`drive_key`] names.
@@ -302,6 +339,25 @@ pub(crate) trait DriveSource: Send + Sync {
     /// is Windows' code.
     fn restore_network(&self, _letter: char) -> Result<(), u32> {
         Err(network::UNSUPPORTED)
+    }
+
+    /// Whether network shares are mounted at a mount point the system chooses
+    /// ([`Self::mount_share`], [`Self::unmount_share`]) rather than mapped to a letter (macOS).
+    fn mounts_shares(&self) -> bool {
+        false
+    }
+
+    /// Mounts the share at `url` (`smb://server/share`), the system asking for the credentials
+    /// and keeping them; blocks until the person answered. The error is the system's number
+    /// (AppleScript's or an errno), [`share::MOUNT_UNSUPPORTED`] where no shares are mounted.
+    fn mount_share(&self, _url: &str) -> Result<(), i32> {
+        Err(share::MOUNT_UNSUPPORTED)
+    }
+
+    /// Unmounts the network share mounted at `point`; without `force` refused while files on it
+    /// are open. The error is the errno.
+    fn unmount_share(&self, _point: &Path, _force: bool) -> Result<(), i32> {
+        Err(share::MOUNT_UNSUPPORTED)
     }
 
     /// Where the portable devices come from; none by default.

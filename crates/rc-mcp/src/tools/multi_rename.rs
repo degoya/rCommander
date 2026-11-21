@@ -25,7 +25,7 @@
 //! check and the run of an apply), the local date and time formats, and a list of new names.
 //! The next step (`multi_rename.next_step`) has no tool: the agent passes the names itself.
 
-use chrono::NaiveDateTime;
+use jiff::civil::DateTime;
 use rc_engine::{
     CaseMode, Change, Command, CounterSettings, MultiRenameRequest, Outcome, RenameContext,
     RenameRule, SearchReplace, VfsPath,
@@ -174,9 +174,9 @@ pub(crate) struct RenameParams {
 }
 
 /// A local time as an agent writes it, or the refusal naming the argument.
-fn moment(name: &str, text: Option<String>) -> Result<Option<NaiveDateTime>, CallToolResult> {
+fn moment(name: &str, text: Option<String>) -> Result<Option<DateTime>, CallToolResult> {
     text.map(|text| {
-        text.trim().parse::<NaiveDateTime>().map_err(|_| {
+        text.trim().parse::<DateTime>().map_err(|_| {
             error_result(
                 "invalid_params",
                 &format!("{name} is no local time like 2026-11-07T08:15:00"),
@@ -219,7 +219,7 @@ impl RuleArgs {
 impl RenameParams {
     /// The engine's request, the moments left open set to `now` so a check and its run agree;
     /// or the refusal of a moment that does not read.
-    fn request(self, now: NaiveDateTime) -> Result<MultiRenameRequest, CallToolResult> {
+    fn request(self, now: DateTime) -> Result<MultiRenameRequest, CallToolResult> {
         let context = RenameContext {
             clipboard: self.clipboard,
             opened_at: Some(moment("opened_at", self.opened_at)?.unwrap_or(now)),
@@ -251,8 +251,8 @@ impl RenameParams {
 }
 
 /// The local time of the call.
-fn now() -> NaiveDateTime {
-    chrono::Local::now().naive_local()
+fn now() -> DateTime {
+    jiff::ZonedDateTime::now().datetime()
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]

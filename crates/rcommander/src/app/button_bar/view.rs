@@ -129,7 +129,9 @@ pub(super) fn symbol<'a>(button: &BarButton, app: &'a App) -> Option<Element<'a,
     Some(Image::<Handle>::new(handle).width(size).height(size).into())
 }
 
-/// `symbol` of `font` at `size`, in the text colour of the button it sits in.
+/// `symbol` of `font` at `size`, in the text colour of the button it sits in: a square of `size`
+/// whose advance is the font's em, so the outline sits where its designer put it in the em
+/// square - the fonts carry each glyph's left bearing for that (RC-110-39, `layout_tests.rs`).
 fn glyph<'a>(symbol: char, font: iced::Font, size: f32) -> Element<'a, Message> {
     text(symbol)
         .font(font)
@@ -343,7 +345,13 @@ pub fn vertical<'a>(app: &'a App, tokens: &'static Tokens) -> Option<Element<'a,
         if shown < bar.spec.items.len() {
             line = line.push(more(BarPlace::Vertical, shown, tokens));
         }
-        container(line).height(Length::Fill).clip(true).into()
+        // The bar is as wide as its widest button with its frame (`Measures::vertical_width`);
+        // the buttons stand in its middle, not at its left edge (RC-110-39).
+        container(line)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .clip(true)
+            .into()
     });
     let bar = container(line)
         .id(bar_id(BarPlace::Vertical))

@@ -1,5 +1,7 @@
 //! Drawing the open drive menu: a card under the button it was opened from, or where it always
-//! stood when the keyboard opened it (`place.rs`), with the lines its scope lists (`menu.rs`).
+//! stood when the keyboard opened it (`place.rs`), with the lines its scope lists (`menu.rs`). An
+//! open connection's row shows the plug and "Connected"; its context menu is this card too, with
+//! "Disconnect" under the connection (RC-110-38).
 
 use iced::{
     Alignment, Element, Length, Padding, Size,
@@ -13,7 +15,7 @@ use super::{
     menu::{MenuLine, lines},
     network_view,
     place::{self, Anchor},
-    view::{card_style, display_name, kind_symbol, line_text, small},
+    view::{CONNECTED, card_style, display_name, kind_symbol, line_text, small},
 };
 use crate::{
     app::{App, Message},
@@ -74,8 +76,12 @@ fn menu_card<'a>(
                 menu.panel,
                 stop == menu.cursor,
                 indent,
+                app.drive_bar.is_open(&drives[drive].id),
                 tokens,
             ),
+            MenuLine::Disconnect { stop, drive } => {
+                disconnect_row(&drives[drive], menu.panel, stop == menu.cursor, tokens)
+            }
             MenuLine::Actions => {
                 container(small(t!("drives.group_network")).color(tokens.text_secondary))
                     .padding([4, 8])
@@ -126,12 +132,18 @@ fn menu_row<'a>(
     panel: PanelId,
     cursor: bool,
     indent: bool,
+    open: bool,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
+    let (symbol, info) = if open {
+        (CONNECTED, t!("drives.connected").to_owned())
+    } else {
+        (kind_symbol(drive.kind), line_text(drive))
+    };
     let line = row![
-        fit::line(kind_symbol(drive.kind)).width(22),
+        fit::line(symbol).width(22),
         fit::line(display_name(drive)).width(Length::Fill),
-        fit::line(line_text(drive)).color(tokens.text_secondary),
+        fit::line(info).color(tokens.text_secondary),
     ]
     .spacing(6)
     .padding(Padding::from([0, 8]).left(if indent { 8.0 + FOLDER_INDENT } else { 8.0 }))
@@ -146,6 +158,36 @@ fn menu_row<'a>(
     mouse_area(face)
         .on_press(Message::Drive(DriveMessage::Pick(panel, drive.id.clone())))
         .on_right_press(Message::Drive(DriveMessage::Context(
+            panel,
+            drive.id.clone(),
+        )))
+        .interaction(Interaction::Pointer)
+        .into()
+}
+
+/// "Disconnect" under an open connection in its context menu: its session ends.
+fn disconnect_row<'a>(
+    drive: &'a Drive,
+    panel: PanelId,
+    cursor: bool,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
+    let line = row![
+        fit::line("\u{23cf}").width(22),
+        fit::line(t!("drives.action_disconnect")).width(Length::Fill),
+    ]
+    .spacing(6)
+    .padding([0, 8])
+    .align_y(Alignment::Center);
+    let face = container(line)
+        .height(theme::ROW_HEIGHT)
+        .width(Length::Fill)
+        .align_y(Alignment::Center)
+        .clip(true)
+        .style(move |_| theme::row(tokens, cursor, true, false));
+    // focus-ring: pointer only (a row of the menu, which the keyboard runs as one list)
+    mouse_area(face)
+        .on_press(Message::Drive(DriveMessage::Disconnect(
             panel,
             drive.id.clone(),
         )))

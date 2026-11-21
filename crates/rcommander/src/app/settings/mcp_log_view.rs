@@ -16,7 +16,7 @@ use super::{
 use crate::{
     app::Message,
     i18n::t,
-    theme::{Tokens, focus, layout},
+    theme::{Tokens, focus, icon::Icon, layout},
 };
 
 /// How many characters of a call's arguments its line shows.
@@ -69,8 +69,16 @@ pub fn view<'a>(page: &'a McpLogPage, tokens: &'static Tokens) -> Element<'a, Me
     let controls = row![
         label(t!("settings.mcp.log.session")),
         focus::Stop::pick(list, "settings.mcp.log.session", moves),
-        layout::secondary_button(t!("settings.mcp.log.refresh"), ready(McpLogMsg::Refresh)),
-        layout::secondary_button(t!("settings.mcp.log.clear"), ready(McpLogMsg::Clear)),
+        layout::secondary_icon_button(
+            Icon::Refresh,
+            t!("settings.mcp.log.refresh"),
+            ready(McpLogMsg::Refresh)
+        ),
+        layout::secondary_icon_button(
+            Icon::Clear,
+            t!("settings.mcp.log.clear"),
+            ready(McpLogMsg::Clear)
+        ),
     ]
     .spacing(8)
     .align_y(Alignment::Center);

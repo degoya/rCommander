@@ -72,11 +72,13 @@ pub(super) fn panel<'a>(
                     tokens
                 ),
                 toggle,
-                layout::secondary_button(
+                layout::secondary_icon_button(
+                    Icon::Edit,
                     t!("connections.forwards.edit"),
                     Some(forward(ForwardMsg::Edit(id)))
                 ),
-                layout::secondary_button(
+                layout::secondary_icon_button(
+                    Icon::Delete,
                     t!("connections.forwards.delete"),
                     Some(forward(ForwardMsg::Delete(id)))
                 ),
@@ -88,7 +90,8 @@ pub(super) fn panel<'a>(
     match &panel.edit {
         Some(edit) => lines = lines.push(editor(edit, panel.binds(), tokens)),
         None => {
-            lines = lines.push(layout::secondary_button(
+            lines = lines.push(layout::secondary_icon_button(
+                Icon::Add,
                 t!("connections.forwards.add"),
                 Some(forward(ForwardMsg::Add)),
             ));
@@ -161,11 +164,16 @@ fn editor<'a>(
     block
         .push(
             row![
-                layout::secondary_button(
+                layout::secondary_icon_button(
+                    Icon::Close,
                     t!("connections.forwards.cancel"),
                     Some(forward(ForwardMsg::Cancel))
                 ),
-                layout::primary_button(t!("connections.forwards.save"), Some(save)),
+                layout::primary_icon_button(
+                    Icon::Save,
+                    t!("connections.forwards.save"),
+                    Some(save)
+                ),
             ]
             .spacing(6),
         )

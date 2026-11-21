@@ -210,7 +210,8 @@ fn question<'a>(key: &str, holder: &str, name: &str) -> Element<'a, Message> {
     layout::button_row(
         None,
         [
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Swap,
                 t!("settings.shortcuts.replace"),
                 Some(page_message(ShortcutsMsg::Replace)),
             ),
@@ -248,11 +249,13 @@ fn theme_panel<'a>(
             .spacing(8)
             .align_y(Alignment::Center),
         row![
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.theme.record"),
                 chosen.and_then(|_| theme_message(ThemeKeyMsg::Record)),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Close,
                 t!("settings.shortcuts.theme.cancel"),
                 theme_message(ThemeKeyMsg::Cancel),
             ),
@@ -291,11 +294,13 @@ fn workspace_panel<'a>(
             .spacing(8)
             .align_y(Alignment::Center),
         row![
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.workspace.record"),
                 chosen.and_then(|_| message(WorkspaceKeyMsg::Record)),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Close,
                 t!("settings.shortcuts.workspace.cancel"),
                 message(WorkspaceKeyMsg::Cancel),
             ),
@@ -329,11 +334,13 @@ fn buttons<'a>(
     let with_key = free.filter(|row| !row.keys.is_empty());
     column![
         row![
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.change"),
                 on(free, ShortcutsMsg::Record(Recording::Change)),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.add"),
                 on(row_of_action, ShortcutsMsg::Record(Recording::Add)),
             ),
@@ -345,31 +352,37 @@ fn buttons<'a>(
         ]
         .spacing(layout::BUTTON_SPACING),
         row![
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Reset,
                 t!("settings.shortcuts.reset"),
                 on(row_of_action, ShortcutsMsg::Reset),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.add_theme"),
                 (idle && any_theme).then(|| page_message(ShortcutsMsg::Theme(ThemeKeyMsg::Open))),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.add_workspace"),
                 (idle && any_workspace)
                     .then(|| { page_message(ShortcutsMsg::Workspace(WorkspaceKeyMsg::Open)) }),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Reset,
                 t!("settings.shortcuts.reset_all"),
                 idle.then(|| page_message(ShortcutsMsg::ResetAll)),
             ),
         ]
         .spacing(layout::BUTTON_SPACING),
         row![
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.add_user_command"),
                 add_command(any_command, CommandKeyKind::Own),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.add_start_item"),
                 add_command(any_entry, CommandKeyKind::Start),
             ),

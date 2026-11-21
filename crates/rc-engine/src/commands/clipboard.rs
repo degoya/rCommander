@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use chrono::{DateTime, Local};
+use jiff::{Timestamp, tz::TimeZone};
 use rc_vfs::{BackendId, VfsPath};
 
 use crate::{
@@ -61,11 +61,15 @@ impl Engine {
                     } else {
                         entry.size.to_string()
                     };
-                    let date = entry.modified.map_or_else(String::new, |time| {
-                        DateTime::<Local>::from(time)
-                            .format("%Y-%m-%d %H:%M:%S")
-                            .to_string()
-                    });
+                    let date = entry
+                        .modified
+                        .and_then(|time| Timestamp::try_from(time).ok())
+                        .map_or_else(String::new, |time| {
+                            TimeZone::system()
+                                .to_datetime(time)
+                                .strftime("%Y-%m-%d %H:%M:%S")
+                                .to_string()
+                        });
                     (entry.name.clone(), format!("\t{size}\t{date}"))
                 })
                 .collect();

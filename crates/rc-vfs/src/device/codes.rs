@@ -8,7 +8,11 @@
 
 use std::{io, time::SystemTime};
 
-use chrono::{Duration, Local, NaiveDate, NaiveDateTime, TimeZone};
+use jiff::{
+    SignedDuration,
+    civil::{DateTime, date},
+    tz::{AmbiguousOffset, TimeZone},
+};
 
 use super::DeviceError;
 
@@ -65,22 +69,27 @@ pub(crate) fn failure(code: u32) -> DeviceError {
 
 /// An OLE automation date (`VT_DATE`: days since 1899-12-30, the fraction the time of day) as
 /// a date and time without a zone; `None` for one out of range.
-pub(crate) fn ole_date(days: f64) -> Option<NaiveDateTime> {
+pub(crate) fn ole_date(days: f64) -> Option<DateTime> {
     if !days.is_finite() {
         return None;
     }
-    let epoch = NaiveDate::from_ymd_opt(1899, 12, 30)?.and_hms_opt(0, 0, 0)?;
+    let epoch = date(1899, 12, 30).at(0, 0, 0, 0);
     // Whole milliseconds are more than a device keeps; the cast saturates outside i64.
     let millis = (days * 86_400_000.0).round() as i64;
-    epoch.checked_add_signed(Duration::try_milliseconds(millis)?)
+    epoch.checked_add(SignedDuration::from_millis(millis)).ok()
 }
 
-/// A device's date (local time, as WPD hands it out) as a point in time.
-pub(crate) fn local_time(date: NaiveDateTime) -> Option<SystemTime> {
-    Local
-        .from_local_datetime(&date)
-        .earliest()
-        .map(SystemTime::from)
+/// A device's date (local time, as WPD hands it out) as a point in time: the earlier of two
+/// when the clock went back, none when it skipped the hour.
+pub(crate) fn local_time(date: DateTime) -> Option<SystemTime> {
+    let ambiguous = TimeZone::system().to_ambiguous_timestamp(date);
+    match ambiguous.offset() {
+        AmbiguousOffset::Gap { .. } => None,
+        _ => ambiguous
+            .earlier()
+            .ok()
+            .and_then(|time| SystemTime::try_from(time).ok()),
+    }
 }
 
 /// Whether the WPD device `id` is a drive Windows mounts with a letter of its own (a USB stick,

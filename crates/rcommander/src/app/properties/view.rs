@@ -216,7 +216,8 @@ fn attributes<'a>(
     if form.has_mode {
         fields = fields.push(field(t!("props.mode"), &form.mode, true, FormMsg::Mode));
     }
-    let now = layout::secondary_button(
+    let now = layout::secondary_icon_button(
+        Icon::Clock,
         t!("props.now"),
         Some(Message::Properties(PropsMsg::Form(FormMsg::Now))),
     );
@@ -397,18 +398,20 @@ fn buttons<'a>(dialog: &PropsDialog) -> Element<'a, Message> {
                     .any(|item| item.entry.kind == EntryKind::Dir && item.usage.is_none())
             });
             if uncounted {
-                extra.push(layout::secondary_button(
+                extra.push(layout::secondary_icon_button(
+                    Icon::Count,
                     t!("props.count"),
                     on(PropsMsg::Count),
                 ));
             }
-            Some(t!("props.apply"))
+            Some((Icon::Confirm, t!("props.apply")))
         }
-        DialogKind::Link => Some(t!("props.create")),
-        DialogKind::Comment => Some(t!("props.save")),
+        DialogKind::Link => Some((Icon::Add, t!("props.create"))),
+        DialogKind::Comment => Some((Icon::Save, t!("props.save"))),
         DialogKind::Space => None,
     };
-    let confirm = confirm.map(|label| layout::primary_button(label, on(PropsMsg::Confirm)));
+    let confirm = confirm
+        .map(|(icon, label)| layout::primary_icon_button(icon, label, on(PropsMsg::Confirm)));
     let close = layout::secondary_icon_button(
         Icon::Close,
         t!("props.close"),

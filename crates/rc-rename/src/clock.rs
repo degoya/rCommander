@@ -1,7 +1,7 @@
 //! The times the date placeholders read: which moment (`[T1]`, `[T2]`, `[T3]`, each with an
 //! optional offset such as `[T1+60m]`), and the local date and time of `[d]` and `[t]`.
 
-use chrono::{Datelike, Months, NaiveDateTime, TimeDelta, Timelike};
+use jiff::{SignedDuration, Span, civil::DateTime};
 
 /// Which moment the date placeholders after a `[T...]` read (Total Commander's switches).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -67,23 +67,19 @@ pub const DEFAULT_TIME_FORMAT: &str = "HH:mm:ss";
 /// The longest date or time format a request may give: a system's pattern is a few characters.
 pub const MAX_FORMAT_TEXT: usize = 80;
 
-/// `time` moved by `offset`; `None` when the result lies outside chrono's range.
-pub(crate) fn shifted(time: NaiveDateTime, offset: Option<TimeOffset>) -> Option<NaiveDateTime> {
+/// `time` moved by `offset`; `None` when the result lies outside the calendar (years -9999 to
+/// 9999). A month later than 31 January is the last day of February.
+pub(crate) fn shifted(time: DateTime, offset: Option<TimeOffset>) -> Option<DateTime> {
     let Some(TimeOffset { amount, unit }) = offset else {
         return Some(time);
     };
     let seconds = |factor: i64| {
-        TimeDelta::try_seconds(amount.checked_mul(factor)?)
-            .and_then(|delta| time.checked_add_signed(delta))
+        let seconds = SignedDuration::from_secs(amount.checked_mul(factor)?);
+        time.checked_add(seconds).ok()
     };
     let months = |factor: i64| {
-        let months = amount.checked_mul(factor)?;
-        let count = Months::new(u32::try_from(months.unsigned_abs()).ok()?);
-        if months < 0 {
-            time.checked_sub_months(count)
-        } else {
-            time.checked_add_months(count)
-        }
+        let months = Span::new().try_months(amount.checked_mul(factor)?).ok()?;
+        time.checked_add(months).ok()
     };
     match unit {
         OffsetUnit::Seconds => seconds(1),
@@ -99,7 +95,7 @@ pub(crate) fn shifted(time: NaiveDateTime, offset: Option<TimeOffset>) -> Option
 /// gives `LOCALE_SSHORTDATE` and `LOCALE_STIMEFORMAT`), then `/` turned into `-` and `:` into
 /// `.` as Total Commander's `[d]` and `[t]` do. Text in single quotes is literal (`''` is a
 /// quote); day and month names are English; any other character is taken as it is.
-pub(crate) fn local(format: &str, time: NaiveDateTime) -> String {
+pub(crate) fn local(format: &str, time: DateTime) -> String {
     let chars: Vec<char> = format.chars().collect();
     let mut out = String::new();
     let mut at = 0;
@@ -127,7 +123,7 @@ pub(crate) fn local(format: &str, time: NaiveDateTime) -> String {
             }),
             'h' | 'H' | 'm' | 's' => {
                 let value = match c {
-                    'h' => time.hour12().1,
+                    'h' => hour12(time).1,
                     'H' => time.hour(),
                     'm' => time.minute(),
                     _ => time.second(),
@@ -139,7 +135,7 @@ pub(crate) fn local(format: &str, time: NaiveDateTime) -> String {
                 });
             }
             't' => {
-                let pm = time.hour12().0;
+                let pm = hour12(time).0;
                 out.push_str(match (run, pm) {
                     (1, false) => "A",
                     (1, true) => "P",
@@ -201,12 +197,22 @@ const MONTHS: [&str; 12] = [
     "December",
 ];
 
-fn weekday(time: NaiveDateTime) -> usize {
-    usize::try_from(time.weekday().num_days_from_monday()).unwrap_or_default()
+/// Whether `time` is after noon, and its hour on a 12-hour clock (12, 1 ... 11).
+pub(crate) fn hour12(time: DateTime) -> (bool, i8) {
+    let hour = time.hour();
+    let hour12 = match hour % 12 {
+        0 => 12,
+        hour => hour,
+    };
+    (hour >= 12, hour12)
 }
 
-fn month(time: NaiveDateTime) -> usize {
-    usize::try_from(time.month0()).unwrap_or_default()
+fn weekday(time: DateTime) -> usize {
+    usize::try_from(time.weekday().to_monday_zero_offset()).unwrap_or_default()
+}
+
+fn month(time: DateTime) -> usize {
+    usize::try_from(time.month() - 1).unwrap_or_default()
 }
 
 fn short(name: &str) -> String {

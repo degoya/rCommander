@@ -17,7 +17,7 @@
 //! Copied and adapted from rDownloader's `crates/rd-update/src/manifest.rs` at commit 26c8592a6:
 //! rCommander's domain, names and fields; no installer, agent or plugin lists.
 
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -117,16 +117,19 @@ pub struct UpdateManifest {
     /// The publisher's monotonic counter for this channel: the signing time in Unix seconds.
     pub sequence: u64,
     /// When the publisher says it signed this.
-    pub issued_at: DateTime<Utc>,
+    #[serde(with = "crate::time::serde_rfc3339")]
+    pub issued_at: Timestamp,
     /// After this instant the manifest is stale. Required: without it a first contact would
     /// accept a replay of any manifest ever published.
-    pub not_after: DateTime<Utc>,
+    #[serde(with = "crate::time::serde_rfc3339")]
+    pub not_after: Timestamp,
     /// The channel this manifest is published on.
     pub channel: Channel,
     /// The offered version, SemVer without a leading `v`; a pre-release on beta only.
     pub version: String,
     /// When the release was published.
-    pub released_at: DateTime<Utc>,
+    #[serde(with = "crate::time::serde_rfc3339")]
+    pub released_at: Timestamp,
     /// Plain-text release notes from the version's `RELEASE-NOTES.md` section, one `- ` point per
     /// line, at most [`MAX_NOTES_CHARS`] characters.
     #[serde(default)]
@@ -185,7 +188,9 @@ impl UpdateManifest {
         if self.not_after <= self.issued_at {
             return Err(invalid("not_after is not after issued_at"));
         }
-        if self.not_after - self.issued_at > Duration::days(MAX_VALIDITY_DAYS) {
+        if self.not_after.duration_since(self.issued_at)
+            > SignedDuration::from_hours(MAX_VALIDITY_DAYS * 24)
+        {
             return Err(invalid(format!(
                 "valid for longer than {MAX_VALIDITY_DAYS} days"
             )));
@@ -230,7 +235,7 @@ fn invalid(reason: impl Into<String>) -> UpdateError {
 /// # Errors
 ///
 /// `update.not_configured`, or `update.failed` for a malformed table.
-pub fn release_trust(now: DateTime<Utc>) -> Result<TrustStore, UpdateError> {
+pub fn release_trust(now: Timestamp) -> Result<TrustStore, UpdateError> {
     if sign::keys_at(EMBEDDED_KEYS, now).is_empty() {
         return Err(UpdateError::NotConfigured);
     }
@@ -251,7 +256,7 @@ pub fn verify(
     bytes: &[u8],
     channel: Channel,
     floor: Option<u64>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<UpdateManifest, UpdateError> {
     verify_with(bytes, &release_trust(now)?, channel, floor, now)
 }
@@ -266,7 +271,7 @@ pub fn verify_with(
     trust: &TrustStore,
     channel: Channel,
     floor: Option<u64>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<UpdateManifest, UpdateError> {
     if bytes.len() > MAX_MANIFEST_BYTES {
         return Err(UpdateError::TooLarge);

@@ -225,7 +225,8 @@ fn symbol_row<'a>(form: &'a OwnForm, shown: &Shown) -> Row<'a, Message> {
     if let Some(browse) = browse::button(PathField::OwnCommandIcon, &form.icon_path, true) {
         symbol = symbol.push(browse);
     }
-    symbol.push(layout::secondary_button(
+    symbol.push(layout::secondary_icon_button(
+        Icon::Symbol,
         t!("symbol_picker.open"),
         Some(wrap(UcMsg::ChooseSymbol)),
     ))

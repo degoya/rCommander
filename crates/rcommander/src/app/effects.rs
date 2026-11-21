@@ -7,8 +7,10 @@ use iced::Task;
 use rc_engine::{Command, CursorTarget, Engine, PanelId};
 
 use super::{
-    App, Effect, Job, Message, database_dialog::DatabaseMsg, field_walk, file_ops, queue_window,
-    window_state,
+    App, Effect, Job, Message,
+    cert_trust::{self, Again, CertTrustMsg},
+    database_dialog::DatabaseMsg,
+    field_walk, file_ops, queue_window, window_state,
 };
 
 impl App {
@@ -130,7 +132,9 @@ impl App {
 
 /// Runs a window job: [`Message::Done`] with the code of its first failure, or
 /// [`Message::VaultRefused`] when a locked vault refused a command - with that command and those
-/// after it, which the unlock prompt runs again once the master password opened the vault.
+/// after it, which the unlock prompt runs again once the master password opened the vault. A
+/// connection a certificate or plain FTP question stopped comes back as
+/// [`CertTrustMsg::Refused`] the same way, for the answer to run again (RC-110-37).
 pub async fn run_job(engine: &Engine, job: Job) -> Message {
     let mut commands = job.commands.into_iter();
     while let Some(command) = commands.next() {
@@ -142,7 +146,17 @@ pub async fn run_job(engine: &Engine, job: Job) -> Message {
                 let retry = std::iter::once(again).chain(commands).collect();
                 return Message::VaultRefused(job.panel, retry);
             }
-            Err(error) => return Message::Done(job.panel, Err(error.code())),
+            Err(error) => {
+                if let Some(question) = cert_trust::asked(engine, &error) {
+                    let again = std::iter::once(again).chain(commands).collect();
+                    return Message::CertTrust(CertTrustMsg::Refused {
+                        question,
+                        panel: job.panel,
+                        again: Again::Job(again),
+                    });
+                }
+                return Message::Done(job.panel, Err(error.code()));
+            }
         }
     }
     Message::Done(job.panel, Ok(()))

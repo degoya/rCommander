@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use jiff::civil::date;
 
 use super::{
     Change, Conflict, CounterSettings, MAX_RULE_TEXT, PlanInput, RenameContext, RenamePlan,
@@ -11,7 +11,7 @@ use crate::replace::SearchReplace;
 
 pub(super) fn file(name: &str) -> RenameSource {
     RenameSource {
-        modified: NaiveDate::from_ymd_opt(2024, 3, 9).and_then(|date| date.and_hms_opt(14, 5, 0)),
+        modified: Some(date(2024, 3, 9).at(14, 5, 0, 0)),
         ..RenameSource::named(name)
     }
 }

@@ -17,7 +17,7 @@ use rc_vfs::BackendId;
 
 use crate::recover::LogPanic as _;
 use crate::{
-    Engine, EngineError, FolderId, Outcome, TreeChange, TreeItem,
+    Engine, EngineError, FolderId, ImportError, Outcome, TreeChange, TreeItem,
     import::{
         ssh_config::{self, LoadError, McpScope, SshConfigImport},
         ssh_config_apply::{self, DEFAULT_FOLDER},
@@ -76,9 +76,11 @@ impl Engine {
                 .home
                 .as_ref()
                 .map(|home| home.join(".ssh").join("config"))
-                .ok_or_else(|| EngineError::SshConfigUnreadable {
-                    path: "~/.ssh/config".to_owned(),
-                    source: io::Error::new(io::ErrorKind::NotFound, "no home directory"),
+                .ok_or_else(|| {
+                    EngineError::Import(ImportError::SshConfigUnreadable {
+                        path: "~/.ssh/config".to_owned(),
+                        source: io::Error::new(io::ErrorKind::NotFound, "no home directory"),
+                    })
                 })?,
         };
         let shown = path.display().to_string();
@@ -88,9 +90,11 @@ impl Engine {
             tokio::task::spawn_blocking(move || read_config(&path, &user, mcp))
                 .await
                 .log_panic("engine.ssh_config_read")
-                .map_err(|error| EngineError::SshConfigUnreadable {
-                    path: shown.clone(),
-                    source: io::Error::other(error),
+                .map_err(|error| {
+                    EngineError::Import(ImportError::SshConfigUnreadable {
+                        path: shown.clone(),
+                        source: io::Error::other(error),
+                    })
                 })??;
         if let Some(alias) = hosts.into_iter().flatten().find(|name| {
             !found
@@ -98,9 +102,9 @@ impl Engine {
                 .iter()
                 .any(|host| host.alias.eq_ignore_ascii_case(name.trim()))
         }) {
-            return Err(EngineError::SshConfigHostUnknown {
+            return Err(EngineError::Import(ImportError::SshConfigHostUnknown {
                 alias: alias.clone(),
-            });
+            }));
         }
         let mut candidates = ssh_config_apply::candidates(&found, hosts);
         let target = folder_id.map_or_else(
@@ -185,19 +189,23 @@ fn read_config(
         // Only a place the import may read learns that its file is missing; any other path is
         // refused alike, whether it exists or not.
         Err(source) if config_home(path, user.home.as_deref()).is_some() => {
-            return Err(EngineError::SshConfigUnreadable {
+            return Err(EngineError::Import(ImportError::SshConfigUnreadable {
                 path: shown(),
                 source,
-            });
+            }));
         }
-        Err(_) => return Err(EngineError::SshConfigPathRefused { path: shown() }),
+        Err(_) => {
+            return Err(EngineError::Import(ImportError::SshConfigPathRefused {
+                path: shown(),
+            }));
+        }
     };
     let home = user
         .home
         .as_deref()
         .map(|home| fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf()));
     let config_of = config_home(&canonical, home.as_deref())
-        .ok_or_else(|| EngineError::SshConfigPathRefused { path: shown() })?;
+        .ok_or_else(|| EngineError::Import(ImportError::SshConfigPathRefused { path: shown() }))?;
     // `~` and `%d` stand for the home as the person spells it, the canonical one only when the
     // given path does not name it (a link into `~/.ssh`) - a WSL share's without its verbatim
     // prefix, so its keys can be taken into the vault.
@@ -207,13 +215,15 @@ fn read_config(
     let scope = mcp.map(|guard| McpScope::new(&context.ssh_dir, guard));
     let found =
         ssh_config::load_scoped(&canonical, &context, scope).map_err(|error| match error {
-            LoadError::Io(source) => EngineError::SshConfigUnreadable {
+            LoadError::Io(source) => EngineError::Import(ImportError::SshConfigUnreadable {
                 path: shown(),
                 source,
-            },
-            LoadError::KeyMaterial { file } => EngineError::SshConfigKeyMaterial {
-                path: file.display().to_string(),
-            },
+            }),
+            LoadError::KeyMaterial { file } => {
+                EngineError::Import(ImportError::SshConfigKeyMaterial {
+                    path: file.display().to_string(),
+                })
+            }
         })?;
     Ok((found, canonical))
 }

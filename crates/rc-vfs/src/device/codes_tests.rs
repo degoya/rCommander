@@ -1,12 +1,10 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use jiff::civil::{DateTime, date};
 
 use super::{failure, is_mass_storage, ole_date};
 use crate::device::DeviceError;
 
-fn at(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> NaiveDateTime {
-    NaiveDate::from_ymd_opt(year, month, day)
-        .and_then(|date| date.and_hms_opt(hour, minute, 0))
-        .expect("a valid date")
+fn at(year: i16, month: i8, day: i8, hour: i8, minute: i8) -> DateTime {
+    date(year, month, day).at(hour, minute, 0, 0)
 }
 
 #[test]

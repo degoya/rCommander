@@ -1,6 +1,7 @@
 //! The dialogs and windows that take a message before the window does, the top layer first.
 
 mod access_keys;
+mod button_icons;
 
 use super::{App, Effect, Message, dialog_windows::DialogWindow};
 
@@ -11,6 +12,10 @@ impl App {
     pub(super) fn intercept(&mut self, message: &Message) -> Option<Vec<Effect>> {
         // The underline of the access keys follows Alt and its setting (RC-080-16).
         if let Some(effects) = self.access_keys_intercept(message) {
+            return Some(effects);
+        }
+        // The icons on the dialogs' buttons follow their setting (RC-110-39).
+        if let Some(effects) = self.button_icons_intercept(message) {
             return Some(effects);
         }
         // The self-update's own messages and events; every key and click for its quiet

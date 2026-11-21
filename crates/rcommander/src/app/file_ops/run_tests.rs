@@ -86,6 +86,7 @@ async fn a_batch_over_at_once_reads_the_panels_again_once() {
         result: Ok(snapshots),
         detail: None,
         refused: None,
+        asked: None,
     };
     let over: Vec<JobSnapshot> = (1..=50)
         .map(|id| job(1000 + id, JobState::Completed, Some(8)))

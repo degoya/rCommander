@@ -26,7 +26,7 @@ use crate::{
         palette::user_commands::{command_label, shown_name, start_label},
     },
     i18n::t,
-    theme::{self, Tokens, fit, focus, layout},
+    theme::{self, Tokens, fit, focus, icon::Icon, layout},
 };
 
 /// What the panel adds a key for.
@@ -195,11 +195,13 @@ pub fn panel<'a>(
             .spacing(8)
             .align_y(Alignment::Center),
         row![
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Shortcut,
                 t!("settings.shortcuts.user_command.record"),
                 chosen.and_then(|_| message(CommandKeyMsg::Record)),
             ),
-            layout::secondary_button(
+            layout::secondary_icon_button(
+                Icon::Close,
                 t!("settings.shortcuts.user_command.cancel"),
                 message(CommandKeyMsg::Cancel),
             ),

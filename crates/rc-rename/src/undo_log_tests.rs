@@ -1,4 +1,4 @@
-use chrono::DateTime;
+use jiff::Timestamp;
 
 use super::{UndoRecord, applied_count};
 use crate::names::FsRules;
@@ -20,7 +20,7 @@ fn a_record_survives_json_and_undoes_its_steps() {
     let record = UndoRecord {
         tag: "7".to_owned(),
         dir: r"C:\photos".to_owned(),
-        started: DateTime::from_timestamp(1_700_000_000, 0).expect("a valid time"),
+        started: Timestamp::from_second(1_700_000_000).expect("a valid time"),
         steps: vec![
             RenameStep {
                 from: "a".to_owned(),
@@ -33,6 +33,11 @@ fn a_record_survives_json_and_undoes_its_steps() {
         ],
     };
     let text = serde_json::to_string(&record).expect("serialises");
+    // The start as chrono wrote it (RC-110-36).
+    assert!(
+        text.contains(r#""started":"2023-11-14T22:13:20Z""#),
+        "{text}"
+    );
     let back: UndoRecord = serde_json::from_str(&text).expect("parses");
     assert_eq!(back, record);
     assert_eq!(undo_steps(&back.steps)[0].from, "a");

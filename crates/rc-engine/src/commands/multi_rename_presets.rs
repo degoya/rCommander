@@ -13,7 +13,7 @@ use rc_rename::RenameRule;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::{Engine, EngineError, EngineEvent, Outcome, PanelId};
+use crate::{Engine, EngineError, EngineEvent, MultiRenameError, Outcome, PanelId};
 
 /// The setting the presets are kept under.
 pub const PRESETS_KEY: &str = "multi_rename.presets";
@@ -53,9 +53,9 @@ fn preset_name(name: &str) -> Result<String, EngineError> {
     } else {
         return Ok(name.to_owned());
     };
-    Err(EngineError::RenamePresetInvalid {
+    Err(EngineError::MultiRename(MultiRenameError::PresetInvalid {
         reason: reason.to_owned(),
-    })
+    }))
 }
 
 /// Whether two preset names are the same one.
@@ -121,9 +121,9 @@ impl Engine {
         {
             Some(index) => presets[index] = preset,
             None if presets.len() >= MAX_PRESETS => {
-                return Err(EngineError::RenamePresetInvalid {
+                return Err(EngineError::MultiRename(MultiRenameError::PresetInvalid {
                     reason: format!("at most {MAX_PRESETS} presets are kept"),
-                });
+                }));
             }
             None => presets.push(preset),
         }
@@ -137,9 +137,9 @@ impl Engine {
         let before = presets.len();
         presets.retain(|preset| !same_name(&preset.name, name.trim()));
         if presets.len() == before {
-            return Err(EngineError::RenamePresetNotFound {
+            return Err(EngineError::MultiRename(MultiRenameError::PresetNotFound {
                 name: name.to_owned(),
-            });
+            }));
         }
         self.store_presets(presets).await
     }
@@ -157,18 +157,18 @@ impl Engine {
             .iter()
             .position(|preset| same_name(&preset.name, name.trim()))
         else {
-            return Err(EngineError::RenamePresetNotFound {
+            return Err(EngineError::MultiRename(MultiRenameError::PresetNotFound {
                 name: name.to_owned(),
-            });
+            }));
         };
         let clash = presets
             .iter()
             .enumerate()
             .any(|(other, preset)| other != index && same_name(&preset.name, &new_name));
         if clash {
-            return Err(EngineError::RenamePresetInvalid {
+            return Err(EngineError::MultiRename(MultiRenameError::PresetInvalid {
                 reason: format!("a preset named {new_name} exists already"),
-            });
+            }));
         }
         presets[index].name = new_name;
         self.store_presets(presets).await

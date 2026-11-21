@@ -4,7 +4,7 @@
 use rc_engine::{Command, Engine, EngineError, JobSnapshot, Outcome, PanelId, RenameError};
 
 use super::FollowUp;
-use crate::i18n::t;
+use crate::{app::cert_trust, i18n::t};
 
 /// A job command for the engine, with what the window does with its job.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +29,9 @@ pub struct Submitted {
     /// The command, when a locked vault refused it: the unlock prompt submits it again
     /// (RC-050-03).
     pub refused: Option<Command>,
+    /// The open certificate or plain FTP question that stopped its connection, and the command:
+    /// a yes submits it again (RC-110-37).
+    pub asked: Option<(u64, Command)>,
 }
 
 impl Submit {
@@ -37,6 +40,7 @@ impl Submit {
         // Kept for a refusal; a command is a few words.
         let again = self.command.clone();
         let mut refused = None;
+        let mut asked = None;
         let mut detail = None;
         let result = match engine.dispatch(self.command).await {
             Ok(Outcome::Job(job)) => Ok(vec![*job]),
@@ -46,6 +50,8 @@ impl Submit {
             Err(error) => {
                 if error.code() == "vault_locked" {
                     refused = Some(again);
+                } else if let Some(question) = cert_trust::asked(&engine, &error) {
+                    asked = Some((question, again));
                 }
                 detail = named(&error);
                 Err(error.code())
@@ -58,6 +64,7 @@ impl Submit {
             result,
             detail,
             refused,
+            asked,
         }
     }
 }

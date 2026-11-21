@@ -22,7 +22,7 @@ use crate::{
         },
     },
     i18n::t,
-    theme::{self, Tokens, fit, focus, layout},
+    theme::{self, Tokens, fit, focus, icon::Icon, layout},
 };
 
 /// The width of the labels in front of the controls.
@@ -62,7 +62,11 @@ pub(super) fn side<'a>(
         .on_submit(wrap(WsMsg::Save));
     let key = row![
         fit::label(key.unwrap_or_else(|| t!("workspaces.key_none").to_owned())).width(Length::Fill),
-        layout::secondary_button(t!("workspaces.add_key"), Some(wrap(WsMsg::AddKey))),
+        layout::secondary_icon_button(
+            Icon::Shortcut,
+            t!("workspaces.add_key"),
+            Some(wrap(WsMsg::AddKey))
+        ),
     ]
     .spacing(8)
     .align_y(Alignment::Center);

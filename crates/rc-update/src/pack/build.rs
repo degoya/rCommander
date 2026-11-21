@@ -12,9 +12,9 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use chrono::{Duration, SubsecRound, Utc};
 use clap::Args;
 use ed25519_dalek::{SigningKey, pkcs8::DecodePrivateKey};
+use jiff::{SignedDuration, Timestamp};
 use rc_update::{
     Artifact, Channel, UpdateManifest,
     manifest::{self, DEFAULT_VALIDITY_DAYS, MAX_VALIDITY_DAYS, kind},
@@ -135,16 +135,16 @@ pub(crate) fn build_under(args: &BuildArgs, roots: &[EmbeddedKey]) -> Result<()>
         }
         None => String::new(),
     };
-    let issued_at = Utc::now().trunc_subsecs(0);
+    let issued_at = whole_seconds_now()?;
     let sequence = match args.sequence {
         Some(sequence) => sequence,
-        None => u64::try_from(issued_at.timestamp()).context("the clock is before 1970")?,
+        None => u64::try_from(issued_at.as_second()).context("the clock is before 1970")?,
     };
     let update = UpdateManifest {
         schema_version: manifest::UPDATE_MANIFEST_SCHEMA_VERSION,
         sequence,
         issued_at,
-        not_after: issued_at + Duration::days(args.valid_days),
+        not_after: issued_at + SignedDuration::from_hours(args.valid_days * 24),
         channel,
         version: version.to_string(),
         released_at: issued_at,
@@ -171,19 +171,18 @@ pub(crate) fn bump(args: &BumpArgs) -> Result<()> {
         .into_iter()
         .find(|channel| channel.file_name() == file_name(&args.file))
         .unwrap_or_else(|| channel_of(&bytes));
-    let old =
-        manifest::verify_with(&bytes, &trust, channel, None, Utc::now()).or_else(|error| {
-            match error {
-                rc_update::UpdateError::Stale(_) => lenient(&bytes, &trust, channel),
-                other => Err(anyhow!(
-                    "{} does not verify ({}): {other}",
-                    args.file.display(),
-                    other.code()
-                )),
-            }
-        })?;
-    let issued_at = Utc::now().trunc_subsecs(0);
-    let sequence = u64::try_from(issued_at.timestamp()).context("the clock is before 1970")?;
+    let old = manifest::verify_with(&bytes, &trust, channel, None, Timestamp::now()).or_else(
+        |error| match error {
+            rc_update::UpdateError::Stale(_) => lenient(&bytes, &trust, channel),
+            other => Err(anyhow!(
+                "{} does not verify ({}): {other}",
+                args.file.display(),
+                other.code()
+            )),
+        },
+    )?;
+    let issued_at = whole_seconds_now()?;
+    let sequence = u64::try_from(issued_at.as_second()).context("the clock is before 1970")?;
     ensure!(
         sequence > old.sequence,
         "the new sequence {sequence} is not above the old {}",
@@ -192,7 +191,7 @@ pub(crate) fn bump(args: &BumpArgs) -> Result<()> {
     let update = UpdateManifest {
         sequence,
         issued_at,
-        not_after: issued_at + Duration::days(args.valid_days),
+        not_after: issued_at + SignedDuration::from_hours(args.valid_days * 24),
         ..old
     };
     write_signed(&key, &update, args.out.as_ref().unwrap_or(&args.file))
@@ -261,7 +260,7 @@ fn write_signed(key: &SigningKey, update: &UpdateManifest, out: &Path) -> Result
         update.artifacts.len(),
         update.sequence,
         out.display(),
-        update.not_after.to_rfc3339(),
+        rc_update::time::rfc3339_offset(update.not_after),
         update
             .schema_change
             .map_or("not said", |change| if change { "yes" } else { "no" })
@@ -269,11 +268,16 @@ fn write_signed(key: &SigningKey, update: &UpdateManifest, out: &Path) -> Result
     Ok(())
 }
 
+/// Now, the fraction of the second cut off: a manifest's dates are whole seconds.
+fn whole_seconds_now() -> Result<Timestamp> {
+    Timestamp::from_second(Timestamp::now().as_second()).context("the clock is out of range")
+}
+
 /// Refuses a key that is not the compiled-in root, so another role's key given by mistake is
 /// caught here and not by every installation's check. While the root is the placeholder, a
 /// warning: the manifest will verify nowhere until the public key is pasted in.
 fn check_against_root(key: &SigningKey, table: &[EmbeddedKey]) -> Result<()> {
-    let roots = sign::keys_at(table, Utc::now());
+    let roots = sign::keys_at(table, Timestamp::now());
     match roots.iter().find(|root| root.key_id == UPDATE_KEY_ID) {
         Some(root) => ensure!(
             sign::decode_public_key(root.public_key)? == key.verifying_key(),

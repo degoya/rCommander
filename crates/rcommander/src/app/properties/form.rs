@@ -4,7 +4,7 @@
 
 use std::time::SystemTime;
 
-use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
+use jiff::civil::DateTime;
 use rc_engine::{ApplyTo, EntryKind, PropertiesReport, PropertyChange};
 
 use crate::i18n::t;
@@ -165,20 +165,13 @@ impl AttributeForm {
 
 /// A time in the fields' format; empty when unknown.
 fn time_text(time: Option<SystemTime>) -> String {
-    time.map_or_else(String::new, |time| {
-        DateTime::<Local>::from(time)
-            .format(TIME_FORMAT)
-            .to_string()
-    })
+    crate::format::date_in(time, TIME_FORMAT)
 }
 
 /// A time typed in the fields' format, in local time.
 fn parse_time(text: &str) -> Option<SystemTime> {
-    let naive = NaiveDateTime::parse_from_str(text.trim(), TIME_FORMAT).ok()?;
-    Local
-        .from_local_datetime(&naive)
-        .earliest()
-        .map(SystemTime::from)
+    let local = DateTime::strptime(TIME_FORMAT, text.trim()).ok()?;
+    crate::format::from_local(local).and_then(|time| SystemTime::try_from(time).ok())
 }
 
 #[cfg(test)]

@@ -1,11 +1,12 @@
-//! The engine's errors, each with a stable code.
+//! The engine's errors, each with a stable code. The own variants of one area are a group of
+//! their own under `error/` (RC-110-35), carried transparently; their codes stay in `codes.rs`.
 
 use rc_checksum::ChecksumError;
 use rc_db::{BackupError, DbError, connections::ConnectionError, login_scripts::LoginScriptError};
 use rc_ops::OpsError;
 use rc_remote::login_script::ScriptInvalid;
 use rc_remote::{AgentError, FtpError, SftpError, SshError};
-use rc_rename::{RenameError, UndoMismatch};
+use rc_rename::RenameError;
 use rc_term::TermError;
 use rc_vault::VaultError;
 use rc_vfs::VfsError;
@@ -13,7 +14,18 @@ use rc_vfs::VfsError;
 use crate::ConnectionId;
 
 mod codes;
+mod compare;
 mod convert;
+mod import;
+mod multi_rename;
+mod session;
+mod settings;
+
+pub use compare::CompareError;
+pub use import::ImportError;
+pub use multi_rename::MultiRenameError;
+pub use session::SessionError;
+pub use settings::SettingsError;
 
 /// What went wrong running a command.
 ///
@@ -119,17 +131,10 @@ pub enum EngineError {
     /// its [`crate::exchange::ExchangeError`].
     #[error(transparent)]
     Exchange(#[from] crate::exchange::ExchangeError),
-    /// `diagnostics.set_retention` named a table without retention limits.
-    #[error("{table} is not a table with retention limits")]
-    RetentionUnknownTable { table: String },
-    /// `diagnostics.set_retention` asked for a limit outside the table's floor and ceiling.
-    #[error("{key} must be between {min} and {max}, not {value}")]
-    RetentionOutOfRange {
-        key: &'static str,
-        value: u64,
-        min: u64,
-        max: u64,
-    },
+    /// A setting or a retention limit is unknown, protected or does not fit (RC-110-35's group);
+    /// keeps its variant's code.
+    #[error(transparent)]
+    Settings(#[from] SettingsError),
     /// No SSH agent answered; keeps the code of its [`AgentError`].
     #[error(transparent)]
     Agent(#[from] AgentError),
@@ -171,63 +176,10 @@ pub enum EngineError {
     /// a relative path. Only a drive or absolute path, or a WSL distribution's share, is read.
     #[error("{path} is not a key file on this computer; only a local one is taken into the vault")]
     KeyPathRefused { path: String },
-    /// A file to import is not `~/.ssh/config` or below `~/.ssh/config.d/` (the user's or a
-    /// WSL distribution's), by its canonical path.
-    #[error("{path} is not ~/.ssh/config or a file in ~/.ssh/config.d; only those are imported")]
-    SshConfigPathRefused { path: String },
-    /// The ssh_config, or a file it includes, is or holds a key: nothing was imported.
-    #[error("{path} is key material, not an SSH configuration; nothing was imported")]
-    SshConfigKeyMaterial { path: String },
-    /// The ssh_config to import cannot be read.
-    #[error("cannot read {path}: {source}")]
-    SshConfigUnreadable {
-        path: String,
-        #[source]
-        source: std::io::Error,
-    },
-    /// A host to import is not in the ssh_config.
-    #[error("the ssh config has no host {alias:?}")]
-    SshConfigHostUnknown { alias: String },
-    /// Over MCP, a Total Commander file to import is not named `wincmd.ini` or `wcx_ftp.ini`,
-    /// or the read guard refuses it; the same answer whether it exists or not.
-    #[error("{path} is not a wincmd.ini or wcx_ftp.ini that may be read")]
-    TcIniPathRefused { path: String },
-    /// A Total Commander file to import cannot be read.
-    #[error("cannot read {path}: {source}")]
-    TcIniUnreadable {
-        path: String,
-        #[source]
-        source: std::io::Error,
-    },
-    /// A Total Commander file to import is larger than the import reads.
-    #[error("{path} is larger than {max} bytes; it is not read")]
-    TcIniTooLarge { path: String, max: u64 },
-    /// Neither `wincmd.ini` nor `wcx_ftp.ini` was found.
-    #[error("no wincmd.ini or wcx_ftp.ini of Total Commander was found; name the files")]
-    TcIniNotFound,
-    /// Over MCP, an export of Remote Desktop Manager to import does not end in `.rdm`, or the
-    /// read guard refuses it; the same answer whether it exists or not.
-    #[error("{path} is not a .rdm file that may be read")]
-    RdmPathRefused { path: String },
-    /// The export cannot be read, or is not a regular file.
-    #[error("cannot read {path}: {source}")]
-    RdmUnreadable {
-        path: String,
-        #[source]
-        source: std::io::Error,
-    },
-    /// The export is larger than the import reads.
-    #[error("{path} is larger than {max} bytes; it is not read")]
-    RdmTooLarge { path: String, max: u64 },
-    /// The export is protected with a master key (or is no XML at all): not read.
-    #[error("{path} is encrypted with a master key; export again without one")]
-    RdmEncrypted { path: String },
-    /// The export is not well-formed XML, or declares a DTD.
-    #[error("{path} is not valid XML (line {line}) or declares a DTD")]
-    RdmInvalid { path: String, line: u32 },
-    /// The file is XML, but no export of Remote Desktop Manager.
-    #[error("{path} is not an export of Remote Desktop Manager")]
-    RdmNotAnExport { path: String },
+    /// An import of an ssh_config, of Total Commander's files or of a Remote Desktop Manager
+    /// export was refused or did not read (RC-110-35's group); keeps its variant's code.
+    #[error(transparent)]
+    Import(#[from] ImportError),
     /// A search cannot run as asked: a pattern that does not compile, an empty content text,
     /// a cursor of another search, too many start folders.
     #[error("invalid search: {reason}")]
@@ -235,32 +187,10 @@ pub enum EngineError {
     /// The caller cancelled a long-running comparison.
     #[error("cancelled")]
     Cancelled,
-    /// `compare.files` without paths found no two files: neither two selected files in the
-    /// active panel nor a file under each panel's cursor.
-    #[error("select two files, or put each panel's cursor on a file, to compare them")]
-    CompareNeedsFiles,
-    /// A compared file changed since it was read; the edit mode or `compare.apply_blocks` did
-    /// not write over it (RC-100-94).
-    #[error("{name} changed since it was compared; compare again")]
-    CompareChanged { name: String },
-    /// A compared file is not edited: binary, too large, or not written back as it was read.
-    #[error("{name} cannot be changed here: {reason}")]
-    CompareNotEditable { name: String, reason: &'static str },
-    /// `compare.apply_blocks` names a block the comparison does not have.
-    #[error("the comparison has no block {block}")]
-    CompareBlockNotFound { block: usize },
-    /// A synchronization would delete and the deletes were not confirmed; nothing was done.
-    #[error("the synchronization deletes {count} entries; confirm the deletes to run it")]
-    SyncDeletesUnconfirmed { count: usize },
-    /// A synchronization row does not exist or cannot take the action.
-    #[error("row {row} of the synchronization cannot take the action {action:?}")]
-    SyncActionInvalid {
-        row: usize,
-        action: crate::sync::SyncAction,
-    },
-    /// `sync.apply` names a path the comparison has no row for.
-    #[error("the synchronization has no row {path}")]
-    SyncRowNotFound { path: String },
+    /// A comparison of two files or a synchronization of two folders cannot go on (RC-110-35's
+    /// group); keeps its variant's code.
+    #[error(transparent)]
+    Compare(#[from] CompareError),
     /// An MCP dispatch would read a file whose contents never leave through MCP (a key, a
     /// credential file, rCommander's own data; `read_guard.rs`); nothing of it was read.
     #[error(
@@ -288,45 +218,14 @@ pub enum EngineError {
     /// The drive has no medium, cannot be reached or did not answer in time; the panel stays.
     #[error("drive {drive} is not ready")]
     DriveNotReady { drive: String },
-    /// No setting has this key.
-    #[error("{key} is not a setting")]
-    SettingUnknown { key: String },
-    /// Only a person in the rCommander window changes this setting (MCP and vault keys).
-    #[error("{key} can only be changed in the rCommander window")]
-    SettingProtected { key: String },
-    /// The value does not fit the setting.
-    #[error("{key}: {reason}")]
-    SettingInvalid { key: String, reason: String },
     /// A multi-rename rule that does not work, or a plan with conflicts (nothing was renamed);
     /// keeps the code of its [`RenameError`].
     #[error(transparent)]
     Rename(#[from] RenameError),
-    /// A multi-rename or its undo is still queued or running.
-    #[error("a multi-rename is still running; wait until it has finished")]
-    RenameBusy,
-    /// The rule gives every entry the name it has.
-    #[error("the rule changes no name; nothing was renamed")]
-    RenameNoChanges,
-    /// The undo log holds no run with a step carried out.
-    #[error("there is no multi-rename to undo")]
-    RenameNothingToUndo,
-    /// The latest run is no longer whole in the undo log (cut by its retention limit) or cannot
-    /// be read; it is not undone in part.
-    #[error("the latest multi-rename is no longer complete in the undo log and cannot be undone")]
-    RenameUndoIncomplete,
-    /// Entries of the latest run were renamed, removed or taken since; nothing was undone.
-    #[error(
-        "{} entries no longer fit the undo, nothing was renamed: {}",
-        .mismatches.len(),
-        convert::describe_mismatches(.mismatches)
-    )]
-    RenameUndoMismatch { mismatches: Vec<UndoMismatch> },
-    /// A multi-rename preset name that cannot be used, or one preset too many.
-    #[error("the preset is refused: {reason}")]
-    RenamePresetInvalid { reason: String },
-    /// No multi-rename preset has this name.
-    #[error("there is no preset named {name}")]
-    RenamePresetNotFound { name: String },
+    /// A multi-rename, its undo or a preset of it cannot go on (RC-110-35's group); keeps its
+    /// variant's code; a rule's own refusal is [`EngineError::Rename`].
+    #[error(transparent)]
+    MultiRename(#[from] MultiRenameError),
     /// The login scripts refused the change or their database failed; keeps the code of its
     /// [`LoginScriptError`].
     #[error(transparent)]
@@ -339,15 +238,10 @@ pub enum EngineError {
     /// `sessions/sources.rs`).
     #[error(transparent)]
     Ssh(SshError),
-    /// An SSH command on a connection of another kind.
-    #[error("connection {id} is not an SSH connection")]
-    ConnectionNotSsh { id: crate::ConnectionId },
-    /// An `ssh.exec` request out of bounds: an empty or overlong command, a NUL, a limit.
-    #[error("invalid command request: {reason}")]
-    ExecInvalid { reason: String },
-    /// SSH session settings that cannot be stored.
-    #[error("invalid session settings: {reason}")]
-    SessionPrefsInvalid { reason: String },
+    /// An SSH, SFTP or FTP session request names no fitting connection or is out of bounds
+    /// (RC-110-35's group); keeps its variant's code.
+    #[error(transparent)]
+    Session(#[from] SessionError),
     /// No FTP session came about (unreachable, login refused, untrusted certificate); keeps the
     /// code of its [`FtpError`].
     #[error(transparent)]
@@ -358,12 +252,6 @@ pub enum EngineError {
         "no password is stored for connection {connection}; the person stores it in rCommander"
     )]
     PasswordNotStored { connection: ConnectionId },
-    /// An `ftp://` location names no FTP connection, or a connection that is not one.
-    #[error("there is no FTP connection named {connection:?}")]
-    FtpConnectionNotFound { connection: String },
-    /// An `ftp://` location's name fits FTP connections in several folders.
-    #[error("{count} FTP connections are named {connection:?}; rename one to reach it by name")]
-    FtpConnectionAmbiguous { connection: String, count: usize },
     /// No MCP question with this id waits (answered, timed out, given up or never asked).
     #[error("no open MCP question {question}")]
     McpQuestionNotFound { question: u64 },
@@ -408,12 +296,6 @@ pub enum EngineError {
     /// channel); keeps the code of its [`SftpError`].
     #[error(transparent)]
     Sftp(#[from] SftpError),
-    /// An `sftp://` location names no SSH connection.
-    #[error("there is no SSH connection named {connection:?}")]
-    SftpConnectionNotFound { connection: String },
-    /// An `sftp://` location's name fits SSH connections in several folders.
-    #[error("{count} SSH connections are named {connection:?}; rename one to reach it by name")]
-    SftpConnectionAmbiguous { connection: String, count: usize },
     /// An FTPS certificate refused, or a decision about one that failed; keeps the code of its
     /// [`crate::CertificateError`].
     #[error(transparent)]

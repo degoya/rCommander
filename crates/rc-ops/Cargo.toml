@@ -12,8 +12,8 @@ async-trait.workspace = true
 blake3.workspace = true
 # Packing (RC-030-04): the archive writers, the same pure-Rust crates rc-vfs reads with.
 bzip2.workspace = true
-chrono.workspace = true
 flate2.workspace = true
+jiff.workspace = true
 # Checksum files, split and combine as jobs (RC-020-05).
 rc-checksum = { path = "../rc-checksum" }
 lzma-rust2.workspace = true

@@ -3,7 +3,7 @@
 
 use std::time::SystemTime;
 
-use chrono::{DateTime, Local, NaiveDateTime};
+use jiff::{Timestamp, civil::DateTime, tz::TimeZone};
 use serde::{Deserialize, Serialize};
 
 use crate::case::CaseMode;
@@ -95,8 +95,8 @@ pub struct RenameSource {
     /// The current name, without the directory.
     pub name: String,
     /// The local modification time, for the date placeholders.
-    #[serde(default)]
-    pub modified: Option<NaiveDateTime>,
+    #[serde(default, with = "crate::serde_time::local_option")]
+    pub modified: Option<DateTime>,
     /// The size in bytes, for `[S]`.
     #[serde(default)]
     pub size: Option<u64>,
@@ -127,9 +127,11 @@ pub struct RenameContext {
     /// The clipboard's text; `[X]` is an error without it.
     pub clipboard: Option<String>,
     /// When the dialog was opened, local (`[T2]`).
-    pub opened_at: Option<NaiveDateTime>,
+    #[serde(with = "crate::serde_time::local_option")]
+    pub opened_at: Option<DateTime>,
     /// When the options last changed, local (`[T3]`).
-    pub changed_at: Option<NaiveDateTime>,
+    #[serde(with = "crate::serde_time::local_option")]
+    pub changed_at: Option<DateTime>,
     /// The local date as a Windows picture (`dd.MM.yyyy`); ISO 8601 when `None`.
     pub date_format: Option<String>,
     /// The local time as a Windows picture (`HH:mm:ss`); 24 hours when `None`.
@@ -157,10 +159,16 @@ impl RenameContext {
     }
 }
 
-/// A modification time as the date placeholders read it: local time.
+/// A modification time as the date placeholders read it: local time. A time beyond the years
+/// 9999 or -9999 is taken as the last or first one.
 #[must_use]
-pub fn local_time(time: SystemTime) -> NaiveDateTime {
-    DateTime::<Local>::from(time).naive_local()
+pub fn local_time(time: SystemTime) -> DateTime {
+    let at = Timestamp::try_from(time).unwrap_or(if time > SystemTime::UNIX_EPOCH {
+        Timestamp::MAX
+    } else {
+        Timestamp::MIN
+    });
+    TimeZone::system().to_datetime(at)
 }
 
 /// Refuses a rule with a text longer than [`MAX_RULE_TEXT`] characters, or a name list that is

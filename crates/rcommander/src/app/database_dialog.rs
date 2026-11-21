@@ -76,7 +76,11 @@ pub struct DatabaseDialog {
 
 impl DatabaseDialog {
     fn new(mode: DialogMode, folder: Option<PathBuf>) -> Self {
-        let stamp = || chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        let stamp = || {
+            jiff::ZonedDateTime::now()
+                .strftime("%Y%m%d-%H%M%S")
+                .to_string()
+        };
         let path = match (mode, &folder) {
             (DialogMode::Backup, Some(folder)) => folder
                 .join(rc_db::backup_file_name(&stamp()))

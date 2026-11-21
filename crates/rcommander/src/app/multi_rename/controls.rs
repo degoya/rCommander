@@ -8,7 +8,7 @@ use iced::{
 use super::{Field, Flag, MrMsg};
 use crate::{
     app::Message,
-    theme::{self, fit::line, focus, layout},
+    theme::{self, fit::line, focus, icon::Icon, layout},
 };
 
 /// The labels' column.
@@ -18,9 +18,14 @@ pub(super) fn wrap(message: MrMsg) -> Message {
     Message::MultiRename(message)
 }
 
-/// A dialog button (`docs/design.md`); `None` draws it disabled.
-pub(super) fn small_button<'a>(label: &'a str, message: Option<MrMsg>) -> Element<'a, Message> {
-    layout::secondary_button(label, message.map(wrap))
+/// A dialog button with its action's `icon`, if it has one (`docs/design.md`); `None` draws it
+/// disabled.
+pub(super) fn small_button<'a>(
+    icon: impl Into<Option<Icon>>,
+    label: &'a str,
+    message: Option<MrMsg>,
+) -> Element<'a, Message> {
+    layout::secondary_icon_button(icon, label, message.map(wrap))
 }
 
 pub(super) fn labelled<'a>(

@@ -9,7 +9,7 @@
 //! verified download, `update.install` downloads first and installs once it is there
 //! (`requested.rs`, RC-100-84).
 
-use chrono::Utc;
+use jiff::Timestamp;
 use rc_update::install::{
     self, DEFAULT_CONFIRM_TIMEOUT_SECS, DOWNLOAD_DIR, Journal, PRE_UPDATE_DIR, Phase, Plan,
     process, steps, update_dir,
@@ -214,7 +214,7 @@ impl Engine {
         let pre_update = update_dir(&data_dir).join(PRE_UPDATE_DIR);
         std::fs::create_dir_all(&pre_update)
             .map_err(|error| UpdateRefusal::new("update.failed", error.to_string()))?;
-        let stamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+        let stamp = Timestamp::now().strftime("%Y%m%dT%H%M%SZ");
         let target = pre_update.join(format!("rcommander-{RUNNING}-{stamp}.db"));
         let copy = db
             .backup_to(&target, false)

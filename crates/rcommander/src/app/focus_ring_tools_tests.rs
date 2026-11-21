@@ -425,20 +425,31 @@ async fn the_network_drive_dialogs_walk_their_controls() {
     {
         let mut screen = Screen::new(drive_bar::with_menu(&harness.app, nothing(), tokens)).await;
         let stops = walk_round(&mut screen, "map network drive");
-        assert_eq!(
-            kinds(&stops)[..3],
-            [None, Some(Kind::Choice), Some(Kind::Toggle)],
-            "the folder, the letter, reconnect"
-        );
+        if rc_engine::NETWORK_MOUNT_POINTS {
+            // macOS mounts under /Volumes: the folder alone, no letter, no reconnect (RC-110-40).
+            assert_eq!(
+                kinds(&stops),
+                [None, Some(Kind::Button), Some(Kind::Button)],
+                "the folder, Connect, Cancel"
+            );
+        } else {
+            assert_eq!(
+                kinds(&stops)[..3],
+                [None, Some(Kind::Choice), Some(Kind::Toggle)],
+                "the folder, the letter, reconnect"
+            );
+        }
         assert_eq!(screen.loose_buttons(), 1, "only the head's X");
         press_every_stop(&mut screen, &stops, "map network drive");
-        let reconnect = press_on(&mut screen, "Reconnect at sign-in", Named::Space);
-        assert!(matches!(
-            reconnect[..],
-            [Message::Drive(DriveMessage::Network(
-                NetworkMsg::Reconnect(_)
-            ))]
-        ));
+        if !rc_engine::NETWORK_MOUNT_POINTS {
+            let reconnect = press_on(&mut screen, "Reconnect at sign-in", Named::Space);
+            assert!(matches!(
+                reconnect[..],
+                [Message::Drive(DriveMessage::Network(
+                    NetworkMsg::Reconnect(_)
+                ))]
+            ));
+        }
         let cancel = press_on(&mut screen, "Cancel", Named::Enter);
         assert!(matches!(
             cancel[..],

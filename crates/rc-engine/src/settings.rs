@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use schema::AGENT_MAX_KEYS_KEY;
+pub use schema::BUTTON_ICONS_KEY;
 pub use schema::LANGUAGE_KEY;
 pub use schema::archive::{DECODER_MEMORY_KEY, VERIFY_UPDATE_KEY};
 pub use schema::associations::{
@@ -37,7 +38,7 @@ pub use schema::checksum::CHECKSUM_ENTER_KEY;
 pub use schema::disk_usage::{DISK_USAGE_LARGEST_KEY, DISK_USAGE_SIZE_KEY};
 pub use schema::drives::{
     DEVICE_TRANSFER_HINT_KEY, FOLLOW_ON_OWN_DRIVE_KEY, FOLLOW_OTHER_PANEL_KEY,
-    PORTABLE_DEVICES_KEY, REFRESH_ON_FOCUS_KEY, REFRESH_ON_FOCUS_NETWORK_KEY,
+    PORTABLE_DEVICES_KEY, REFRESH_ON_FOCUS_KEY, REFRESH_ON_FOCUS_NETWORK_KEY, SHOW_CONNECTIONS_KEY,
 };
 pub use schema::ftp::{FTP_ASK_PLAINTEXT_KEY, FTP_RESOLVE_LINKS_KEY};
 pub use schema::git::{GIT_BRANCH_KEY, GIT_IGNORED_KEY, GIT_PROGRAM_KEY, GIT_STATUS_KEY};
@@ -135,7 +136,7 @@ pub use schema::{
     UPDATE_PROXY_KEY, UPDATE_RETENTION_KEY, UPDATE_SOURCE_KEY, UPDATE_WHATS_NEW_KEY,
 };
 
-use crate::{Engine, EngineError, EngineEvent, Outcome};
+use crate::{Engine, EngineError, EngineEvent, Outcome, SettingsError};
 
 /// Settings the window sets through `settings.set` but an agent may not: the workspace applied
 /// at the next start may open terminals and SSH sessions, which an agent starts only through
@@ -273,8 +274,10 @@ impl Engine {
     pub(crate) async fn get_settings(&self, key: Option<&str>) -> Result<Outcome, EngineError> {
         let db = self.db()?;
         let specs: Vec<&SettingSpec> = match key {
-            Some(key) => vec![setting(key).ok_or_else(|| EngineError::SettingUnknown {
-                key: key.to_owned(),
+            Some(key) => vec![setting(key).ok_or_else(|| {
+                EngineError::Settings(SettingsError::SettingUnknown {
+                    key: key.to_owned(),
+                })
             })?],
             None => SETTINGS.iter().collect(),
         };
@@ -303,9 +306,9 @@ impl Engine {
     ) -> Result<Outcome, EngineError> {
         if is_protected(key) || (crate::read_guard::from_mcp() && AGENT_MAY_NOT_SET.contains(&key))
         {
-            return Err(EngineError::SettingProtected {
+            return Err(EngineError::Settings(SettingsError::SettingProtected {
                 key: key.to_owned(),
-            });
+            }));
         }
         let stored = self.store_setting(key, value).await?;
         Ok(Outcome::Settings {
@@ -328,15 +331,17 @@ impl Engine {
     }
 
     async fn store_setting(&self, key: &str, value: &Value) -> Result<SettingValue, EngineError> {
-        let spec = setting(key).ok_or_else(|| EngineError::SettingUnknown {
-            key: key.to_owned(),
+        let spec = setting(key).ok_or_else(|| {
+            EngineError::Settings(SettingsError::SettingUnknown {
+                key: key.to_owned(),
+            })
         })?;
-        let value = spec
-            .check(value)
-            .map_err(|reason| EngineError::SettingInvalid {
+        let value = spec.check(value).map_err(|reason| {
+            EngineError::Settings(SettingsError::SettingInvalid {
                 key: key.to_owned(),
                 reason,
-            })?;
+            })
+        })?;
         // Only themes this system offers, each of its mode (RC-100-56).
         if spec.key == WSL_THEMES_KEY {
             self.check_wsl_themes(&value).await?;

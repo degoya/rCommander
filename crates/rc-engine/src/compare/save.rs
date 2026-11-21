@@ -20,7 +20,7 @@ use super::{
     read_bounded,
     text::{self, TextFile},
 };
-use crate::EngineError;
+use crate::{CompareError, EngineError};
 
 /// Both files as an [`EditSession`]; `None` when either is binary, larger than
 /// [`super::TEXT_DIFF_LIMIT`] or of too many lines, as the line diff answers.
@@ -106,9 +106,9 @@ pub async fn save(
     }
     let now = vfs.stat(&path.path).await?;
     if !force && !origin.unchanged(&now) {
-        return Err(EngineError::CompareChanged {
+        return Err(EngineError::Compare(CompareError::CompareChanged {
             name: crate::shown_path(path).display().to_string(),
-        });
+        }));
     }
     let link = matches!(now.kind, EntryKind::Symlink { .. });
     if path.backend == BackendId::Local && !link {

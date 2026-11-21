@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{archive::refuse_archive_change, panel::resolve_path};
 use crate::{
-    Engine, EngineError, EngineEvent, Outcome, PanelChange, PanelId, Selection,
+    CompareError, Engine, EngineError, EngineEvent, Outcome, PanelChange, PanelId, Selection,
     compare::{self, FileCompareRequest, FileComparison, Side, TextDiff, TextOptions},
     dispatch::call_token,
     read_guard,
@@ -375,7 +375,7 @@ impl Engine {
         };
         match (pick(PanelId::Left, left), pick(PanelId::Right, right)) {
             (Some(left), Some(right)) => Ok((left, right)),
-            _ => Err(EngineError::CompareNeedsFiles),
+            _ => Err(EngineError::Compare(CompareError::CompareNeedsFiles)),
         }
     }
 }

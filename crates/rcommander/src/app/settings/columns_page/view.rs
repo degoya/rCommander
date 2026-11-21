@@ -21,7 +21,7 @@ use crate::{
     theme::{
         self, DANGER, Tokens, focus,
         icon::Icon,
-        layout::{glyph_button, primary_button, secondary_button, secondary_icon_button},
+        layout::{glyph_button, primary_icon_button, secondary_icon_button},
     },
 };
 
@@ -202,7 +202,8 @@ fn editor_view<'a>(
             .on_input(|text| page_message(ColumnsMsg::Masks(text)))
             .width(Length::Fill),
         hint(t!("settings.columns.masks_help"), tokens),
-        primary_button(
+        primary_icon_button(
+            Icon::Save,
             t!("settings.columns.save"),
             (!page.busy).then(|| page_message(ColumnsMsg::Save))
         ),
@@ -258,7 +259,8 @@ fn column_row<'a>(
             (!last).then(|| page_message(ColumnsMsg::RowDown(at))),
             tokens,
         ),
-        secondary_button(
+        secondary_icon_button(
+            Icon::Delete,
             t!("settings.columns.remove"),
             (count > 1).then(|| page_message(ColumnsMsg::RowRemove(at)))
         ),

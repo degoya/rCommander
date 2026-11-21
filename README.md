@@ -11,8 +11,9 @@ Rust.
 - Two panels with tabs; each panel shows either the file list or a terminal. The lists offer a
   folder tree, thumbnails, git status, your own column sets, and refresh themselves when a
   folder changes.
-- WSL distributions, SSH servers and phones or cameras on USB (MTP, Windows and Linux) in the
-  drive bar, next to the local drives.
+- WSL distributions, SSH servers, network drives (Windows and macOS) and phones or cameras on USB
+  (MTP, Windows and Linux) in the drive bar, next to the local drives; each open server
+  connection has a button there that leads back to it or disconnects it.
 - A small SSH connection manager: servers, keys, credentials, login scripts and one-time codes
   for two-factor logins, stored encrypted behind an optional master password; inventory plugins
   keep connections in step with NetBox, Proxmox or another system.

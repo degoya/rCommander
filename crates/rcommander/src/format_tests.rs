@@ -2,7 +2,9 @@ use std::time::{Duration, SystemTime};
 
 use rc_engine::EntryKind;
 
-use super::{attributes, count, date_in, date_pattern, parse_size, percent, rights, size};
+use super::{
+    attributes, count, date_in, date_pattern, from_local, parse_size, percent, rights, size,
+};
 
 const KIB: u64 = 1024;
 const MIB: u64 = KIB * 1024;
@@ -96,6 +98,27 @@ fn a_date_has_minute_precision_and_none_is_empty() {
     );
     assert_eq!(text.len(), "2023-11-14 22:13".len());
     assert!(text.starts_with("2023-11-1"), "{text}");
+}
+
+/// Every pattern the panels, the properties and the dialogs write gives the text chrono gave
+/// (RC-110-36): a local time read back and written in each.
+#[test]
+fn a_local_time_reads_back_in_every_pattern() {
+    let local = jiff::civil::date(2024, 5, 17).at(14, 4, 5, 0);
+    let time = from_local(local).and_then(|time| SystemTime::try_from(time).ok());
+    let cases = [
+        ("%Y-%m-%d %H:%M:%S", "2024-05-17 14:04:05"),
+        ("%d.%m.%Y %H:%M", "17.05.2024 14:04"),
+        ("%m/%d/%Y %I:%M %p", "05/17/2024 02:04 PM"),
+        ("%d/%m/%Y %H:%M", "17/05/2024 14:04"),
+        ("%d-%m-%Y %H:%M", "17-05-2024 14:04"),
+        ("%Y/%m/%d %H:%M", "2024/05/17 14:04"),
+        ("%Y%m%d-%H%M%S", "20240517-140405"),
+        ("%H:%M", "14:04"),
+    ];
+    for (pattern, text) in cases {
+        assert_eq!(date_in(time, pattern), text, "{pattern}");
+    }
 }
 
 #[test]

@@ -16,13 +16,13 @@ path = "src/main.rs"
 anyhow.workspace = true
 # The names of the thumbnails' tiles on disk: a hash of path, size, time and tile size (RC-100-89).
 blake3.workspace = true
-chrono.workspace = true
 clap.workspace = true
 directories.workspace = true
 # Raster images for the file icons (RC-010-10) and the viewer (RC-020-07): RGBA handles only,
 # no iced codecs; the viewer decodes through `image` with its own limits.
 iced = { workspace = true, features = ["image-without-codecs"] }
 image.workspace = true
+jiff.workspace = true
 # The native menu bar (RC-080-18): built everywhere, attached on Windows only.
 muda.workspace = true
 # A link in the Markdown preview goes to the system as `file.open` hands a file (RC-020-09).

@@ -42,7 +42,7 @@ use crate::{
         fit::tip,
         focus,
         icon::Icon,
-        layout::{primary_button, secondary_button, secondary_icon_button},
+        layout::{primary_icon_button, secondary_icon_button},
         themes::seen,
     },
 };
@@ -255,11 +255,13 @@ fn buttons<'a>(page: &'a ThemesPage, tokens: &'static Tokens) -> Element<'a, Mes
                 .on_input(|text| page_message(ThemesMsg::RenameText(text)))
                 .on_submit(page_message(ThemesMsg::RenameDone))
                 .width(280),
-            primary_button(
+            primary_icon_button(
+                Icon::Confirm,
                 t!("settings.themes.rename_done"),
                 on(true, ThemesMsg::RenameDone)
             ),
-            secondary_button(
+            secondary_icon_button(
+                Icon::Close,
                 t!("settings.themes.rename_cancel"),
                 Some(page_message(ThemesMsg::RenameCancel))
             ),
@@ -285,7 +287,11 @@ fn buttons<'a>(page: &'a ThemesPage, tokens: &'static Tokens) -> Element<'a, Mes
                 t!("settings.themes.rename"),
                 on(own, ThemesMsg::Rename)
             ),
-            secondary_button(t!("settings.themes.edit"), on(own, ThemesMsg::Edit)),
+            secondary_icon_button(
+                Icon::Edit,
+                t!("settings.themes.edit"),
+                on(own, ThemesMsg::Edit)
+            ),
             secondary_icon_button(
                 Icon::Delete,
                 t!("settings.themes.delete"),
@@ -321,7 +327,8 @@ fn file_row<'a>(page: &'a ThemesPage, tokens: &'static Tokens) -> Element<'a, Me
             t!("settings.themes.import"),
             on(ThemesMsg::Import)
         ))
-        .push(secondary_button(
+        .push(secondary_icon_button(
+            Icon::Export,
             t!("settings.themes.export"),
             export.and_then(on)
         ))
@@ -344,15 +351,18 @@ fn conflict(page: &ThemesPage) -> Option<Element<'_, Message>> {
                 name = conflict.existing.name.as_str()
             )),
             row![
-                secondary_button(
+                secondary_icon_button(
+                    Icon::Swap,
                     t!("settings.themes.conflict_replace"),
                     ask(ConflictChoice::Replace)
                 ),
-                secondary_button(
+                secondary_icon_button(
+                    Icon::Rename,
                     t!("settings.themes.conflict_rename"),
                     ask(ConflictChoice::Rename)
                 ),
-                secondary_button(
+                secondary_icon_button(
+                    Icon::Close,
                     t!("settings.themes.conflict_cancel"),
                     ask(ConflictChoice::Cancel)
                 ),

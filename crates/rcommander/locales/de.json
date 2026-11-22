@@ -2257,6 +2257,8 @@
   "viewer.hints_views": "1 Text · 2 Binär · 3 Hex · 4 Bild · 5 Markdown · 7 Nächste Ansicht · A/S/6/8/E Kodierung · W Umbruch · F7 Suchen · Strg+Mausrad/+/-/0 Textgröße · N/P Nächste/Vorige · Esc Schließen",
   "setting.plugins.enabled": "Plugins ausführen",
   "setting.plugins.enabled.help": "Aus: kein Plugin läuft, und der eingebaute Lister zeigt jede Datei. Die Plugins bleiben installiert und behalten ihre eigenen Schalter.",
+  "setting.plugins.preload_viewers": "Lister-Plugins nach dem Start laden",
+  "setting.plugins.preload_viewers.help": "An: die Lister-Plugins werden im Hintergrund geladen, sobald das Fenster offen ist, so dass die erste Datei in Lister oder Schnellansicht nicht auf sie wartet. Aus: sie werden geladen, wenn die erste Datei geöffnet wird.",
   "setting.plugins.crash_limit": "Fehler, bevor ein Plugin ausgesetzt wird",
   "setting.plugins.crash_limit.help": "Ein Plugin, das so oft innerhalb von fünf Minuten abstürzt, hängt oder keinen Speicher mehr hat, wird ausgesetzt, bis es auf dieser Seite fortgesetzt wird (1-10).",
   "setting.plugins.viewer_output_limit_mib": "Größter Text, den ein Lister-Plugin schreiben darf (MiB)",

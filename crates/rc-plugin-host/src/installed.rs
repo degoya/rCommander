@@ -20,7 +20,7 @@ mod state;
 mod sweep;
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -35,7 +35,7 @@ use crate::{
     sign::decode_public_key,
     verifier::PluginVerifier,
 };
-use disk::{BUNDLED_MARKER, read_package_parts, version_directories};
+use disk::{BUNDLED_MARKER, read_bounded_file, read_package_parts, version_directories};
 
 pub use bundled::{BUNDLED_DIR, bundled_dir, sync_bundled};
 pub use keys::InstalledKeys;
@@ -118,6 +118,34 @@ pub fn list(data_dir: &Path) -> Result<Vec<InstalledPlugin>> {
             .cmp(&right.manifest.name.to_lowercase())
     });
     Ok(plugins)
+}
+
+/// The hex SHA-256 of every installed version's `component.wasm` under `data_dir`: what the
+/// compile cache keeps when it is pruned ([`crate::prune_compile_cache`], RC-110-48). Nothing is
+/// verified - a digest only keeps cache entries, it never runs anything. A version whose
+/// component does not read is left out, so its entries go with the pass.
+///
+/// # Errors
+///
+/// The plugin folder cannot be read; then nothing may be pruned by this answer.
+pub fn component_digests(data_dir: &Path) -> Result<BTreeSet<String>> {
+    let mut digests = BTreeSet::new();
+    for dir in version_directories(&plugins_root(data_dir))? {
+        match read_bounded_file(
+            &dir.join(crate::COMPONENT_MEMBER),
+            crate::MAX_COMPONENT_BYTES,
+        ) {
+            Ok(bytes) => {
+                digests.insert(crate::sha256_hex(&bytes));
+            }
+            Err(error) => tracing::debug!(
+                folder = %dir.display(),
+                error = %format!("{error:#}"),
+                "an installed plugin version's component does not read"
+            ),
+        }
+    }
+    Ok(digests)
 }
 
 /// One installed version as the Plugins page shows it.

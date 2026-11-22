@@ -5,6 +5,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-22
+
+### Changed
+
+- **crypto-common 0.1.7** (RC-110-46): the digest stack under Cranelift and Wasmtime's cache on
+  crypto-common 0.1.7, which pins generic-array to 0.14.7 (down from 0.14.9); nothing in the
+  lock needs a newer 0.14, and no crate of the workspace uses generic-array directly. With it
+  hashbrown 0.17.2 and russh 0.65.4, compatible updates.
+- **Rust 1.100.0** (RC-110-51): the toolchain pin and the workspace's `rust-version`; with it
+  cargo-nextest 0.9.152, cargo-llvm-cov 0.9.2 and nfpm 2.49.0 (checksum-pinned). wasm-tools
+  stays on 1.261.0, the version the bundled plugins and the SDK are built with.
+- **russh-sftp 4.0.0** (RC-110-50): SFTP on russh-sftp 4 instead of 3.0.1. Its breaks are file
+  and directory handles typed as bytes (`SftpHandle`) instead of `String`, in the client and the
+  server handler; the listing and the test server's SFTP subsystem take them, paths stay
+  strings. Through the library: a status code outside the protocol draft is a plain failure
+  instead of a broken answer, extended attributes are read past instead of misreading the rest
+  of a listing, a file type is matched exactly (a socket or block device is no longer taken for
+  a directory), a request after the session ended fails at once, and the request timeout counts
+  from the moment the request is sent. russh-sftp no longer brings chrono (`deny.toml`).
+
+### Fixed
+
+- **Plugin compile cache switched on, viewers preloaded** (RC-110-48): the start compiled every
+  bundled plugin again with Cranelift (2.6-2.8 s of a 3 s start with 25 plugins), because
+  nothing configured `rc-plugin-host`'s compile cache. `Engine::attach_plugins` now configures it
+  under `<data dir>/plugin-cache` (the portable folder in portable mode) before anything can
+  compile a plugin, a failure a warning; `start_plugins` prunes it after the sweep by the
+  installed components (`installed::component_digests`), in the background. Once the window is
+  open the viewer plugins are loaded into the window's set in the background, so the first F3
+  or Quick View no longer waits for them; new setting `plugins.preload_viewers` (on, protected).
+
 ## [0.24.3] - 2026-11-21
 
 ### Changed

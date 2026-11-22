@@ -18,7 +18,8 @@ use std::{
 
 use russh::{Channel, server::Msg};
 use russh_sftp::protocol::{
-    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Packet, Status, StatusCode, Version,
+    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Packet, SftpHandle, Status,
+    StatusCode, Version,
 };
 
 /// The rename that replaces its target; version "1".
@@ -86,7 +87,7 @@ enum Opened {
 
 struct Served {
     options: SftpServe,
-    handles: HashMap<String, Opened>,
+    handles: HashMap<SftpHandle, Opened>,
     next: u64,
 }
 
@@ -157,14 +158,14 @@ impl Served {
         path
     }
 
-    fn handle(&mut self, opened: Opened) -> String {
+    fn handle(&mut self, opened: Opened) -> SftpHandle {
         self.next += 1;
-        let handle = format!("h{}", self.next);
+        let handle = SftpHandle::from(format!("h{}", self.next));
         self.handles.insert(handle.clone(), opened);
         handle
     }
 
-    fn file(&mut self, handle: &str) -> Result<&mut fs::File, StatusCode> {
+    fn file(&mut self, handle: &SftpHandle) -> Result<&mut fs::File, StatusCode> {
         match self.handles.get_mut(handle) {
             Some(Opened::File(file)) => Ok(file),
             _ => Err(StatusCode::Failure),
@@ -237,7 +238,7 @@ impl russh_sftp::server::Handler for Served {
         Ok(Attrs { id, attrs })
     }
 
-    async fn fstat(&mut self, id: u32, handle: String) -> Result<Attrs, Self::Error> {
+    async fn fstat(&mut self, id: u32, handle: SftpHandle) -> Result<Attrs, Self::Error> {
         let attrs = attrs(self.file(&handle)?.metadata())?;
         Ok(Attrs { id, attrs })
     }
@@ -272,7 +273,7 @@ impl russh_sftp::server::Handler for Served {
     async fn read(
         &mut self,
         id: u32,
-        handle: String,
+        handle: SftpHandle,
         offset: u64,
         len: u32,
     ) -> Result<Data, Self::Error> {
@@ -292,7 +293,7 @@ impl russh_sftp::server::Handler for Served {
     async fn write(
         &mut self,
         id: u32,
-        handle: String,
+        handle: SftpHandle,
         offset: u64,
         data: Vec<u8>,
     ) -> Result<Status, Self::Error> {
@@ -303,7 +304,7 @@ impl russh_sftp::server::Handler for Served {
         done(id, written)
     }
 
-    async fn close(&mut self, id: u32, handle: String) -> Result<Status, Self::Error> {
+    async fn close(&mut self, id: u32, handle: SftpHandle) -> Result<Status, Self::Error> {
         self.handles.remove(&handle);
         Ok(ok(id))
     }
@@ -331,7 +332,7 @@ impl russh_sftp::server::Handler for Served {
         Ok(Handle { id, handle })
     }
 
-    async fn readdir(&mut self, id: u32, handle: String) -> Result<Name, Self::Error> {
+    async fn readdir(&mut self, id: u32, handle: SftpHandle) -> Result<Name, Self::Error> {
         let block = self.options.block.max(1);
         let Some(Opened::Dir(listing)) = self.handles.get_mut(&handle) else {
             return Err(StatusCode::Failure);

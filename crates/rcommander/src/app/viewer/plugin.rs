@@ -7,7 +7,8 @@
 //! the Lister or Quick View moving on drops the lister, whose flag ends the plugin's running
 //! call and every later one. A photo the built-in viewer opens brings its EXIF as a document of
 //! the core's own (RC-100-99, `exif.rs`), a credential file its colours (RC-110-07,
-//! `credentials.rs`), a certificate or key file its report (RC-110-08, `cert.rs`).
+//! `credentials.rs`), a certificate or key file its report (RC-110-08, `cert.rs`). The plugins
+//! are loaded in the background once the window is open (RC-110-48, `plugins.preload_viewers`).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -19,6 +20,7 @@ use rc_engine::{
         self, OpenRequest, Opening, Output, PictureFormat, PluginDocument, Purpose, Theme,
         ViewerPlugins,
     },
+    settings::{PRELOAD_VIEWERS_KEY, stored_bool},
     viewer::exif::PhotoExif,
     viewer::{DETECT_BYTES, Detected, ViewMode, sniff},
 };
@@ -46,10 +48,32 @@ use crate::{
 pub struct Plugins(Arc<OnceCell<ViewerPlugins>>);
 
 /// Whether a changed setting is one the loaded plugins follow: not the colours (the views'),
-/// nor how many calls the Plugins page lists (RC-100-75).
+/// nor how many calls the Plugins page lists (RC-100-75), nor when they are loaded (RC-110-48).
 pub fn concerns(key: &str) -> bool {
     use rc_engine::settings::{RECENT_CALLS_SHOWN_KEY, VIEWER_TOKEN_COLORS_KEY};
-    key.starts_with("plugins.") && ![VIEWER_TOKEN_COLORS_KEY, RECENT_CALLS_SHOWN_KEY].contains(&key)
+    key.starts_with("plugins.")
+        && ![
+            VIEWER_TOKEN_COLORS_KEY,
+            RECENT_CALLS_SHOWN_KEY,
+            PRELOAD_VIEWERS_KEY,
+        ]
+        .contains(&key)
+}
+
+/// Loads the viewer plugins into `plugins` unless `plugins.preload_viewers` is off or there is
+/// no database; whether it did. A load the first file started is waited for, not repeated.
+async fn preload(engine: Engine, db: Option<Db>, plugins: Plugins) -> bool {
+    let Some(db) = db else {
+        return false;
+    };
+    if !stored_bool(&db, PRELOAD_VIEWERS_KEY).await {
+        return false;
+    }
+    plugins
+        .0
+        .get_or_init(|| ViewerPlugins::load(&engine, Some(&db)))
+        .await;
+    true
 }
 
 /// What a plugin made of a file.
@@ -192,6 +216,14 @@ async fn read_picture(
 }
 
 impl App {
+    /// The viewer plugins loaded in the background (RC-110-48), so the first file a viewer opens
+    /// waits for nothing; the set is the window's, and a `PluginsChanged` meanwhile drops it as
+    /// it drops any other.
+    pub(in crate::app) fn preload_viewers_task(&self) -> Task<Message> {
+        let plugins = self.viewers.plugins.clone();
+        Task::future(preload(self.engine.clone(), self.db.clone(), plugins)).discard()
+    }
+
     /// Opens `path` for the lister `id`: with the plugin that claims it, else built in.
     pub(super) fn open_file(&self, id: u64, path: VfsPath) -> Effect {
         Effect::Task(self.open_task(id, path))

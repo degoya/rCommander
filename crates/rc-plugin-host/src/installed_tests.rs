@@ -210,3 +210,27 @@ fn copy_dir(from: &Path, to: &Path) {
         }
     }
 }
+
+/// RC-110-48: the compile cache is pruned by the components installed now - every version's,
+/// read from its folder; no plugin folder is no component.
+#[test]
+fn the_component_digests_name_every_installed_version() {
+    let data = tempfile::tempdir().expect("temp dir");
+    assert!(
+        component_digests(data.path())
+            .expect("no plugin folder")
+            .is_empty()
+    );
+    install(data.path(), &state_trusting(7), &["1.0.0", "1.1.0"]);
+    let expected: std::collections::BTreeSet<String> =
+        super::disk::version_directories(&plugins_root(data.path()))
+            .expect("versions")
+            .iter()
+            .map(|dir| {
+                let component = std::fs::read(dir.join(crate::COMPONENT_MEMBER)).expect("read");
+                crate::sha256_hex(&component)
+            })
+            .collect();
+    assert!(!expected.is_empty());
+    assert_eq!(component_digests(data.path()).expect("digests"), expected);
+}

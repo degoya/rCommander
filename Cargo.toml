@@ -3,10 +3,10 @@ resolver = "2"
 members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer", "plugins/hcl-viewer", "plugins/schema-viewer", "plugins/script-viewer", "plugins/markup-viewer", "plugins/office-viewer", "plugins/media-viewer", "plugins/pdf-viewer"]
 
 [workspace.package]
-version = "0.24.3"
+version = "0.25.0"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/degoya/rCommander"
 homepage = "https://rcommander.net"
@@ -100,7 +100,7 @@ roxmltree = "0.21"
 # randomart, OpenSSH public key parsing).
 russh = "0.65"
 # SFTP (rc-remote) over a russh channel; version 3 as in rDownloader.
-russh-sftp = "3"
+russh-sftp = "4"
 # TLS for FTPS (rc-remote) on aws-lc-rs, which russh already links; the platform verifier
 # checks against the system roots (CryptoAPI on Windows).
 rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std", "tls12"] }

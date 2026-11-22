@@ -2257,6 +2257,8 @@
   "viewer.hints_views": "1 Text · 2 Binary · 3 Hex · 4 Image · 5 Markdown · 7 Next view · A/S/6/8/E Encoding · W Wrap · F7 Search · Ctrl+wheel/+/-/0 Text size · N/P Next/Previous · Esc Close",
   "setting.plugins.enabled": "Run plugins",
   "setting.plugins.enabled.help": "Off: no plugin runs, and the built-in viewer shows every file. The plugins stay installed and keep their own switches.",
+  "setting.plugins.preload_viewers": "Load the viewer plugins after the start",
+  "setting.plugins.preload_viewers.help": "On: the viewer plugins are loaded in the background once the window is open, so the first file opened in Lister or Quick View does not wait for them. Off: they are loaded when the first file is opened.",
   "setting.plugins.crash_limit": "Failures before a plugin is suspended",
   "setting.plugins.crash_limit.help": "A plugin that crashes, hangs or runs out of memory this many times within five minutes is suspended until you resume it on this page (1-10).",
   "setting.plugins.viewer_output_limit_mib": "Largest text a viewer plugin may write (MiB)",

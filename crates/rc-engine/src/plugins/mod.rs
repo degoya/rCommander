@@ -24,7 +24,7 @@ mod streams;
 mod write;
 
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 pub use codes::{ALL_CODES, PLUGIN_FAILED, failure_code};
 pub use document::{PictureFormat, PluginDocument};

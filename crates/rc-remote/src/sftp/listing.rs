@@ -165,7 +165,7 @@ impl SftpVfs {
         let max = self.limits.max_entries;
         let (mut listed, mut blocks, mut dropped) = (0usize, 0usize, 0usize);
         let outcome = loop {
-            match self.unless_gone(self.raw.readdir(handle.as_str())).await {
+            match self.unless_gone(self.raw.readdir(handle.clone())).await {
                 Ok(block) => {
                     // A block without names still counts: a server cannot keep a listing alive
                     // with empty answers.

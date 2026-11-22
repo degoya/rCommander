@@ -2257,6 +2257,8 @@
   "viewer.hints_views": "1 Texto · 2 Binario · 3 Hex · 4 Imagen · 5 Markdown · 7 Vista siguiente · A/S/6/8/E Codificación · W Ajuste · F7 Buscar · Ctrl+rueda/+/-/0 Tamaño del texto · N/P Siguiente/Anterior · Esc Cerrar",
   "setting.plugins.enabled": "Ejecutar plugins",
   "setting.plugins.enabled.help": "Desactivado: no se ejecuta ningún plugin y el visor integrado muestra todos los archivos. Los plugins siguen instalados y conservan sus propios interruptores.",
+  "setting.plugins.preload_viewers": "Cargar los plugins visores tras el inicio",
+  "setting.plugins.preload_viewers.help": "Activado: los plugins visores se cargan en segundo plano en cuanto la ventana está abierta, de modo que el primer archivo abierto en el Lister o la vista rápida no los espera. Desactivado: se cargan al abrir el primer archivo.",
   "setting.plugins.crash_limit": "Fallos antes de suspender un plugin",
   "setting.plugins.crash_limit.help": "Un plugin que se bloquea, se cuelga o se queda sin memoria este número de veces en cinco minutos se suspende hasta que lo reanude en esta página (1-10).",
   "setting.plugins.viewer_output_limit_mib": "Texto más grande que puede escribir un plugin visor (MiB)",

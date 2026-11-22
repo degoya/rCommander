@@ -8,11 +8,11 @@
 #
 #   source "$ROOT/scripts/lib/tool-versions.sh"
 #   echo "$RC_NEXTEST_VERSION"
-#   rc_rust_version "$ROOT"          # 1.99.1
+#   rc_rust_version "$ROOT"          # 1.100.0
 #   rc_user_tools_path               # ~/.local/bin in front of PATH, unless it leads it
 
 # shellcheck disable=SC2034  # read by the scripts that source this file
-RC_NEXTEST_VERSION="0.9.146"
+RC_NEXTEST_VERSION="0.9.152"
 # shellcheck disable=SC2034
 RC_CARGO_XWIN_VERSION="0.23.1"
 # shellcheck disable=SC2034
@@ -37,9 +37,9 @@ RC_KOMAC_VERSION="2.17.2"
 # shellcheck disable=SC2034
 RC_KOMAC_SHA256="b03b020eec98acfb0b53e284a6e21815b884be33de6785b97e7a120f0e748966"
 # shellcheck disable=SC2034
-RC_NFPM_VERSION="2.47.0"
+RC_NFPM_VERSION="2.49.0"
 # shellcheck disable=SC2034
-RC_NFPM_SHA256="0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783"
+RC_NFPM_SHA256="2afaa5ffb5e3493402e31e7c67a5a1fb42133e3f66fc315ca0051934125561c7"
 # Fuzzing and coverage (RC-080-72; docs/development.md, "Fuzzing and coverage"): cargo-fuzz needs
 # a nightly for libFuzzer's sanitizer flags, pinned by date so a finding reproduces; the main
 # workspace stays on rust-toolchain.toml's stable. cargo-llvm-cov runs on that stable with its
@@ -50,7 +50,7 @@ RC_FUZZ_NIGHTLY="nightly-2026-10-01"
 # shellcheck disable=SC2034
 RC_CARGO_FUZZ_VERSION="0.13.2"
 # shellcheck disable=SC2034
-RC_LLVM_COV_VERSION="0.9.1"
+RC_LLVM_COV_VERSION="0.9.2"
 
 # The Rust toolchain checkout $1 pins: rust-toolchain.toml's `channel`.
 rc_rust_version() {

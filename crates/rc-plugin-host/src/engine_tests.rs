@@ -1,4 +1,4 @@
-use super::SharedEngine;
+use super::{SharedEngine, configure_compile_cache, configured, shared};
 
 /// The smallest valid component: the preamble of the component encoding and nothing else.
 pub(crate) const EMPTY_COMPONENT: [u8; 8] = [0x00, 0x61, 0x73, 0x6d, 0x0d, 0x00, 0x01, 0x00];
@@ -29,4 +29,32 @@ fn a_component_that_does_not_compile_is_not_remembered() {
     assert!(shared.compile(b"not a component").is_err());
     assert!(shared.compile(b"not a component").is_err());
     assert_eq!(shared.compilations(), 0);
+}
+
+/// RC-110-48: the cache configured at the start is the one every compile of the process uses -
+/// the entry lands under its folder, the next start (an engine of its own on the same folder)
+/// reads it back instead of compiling, and a second configuration is refused. The engine is the
+/// process's: nextest runs this test in a process of its own.
+#[test]
+fn the_configured_cache_serves_the_next_start() {
+    let root = tempfile::tempdir().expect("tempdir");
+    configure_compile_cache(root.path()).expect("configured before the first compile");
+    assert!(configured().is_some_and(|engine| engine.disk().is_some()));
+    shared()
+        .expect("the configured engine")
+        .compile(&variant(9))
+        .expect("compile");
+    assert!(
+        configure_compile_cache(root.path()).is_err(),
+        "the engine exists: a later configuration is refused, not ignored"
+    );
+
+    let next = SharedEngine::new(Some(root.path())).expect("the next start");
+    next.compile(&variant(9)).expect("read back");
+    let cache = next.disk().expect("a disk cache").cache();
+    assert_eq!(
+        (cache.cache_hits(), cache.cache_misses()),
+        (1, 0),
+        "the next start must not compile"
+    );
 }

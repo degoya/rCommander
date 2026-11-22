@@ -1299,7 +1299,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "gimli",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "libm",
  "log",
  "postcard",
@@ -1361,7 +1361,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39e025bb120162a1b60d010bbc3237ac1b99b466702b5ae42a974e91afcb9725"
 dependencies = [
  "cranelift-codegen",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "log",
  "smallvec",
  "target-lexicon",
@@ -1496,9 +1496,9 @@ dependencies = [
 
 [[package]]
 name = "crypto-common"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
+checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array",
  "typenum",
@@ -1711,7 +1711,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer 0.10.4",
- "crypto-common 0.1.6",
+ "crypto-common 0.1.7",
 ]
 
 [[package]]
@@ -1993,7 +1993,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2375,9 +2375,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "0.14.9"
+version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bb6743198531e02858aeaea5398fcc883e71851fcbcb5a2f773e2fb6cb1edf2"
+checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
@@ -2661,9 +2661,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+checksum = "735eaa21a6a5ffb2e84362faaeb90c05ba8e19797ca30428478cb6ea3a4921bc"
 dependencies = [
  "foldhash 0.2.0",
  "serde",
@@ -2956,7 +2956,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.58.0",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -3316,7 +3316,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "serde",
  "serde_core",
 ]
@@ -3406,10 +3406,12 @@ dependencies = [
  "jiff-core",
  "jiff-static",
  "jiff-tzdb-platform",
+ "js-sys",
  "log",
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -4708,7 +4710,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd229a0361b9d0d4396176e02d65897f487eebeab7caa6d443855ee152ca0b9c"
 dependencies = [
  "crc32fast",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "indexmap",
  "memchr",
 ]
@@ -5423,7 +5425,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5522,7 +5524,7 @@ dependencies = [
 
 [[package]]
 name = "rc-cert"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "base64 0.23.1",
  "sha1",
@@ -5532,7 +5534,7 @@ dependencies = [
 
 [[package]]
 name = "rc-checksum"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5554,7 +5556,7 @@ dependencies = [
 
 [[package]]
 name = "rc-db"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "blake3",
  "directories",
@@ -5572,7 +5574,7 @@ dependencies = [
 
 [[package]]
 name = "rc-engine"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5621,7 +5623,7 @@ dependencies = [
 
 [[package]]
 name = "rc-mcp"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -5650,7 +5652,7 @@ dependencies = [
 
 [[package]]
 name = "rc-ops"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5680,7 +5682,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-api"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "rc-plugin-types",
  "serde",
@@ -5743,7 +5745,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-host"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5908,11 +5910,11 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-text"
-version = "0.24.3"
+version = "0.25.0"
 
 [[package]]
 name = "rc-plugin-types"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5944,14 +5946,14 @@ dependencies = [
 
 [[package]]
 name = "rc-process"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "rc-recover"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "tokio",
  "tracing",
@@ -5960,7 +5962,7 @@ dependencies = [
 
 [[package]]
 name = "rc-remote"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5994,7 +5996,7 @@ dependencies = [
 
 [[package]]
 name = "rc-rename"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "jiff",
  "rc-plugin-text",
@@ -6007,7 +6009,7 @@ dependencies = [
 
 [[package]]
 name = "rc-tc-host"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "rc-process",
  "serde",
@@ -6019,7 +6021,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "alacritty_terminal",
  "base64 0.23.1",
@@ -6043,7 +6045,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term-widget"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "alacritty_terminal",
  "iced",
@@ -6055,7 +6057,7 @@ dependencies = [
 
 [[package]]
 name = "rc-update"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6085,7 +6087,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vault"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -6105,7 +6107,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vfs"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "async-trait",
  "bzip2",
@@ -6149,7 +6151,7 @@ dependencies = [
 
 [[package]]
 name = "rcommander"
-version = "0.24.3"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -6299,7 +6301,7 @@ checksum = "34f923657880712029496c2e68bb40bef163806b2011adde559b28bbcedc82ea"
 dependencies = [
  "allocator-api2",
  "bumpalo",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "log",
  "rustc-hash 2.1.3",
  "serde",
@@ -6521,9 +6523,9 @@ dependencies = [
 
 [[package]]
 name = "russh"
-version = "0.65.3"
+version = "0.65.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00daa3a9ed888315e06e87cf9db6fbfb4977dd652625b85deb844963883dac4a"
+checksum = "569d8c45e20c123af2fc5ecb4803fde0a98572449ba4c24ed97741d7b02fedf7"
 dependencies = [
  "aes",
  "aws-lc-rs",
@@ -6603,15 +6605,15 @@ dependencies = [
 
 [[package]]
 name = "russh-sftp"
-version = "3.0.1"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bb17f72aba4314656b359ffba72c68dcbd70ed9e97497898b75498fe7198042"
+checksum = "5b8067d56cde438de09db20be974be92118b85d671c7f50ea3b37cf9011760f0"
 dependencies = [
  "bitflags 2.13.2",
  "bytes",
- "chrono",
  "dashmap",
  "gloo-timers",
+ "jiff",
  "log",
  "serde",
  "serde_bytes",
@@ -6692,7 +6694,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6761,7 +6763,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7885,7 +7887,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8705,7 +8707,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "974d643b125b272607e2fff8012ea14a8328acd7621e4bafa7afb32500052b1b"
 dependencies = [
  "bitflags 2.13.2",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "indexmap",
  "semver",
 ]
@@ -8717,7 +8719,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f5fa0a054ae153606df820eb0a84213e28cda41bbe04ba2628e71b6ba100fcb"
 dependencies = [
  "bitflags 2.13.2",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "indexmap",
  "semver",
  "serde",
@@ -8790,7 +8792,7 @@ dependencies = [
  "cranelift-bitset",
  "cranelift-entity",
  "gimli",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "indexmap",
  "log",
  "object",
@@ -8856,7 +8858,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd7abb27d389eee2f4e477c25d40a47bb837a08571bf0262c07aebe634e28774"
 dependencies = [
  "anyhow",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "libm",
  "serde",
 ]
@@ -9350,7 +9352,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -9839,7 +9841,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00f0dc051466ffe46787721fca3d088536f158ae400be044f1b1c386ba9397ad"
 dependencies = [
  "anyhow",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "id-arena",
  "indexmap",
  "log",
@@ -9858,7 +9860,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "874d6ce9db4261cb66980ab14f3da066b24292497b6f46f988c0d1b9b27913f3"
 dependencies = [
  "anyhow",
- "hashbrown 0.17.1",
+ "hashbrown 0.17.2",
  "id-arena",
  "indexmap",
  "log",

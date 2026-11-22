@@ -9,6 +9,9 @@ use super::{SettingKind, SettingPage, SettingSpec};
 
 /// The master switch: off, no plugin runs.
 pub const ENABLED_KEY: &str = "plugins.enabled";
+/// The viewer plugins are loaded in the background after the start, so the first file a viewer
+/// opens does not wait for them (RC-110-48); off, they load with that first file.
+pub const PRELOAD_VIEWERS_KEY: &str = "plugins.preload_viewers";
 /// Failures within five minutes before a plugin is suspended until the person resumes it.
 pub const CRASH_LIMIT_KEY: &str = "plugins.crash_limit";
 /// The most a viewer's text output may write, in MiB.
@@ -39,6 +42,16 @@ pub(super) const ENABLED: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.plugins.enabled",
     help: "setting.plugins.enabled.help",
+    protected: true,
+    restart: false,
+};
+
+pub(super) const PRELOAD_VIEWERS: SettingSpec = SettingSpec {
+    key: PRELOAD_VIEWERS_KEY,
+    page: SettingPage::Plugins,
+    kind: SettingKind::Bool { default: true },
+    label: "setting.plugins.preload_viewers",
+    help: "setting.plugins.preload_viewers.help",
     protected: true,
     restart: false,
 };

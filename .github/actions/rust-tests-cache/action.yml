@@ -56,4 +56,4 @@ runs:
     # The version is RC_NEXTEST_VERSION of scripts/lib/tool-versions.sh (scripts/tests/tool-versions.sh).
     - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
       with:
-        tool: nextest@0.9.146
+        tool: nextest@0.9.152

@@ -448,7 +448,9 @@ impl App {
         let opened = opened
             .discard()
             .chain(crate::platform::taskbar::join(main))
-            .chain(app.menu_bar_task());
+            .chain(app.menu_bar_task())
+            // The viewer plugins, after the window, so the first F3 waits for nothing (RC-110-48).
+            .chain(app.preload_viewers_task());
         (
             app,
             Task::batch([

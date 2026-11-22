@@ -2257,6 +2257,8 @@
   "viewer.hints_views": "1 Texte · 2 Binaire · 3 Hex · 4 Image · 5 Markdown · 7 Vue suivante · A/S/6/8/E Encodage · W Retour à la ligne · F7 Rechercher · Ctrl+molette/+/-/0 Taille du texte · N/P Suivant/Précédent · Échap Fermer",
   "setting.plugins.enabled": "Exécuter les plugins",
   "setting.plugins.enabled.help": "Désactivé: aucun plugin ne s'exécute, et le Lister intégré affiche chaque fichier. Les plugins restent installés et gardent leurs propres interrupteurs.",
+  "setting.plugins.preload_viewers": "Charger les plugins de visualisation après le démarrage",
+  "setting.plugins.preload_viewers.help": "Activé: les plugins de visualisation sont chargés en arrière-plan dès que la fenêtre est ouverte, pour que le premier fichier ouvert dans le Lister ou la vue rapide ne les attende pas. Désactivé: ils sont chargés à l'ouverture du premier fichier.",
   "setting.plugins.crash_limit": "Échecs avant la suspension d'un plugin",
   "setting.plugins.crash_limit.help": "Un plugin qui plante, se bloque ou manque de mémoire ce nombre de fois en cinq minutes est suspendu jusqu'à ce que vous le repreniez sur cette page (1-10).",
   "setting.plugins.viewer_output_limit_mib": "Plus grand texte qu'un plugin de visualisation peut écrire (Mio)",

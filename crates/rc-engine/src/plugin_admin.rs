@@ -10,6 +10,7 @@
 //! `plugins.*` commands are in `plugin_admin/commands.rs`; all but `plugins.list` are `GuiOnly`:
 //! installing, switching on or rolling back decides which foreign code runs.
 
+mod cache;
 mod commands;
 mod error;
 mod info;
@@ -74,8 +75,14 @@ pub struct PluginStart {
 impl Engine {
     /// Gives the engine its plugin folder `<data_dir>/plugins` and the bundled packages in
     /// `bundled`; `false` when it has one already. With a database attached, every plugin call
-    /// is written into `plugin_executions` from now on.
+    /// is written into `plugin_executions` from now on. The compiled plugin code is kept in
+    /// `<data_dir>/plugin-cache` from here on (RC-110-48): nothing in the engine compiles a
+    /// plugin before it has this folder.
     pub fn attach_plugins(&self, data_dir: PathBuf, bundled: Option<PathBuf>) -> bool {
+        if self.inner.plugins.get().is_some() {
+            return false;
+        }
+        cache::configure(&data_dir);
         let log = Arc::new(ExecutionLog::new());
         if let (Ok(db), Ok(runtime)) = (self.db(), tokio::runtime::Handle::try_current()) {
             let (sender, receiver) = tokio::sync::mpsc::channel(EXECUTION_QUEUE);
@@ -129,7 +136,7 @@ impl Engine {
 
     /// The start's work on the plugins, before anything runs one: an update installed last run
     /// takes over, the bundled packages not installed yet are installed, the start's sweep runs
-    /// and the state file is written.
+    /// and the state file is written; then the compile cache is pruned in the background.
     ///
     /// # Errors
     ///
@@ -163,6 +170,8 @@ impl Engine {
                 .await
                 .log_panic("engine.plugin_sweep")
                 .map_err(PluginAdminError::from)?;
+        // The compiled code of what the sweep removed and of an older Wasmtime goes (RC-110-48).
+        cache::prune_in_background(desk.data_dir.clone());
         self.publish(EngineEvent::PluginsChanged);
         Ok(start)
     }

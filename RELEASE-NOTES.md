@@ -11,6 +11,13 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.25.0
+
+- rCommander starts faster: the plugins are no longer prepared anew at every start, only after they or rCommander were updated.
+- The first file you open in Lister or Quick View no longer pauses while the viewer plugins load; a setting on the Plugins page turns this off.
+- SFTP connections cope better with unusual servers: an unknown status code or extended file attributes no longer break a session or a folder listing.
+- Updated components: the Rust toolchain and several libraries were brought up to date.
+
 ## 0.24.3
 
 - On Windows a panel now notices when the folder it shows is deleted, and reads the folder again when Windows drops change notices, as it already did on Linux.

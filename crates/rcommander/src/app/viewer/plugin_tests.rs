@@ -11,7 +11,7 @@ use rc_engine::{
     plugins::{OpenRequest, Output, Purpose},
 };
 
-use super::{Loaded, PluginOpened, Plugins, concerns, hex, open, plugin_theme, views};
+use super::{Loaded, PluginOpened, Plugins, concerns, hex, open, plugin_theme, preload, views};
 use crate::app::{
     harness::Harness,
     viewer::{ViewerMessage, document::DocView, lister::Lister, load, quick::Quick},
@@ -54,6 +54,31 @@ fn every_plugins_setting_but_the_colours_reloads_the_plugins() {
         "the Plugins page's list"
     );
     assert!(!concerns("viewer.font_size"));
+    assert!(
+        !concerns("plugins.preload_viewers"),
+        "when they load, not what"
+    );
+}
+
+/// RC-110-48: the start fills the window's set in the background, so the first file waits for
+/// nothing; `plugins.preload_viewers` off leaves the load to the first file.
+#[tokio::test]
+async fn the_start_preloads_the_viewer_plugins_unless_switched_off() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let harness = Harness::headless(root.path()).await;
+    let engine = harness.app.engine().clone();
+    let db = rc_db::Db::open_in_memory().await.expect("db");
+
+    let plugins = Plugins::default();
+    assert!(preload(engine.clone(), Some(db.clone()), plugins.clone()).await);
+    assert!(plugins.0.initialized(), "loaded before the first file");
+
+    db.set(rc_engine::settings::PRELOAD_VIEWERS_KEY, &false)
+        .await
+        .expect("stored");
+    let plugins = Plugins::default();
+    assert!(!preload(engine, Some(db), plugins.clone()).await);
+    assert!(!plugins.0.initialized(), "left to the first file");
 }
 
 /// Quick View moving on drops the lister of the file before, which stops its plugin; a Lister

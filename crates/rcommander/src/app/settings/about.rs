@@ -99,8 +99,8 @@ fn about_message(message: AboutMsg) -> Message {
     wrap(SettingsMessage::About(message))
 }
 
-/// The window's title, fixed as Total Commander's: name, version and author, from the same
-/// constants as the page and `app.about`.
+/// The window's title, fixed as Total Commander's: name, version and author with the company
+/// ("made with ... by", RC-110-53), from the same constants as the page and `app.about`.
 pub fn window_title() -> String {
     t!(
         "app.title",

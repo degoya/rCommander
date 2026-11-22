@@ -11,6 +11,12 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.25.1
+
+- rCommander now really starts faster after the update to 0.25: the bundled plugins were prepared anew at every start, from the second start on they are not.
+- Bundled plugins rebuilt with a new rCommander version now replace the installed ones, so their fixes reach you.
+- The window title now reads "made with ♥ by Alexander Herling / DEGOYA.digital".
+
 ## 0.25.0
 
 - rCommander starts faster: the plugins are no longer prepared anew at every start, only after they or rCommander were updated.

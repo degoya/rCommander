@@ -1,5 +1,5 @@
 {
-  "app.title": "{name} {version} - © {author}",
+  "app.title": "{name} {version} - made with ♥ by {author}",
   "column.name": "Name",
   "column.ext": "Ext",
   "column.size": "Size",

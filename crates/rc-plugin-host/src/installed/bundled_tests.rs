@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 
@@ -10,7 +13,7 @@ use crate::{
     package::MANIFEST_MEMBER,
     public_key_base64,
     test_fixtures::PLUGIN_ID,
-    test_support::{signing_key, viewer_package},
+    test_support::{signing_key, viewer_component, viewer_package, viewer_package_unchecked},
 };
 
 /// The key an older build shipped its plugins under, and the one this build trusts.
@@ -109,6 +112,79 @@ fn a_bundled_version_under_a_key_no_longer_trusted_is_replaced_and_stays_off() {
     assert_eq!(after, state);
     assert!(!after.enabled(PLUGIN_ID));
     // Nothing is left beside it, and the next start changes nothing.
+    let folders = std::fs::read_dir(plugins_root(data.path()).join(PLUGIN_ID))
+        .expect("read")
+        .count();
+    assert_eq!(folders, 1, "no staging or replaced folder is left");
+    assert!(
+        sync_with(data.path(), bundled.path(), &current)
+            .expect("again")
+            .is_empty()
+    );
+}
+
+/// Version 1.0.0 rebuilt: the viewer's component with one more custom section, signed by this
+/// build's key as [`shipped`] signs it - other bytes, the same plugin and version. With the
+/// component, as the folder of bundled packages holds it.
+fn rebuilt() -> (tempfile::TempDir, Vec<u8>) {
+    let mut component = viewer_component();
+    // A custom section: id 0, 9 bytes - the name's length, "rebuild", one byte of payload.
+    component.extend_from_slice(&[0x00, 0x09, 0x07]);
+    component.extend_from_slice(b"rebuild2");
+    let folder = tempfile::tempdir().expect("bundled");
+    let package = viewer_package_unchecked(
+        PLUGIN_ID,
+        "1.0.0",
+        NEW_KEY_ID,
+        &signing_key(NEW),
+        &component,
+    );
+    std::fs::write(folder.path().join("csv.rcplug"), package).expect("write");
+    (folder, component)
+}
+
+#[test]
+fn a_bundled_version_rebuilt_under_the_same_key_is_replaced_and_stays_off() {
+    let data = tempfile::tempdir().expect("temp dir");
+    let mut state = PluginState::default();
+    state.disabled.insert(PLUGIN_ID.to_owned());
+    state.write(data.path()).expect("state");
+    let current = roots(NEW_KEY_ID, NEW);
+    let first = shipped(NEW_KEY_ID, NEW);
+    assert_eq!(
+        sync_with(data.path(), first.path(), &current)
+            .expect("sync")
+            .len(),
+        1
+    );
+    // The same build again replaces nothing.
+    assert!(
+        sync_with(data.path(), first.path(), &current)
+            .expect("same build")
+            .is_empty()
+    );
+
+    // The next release ships 1.0.0 rebuilt: it takes the installed one's place.
+    let (bundled, component) = rebuilt();
+    let replaced = sync_with(data.path(), bundled.path(), &current).expect("sync");
+    assert_eq!(replaced, [(PLUGIN_ID.to_owned(), "1.0.0".to_owned())]);
+    let installed =
+        std::fs::read(version_dir(data.path()).join(crate::COMPONENT_MEMBER)).expect("component");
+    assert_eq!(installed, component);
+    assert!(version_dir(data.path()).join(BUNDLED_MARKER).is_file());
+    let verified = entry(version_dir(data.path()), &current().expect("verifier"));
+    assert_eq!(verified.refused, None);
+    // What the start compiled is installed now, so the compile cache's prune keeps its entry.
+    assert_eq!(
+        crate::installed::component_digests(data.path()).expect("digests"),
+        BTreeSet::from([crate::sha256_hex(&component)])
+    );
+
+    // The switch is the state's, by id: still off; nothing is left beside it, and the next
+    // start changes nothing.
+    let after = PluginState::read(data.path()).expect("state");
+    assert_eq!(after, state);
+    assert!(!after.enabled(PLUGIN_ID));
     let folders = std::fs::read_dir(plugins_root(data.path()).join(PLUGIN_ID))
         .expect("read")
         .count();

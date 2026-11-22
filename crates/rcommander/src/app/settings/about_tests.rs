@@ -45,7 +45,7 @@ fn the_window_title_is_name_version_and_author() {
     assert_eq!(
         window_title(),
         format!(
-            "rCommander {} - \u{a9} Alexander Herling",
+            "rCommander {} - made with \u{2665} by Alexander Herling / DEGOYA.digital",
             env!("CARGO_PKG_VERSION")
         )
     );

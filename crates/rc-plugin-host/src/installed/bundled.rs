@@ -11,8 +11,11 @@
 //!
 //! New in rCommander (RC-100-79): an installed bundled version signed by a key this build no
 //! longer trusts - the development key after the release key, or a release key after its change -
-//! is replaced by the bundled package of the same id and version. Only that: a version that
-//! verifies, one a person installed, one withdrawn or changed on disk stays as it is. The switch,
+//! is replaced by the bundled package of the same id and version. So is one rebuilt (RC-110-54):
+//! it verifies and the bundled package of its id and version is signed by the same key, but the
+//! contents differ - a new build under an unchanged version, which would otherwise stay on the
+//! old build and compile the new one at every start. Only that: a version under a key the person
+//! trusts, one a person installed, one withdrawn or changed on disk stays as it is. The switch,
 //! the version choice and the settings are kept by id and version, outside the folder.
 
 use std::path::{Path, PathBuf};
@@ -59,7 +62,8 @@ fn bundled_dir_of(exe: &Path) -> Option<PathBuf> {
 
 /// Installs every bundled package from `bundled` that is not installed yet into
 /// `<data dir>/plugins`, and replaces an installed bundled version signed by a key this build no
-/// longer trusts; the `(id, version)` of each one installed or replaced. A package that does not
+/// longer trusts or rebuilt under the same key; the `(id, version)` of each one installed or
+/// replaced. A package that does not
 /// verify against the roots is skipped with a warning; the start goes on.
 ///
 /// # Errors
@@ -117,29 +121,37 @@ pub(crate) fn sync_with(
         let manifest = &package.manifest;
         let destination = installer.version_dir(&manifest.id, &manifest.version)?;
         if destination.exists() {
-            let Some(code) = current
+            let Some(reason) = current
                 .as_ref()
-                .and_then(|current| no_longer_trusted(&destination, current))
+                .and_then(|current| replacement(&destination, &package, current))
             else {
                 continue;
             };
             match replace(&installer, &package, &destination) {
                 Ok(()) => {
-                    tracing::warn!(
-                        plugin_id = %manifest.id,
-                        version = %manifest.version,
-                        code,
-                        "an installed bundled plugin no longer verified and was replaced by the \
-                         bundled package"
-                    );
+                    match reason {
+                        Replacement::NoLongerTrusted(code) => tracing::warn!(
+                            plugin_id = %manifest.id,
+                            version = %manifest.version,
+                            code,
+                            "an installed bundled plugin no longer verified and was replaced by \
+                             the bundled package"
+                        ),
+                        Replacement::Rebuilt => tracing::info!(
+                            plugin_id = %manifest.id,
+                            version = %manifest.version,
+                            "an installed bundled plugin was replaced by its rebuilt bundled \
+                             package"
+                        ),
+                    }
                     installed.push((manifest.id.clone(), manifest.version.clone()));
                 }
                 Err(error) => tracing::warn!(
                     plugin_id = %manifest.id,
                     version = %manifest.version,
-                    code,
+                    reason = ?reason,
                     %error,
-                    "an installed bundled plugin that no longer verifies could not be replaced"
+                    "an installed bundled plugin could not be replaced by the bundled package"
                 ),
             }
             continue;
@@ -156,18 +168,42 @@ pub(crate) fn sync_with(
     Ok(installed)
 }
 
-/// The refusal of the installed version in `dir` when it is a bundled one signed by a key
-/// `current` does not trust; `None` for any other version, verified or not.
-fn no_longer_trusted(dir: &Path, current: &PluginVerifier) -> Option<&'static str> {
+/// Why an installed bundled version gives way to the bundled package of its id and version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Replacement {
+    /// Signed by a key this build does not trust (any more): the refusal's code (RC-100-79).
+    NoLongerTrusted(&'static str),
+    /// The same version rebuilt under the same key - other bytes (RC-110-54). Left installed,
+    /// it would keep the old build and compile the new one at every start for nothing.
+    Rebuilt,
+}
+
+/// Whether the installed version in `dir` gives way to `package`: when it is a bundled one and
+/// either signed by a key `current` does not trust, or verified, signed by `package`'s key and
+/// of other contents. `None` for any other version - one a person installed, one under a key
+/// the person trusts, one withdrawn or changed on disk.
+fn replacement(
+    dir: &Path,
+    package: &VerifiedPackage,
+    current: &PluginVerifier,
+) -> Option<Replacement> {
     if !dir.join(BUNDLED_MARKER).is_file() {
         return None;
     }
-    let code = read_package_parts(dir)
+    let verified = read_package_parts(dir)
         .map_err(crate::VerifyError::from)
-        .and_then(|parts| current.verify_contents(parts))
-        .err()?
-        .code();
-    NO_LONGER_TRUSTED.contains(&code).then_some(code)
+        .and_then(|parts| current.verify_contents(parts));
+    match verified {
+        Ok(installed) => (installed.manifest.public_key == package.manifest.public_key
+            && installed.digest() != package.digest())
+        .then_some(Replacement::Rebuilt),
+        Err(error) => {
+            let code = error.code();
+            NO_LONGER_TRUSTED
+                .contains(&code)
+                .then_some(Replacement::NoLongerTrusted(code))
+        }
+    }
 }
 
 /// Puts `package` in place of the version in `destination`: staged first, the old version moved

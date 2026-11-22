@@ -8,7 +8,7 @@ fn the_facts_come_from_the_manifest() {
     assert_eq!(answer.license, "GPL-3.0-or-later");
     assert_eq!(answer.authors, ["Alexander Herling / DEGOYA.digital"]);
     assert_eq!((NAME, VERSION), ("rCommander", env!("CARGO_PKG_VERSION")));
-    assert_eq!(author(), "Alexander Herling");
+    assert_eq!(author(), "Alexander Herling / DEGOYA.digital");
     assert!(
         answer.platform.starts_with(std::env::consts::OS),
         "{}",

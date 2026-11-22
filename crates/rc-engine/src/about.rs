@@ -94,13 +94,11 @@ fn authors() -> impl Iterator<Item = &'static str> {
         .filter(|author| !author.is_empty())
 }
 
-/// The person of the first author, without the company after ` / ` - what the window title
-/// names.
+/// The first author as written in `Cargo.toml`, the company after ` / ` with it - what the
+/// window title names (RC-110-53).
 #[must_use]
 pub fn author() -> &'static str {
-    authors().next().map_or("", |author| {
-        author.split(" / ").next().unwrap_or(author).trim()
-    })
+    authors().next().map_or("", str::trim)
 }
 
 /// The About page's facts for this build.

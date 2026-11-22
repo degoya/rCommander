@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-11-22
+
+### Changed
+
+- **Window title** (RC-110-53): "rCommander <version> - made with ♥ by Alexander Herling /
+  DEGOYA.digital" instead of "- © Alexander Herling"; the author with the company, as
+  `Cargo.toml` names it, in all four languages.
+
+### Fixed
+
+- **Rebuilt bundled plugins replace the installed ones** (RC-110-54): a bundled plugin rebuilt
+  under an unchanged version - all 25 in 0.25.0 - stayed installed in its old build, while the
+  start compiled the new build to verify it at every run; the compile cache's prune then removed
+  that entry again, as no installed component owned it, so every start compiled every bundled
+  plugin (1.8 s on Windows). An installed bundled version that verifies, is signed by the
+  bundled package's key and differs from it is now replaced by the package, its switch, version
+  choice and settings kept; from the next start the cache serves it.
+
 ## [0.25.0] - 2026-11-22
 
 ### Changed

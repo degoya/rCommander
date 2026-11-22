@@ -5524,7 +5524,7 @@ dependencies = [
 
 [[package]]
 name = "rc-cert"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "base64 0.23.1",
  "sha1",
@@ -5534,7 +5534,7 @@ dependencies = [
 
 [[package]]
 name = "rc-checksum"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5556,7 +5556,7 @@ dependencies = [
 
 [[package]]
 name = "rc-db"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "blake3",
  "directories",
@@ -5574,7 +5574,7 @@ dependencies = [
 
 [[package]]
 name = "rc-engine"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5623,7 +5623,7 @@ dependencies = [
 
 [[package]]
 name = "rc-mcp"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -5652,7 +5652,7 @@ dependencies = [
 
 [[package]]
 name = "rc-ops"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5682,7 +5682,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-api"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "rc-plugin-types",
  "serde",
@@ -5745,7 +5745,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-host"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5910,11 +5910,11 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-text"
-version = "0.25.0"
+version = "0.25.1"
 
 [[package]]
 name = "rc-plugin-types"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5946,14 +5946,14 @@ dependencies = [
 
 [[package]]
 name = "rc-process"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "rc-recover"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "tokio",
  "tracing",
@@ -5962,7 +5962,7 @@ dependencies = [
 
 [[package]]
 name = "rc-remote"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5996,7 +5996,7 @@ dependencies = [
 
 [[package]]
 name = "rc-rename"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "jiff",
  "rc-plugin-text",
@@ -6009,7 +6009,7 @@ dependencies = [
 
 [[package]]
 name = "rc-tc-host"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "rc-process",
  "serde",
@@ -6021,7 +6021,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "alacritty_terminal",
  "base64 0.23.1",
@@ -6045,7 +6045,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term-widget"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "alacritty_terminal",
  "iced",
@@ -6057,7 +6057,7 @@ dependencies = [
 
 [[package]]
 name = "rc-update"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6087,7 +6087,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vault"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -6107,7 +6107,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vfs"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "async-trait",
  "bzip2",
@@ -6151,7 +6151,7 @@ dependencies = [
 
 [[package]]
 name = "rcommander"
-version = "0.25.0"
+version = "0.25.1"
 dependencies = [
  "anyhow",
  "blake3",

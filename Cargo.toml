@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer", "plugins/hcl-viewer", "plugins/schema-viewer", "plugins/script-viewer", "plugins/markup-viewer", "plugins/office-viewer", "plugins/media-viewer", "plugins/pdf-viewer"]
 
 [workspace.package]
-version = "0.26.0"
+version = "0.26.1"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.100"
@@ -60,8 +60,8 @@ jpeg-decoder = { version = "0.3", default-features = false }
 jiff = { version = "1.0.1", default-features = false, features = ["std", "tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
 # The native menu bar (rcommander, RC-080-18): Win32 menus on the main window, NSMenu on macOS
 # later; MIT or Apache-2.0, from Tauri. No default features: GTK stays out, so on Linux the crate
-# builds its no-op backend and the menu code is linted there too. Locked at 0.21.0.
-muda = { version = "0.21.0", default-features = false }
+# builds its no-op backend and the menu code is linted there too. 0.22 since RC-110-94.
+muda = { version = "0.22.0", default-features = false }
 # The panels' file watcher (rc-engine, RC-110-02): ReadDirectoryChangesW, inotify and FSEvents
 # behind one API; CC0-1.0. No default features but FSEvents, so macOS needs no kqueue.
 notify = { version = "9.0.0", default-features = false, features = ["macos_fsevent"] }

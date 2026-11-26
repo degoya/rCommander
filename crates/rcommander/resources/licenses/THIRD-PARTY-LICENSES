@@ -460,7 +460,7 @@ limitations under the License.
 
 === Licence ====================================================================
 adler2 2.0.1 (0BSD OR MIT OR Apache-2.0): LICENSE-MIT
-allocator-api2 0.2.21 (MIT OR Apache-2.0): LICENSE-MIT
+allocator-api2 0.2.22 (MIT OR Apache-2.0): LICENSE-MIT
 anyhow 1.0.105 (MIT OR Apache-2.0): LICENSE-MIT
 async-channel 2.5.0 (Apache-2.0 OR MIT): LICENSE-MIT
 async-executor 1.14.1 (Apache-2.0 OR MIT): LICENSE-MIT
@@ -992,7 +992,7 @@ log 0.4.35 (MIT OR Apache-2.0): LICENSE-APACHE
 metal 0.32.0 (MIT OR Apache-2.0): LICENSE-APACHE
 mime 0.3.18 (MIT OR Apache-2.0): LICENSE-APACHE
 miow 0.6.1 (MIT OR Apache-2.0): LICENSE-APACHE
-muda 0.21.2 (Apache-2.0 OR MIT): LICENSE-APACHE
+muda 0.22.0 (Apache-2.0 OR MIT): LICENSE-APACHE
 num-bigint 0.4.8 (MIT OR Apache-2.0): LICENSE-APACHE
 num-bigint 0.5.1 (MIT OR Apache-2.0): LICENSE-APACHE
 num-integer 0.1.47 (MIT OR Apache-2.0): LICENSE-APACHE
@@ -1609,7 +1609,7 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 === Licence ====================================================================
-allocator-api2 0.2.21 (MIT OR Apache-2.0): LICENSE-APACHE
+allocator-api2 0.2.22 (MIT OR Apache-2.0): LICENSE-APACHE
 anyhow 1.0.105 (MIT OR Apache-2.0): LICENSE-APACHE
 constant_time_eq 0.4.2 (CC0-1.0 OR MIT-0 OR Apache-2.0): LICENSE-APACHE
 constant_time_eq 0.6.2 (CC0-1.0 OR MIT-0 OR Apache-2.0): LICENSE-APACHE
@@ -14462,7 +14462,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 === Licence ====================================================================
-muda 0.21.2 (Apache-2.0 OR MIT): LICENSE-MIT
+muda 0.22.0 (Apache-2.0 OR MIT): LICENSE-MIT
 --- Text -----------------------------------------------------------------------
 MIT License
 
@@ -14487,7 +14487,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 === Licence ====================================================================
-muda 0.21.2 (Apache-2.0 OR MIT): LICENSE.spdx
+muda 0.22.0 (Apache-2.0 OR MIT): LICENSE.spdx
 --- Text -----------------------------------------------------------------------
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0
@@ -22035,7 +22035,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 === Licence ====================================================================
-zerocopy 0.8.65 (BSD-2-Clause OR Apache-2.0 OR MIT): LICENSE-APACHE
+zerocopy 0.8.66 (BSD-2-Clause OR Apache-2.0 OR MIT): LICENSE-APACHE
 --- Text -----------------------------------------------------------------------
                                  Apache License
                            Version 2.0, January 2004
@@ -22240,7 +22240,7 @@ zerocopy 0.8.65 (BSD-2-Clause OR Apache-2.0 OR MIT): LICENSE-APACHE
    limitations under the License.
 
 === Licence ====================================================================
-zerocopy 0.8.65 (BSD-2-Clause OR Apache-2.0 OR MIT): LICENSE-BSD
+zerocopy 0.8.66 (BSD-2-Clause OR Apache-2.0 OR MIT): LICENSE-BSD
 --- Text -----------------------------------------------------------------------
 Copyright 2019 The Fuchsia Authors.
 
@@ -22268,7 +22268,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 === Licence ====================================================================
-zerocopy 0.8.65 (BSD-2-Clause OR Apache-2.0 OR MIT): LICENSE-MIT
+zerocopy 0.8.66 (BSD-2-Clause OR Apache-2.0 OR MIT): LICENSE-MIT
 --- Text -----------------------------------------------------------------------
 Copyright 2023 The Fuchsia Authors
 

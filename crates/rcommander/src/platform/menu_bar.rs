@@ -12,7 +12,7 @@
 
 use std::{
     cell::RefCell,
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use iced::{
@@ -20,7 +20,7 @@ use iced::{
     futures::{SinkExt, Stream, channel::mpsc},
     window,
 };
-use muda::{Menu, MenuEvent, Submenu};
+use muda::{Menu, MenuEvent, MenuEventHandler, Submenu};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 use crate::recover::LockOrRecover as _;
@@ -160,8 +160,8 @@ thread_local! {
     static BAR: RefCell<Option<Attached>> = const { RefCell::new(None) };
 }
 
-/// The sender of the running [`events`] stream; muda's handler, which it takes only once, sends
-/// through whichever stream runs.
+/// The sender of the running [`events`] stream; muda's handler, one for the process that each
+/// [`events`] sets anew (muda 0.22 replaces it, RC-110-94), sends through whichever stream runs.
 static CHOSEN: Mutex<Option<UnboundedSender<String>>> = Mutex::new(None);
 
 /// Builds `menus` and attaches them to the main window `id` with `look`; once.
@@ -239,7 +239,9 @@ pub fn events() -> impl Stream<Item = String> {
     iced::stream::channel(16, async |mut output: mpsc::Sender<String>| {
         let (sender, mut receiver) = unbounded_channel();
         *CHOSEN.lock_or_recover("menu_bar.chosen") = Some(sender);
-        MenuEvent::set_event_handler(Some(forward));
+        let handler: MenuEventHandler = Arc::new(forward);
+        // The handler it replaces, if any, is this same `forward` from a stream that ran before.
+        MenuEvent::set_event_handler(Some(handler));
         while let Some(id) = receiver.recv().await {
             if output.send(id).await.is_err() {
                 break;

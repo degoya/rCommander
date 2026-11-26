@@ -11,6 +11,10 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.26.1
+
+- Maintenance release: internal changes only, no change in behaviour.
+
 ## 0.26.0
 
 - Files unpacked from downloaded archives, copied from downloads or fetched from servers keep Windows' download mark, so SmartScreen and Office's Protected View still warn about them.

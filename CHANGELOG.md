@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-11-26
+
+### Changed
+
+- Dependencies: `allocator-api2` 0.2.22 and `zerocopy` 0.8.66 (semver-compatible, before 0.26.1).
+- GitHub Actions: `EmbarkStudios/cargo-deny-action` 2.1.3 (cargo-deny 0.22) and `taiki-e/install-action` 2.90.8 in every workflow (Dependabot PR #25, `fuzz.yml` included).
+- **muda 0.22** (RC-110-94): the native menu bar's crate from 0.21.2 to 0.22.0. Its one break,
+  `MenuEvent::set_event_handler` taking an `Arc` handler and replacing the one before (0.21 kept
+  only the first), is followed in `platform/menu_bar.rs`; Windows' dark bar now draws item icons,
+  which rCommander's bar has none of. With it nine crates share `windows-sys` 0.61 instead of
+  0.59 and `tempfile` takes `getrandom` 0.4; no new crate.
+
 ## [0.26.0] - 2026-11-26
 
 ### Added

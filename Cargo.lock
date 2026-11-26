@@ -135,9 +135,9 @@ dependencies = [
 
 [[package]]
 name = "allocator-api2"
-version = "0.2.21"
+version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+checksum = "57b212daf2e827b1ccdd778b7eb48ba433e58cb0e4f27b43cd6b7a608425a014"
 
 [[package]]
 name = "android-activity"
@@ -4058,9 +4058,9 @@ dependencies = [
 
 [[package]]
 name = "muda"
-version = "0.21.2"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4340e89c178916e62879c5c36b7f699019369be413e496178a6983ce91b8bc03"
+checksum = "a775675be5389020a44c56efbdf3bbea8b97f47dfdd325e6c5c5213797a7e0aa"
 dependencies = [
  "crossbeam-channel",
  "dpi",
@@ -5513,7 +5513,7 @@ dependencies = [
 
 [[package]]
 name = "rc-cert"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "base64 0.23.1",
  "sha1",
@@ -5523,7 +5523,7 @@ dependencies = [
 
 [[package]]
 name = "rc-checksum"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5545,7 +5545,7 @@ dependencies = [
 
 [[package]]
 name = "rc-db"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "blake3",
  "directories",
@@ -5563,7 +5563,7 @@ dependencies = [
 
 [[package]]
 name = "rc-engine"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5614,7 +5614,7 @@ dependencies = [
 
 [[package]]
 name = "rc-mcp"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -5643,7 +5643,7 @@ dependencies = [
 
 [[package]]
 name = "rc-ops"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5673,7 +5673,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-api"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "rc-plugin-types",
  "serde",
@@ -5736,7 +5736,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-host"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5901,11 +5901,11 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-text"
-version = "0.26.0"
+version = "0.26.1"
 
 [[package]]
 name = "rc-plugin-types"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5937,14 +5937,14 @@ dependencies = [
 
 [[package]]
 name = "rc-process"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "rc-recover"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "tokio",
  "tracing",
@@ -5953,7 +5953,7 @@ dependencies = [
 
 [[package]]
 name = "rc-remote"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5987,7 +5987,7 @@ dependencies = [
 
 [[package]]
 name = "rc-rename"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "jiff",
  "proptest",
@@ -6001,7 +6001,7 @@ dependencies = [
 
 [[package]]
 name = "rc-tc-host"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "rc-process",
  "serde",
@@ -6013,7 +6013,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "alacritty_terminal",
  "base64 0.23.1",
@@ -6037,7 +6037,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term-widget"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "alacritty_terminal",
  "iced",
@@ -6049,7 +6049,7 @@ dependencies = [
 
 [[package]]
 name = "rc-update"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6079,7 +6079,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vault"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -6100,7 +6100,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vfs"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "async-trait",
  "bzip2",
@@ -6144,7 +6144,7 @@ dependencies = [
 
 [[package]]
 name = "rcommander"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "anyhow",
  "blake3",
@@ -10080,18 +10080,18 @@ checksum = "6df3dc4292935e51816d896edcd52aa30bc297907c26167fec31e2b0c6a32524"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.65"
+version = "0.8.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32bc8a75f879cd6fe53a6bedf3c28f0e1b914c77424fc2be9e2ec85d7d25aff5"
+checksum = "cba8a86aee14fc8cc6c208af60854b3d4ab7185a9a369a12c648faa2716ff42a"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.65"
+version = "0.8.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8bfd2644ea1681f60cf95029ff18aa8ad1cc3f7b8fe37286f8e473bb29f816b"
+checksum = "f89bca3b96ceb3cfcb4572790402f977442270d252b9a8504ebc258760c55f94"
 dependencies = [
  "proc-macro2",
  "quote",

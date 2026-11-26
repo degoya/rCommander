@@ -140,6 +140,7 @@ async fn a_call_allowed_for_the_session_runs_frozen_and_pinned() {
         "ops_copy",
         CommandClass::Write,
         json!({}).as_object(),
+        None,
     )
     .await
     .expect("gates");

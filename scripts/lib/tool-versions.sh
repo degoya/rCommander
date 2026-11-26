@@ -51,6 +51,10 @@ RC_FUZZ_NIGHTLY="nightly-2026-10-01"
 RC_CARGO_FUZZ_VERSION="0.13.2"
 # shellcheck disable=SC2034
 RC_LLVM_COV_VERSION="0.9.2"
+# cargo-cyclonedx: the CycloneDX SBOMs of a release (scripts/release-assets.sh sbom, RC-110-73);
+# release.yml installs it with `cargo install --locked` at this pin. CI only.
+# shellcheck disable=SC2034
+RC_CARGO_CYCLONEDX_VERSION="0.5.10"
 
 # The Rust toolchain checkout $1 pins: rust-toolchain.toml's `channel`.
 rc_rust_version() {

@@ -49,7 +49,7 @@ impl Confirm {
                 all_lists: false,
                 unfinished,
             } => (
-                t!("queue.confirm_clear", unfinished = unfinished),
+                t!("queue.confirm_clear", count = unfinished),
                 t!("queue.clear_yes"),
                 t!("queue.keep"),
             ),
@@ -57,7 +57,7 @@ impl Confirm {
                 all_lists: true,
                 unfinished,
             } => (
-                t!("queue.confirm_clear_all", unfinished = unfinished),
+                t!("queue.confirm_clear_all", count = unfinished),
                 t!("queue.clear_yes"),
                 t!("queue.keep"),
             ),

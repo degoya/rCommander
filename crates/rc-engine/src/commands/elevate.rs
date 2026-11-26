@@ -96,6 +96,36 @@ pub(crate) async fn shell_start(start: ShellStart) -> Result<ShellStarted, UserC
     Ok(ShellStarted::Started)
 }
 
+/// The `nShow` of `show` (`SW_SHOWNORMAL`, `SW_SHOWMINNOACTIVE`, `SW_SHOWMAXIMIZED`): a program
+/// that opens minimized does not take the focus. Apart from the call, so it is tested on every
+/// platform (RC-110-70).
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "read by the Windows half and the tests")
+)]
+pub(crate) fn show_command(show: Show) -> i32 {
+    match show {
+        Show::Normal => 1,
+        Show::Minimized => 7,
+        Show::Maximized => 3,
+    }
+}
+
+/// What a refused start means by Windows' `code`: `ERROR_CANCELLED` (1223) is the person's "no"
+/// to Windows' question, no error; any other code is the error (0 for one that is no code).
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "read by the Windows half and the tests")
+)]
+pub(crate) fn refused(code: i32) -> Result<ShellStarted, u32> {
+    const ERROR_CANCELLED: i32 = 1223;
+    if code == ERROR_CANCELLED {
+        Ok(ShellStarted::Cancelled)
+    } else {
+        Err(u32::try_from(code).unwrap_or(0))
+    }
+}
+
 /// `folder` as the elevated process can reach it: a folder on a mapped network drive of `drives`
 /// (`Z:\work`) as its UNC path (`\\server\share\work`); any other folder as it is.
 #[must_use]

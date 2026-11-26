@@ -49,7 +49,9 @@ impl App {
         } else {
             t!("cmdline.local_only")
         };
+        // field-label: the command line's prompt before it, the panel's folder
         let field = text_input(placeholder, &self.cmdline.text)
+            .style(theme::text_field)
             .id(CMDLINE_ID)
             .on_input_maybe(enabled.then_some(input))
             .size(theme::TEXT_SIZE)

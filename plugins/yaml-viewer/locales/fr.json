@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse YAML",
+  "description": "Affiche le YAML en couleurs, comme un éditeur, ou sous forme d'arborescence à déplier.",
+  "codes": {
+    "01a15939-8404-762d-9569-7e4ec903238e.too_many_nodes": "L'arborescence a trop de plages ouvertes ; fermez la visionneuse et rouvrez le fichier."
+  }
+}

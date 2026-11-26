@@ -2,6 +2,10 @@
 //! line that never wraps, prose and help lines that wrap, a path shortened in the middle to the
 //! width it is given, the one-line cells and rows of a dialog's table and a status line's message
 //! cut at its end, each with the whole value in a tooltip.
+//!
+//! Every text here shows the characters a person cannot see spelled out
+//! (`ellipsis::visible_lines`, RC-110-62): a name with a direction override in a dialog reads as
+//! it is stored, not turned around.
 
 use std::{borrow::Cow, time::Duration};
 
@@ -12,7 +16,7 @@ use iced::{
 
 use super::{
     ROW_HEIGHT, TEXT_SIZE, Tokens, UI_FONT, dialog,
-    ellipsis::{end_ellipsis_by, estimate_width, middle_ellipsis},
+    ellipsis::{end_ellipsis_by, estimate_width, middle_ellipsis, visible_lines, visible_text},
     striped_row,
 };
 
@@ -22,7 +26,7 @@ pub const TIP_WIDTH: f32 = 420.0;
 
 /// One line at [`TEXT_SIZE`] in the interface font that never wraps: a label, a title, a value.
 pub fn line<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
-    text(content)
+    text(shown(content))
         .size(TEXT_SIZE)
         .font(UI_FONT)
         .wrapping(text::Wrapping::None)
@@ -30,7 +34,7 @@ pub fn line<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
 
 /// Prose - an explanation, a note, an error: wraps by word in the width it has.
 pub fn prose<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
-    text(content)
+    text(shown(content))
         .size(TEXT_SIZE)
         .font(UI_FONT)
         .wrapping(text::Wrapping::Word)
@@ -39,7 +43,13 @@ pub fn prose<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
 
 /// A label beside a control, a line of a question: wraps by word, as wide as its content.
 pub fn label<'a>(content: impl text::IntoFragment<'a>) -> text::Text<'a> {
-    text(content).size(TEXT_SIZE).font(UI_FONT)
+    text(shown(content)).size(TEXT_SIZE).font(UI_FONT)
+}
+
+/// `content` with what cannot be seen spelled out; its line breaks stay. Borrowed stays borrowed
+/// and owned stays owned when there is nothing to spell out.
+fn shown<'a>(content: impl text::IntoFragment<'a>) -> Cow<'a, str> {
+    visible_text(content.into_fragment(), true)
 }
 
 /// [`label`] that breaks a word wider than its line between glyphs: a command, an argument, a
@@ -200,9 +210,10 @@ fn wrapped_tip<'a, Message: 'a>(
         .into()
 }
 
-/// Whether `value` at [`TEXT_SIZE`] is wider than `width` by the estimate (which errs wide).
+/// Whether `value` at [`TEXT_SIZE`] is wider than `width` by the estimate (which errs wide), as
+/// shown: with what cannot be seen spelled out.
 pub fn overflows(value: &str, width: f32) -> bool {
-    !value.is_empty() && estimate_width(value, TEXT_SIZE) > width
+    !value.is_empty() && estimate_width(&visible_lines(value), TEXT_SIZE) > width
 }
 
 /// A row of a dialog's table: one line of [`ROW_HEIGHT`], its cells side by side 8 apart, on

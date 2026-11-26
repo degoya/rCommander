@@ -35,12 +35,15 @@ impl<T> fmt::Display for Labeled<T> {
     }
 }
 
-/// A one-line text field of the dialog's look.
+/// A one-line text field of the dialog's look; `placeholder` is an example or a hint, its label
+/// stands beside it (`labeled`, RC-110-78).
 pub(in crate::app) fn field<'a>(
     placeholder: &str,
     value: &str,
 ) -> text_input::TextInput<'a, Message> {
+    // field-label: each call names its field
     text_input(placeholder, value)
+        .style(theme::text_field)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([5, 8])

@@ -61,13 +61,14 @@ are needed:
 - **macOS, Apple Silicon and Intel**: unzip it and move `rCommander.app` to *Applications*. The
   app is not notarised, so open it the first time with a right-click and *Open*.
 
-Every release lists its files with their SHA-256 in `SHA256SUMS`, and carries a `.deb` and an
-`.rpm` package for each Linux architecture. An unpacked package updates itself: by default a new
+Every release lists its files with their SHA-256 in `SHA256SUMS`, carries a CycloneDX software
+bill of materials (SBOM) for rCommander and for its bundled plugins, and a `.deb` and an `.rpm`
+package for each Linux architecture. An unpacked package updates itself: by default a new
 version installs when you quit rCommander (Settings > Updates).
 
 To carry rCommander on a USB stick with its settings, connections and plugins, unpack the Windows
 zip or the Linux tarball there and choose *Make this copy portable...* in the database dialog
-(Configuration > Database...): from the next start the data lives in `data` beside the program.
+(Configuration > Database...): from the next start the data lives in `data` next to the program.
 
 ### Package managers
 
@@ -118,6 +119,34 @@ to report a vulnerability privately.
   menus in the system's menu bar, Cmd as the shortcut key, the Mac's colours, accent and fonts
   and the transparent title bar.
 
+## Privacy
+
+rCommander collects nothing about you and has no telemetry and no crash reports. Its settings,
+connections, keys and credentials stay in its database on your computer, the secrets encrypted.
+
+- **Update check**: by default rCommander asks github.com once a day whether a new version is
+  out. GitHub sees your IP address and the version you run, as with any download; the request
+  carries nothing else. Turn it off under Settings > Updates; *Check now* still works.
+- **Connections**: rCommander reaches a server, a mirror or an inventory system only when you
+  set it up or open it.
+- **MCP**: the built-in MCP server listens on your own computer only (127.0.0.1) and needs its
+  access token. An AI agent you connect passes what it reads through rCommander to the provider
+  of its AI client, possibly in another country; the rights under Settings > MCP server decide
+  what it may read. rCommander itself contains no AI.
+
+## Trademarks
+
+Total Commander, Double Commander, Windows and macOS are trademarks or names of their respective
+owners, used here only to describe rCommander. rCommander is an independent project, not
+affiliated with, endorsed or sponsored by any of them.
+
 ## Licence
 
-GPL-3.0-or-later, see [LICENSE](LICENSE).
+Copyright © 2026 Alexander Herling / DEGOYA.digital
+
+rCommander is free software: you may pass it on and change it under the terms of the GNU General
+Public License, version 3 or (at your option) any later version, see [LICENSE](LICENSE). It is
+distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY, without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, to the extent permitted by
+applicable law. The third-party material it contains and its licences are listed in
+[NOTICE](NOTICE).

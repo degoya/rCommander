@@ -8,6 +8,9 @@
 //!   goes in.
 //! - A tab is there already when the panel has a tab on its folder (adding only); a tab whose
 //!   folder does not exist is `missing` and added only when `only` names it.
+//! - For an agent (RC-110-58) a menu entry or a tab on another machine's share is skipped with
+//!   `network_path` and never asked about: opening it signs in to that server with the person's
+//!   NTLM hash, the rule `network_path` keeps for every path an agent names (RC-080-10).
 
 use std::{collections::HashMap, time::Duration};
 
@@ -15,10 +18,10 @@ use rc_db::{HotlistItem, HotlistPatch, NewHotlistItem};
 use rc_vfs::VfsPath;
 
 use super::{
-    total_commander::{TcMenuItem, TcMenuKind, TcTab},
+    total_commander::{TcMenuItem, TcMenuKind, TcSkip, TcTab},
     total_commander_report::{DEFAULT_FOLDER, TcHotlistRow, TcRowStatus, TcTabRow, TcTabsMode},
 };
-use crate::{Engine, EngineError, EngineEvent, PanelId};
+use crate::{Engine, EngineError, EngineEvent, PanelId, read_guard};
 
 /// How long a tab's folder may take to answer whether it exists (a server share may not).
 const EXISTS_TIMEOUT: Duration = Duration::from_secs(2);
@@ -31,6 +34,19 @@ pub(crate) fn chosen(key: &str, only: Option<&[String]>, default: bool) -> bool 
 /// A folder path as a map key: its names in ASCII lower case.
 pub(super) fn path_key(names: &[String]) -> Vec<String> {
     names.iter().map(|name| name.to_ascii_lowercase()).collect()
+}
+
+/// Whether `path` is on another machine (`\\server\share`, a device path): what an agent's
+/// import skips without asking about it.
+fn on_network(path: &str) -> bool {
+    crate::network_path(path).is_some()
+}
+
+/// The status of a row an agent's import skips for its share.
+fn network_skipped() -> TcRowStatus {
+    TcRowStatus::Skipped {
+        reason: TcSkip::NetworkPath.code().to_owned(),
+    }
 }
 
 /// `path` as a hotlist stores it.
@@ -86,6 +102,7 @@ impl Engine {
                 .take(None, DEFAULT_FOLDER, true)
                 .map(|item| item.id),
         );
+        let from_mcp = read_guard::from_mcp();
         let mut rows = Vec::with_capacity(items.len());
         let mut found = Vec::with_capacity(items.len());
         for item in items {
@@ -119,6 +136,14 @@ impl Engine {
                     id = there.as_ref().map(|there| there.id);
                     folders.insert(path_key(&path), id);
                     row.selected = chosen(&row.key, only, there.is_none());
+                }
+                TcMenuKind::Entry { path, target }
+                    if from_mcp
+                        && (on_network(path) || target.as_deref().is_some_and(on_network)) =>
+                {
+                    row.path = Some(path.clone());
+                    row.target.clone_from(target);
+                    row.status = network_skipped();
                 }
                 TcMenuKind::Entry { path, target } => {
                     row.path = Some(path.clone());
@@ -237,6 +262,7 @@ impl Engine {
         mode: TcTabsMode,
         dry_run: bool,
     ) -> Result<Vec<TcTabRow>, EngineError> {
+        let from_mcp = read_guard::from_mcp();
         let mut rows = Vec::with_capacity(tabs.len());
         for tab in tabs {
             let side = match tab.panel {
@@ -244,14 +270,17 @@ impl Engine {
                 PanelId::Right => "right",
             };
             let key = format!("{side}{}", tab.position);
+            let network = from_mcp && tab.path.as_deref().is_ok_and(on_network);
+            // A share is never asked about for an agent, not even whether it exists.
             let exists = match &tab.path {
-                Ok(path) => folder_exists(path).await,
-                Err(_) => false,
+                Ok(path) if !network => folder_exists(path).await,
+                _ => false,
             };
             let status = match &tab.path {
                 Err(skip) => TcRowStatus::Skipped {
                     reason: skip.code().to_owned(),
                 },
+                Ok(_) if network => network_skipped(),
                 Ok(_) if !exists => TcRowStatus::Missing,
                 Ok(path)
                     if mode == TcTabsMode::Append

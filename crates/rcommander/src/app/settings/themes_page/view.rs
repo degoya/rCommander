@@ -37,12 +37,12 @@ use crate::{
     },
     i18n::{lookup, t},
     theme::{
-        self, DANGER, Tokens,
+        self, Tokens,
         ellipsis::middle_ellipsis,
         fit::tip,
         focus,
         icon::Icon,
-        layout::{primary_icon_button, secondary_icon_button},
+        layout::{self, primary_icon_button, secondary_icon_button},
         themes::seen,
     },
 };
@@ -251,10 +251,13 @@ fn buttons<'a>(page: &'a ThemesPage, tokens: &'static Tokens) -> Element<'a, Mes
     let in_use = marked.is_some_and(|theme| page.chosen(&theme.id));
     if let Some(name) = &page.renaming {
         return row![
-            text_input(t!("settings.themes.name"), name)
-                .on_input(|text| page_message(ThemesMsg::RenameText(text)))
-                .on_submit(page_message(ThemesMsg::RenameDone))
-                .width(280),
+            layout::captioned_beside(
+                t!("settings.themes.name"),
+                text_input("", name)
+                    .on_input(|text| page_message(ThemesMsg::RenameText(text)))
+                    .on_submit(page_message(ThemesMsg::RenameDone))
+                    .width(280),
+            ),
             primary_icon_button(
                 Icon::Confirm,
                 t!("settings.themes.rename_done"),
@@ -318,6 +321,7 @@ fn file_row<'a>(page: &'a ThemesPage, tokens: &'static Tokens) -> Element<'a, Me
         label(t!("settings.themes.file")),
         row![
             text_input(t!("settings.themes.file_placeholder"), &page.file)
+                .style(theme::text_field)
                 .on_input(|text| page_message(ThemesMsg::File(text)))
                 .width(Length::Fill),
         ]
@@ -409,7 +413,7 @@ pub fn view<'a>(
         .push(conflict(page));
     if let Some((note, error)) = &page.note {
         let colour = if *error {
-            DANGER
+            tokens.status.danger
         } else {
             tokens.text_secondary
         };

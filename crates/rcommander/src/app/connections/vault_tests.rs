@@ -70,11 +70,12 @@ async fn locked_ftp(harness: &mut Harness, name: &str) -> ConnectionId {
     engine.dispatch(open).await.expect("the vault open");
     // A test of these connections reaches the login: no question before a password in clear
     // (RC-080-67), so the failure is the refused socket's.
+    // Protected (RC-110-58): the window's way, as the settings dialog stores it.
     engine
-        .dispatch(Command::SetSetting {
-            key: rc_engine::settings::FTP_ASK_PLAINTEXT_KEY.into(),
-            value: serde_json::json!(false),
-        })
+        .set_protected_setting(
+            rc_engine::settings::FTP_ASK_PLAINTEXT_KEY,
+            &serde_json::json!(false),
+        )
         .await
         .expect("no plaintext question");
     let port = std::net::TcpListener::bind("127.0.0.1:0")

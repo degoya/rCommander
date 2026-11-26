@@ -62,9 +62,9 @@ scripts/soak.sh
 scripts/lib/soak.py
 scripts/tests/soak.sh
 
-# The live test servers (Docker containers with throw-away logins) and their driver; the Rust
-# suites they serve are `#[ignore]` and stay.
-scripts/live/
+# The maintainer's one entry to both live suites, under the build lock. The suites themselves -
+# the containers with their throw-away logins and each suite's run.sh - are public in
+# scripts/live-servers/, which the weekly workflow .github/workflows/live.yml runs (RC-110-69).
 scripts/live-tests.sh
 scripts/tests/live-tests.sh
 

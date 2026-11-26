@@ -1,7 +1,7 @@
 //! The focus ring of the small questions in windows of their own (RC-080-16, RC-080-23): each
 //! question drawn as its window draws it walks its ring without the head's X - the title bar has
 //! it - and its window starts on its first control. The MCP call's window starts on Deny, its one
-//! stop; Allow stays a button only a click presses.
+//! stop; Allow is a button only a click presses in the question's first second (RC-110-80).
 
 use std::time::Duration;
 
@@ -94,7 +94,8 @@ async fn the_question_windows_walk_their_rings_without_a_head() {
 }
 
 /// The MCP call's window has Deny as its one stop and the keyboard on it as it opens; Allow is
-/// out of the ring, so no key typed as the window appears allows the call.
+/// out of the ring in the question's first second, so no key typed as the window appears allows
+/// the call (RC-110-80).
 #[tokio::test]
 async fn the_mcp_question_window_starts_on_deny() {
     let root = tempfile::tempdir().expect("temp dir");
@@ -117,5 +118,5 @@ async fn the_mcp_question_window_starts_on_deny() {
     harness.settle().await;
     let (stops, loose) = question_ring(&mut harness, "MCP window").await;
     assert_eq!(stops, [Some(Kind::Button)], "Deny is the one stop");
-    assert_eq!(loose, 1, "Allow, which only a click presses; no head");
+    assert_eq!(loose, 1, "Allow, which only a click presses yet; no head");
 }

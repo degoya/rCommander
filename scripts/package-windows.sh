@@ -3,8 +3,9 @@
 # Builds the Windows release from WSL with cargo-xwin - or natively with cargo on Windows (Git
 # Bash, the GitHub runner of release.yml, RC-100-31) - and packs it:
 #   artifacts/windows/rcommander-<version>-windows-x64.zip
-# with rcommander.exe, README.md, LICENSE, NOTICE (the bundled icons' licence), VERSION.txt and
-# plugins/ - the bundled plugins, built, signed and checked by scripts/build-plugins.sh (which
+# with rcommander.exe, README.md, LICENSE, NOTICE (the bundled third-party material),
+# THIRD-PARTY-LICENSES (the crates' licence texts), VERSION.txt and plugins/ - the bundled
+# plugins, built, signed and checked by scripts/build-plugins.sh (which
 # needs the signing key, RC_PLUGIN_KEY) and installed by rCommander at its first start.
 #
 # Usage:

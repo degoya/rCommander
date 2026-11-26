@@ -12,8 +12,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 
 use super::{IoCancel, TimeoutFs, Timeouts};
 use crate::{
-    Capabilities, Entry, LocalFs, ReadStream, Result, SetAttributes, Vfs, VfsError, WriteMode,
-    WriteStream, conformance,
+    Capabilities, CopyWatch, Entry, LocalFs, ReadStream, Result, SetAttributes, Vfs, VfsError,
+    WriteMode, WriteStream, conformance,
 };
 
 /// A share whose server is gone: every call under `/share` waits forever; anything else answers
@@ -129,6 +129,16 @@ impl Vfs for Share {
     }
     async fn set_attributes(&self, path: &Path, _change: SetAttributes) -> Result<()> {
         answer(path, ()).await
+    }
+    /// Under `/share` never a byte; elsewhere one more every 10 s, for the listing time.
+    async fn copy_file(&self, from: &Path, _to: &Path, watch: Arc<CopyWatch>) -> Result<u64> {
+        answer(from, ()).await?;
+        let steps = self.listing.as_secs() / 10;
+        for step in 1..=steps {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            watch.report(step);
+        }
+        Ok(steps)
     }
 }
 
@@ -362,4 +372,52 @@ async fn around_the_local_backend_everything_works_as_before() {
     let file = dir.path().join("seek.bin");
     conformance::write_file(&fs, &file, WriteMode::CreateNew, b"hello").await;
     conformance::seekable_read_when_offered(&fs, &file).await;
+}
+
+/// RC-110-65: a system copy whose bytes stop moving is stopped after the request limit.
+#[tokio::test(start_paused = true)]
+async fn a_silent_system_copy_times_out_and_is_stopped() {
+    let fs = share(Duration::ZERO);
+    let watch = Arc::new(CopyWatch::new());
+    let copied = fs
+        .copy_file(
+            Path::new("/share/a"),
+            Path::new("/share/b"),
+            Arc::clone(&watch),
+        )
+        .await;
+    assert!(
+        matches!(&copied, Err(VfsError::TimedOut { seconds: 20, .. })),
+        "{copied:?}"
+    );
+    assert!(watch.is_cancelled(), "the copy is told to stop");
+}
+
+/// A copy longer than the request limit runs on while its bytes move.
+#[tokio::test(start_paused = true)]
+async fn a_system_copy_that_moves_has_no_time_limit() {
+    let fs = share(Duration::from_secs(120));
+    let watch = Arc::new(CopyWatch::new());
+    let started = tokio::time::Instant::now();
+    let copied = fs
+        .copy_file(Path::new("/home/a"), Path::new("/home/b"), watch)
+        .await;
+    assert_eq!(copied.ok(), Some(12));
+    assert!(started.elapsed() >= Duration::from_secs(120));
+}
+
+/// A paused copy is silent on purpose: it waits as long as the pause lasts.
+#[tokio::test(start_paused = true)]
+async fn a_paused_system_copy_is_not_timed_out() {
+    let fs = share(Duration::ZERO);
+    let watch = Arc::new(CopyWatch::new());
+    watch.set_paused(true);
+    let copy = fs.copy_file(
+        Path::new("/share/a"),
+        Path::new("/share/b"),
+        Arc::clone(&watch),
+    );
+    let waited = tokio::time::timeout(Duration::from_secs(120), copy).await;
+    assert!(waited.is_err(), "still waiting after the request limit");
+    assert!(!watch.is_cancelled());
 }

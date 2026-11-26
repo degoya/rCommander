@@ -13,13 +13,16 @@
 //! system in memory for the tests of crates that work against [`Vfs`]; `testing` (the same
 //! feature) has what such tests wrap a backend with. [`TimeoutFs`] holds any
 //! backend to a time limit and lets its waiting calls be stopped: a share that does not answer
-//! never holds the caller (RC-080-04). A portable device (a phone over MTP) is
+//! never holds the caller (RC-080-04). [`Vfs::copy_file`] copies a file through the operating
+//! system's own call where the backend has one - the local disk's `CopyFileExW` and
+//! `copy_file_range` -, watched by a [`CopyWatch`] (RC-110-65). A portable device (a phone over MTP) is
 //! [`BackendId::Device`] on Windows, a gvfs folder on the local backend on Linux ([`device`],
 //! RC-100-61).
 
 mod archive;
 #[cfg(any(test, feature = "conformance"))]
 pub mod conformance;
+mod copy_watch;
 mod device;
 mod entry;
 mod error;
@@ -47,6 +50,7 @@ pub use archive::{
     ArchiveSettings, Compression, UnsafeName, check_sevenz_block, check_sevenz_header,
     detect_format, detect_format_within,
 };
+pub use copy_watch::CopyWatch;
 pub use device::{DeviceFs, DeviceHub, PortableDevice, system_hub};
 pub use entry::{
     Attributes, Capabilities, Entry, EntryKind, Owner, SetAttributes, TargetKind, WindowsFlags,

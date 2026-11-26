@@ -158,7 +158,8 @@ impl Engine {
 
     /// The file `target` inside an archive, unpacked into a folder of its own under the system's
     /// temporary folder and marked read-only, for a program of the system to open. Nothing is
-    /// written back into the archive.
+    /// written back into the archive. The copy carries the archive's Mark-of-the-Web, or the
+    /// internet's for a file on a server (RC-110-56), so SmartScreen asks before it runs.
     ///
     /// # Errors
     ///
@@ -191,6 +192,8 @@ impl Engine {
             let mut reader = tokio::io::BufReader::with_capacity(COPY_BUFFER, &mut reader);
             tokio::io::copy_buf(&mut reader, &mut writer).await?;
             writer.flush().await?;
+            // The archive's Mark-of-the-Web, before the file turns read-only (RC-110-56).
+            self.keep_zone(target, &file).await;
             let mut permissions = writer.metadata().await?.permissions();
             permissions.set_readonly(true);
             tokio::fs::set_permissions(&file, permissions).await

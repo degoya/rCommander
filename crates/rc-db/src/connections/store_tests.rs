@@ -353,3 +353,30 @@ async fn the_ftp_options_are_stored_and_changed() {
     assert_eq!(changed.ftp_encoding, Some(FtpEncoding::Utf8));
     assert_eq!(db.connection(created.id).await.expect("get"), changed);
 }
+
+#[tokio::test]
+async fn a_host_is_known_by_its_host_and_port() {
+    let db = Db::open_in_memory().await.expect("open");
+    let created = db
+        .create_connection(None, &draft("web"))
+        .await
+        .expect("create");
+    assert!(
+        db.has_connection_to("example.org", created.port)
+            .await
+            .expect("read")
+    );
+    assert!(
+        db.has_connection_to(" EXAMPLE.org ", 22)
+            .await
+            .expect("read"),
+        "case and blanks do not count"
+    );
+    assert!(
+        !db.has_connection_to("example.org", 2222)
+            .await
+            .expect("read"),
+        "another port is another host"
+    );
+    assert!(!db.has_connection_to("example.net", 22).await.expect("read"));
+}

@@ -29,6 +29,7 @@ impl From<LevelArg> for LogLevel {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ErrorLogParams {
     /// Only lines of this level: `warn` or `error`.
     #[serde(default)]
@@ -38,14 +39,17 @@ pub(crate) struct ErrorLogParams {
     pub contains: Option<String>,
     /// Lines at most, newest first: 100 when omitted, 1000 at most.
     #[serde(default)]
+    #[schemars(range(min = 1, max = 1000))]
     pub limit: Option<u32>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct ClearErrorLogParams {}
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct SetRetentionParams {
     /// The growing table, as diagnostics_get_retention names it (`error_log`).

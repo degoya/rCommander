@@ -142,7 +142,9 @@ const MENU_BAR_STYLES: &[Choice] = &[
 ];
 
 /// Drawn by default: the Win32 menu knows only light and one dark grey, not the themes
-/// (owner 2026-11-01, RC-100-66). Switched without a restart.
+/// (owner 2026-11-01, RC-100-66); while a screen reader runs and nothing is stored, the window
+/// takes the Win32 menu, the part of it a screen reader reads (RC-110-79). Switched without a
+/// restart.
 pub(super) const MENU_BAR_STYLE: SettingSpec = SettingSpec {
     key: MENU_BAR_STYLE_KEY,
     page: SettingPage::Appearance,

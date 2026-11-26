@@ -3,8 +3,10 @@ use std::time::{Duration, SystemTime};
 use rc_engine::EntryKind;
 
 use super::{
-    attributes, count, date_in, date_pattern, from_local, parse_size, percent, rights, size,
+    attributes, count, count_in, date, date_in, date_pattern, day, day_pattern, from_local,
+    instant, parse_size, percent, rights, scaled, size,
 };
+use crate::locale::Lang;
 
 const KIB: u64 = 1024;
 const MIB: u64 = KIB * 1024;
@@ -69,12 +71,47 @@ fn rights_read_as_ls_prints_them() {
     assert_eq!(rights(&EntryKind::File, None), "");
 }
 
+/// The tests read English, so `count` groups with a comma.
 #[test]
 fn counts_are_grouped_by_three() {
     assert_eq!(count(0), "0");
     assert_eq!(count(999), "999");
-    assert_eq!(count(1_000), "1\u{202f}000");
-    assert_eq!(count(1_234_567), "1\u{202f}234\u{202f}567");
+    assert_eq!(count(1_000), "1,000");
+    assert_eq!(count(1_234_567), "1,234,567");
+}
+
+/// Every language groups with its own separator (RC-110-83): English a comma, German and
+/// Spanish a point, French a narrow no-break space.
+#[test]
+fn counts_are_grouped_as_each_language_writes_them() {
+    for (lang, million, small) in [
+        (Lang::En, "1,234,567", "999"),
+        (Lang::De, "1.234.567", "999"),
+        (Lang::Fr, "1\u{202f}234\u{202f}567", "999"),
+        (Lang::Es, "1.234.567", "999"),
+    ] {
+        assert_eq!(count_in(lang, 1_234_567), million, "{lang:?}");
+        assert_eq!(count_in(lang, 999), small, "{lang:?}");
+        assert_eq!(count_in(lang, 0), "0", "{lang:?}");
+    }
+}
+
+/// Every language writes a size's decimal with its own mark (RC-110-83); whole numbers and
+/// bytes stay as they are.
+#[test]
+fn sizes_take_the_decimal_mark_of_each_language() {
+    for (lang, mark) in [
+        (Lang::En, "1.5"),
+        (Lang::De, "1,5"),
+        (Lang::Fr, "1,5"),
+        (Lang::Es, "1,5"),
+    ] {
+        assert_eq!(scaled(lang, 1_536), (1, mark.to_owned()), "{lang:?}");
+        assert_eq!(scaled(lang, 3 * GIB / 2), (3, mark.to_owned()), "{lang:?}");
+        assert_eq!(scaled(lang, 20 * MIB), (2, "20".to_owned()), "{lang:?}");
+        assert_eq!(scaled(lang, 1_023), (0, "1023".to_owned()), "{lang:?}");
+    }
+    assert_eq!(scaled(Lang::De, u64::MAX), (4, "16777216".to_owned()));
 }
 
 #[test]
@@ -119,6 +156,25 @@ fn a_local_time_reads_back_in_every_pattern() {
     for (pattern, text) in cases {
         assert_eq!(date_in(time, pattern), text, "{pattern}");
     }
+}
+
+/// An instant reads as a file's date does, and its day as the date without the time: the
+/// update page and the certificate dialog (RC-110-83).
+#[test]
+fn an_instant_and_its_day_read_as_a_file_date() {
+    let at = jiff::Timestamp::from_second(1_700_000_000).expect("in range");
+    let time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    assert_eq!(instant(at), date(Some(time)));
+    assert!(
+        instant(at).starts_with(&day(at)),
+        "{} {}",
+        instant(at),
+        day(at)
+    );
+    assert!(day(at).len() < instant(at).len());
+    assert_eq!(day_pattern("%d.%m.%Y %H:%M"), "%d.%m.%Y");
+    assert_eq!(day_pattern("%m/%d/%Y %I:%M %p"), "%m/%d/%Y");
+    assert_eq!(day_pattern("%H:%M"), "%H:%M");
 }
 
 #[test]

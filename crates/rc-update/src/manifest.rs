@@ -33,7 +33,9 @@ pub use artifact::{Artifact, kind};
 
 /// Domain separator for the manifest's signatures (`sign/envelope.rs`).
 pub const UPDATE_MANIFEST_DOMAIN: &str = "rcommander.update-manifest.v1";
-/// The manifest layout this build understands. Anything else is refused as a whole.
+/// The manifest layout this build understands. Anything else is refused as a whole. A later
+/// layout is published under a file name of its own, beside schema 1 at [`Channel::file_name`]
+/// (`docs/security/updates.md`, "A new schema version").
 pub const UPDATE_MANIFEST_SCHEMA_VERSION: u32 = 1;
 /// Largest signed manifest accepted, checked before a byte of it is parsed.
 pub const MAX_MANIFEST_BYTES: usize = 256 * 1024;

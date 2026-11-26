@@ -64,11 +64,10 @@ impl App {
             EngineEvent::SelectionLoaded {
                 selected, missing, ..
             } => {
-                self.info = Some(t!(
-                    "selection.loaded",
-                    selected = selected.to_string(),
-                    missing = missing.to_string()
-                ));
+                self.info = Some(
+                    crate::i18n::counted::Counted::now()
+                        .selection_loaded(selected as u64, missing as u64),
+                );
                 Vec::new()
             }
             // A key trusted, removed or imported: the settings' Host keys page reads it again.

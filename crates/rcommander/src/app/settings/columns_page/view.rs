@@ -19,7 +19,7 @@ use crate::{
     },
     i18n::t,
     theme::{
-        self, DANGER, Tokens, focus,
+        self, Tokens, focus,
         icon::Icon,
         layout::{glyph_button, primary_icon_button, secondary_icon_button},
     },
@@ -80,7 +80,7 @@ pub fn view<'a>(page: &'a ColumnsPage, tokens: &'static Tokens) -> Element<'a, M
     }
     if let Some((note, error)) = &page.note {
         let colour = if *error {
-            DANGER
+            tokens.status.danger
         } else {
             tokens.text_secondary
         };
@@ -192,6 +192,7 @@ fn editor_view<'a>(
     column![
         label(t!("settings.columns.name")),
         text_input(t!("settings.columns.name"), &editor.name)
+            .style(theme::text_field)
             .on_input(|text| page_message(ColumnsMsg::Name(text)))
             .width(320),
         label(t!("settings.columns.columns")),
@@ -199,6 +200,7 @@ fn editor_view<'a>(
         secondary_icon_button(Icon::Add, t!("settings.columns.add"), more),
         label(t!("settings.columns.masks")),
         text_input(t!("settings.columns.masks_placeholder"), &editor.masks)
+            .style(theme::text_field)
             .on_input(|text| page_message(ColumnsMsg::Masks(text)))
             .width(Length::Fill),
         hint(t!("settings.columns.masks_help"), tokens),
@@ -236,9 +238,12 @@ fn column_row<'a>(
             &format!("settings.columns.field.{at}"),
             field_moves
         ),
+        // field-label: the table's header over its column (Title); the placeholder is a hint
         text_input(t!("settings.columns.title_placeholder"), &column.title)
+            .style(theme::text_field)
             .on_input(move |text| page_message(ColumnsMsg::Title(at, text)))
             .width(Length::Fill),
+        // field-label: the table's header over its column (Width)
         text_input("", &column.width)
             .on_input(move |text| page_message(ColumnsMsg::Width(at, text)))
             .width(70),

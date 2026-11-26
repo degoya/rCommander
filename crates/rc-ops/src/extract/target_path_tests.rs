@@ -38,3 +38,36 @@ fn parts_reads_plain_components_only() {
     assert_eq!(parts(Path::new("../b")), None);
     assert_eq!(parts(Path::new("/b")), None);
 }
+
+/// RC-110-92: the names the archive view lists on Windows land below the target, for an
+/// unpacking (`below`) and a copy out of the archive view (`check_listed`, `check_target`) alike -
+/// a `C:` or a stream in the middle of a stored name is renamed, never joined as a drive.
+#[test]
+fn names_cleaned_for_windows_land_below_the_target() {
+    let cases: [(&str, &str); 6] = [
+        ("a/C:/x.txt", "/t/a/C_/x.txt"),
+        ("b.txt:Zone.Identifier", "/t/b.txt_Zone.Identifier"),
+        ("CON", "/t/_CON"),
+        ("name.", "/t/name_"),
+        ("a<b", "/t/a_b"),
+        ("a\\C:/d.\\x ", "/t/a/C_/d_/x_"),
+    ];
+    for (stored, landed) in cases {
+        let names = rc_vfs::testing::archive_name_parts(stored, true);
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        assert_eq!(
+            below(Path::new("/t"), &names),
+            Ok(PathBuf::from(landed)),
+            "{stored}"
+        );
+        for name in &names {
+            assert!(crate::name::check_listed(name).is_ok(), "{stored}: {name}");
+        }
+        let rel: PathBuf = names.iter().collect();
+        assert!(crate::check_target(&rel, true).is_ok(), "{stored}");
+        // Without Windows' cleaning the same name is refused, never joined.
+        let kept = rc_vfs::testing::archive_name_parts(stored, false);
+        let kept: Vec<&str> = kept.iter().map(String::as_str).collect();
+        assert!(below(Path::new("/t"), &kept).is_err(), "{stored}");
+    }
+}

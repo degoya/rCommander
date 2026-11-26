@@ -7,6 +7,10 @@
 //! (`/proc/self/status`, in KiB): idle, after the listing, and its peak. The script makes the
 //! folder and reads the lines.
 //!
+//! `first_rows` is the navigation into the folder until the panel shows its first rows, `list`
+//! until the whole folder is there: a listing that runs long is shown as it arrives
+//! (`commands/panel_listing.rs`; the local backend sends parts of 4096 entries, RC-110-66).
+//!
 //! `start` is the window's start without the window (`app/startup.rs`): from `main` until the
 //! first panel's listing is there - the database opened (created and migrated when `<database>`
 //! is new) and attached, the engine opened on the folder's parent, the stored settings and the
@@ -17,12 +21,14 @@
 //! packs a solid 7z and a `tar.xz` of many small files and `perf archive-unpack <work folder>
 //! <format> <files>` unpacks one of them, each in a process of its own (`perf_cases/archive.rs`);
 //! `perf ftp-viewer <MiB>` reads a large file on the in-process FTP server as the viewer does
-//! (`perf_cases/ftp_viewer.rs`).
+//! (`perf_cases/ftp_viewer.rs`). The case of RC-110-63: `perf dir-sizes <work folder> <folders>`
+//! counts the sizes of many small folders at once, as Alt+Shift+Enter does
+//! (`perf_cases/dir_sizes.rs`).
 
 use std::{
     error::Error,
     path::{Path, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use rc_db::Db;
@@ -34,6 +40,8 @@ use rc_vfs::VfsPath;
 
 #[path = "perf_cases/archive.rs"]
 mod archive;
+#[path = "perf_cases/dir_sizes.rs"]
+mod dir_sizes;
 #[path = "perf_cases/ftp_viewer.rs"]
 mod ftp_viewer;
 
@@ -97,6 +105,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if folder.as_os_str() == "ftp-viewer" {
         return ftp_viewer::run(number(args.next())?).await;
     }
+    if folder.as_os_str() == "dir-sizes" {
+        let dir = args
+            .next()
+            .ok_or("usage: perf dir-sizes <work folder> <folders>")?;
+        let folders = usize::try_from(number(args.next())?)?;
+        return dir_sizes::run(&dir, folders).await;
+    }
     let database = args.next();
     let db = match &database {
         Some(path) => Some(Db::open(path).await?),
@@ -116,11 +131,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("start\t{:.1}", started.elapsed().as_secs_f64() * 1000.0);
     let idle_rss = memory_kib("VmRSS");
     let path = folder.display().to_string();
+    // The panel shows what arrived once the listing runs past `FIRST_SHOWN` and takes in the rest
+    // on its own (RC-060-02, RC-110-66): the navigation's answer is the first rows, the listing's
+    // end the whole folder, which the steps after it need.
+    let listing = Instant::now();
     timed(
-        "list",
+        "first_rows",
         engine.dispatch(Command::Navigate { panel: LEFT, path }),
     )
     .await?;
+    while engine.panel(PanelId::Left).listing.is_some() {
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    println!("list\t{:.1}", listing.elapsed().as_secs_f64() * 1000.0);
     let entries = engine.panel(PanelId::Left).entries.len();
     let listed_rss = memory_kib("VmRSS");
     for (name, key) in [

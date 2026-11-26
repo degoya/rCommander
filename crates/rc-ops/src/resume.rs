@@ -70,7 +70,8 @@ impl RetryPolicy {
 }
 
 /// Opens a server's backend again after its connection was lost: the engine's opens a new
-/// session where the old one is gone, and registers the backend with the queue.
+/// session where the old one is gone, and registers the backend with the queue. It also names
+/// the server a file came from, for its Mark-of-the-Web (RC-110-56).
 #[async_trait]
 pub trait Reconnect: Send + Sync {
     /// The backend of `backend` as it works now.
@@ -79,6 +80,12 @@ pub trait Reconnect: Send + Sync {
     ///
     /// Why it cannot be had; the retry counts as failed.
     async fn reconnect(&self, backend: &BackendId) -> Result<Arc<dyn Vfs>, OpsError>;
+
+    /// The server `backend` reaches as a URL without credentials (`sftp://host:22/`), the
+    /// `HostUrl` of a file copied from it; `None` when it is not known.
+    async fn host_url(&self, _backend: &BackendId) -> Option<String> {
+        None
+    }
 }
 
 /// Whether `error` is a connection that broke - worth a retry, never a reason to remove a part.
@@ -138,6 +145,10 @@ impl Runner {
         }
         let part = part_path(&placement.dest);
         self.keep_mark(item, placement).await;
+        // Disk to disk, the system's own copy where it can (`system_copy.rs`, RC-110-65).
+        if let Some(moved) = self.copy_by_system(item, placement).await? {
+            return Ok(moved);
+        }
         let start = self.progress.bytes_done;
         let mut resume = placement.resume;
         let mut retries = 0_u32;
@@ -157,6 +168,7 @@ impl Runner {
             };
             match attempt {
                 Ok(()) => {
+                    self.keep_zone(item, &placement.dest).await;
                     self.preserve(&item.entry, &placement.dest).await;
                     return Ok(Moved::Copied);
                 }

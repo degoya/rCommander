@@ -12,6 +12,7 @@ use rc_engine::{DownloadState, UpdateStatus};
 use super::{UpdateMsg, wrap};
 use crate::app::Message;
 use crate::{
+    format,
     i18n::{error_text, t},
     theme::{
         self, Tokens,
@@ -47,16 +48,13 @@ pub(in crate::app) fn page<'a>(
     let offer = status.offer.as_ref();
     match offer {
         Some(offer) => {
-            let size = offer
-                .artifact
-                .as_ref()
-                .map_or(0, |artifact| artifact.size / (1024 * 1024));
+            let size = offer.artifact.as_ref().map_or(0, |artifact| artifact.size);
             page = page.push(
                 label(t!(
                     "update.page.offer",
                     version = offer.version,
-                    date = offer.released_at.strftime("%Y-%m-%d"),
-                    size = size
+                    date = format::day(offer.released_at),
+                    size = format::size(size)
                 ))
                 .font(theme::UI_FONT_STRONG),
             );
@@ -92,13 +90,10 @@ pub(super) fn manager_line(status: &UpdateStatus) -> Option<String> {
 fn last_check(status: &UpdateStatus) -> String {
     match (&status.last_check, &status.last_code) {
         (None, _) => t!("update.page.never_checked").to_owned(),
-        (Some(at), None) => t!(
-            "update.page.checked",
-            time = at.strftime("%Y-%m-%d %H:%M UTC")
-        ),
+        (Some(at), None) => t!("update.page.checked", time = format::instant(*at)),
         (Some(at), Some(code)) => t!(
             "update.page.check_failed",
-            time = at.strftime("%Y-%m-%d %H:%M UTC"),
+            time = format::instant(*at),
             reason = error_text(code)
         ),
     }
@@ -109,8 +104,8 @@ fn download_line(download: &DownloadState) -> String {
         DownloadState::None => String::new(),
         DownloadState::Running { received, total } => t!(
             "update.page.downloading",
-            received = received / 1024,
-            total = total / 1024
+            received = format::size(*received),
+            total = format::size(*total)
         ),
         DownloadState::Ready { .. } => t!("update.page.downloaded").to_owned(),
         DownloadState::Failed { code } => {

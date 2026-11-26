@@ -36,9 +36,12 @@ pub(super) fn page<'a>(
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let source = row![
-        field(t!("rdm_import.path"), &dialog.path)
-            .on_input(|path| msg(RdmImportMsg::Path(path)))
-            .on_submit(msg(RdmImportMsg::Read)),
+        layout::captioned_beside(
+            t!("field.file"),
+            field(t!("rdm_import.path"), &dialog.path)
+                .on_input(|path| msg(RdmImportMsg::Path(path)))
+                .on_submit(msg(RdmImportMsg::Read)),
+        ),
         browse::button(PathField::RdmExport, &dialog.path, true),
         layout::secondary_icon_button(
             Icon::ViewFile,
@@ -55,7 +58,7 @@ pub(super) fn page<'a>(
     ]
     .spacing(10);
     if let Some(error) = &dialog.page.error {
-        body = body.push(fit::prose(error.as_str()).color(theme::DANGER));
+        body = body.push(fit::prose(error.as_str()).color(tokens.status.danger));
     }
     let list: Element<'a, Message> = match (&dialog.report, dialog.page.phase) {
         (_, Phase::Reading) => hint(t!("rdm_import.reading"), tokens).into(),

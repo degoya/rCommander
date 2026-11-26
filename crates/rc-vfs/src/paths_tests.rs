@@ -280,3 +280,83 @@ fn case_counts_inside_a_wsl_distribution_whatever_the_backend_says() {
         assert!(case_sensitive_at(true, Path::new(other)), "{other}");
     }
 }
+
+/// The same rules over any input (RC-110-70): the examples above are the spellings people use,
+/// these hold for every name a strategy can make.
+mod props {
+    use std::path::{Path, PathBuf};
+
+    use proptest::prelude::*;
+
+    use super::{
+        NetworkPath, WslPath, case_sensitive_at, network_path, parse_wsl_unc, unverbatim, verbatim,
+        wsl_unc_path,
+    };
+
+    /// A file or folder name: no separator, not `.` or `..`.
+    fn name() -> impl Strategy<Value = String> {
+        "[^/\\\\]{1,12}".prop_filter("a name", |name| name != "." && name != "..")
+    }
+
+    proptest! {
+        /// A Linux path built into a distribution's share parses back, without the slashes at
+        /// its ends; the share is this machine's and keeps case.
+        #[test]
+        fn a_wsl_share_parses_back_as_built(
+            distro in "[A-Za-z0-9._-]{1,12}",
+            linux in "/[^\\\\]{0,40}",
+        ) {
+            prop_assume!(distro != "." && distro != "..");
+            let built = wsl_unc_path(&distro, &linux).expect("a valid distribution and path");
+            let inner = linux.trim_start_matches('/').trim_end_matches('/');
+            prop_assert_eq!(
+                parse_wsl_unc(&built),
+                Some(WslPath {
+                    distro: distro.clone(),
+                    linux_path: format!("/{inner}"),
+                })
+            );
+            prop_assert_eq!(network_path(&built.to_string_lossy()), None);
+            prop_assert!(case_sensitive_at(false, &built));
+        }
+
+        /// A drive path and a share take the `\\?\` prefix and lose it again unchanged, with
+        /// `/` read as `\`.
+        #[test]
+        fn verbatim_and_back_is_the_path(
+            letter in "[A-Za-z]",
+            server in "[a-z0-9]{1,8}",
+            share in "[a-z0-9]{1,8}",
+            parts in prop::collection::vec(name(), 0..6),
+            slash in any::<bool>(),
+        ) {
+            let separator = if slash { "/" } else { "\\" };
+            let rest = parts.join(separator);
+            for (path, prefixed) in [
+                (format!("{letter}:{separator}{rest}"), format!(r"\\?\{letter}:\")),
+                (format!(r"\\{server}\{share}{separator}{rest}"), r"\\?\UNC\".to_owned()),
+            ] {
+                let plain = path.replace('/', "\\");
+                let long = verbatim(Path::new(&path)).expect("an absolute path");
+                let text = long.to_string_lossy().into_owned();
+                prop_assert!(text.starts_with(&prefixed), "{} for {}", text, path);
+                prop_assert_eq!(unverbatim(&long), Some(PathBuf::from(&plain)));
+                prop_assert_eq!(verbatim(&long), Some(long.clone()));
+            }
+        }
+
+        /// Whatever the text, a share is named `\\server\share` with both parts, and `/` reads
+        /// as `\`.
+        #[test]
+        fn a_share_always_has_a_server_and_a_name(text in any::<String>()) {
+            let found = network_path(&text);
+            prop_assert_eq!(&found, &network_path(&text.replace('/', "\\")));
+            if let Some(NetworkPath::Share(share)) = found {
+                let rest = share.strip_prefix(r"\\").expect("a UNC form");
+                let parts: Vec<&str> = rest.split('\\').collect();
+                prop_assert_eq!(parts.len(), 2, "{}", share);
+                prop_assert!(parts.iter().all(|part| !part.is_empty()), "{}", share);
+            }
+        }
+    }
+}

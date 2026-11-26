@@ -24,7 +24,7 @@ use crate::{
     i18n::t,
     platform::colour_picker,
     theme::{
-        DANGER, MONO_FONT, Tokens,
+        self, MONO_FONT, Tokens,
         colours::low_contrast,
         fit::line,
         focus,
@@ -58,7 +58,9 @@ fn colour_line<'a>(
         ));
     }
     line = line.push(
+        // field-label: the colour's name at the row's start; the placeholder is a hint
         text_input(t!("settings.colours.own"), typed)
+            .style(theme::text_field)
             .on_input(move |text| edit(EditorMsg::Hex(slot, text)))
             .width(110),
     );
@@ -154,6 +156,7 @@ pub fn view<'a>(editor: &'a Editor, busy: bool, tokens: &'static Tokens) -> Elem
         row![
             label(t!("settings.themes.name")),
             text_input(t!("settings.themes.name"), &editor.theme.name)
+                .style(theme::text_field)
                 .on_input(|text| edit(EditorMsg::Name(text)))
                 .width(280),
             hint(mode, tokens),
@@ -194,7 +197,7 @@ pub fn view<'a>(editor: &'a Editor, busy: bool, tokens: &'static Tokens) -> Elem
         }
     }
     for pair in low_contrast(editor.shown) {
-        body = body.push(line(contrast_note(pair)).color(DANGER));
+        body = body.push(line(contrast_note(pair)).color(tokens.status.danger));
     }
     body.push(hint(t!("settings.themes.editor_help"), tokens))
         .push(

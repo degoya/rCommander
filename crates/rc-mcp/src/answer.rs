@@ -7,9 +7,10 @@ use serde::Serialize;
 /// What a tool method returns.
 pub(crate) type ToolResult = Result<CallToolResult, rmcp::ErrorData>;
 
-/// A success payload as pretty JSON text.
+/// A success payload as compact JSON text: an agent reads it, and indentation only made a long
+/// answer longer (RC-110-61).
 pub(crate) fn json_result(value: &impl Serialize) -> ToolResult {
-    let text = serde_json::to_string_pretty(value).map_err(|error| {
+    let text = serde_json::to_string(value).map_err(|error| {
         rmcp::ErrorData::internal_error(format!("failed to serialize tool result: {error}"), None)
     })?;
     Ok(CallToolResult::success(vec![ContentBlock::text(text)]))

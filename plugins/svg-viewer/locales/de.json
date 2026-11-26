@@ -1,0 +1,10 @@
+{
+  "name": "SVG-Viewer",
+  "description": "Zeigt SVG- und SVGZ-Bilder und ihren Quelltext farbig als XML.",
+  "codes": {
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_large": "Das SVG ist größer als 64 MiB oder entpackt sich auf mehr.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.bad_gzip": "Das komprimierte SVG (.svgz) ist beschädigt und kann nicht entpackt werden.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.not_svg": "Das Bild kann nicht gezeichnet werden: Die Datei ist kein lesbares SVG oder hat keine Größe.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_complex": "Das Bild wiederholt seine Teile (<use>) zu oft, um gezeichnet zu werden."
+  }
+}

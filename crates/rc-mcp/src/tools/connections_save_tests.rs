@@ -73,6 +73,17 @@ async fn connection_count(context: &McpContext) -> usize {
 #[tokio::test]
 async fn one_call_adds_a_connection_and_another_changes_it() {
     let setup = setup().await;
+    // The person saved a connection to the host before: a new host would ask (RC-110-59,
+    // `remote_ask_tests.rs`).
+    setup
+        .context
+        .engine()
+        .dispatch(Command::CreateConnection {
+            folder_id: None,
+            connection: ConnectionDraft::new("known", "example.org"),
+        })
+        .await
+        .expect("saved in the window");
     let client = connect(&setup.context).await;
     let added = json(
         &call(
@@ -96,7 +107,7 @@ async fn one_call_adds_a_connection_and_another_changes_it() {
     );
     assert_eq!(changed["notes"], "prod", "{changed}");
     assert_eq!(changed["username"], "deploy", "omitted fields stay");
-    assert_eq!(connection_count(&setup.context).await, 1);
+    assert_eq!(connection_count(&setup.context).await, 2);
 
     let refused = json(
         &call(

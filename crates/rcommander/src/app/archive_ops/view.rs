@@ -194,6 +194,7 @@ fn pack_view<'a>(pack: &'a PackDialog, tokens: &'static Tokens) -> Element<'a, M
 fn extract_view<'a>(extract: &'a ExtractDialog, tokens: &'static Tokens) -> Element<'a, Message> {
     let count = extract.archives.len().to_string();
     let field = |value: &'a str, message: fn(String) -> ArchiveMsg| {
+        // field-label: each use - the target under "Extract to", the mask under its caption
         text_input("", value)
             .font(theme::UI_FONT)
             .size(theme::TEXT_SIZE)
@@ -255,7 +256,7 @@ fn delete_view<'a>(prompt: &'a DeletePrompt, tokens: &'static Tokens) -> Element
             archive = prompt.archive
         ))
         .color(tokens.text),
-        prose(t!("archive_ops.delete_warning")).color(theme::DANGER),
+        prose(t!("archive_ops.delete_warning")).color(tokens.status.danger),
         buttons(Icon::Delete, t!("archive_ops.delete_ok"), true),
     ]
     .spacing(10)
@@ -263,10 +264,12 @@ fn delete_view<'a>(prompt: &'a DeletePrompt, tokens: &'static Tokens) -> Element
 }
 
 fn password_view<'a>(prompt: &'a PasswordPrompt, tokens: &'static Tokens) -> Element<'a, Message> {
+    // field-label: the question over it asks for the password (`archive_ops.password_for`)
     let field = text_input(
         t!("archive_ops.password_placeholder"),
         prompt.typed.expose_secret(),
     )
+    .style(theme::text_field)
     .id(PASSWORD_FIELD)
     .secure(true)
     .font(theme::UI_FONT)
@@ -279,7 +282,7 @@ fn password_view<'a>(prompt: &'a PasswordPrompt, tokens: &'static Tokens) -> Ele
     ]
     .spacing(10);
     if prompt.wrong {
-        body = body.push(prose(t!("archive_ops.password_wrong")).color(theme::DANGER));
+        body = body.push(prose(t!("archive_ops.password_wrong")).color(tokens.status.danger));
     }
     body.push(field)
         .push(prose(t!("archive_ops.password_note")).color(tokens.text_secondary))

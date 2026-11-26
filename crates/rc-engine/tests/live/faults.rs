@@ -105,7 +105,7 @@ async fn lists_it_whole(engine: &Engine, path: &str) {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_listing_whose_server_hangs_or_drops_keeps_what_arrived_says_why_and_lists_again() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -158,7 +158,7 @@ async fn a_listing_whose_server_hangs_or_drops_keeps_what_arrived_says_why_and_l
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn an_upload_whose_server_is_killed_waits_resumable_and_goes_on_from_its_part() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -244,7 +244,7 @@ async fn top_running(engine: &Engine, id: rc_engine::ConnectionId, word: &str) -
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_terminal_whose_server_hangs_or_stops_ends_is_announced_lost_and_opens_again() {
     let live = live_or_skip!();
     let dir = workdir();

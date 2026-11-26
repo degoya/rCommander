@@ -229,7 +229,7 @@ fn finding(finding: &Finding) -> String {
             "viewer.cert.finding.valid_until",
             object = object,
             date = date(*until),
-            days = days
+            count = days
         ),
         Finding::ExpiresSoon {
             object,
@@ -239,7 +239,7 @@ fn finding(finding: &Finding) -> String {
             "viewer.cert.finding.expires_soon",
             object = object,
             date = date(*until),
-            days = days
+            count = days
         ),
         Finding::Expired {
             object,
@@ -249,13 +249,13 @@ fn finding(finding: &Finding) -> String {
             "viewer.cert.finding.expired",
             object = object,
             date = date(*until),
-            days = days
+            count = days
         ),
         Finding::NotYetValid { object, from, days } => t!(
             "viewer.cert.finding.not_yet_valid",
             object = object,
             date = date(*from),
-            days = days
+            count = days
         ),
         Finding::SelfSignedRoot { object } => {
             t!("viewer.cert.finding.self_signed_root", object = object)

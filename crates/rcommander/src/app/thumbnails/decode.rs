@@ -1,11 +1,13 @@
 //! A tile's pixels: a picture decoded with the Lister's decoder and its limits
 //! (`viewer/picture.rs`: a file's dimensions read from its header first, a decompression bomb
-//! refused before a byte is decoded), scaled down to fit the tile, proportions kept. Blocking:
-//! run it off the UI thread.
+//! refused before a byte is decoded), scaled down to fit the tile, proportions kept. A JPEG goes
+//! the shorter way first: its EXIF thumbnail or a decode at a fraction of its size (`jpeg.rs`,
+//! RC-110-67). Blocking: run it off the UI thread.
 
 use ::image::{RgbaImage, imageops};
-use rc_engine::viewer::sniff;
+use rc_engine::viewer::{ImageFormat, sniff};
 
+use super::jpeg;
 use crate::app::viewer::picture;
 
 /// A tile's pixels, RGBA rows, at most the tile's side either way.
@@ -29,7 +31,12 @@ impl std::fmt::Debug for Tile {
 /// no picture rCommander decodes, a damaged one, or one past the picture limits.
 pub fn picture(bytes: &[u8], side: u32) -> Option<Tile> {
     let format = sniff::sniff_image(bytes)?;
-    // Scaled while decoding to about the tile's area, then fitted into its square.
+    if format == ImageFormat::Jpeg
+        && let Some(tile) = jpeg::tile(bytes, side)
+    {
+        return Some(tile);
+    }
+    // Decoded whole, then scaled down to about the tile's area and fitted into its square.
     let shown = u64::from(side) * u64::from(side);
     let pixels = picture::decode(bytes, format, shown).ok()?;
     fit(pixels.rgba, pixels.shown_width, pixels.shown_height, side)

@@ -95,14 +95,14 @@ async fn a_screen_allowed_for_the_session_is_read_without_asking_again() {
     let tool = "terminal_read_screen";
 
     let person_allows = person(&engine, McpAnswer::AllowForSession);
-    let first = ask(&context, settings, "s1", tool, class, on(3).as_ref()).await;
+    let first = ask(&context, settings, "s1", tool, class, on(3).as_ref(), None).await;
     assert!(matches!(first.expect("asks"), Gate::Run(None)), "allowed");
     let question = person_allows.await.expect("joins");
     assert_eq!(question.tool, tool);
     assert_eq!(question.session, Some(McpSessionOffer::Session));
 
     // Nobody answers now, and the same terminal is read at once.
-    let again = ask(&context, settings, "s1", tool, class, on(3).as_ref()).await;
+    let again = ask(&context, settings, "s1", tool, class, on(3).as_ref(), None).await;
     assert!(
         matches!(again.expect("asks"), Gate::Run(None)),
         "no question"
@@ -113,7 +113,15 @@ async fn a_screen_allowed_for_the_session_is_read_without_asking_again() {
     for (session, terminal) in [("s1", 4), ("s2", 3)] {
         let person_denies = person(&engine, McpAnswer::Deny);
         let target = on(terminal);
-        let other = ask(&context, settings, session, tool, class, target.as_ref());
+        let other = ask(
+            &context,
+            settings,
+            session,
+            tool,
+            class,
+            target.as_ref(),
+            None,
+        );
         let Gate::Answer(refused) = other.await.expect("asks") else {
             panic!("refused: {session} on {terminal}");
         };

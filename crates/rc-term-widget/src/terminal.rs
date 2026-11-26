@@ -103,7 +103,8 @@ pub struct CopySettings {
     pub ctrl_v: bool,
     /// A program's OSC 52 copy reaches the clipboard ([`Event::Copy`]; the app honours it).
     pub osc52: bool,
-    /// With `osc52`, a program in an SSH terminal's copy too (the app tells them apart).
+    /// With `osc52`, a program in an SSH terminal's copy too (the app tells them apart); off by
+    /// default (RC-110-62).
     pub osc52_remote: bool,
     /// Shift with the mouse selects even while the program takes the mouse.
     pub shift_selects: bool,
@@ -118,7 +119,7 @@ impl Default for CopySettings {
             on_select: false,
             ctrl_v: true,
             osc52: true,
-            osc52_remote: true,
+            osc52_remote: false,
             shift_selects: true,
         }
     }

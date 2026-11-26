@@ -17,7 +17,7 @@ use super::{
 };
 use crate::{
     app::Message,
-    i18n::{error_text, t},
+    i18n::{counted::Counted, error_text, t},
     theme::{
         self, Tokens,
         fit::{self, line},
@@ -192,7 +192,7 @@ pub(super) fn lists_bar<'a>(
                 secondary_button(t!("queue.keep_saved"), Some(msg(ListMsg::KeepSaved))),
             ],
             [Element::from(
-                fit::prose(t!("queue.confirm_delete_saved")).color(theme::DANGER),
+                fit::prose(t!("queue.confirm_delete_saved")).color(tokens.status.danger),
             )],
         ));
     }
@@ -208,17 +208,13 @@ pub(super) fn lists_bar<'a>(
                 unloadable: 0,
             } => (t!("queue.note.loaded", count = jobs), false),
             Note::Loaded { jobs, unloadable } => (
-                t!(
-                    "queue.note.loaded_unloadable",
-                    count = jobs,
-                    unloadable = unloadable
-                ),
+                Counted::now().loaded_unloadable(*jobs as u64, *unloadable as u64),
                 true,
             ),
             Note::Refused(code) => (error_text(code), true),
         };
         let color = if danger {
-            theme::DANGER
+            tokens.status.danger
         } else {
             tokens.text_secondary
         };

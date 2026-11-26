@@ -19,7 +19,7 @@ use crate::{
         Message,
         browse::{self, PathField},
     },
-    i18n::t,
+    i18n::{counted::Counted, t},
     theme::{
         self, Tokens,
         fit::{self, line},
@@ -41,7 +41,7 @@ pub fn overlay<'a>(dialog: &'a MultiRenameDialog, tokens: &'static Tokens) -> El
 /// The controls, the table and the buttons: the card's content over the window, the whole of
 /// its own window (RC-080-15).
 pub fn body<'a>(dialog: &'a MultiRenameDialog, tokens: &'static Tokens) -> Element<'a, Message> {
-    let danger = theme::DANGER;
+    let danger = tokens.status.danger;
     column![
         masks(dialog, danger),
         placeholders(dialog.form.names.is_some()),
@@ -75,10 +75,12 @@ fn masks(dialog: &MultiRenameDialog, danger: Color) -> Element<'_, Message> {
         }),
         _ => None,
     };
+    // field-label: the masks' captions before them (`multi_rename.name_mask`, `extension_mask`)
     let mut name = column![mask_field(&form.name_mask, Field::NameMask, "[N]", locked)].spacing(2);
     if let Some(error) = error(MaskField::Name) {
         name = name.push(fit::prose(error).color(danger));
     }
+    // field-label: its caption before it (`multi_rename.extension_mask`)
     let mut extension = column![mask_field(
         &form.extension_mask,
         Field::ExtensionMask,
@@ -257,11 +259,8 @@ fn presets(dialog: &MultiRenameDialog) -> Element<'_, Message> {
                 t!("multi_rename.presets"),
                 moves,
             )),
-            field(
-                &dialog.preset_name,
-                Field::PresetName,
-                t!("multi_rename.preset_name")
-            ),
+            line(t!("multi_rename.preset_name")),
+            field(&dialog.preset_name, Field::PresetName, ""),
             layout::secondary_icon_button(
                 Icon::Save,
                 t!("multi_rename.preset_save"),
@@ -298,6 +297,7 @@ fn log(dialog: &MultiRenameDialog) -> Element<'_, Message> {
     indented(
         row![
             toggle,
+            // field-label: the Log checkbox before it; the placeholder is a hint
             field(
                 &dialog.log_path,
                 Field::LogPath,
@@ -328,19 +328,11 @@ fn status<'a>(
             (error.text.clone(), danger)
         }
         (Status::None, Preview::Ready { changes, conflicts }) if *conflicts > 0 => (
-            t!(
-                "multi_rename.conflicts",
-                count = conflicts,
-                changes = changes
-            ),
+            Counted::now().rename_conflicts(*conflicts as u64, *changes as u64),
             danger,
         ),
         (Status::None, Preview::Ready { changes, .. }) => (
-            t!(
-                "multi_rename.changes",
-                count = changes,
-                total = dialog.list.len()
-            ),
+            Counted::now().rename_changes(*changes as u64, dialog.list.len() as u64),
             tokens.text_secondary,
         ),
         (Status::None, _) => (String::new(), tokens.text_secondary),

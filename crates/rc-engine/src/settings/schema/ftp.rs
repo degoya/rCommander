@@ -8,7 +8,8 @@
 //! Whether a plain FTP connection asks before its password crosses the network unencrypted
 //! (RC-080-67): on, the default, the first login to such a server waits for a person - once, or
 //! for the server until rCommander ends; off, it logs in at once, with the warning after it.
-//! rCommander's own rule: Total Commander does not ask.
+//! rCommander's own rule: Total Commander does not ask. Protected (RC-110-58): only a person in
+//! the window switches it, so no agent turns the question off before a login it starts.
 
 use super::{SettingKind, SettingPage, SettingSpec};
 
@@ -24,7 +25,7 @@ pub(super) const ASK_PLAINTEXT: SettingSpec = SettingSpec {
     kind: SettingKind::Bool { default: true },
     label: "setting.ftp.ask_plaintext",
     help: "setting.ftp.ask_plaintext.help",
-    protected: false,
+    protected: true,
     restart: false,
 };
 

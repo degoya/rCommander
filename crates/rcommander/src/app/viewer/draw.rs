@@ -38,7 +38,7 @@ use super::{
 use crate::{
     app::{App, Message, file_list::divider},
     format,
-    i18n::{self, t},
+    i18n::{self, counted::Counted, t},
     theme::{
         self, Tokens,
         fit::{self, line},
@@ -189,7 +189,8 @@ fn text_view<'a>(lister: &'a Lister, tokens: &'static Tokens) -> Element<'a, Mes
         wrap(ViewerMessage::Scrollbar(id, 1.0 - value / SCROLL_STEPS))
     })
     .width(12)
-    .height(Length::Fill);
+    .height(Length::Fill)
+    .style(theme::scroll_slider);
     row![measured, scrollbar]
         .spacing(4)
         .height(Length::Fill)
@@ -269,6 +270,7 @@ fn bar(lister: &Lister, kind: BarKind) -> Element<'_, Message> {
         BarKind::GoTo => (t!("viewer.goto_placeholder"), &lister.find.offset),
     };
     let field = text_input(placeholder, value)
+        .style(theme::text_field)
         .id(BAR_ID)
         .on_input(move |text| wrap(ViewerMessage::BarInput(id, text)))
         .on_submit(wrap(ViewerMessage::BarSubmit(id)))
@@ -309,12 +311,9 @@ fn dir_view<'a>(
     );
     let numbers = match summary {
         None => t!("viewer.loading").to_owned(),
-        Some(Ok(summary)) => t!(
-            "viewer.quick_dir",
-            files = format::count(summary.files),
-            dirs = format::count(summary.dirs),
-            size = format::size(summary.bytes)
-        ),
+        Some(Ok(summary)) => {
+            Counted::now().quick_dir(summary.files, summary.dirs, format::size(summary.bytes))
+        }
         Some(Err(message)) => message.clone(),
     };
     center(

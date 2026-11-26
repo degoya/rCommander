@@ -31,7 +31,7 @@ class Rcommander < Formula
     # plugins/ beside the executable. bin/ gets a script that execs the real file, so the program
     # runs from the Cellar, where its update check sees that Homebrew updates it.
     libexec.install "rcommander", "plugins", "VERSION.txt"
-    doc.install "README.md", "LICENSE", "NOTICE"
+    doc.install "README.md", "LICENSE", "NOTICE", "THIRD-PARTY-LICENSES"
     bin.write_exec_script libexec/"rcommander"
   end
 

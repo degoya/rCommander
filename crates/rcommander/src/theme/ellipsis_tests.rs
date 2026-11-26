@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use super::{
     ELLIPSIS, clusters, end_ellipsis_by, estimate_mono_width, estimate_width, middle_ellipsis,
-    middle_ellipsis_by,
+    middle_ellipsis_by, visible, visible_lines,
 };
 
 const SIZE: f32 = 13.0;
@@ -131,4 +131,84 @@ fn the_end_cut_keeps_the_start() {
         format!("e\u{301}{ELLIPSIS}")
     );
     assert_eq!(end_ellipsis_by("abcdef", 5.0, monospace), ELLIPSIS);
+}
+
+/// RC-110-62: a name with a right-to-left override shows it spelled out, as the MCP questions do,
+/// not as the picture it pretends to be - whether it fits or is cut, in the middle or at its end.
+#[test]
+fn a_direction_override_is_spelled_out_not_obeyed() {
+    let name = "photo\u{202E}gpj.exe";
+    assert_eq!(middle_ellipsis(name, 500.0, SIZE), "photo\\u{202e}gpj.exe");
+    assert_eq!(
+        end_ellipsis_by(name, 500.0, monospace),
+        "photo\\u{202e}gpj.exe"
+    );
+    let cut = middle_ellipsis_by(name, 140.0, monospace);
+    assert_eq!(cut, format!("photo\\u{ELLIPSIS}pj.exe"));
+    assert!(!cut.contains('\u{202e}'), "{cut}");
+    let cut = end_ellipsis_by(name, 100.0, monospace);
+    assert_eq!(cut, format!("photo\\u{{2{ELLIPSIS}"));
+}
+
+/// Every direction, zero-width and format character and every control is spelled out; a plain
+/// name is left as it is, borrowed.
+#[test]
+fn every_invisible_character_is_spelled_out() {
+    for c in [
+        '\u{202a}',
+        '\u{202b}',
+        '\u{202c}',
+        '\u{202d}',
+        '\u{202e}',
+        '\u{2066}',
+        '\u{2067}',
+        '\u{2068}',
+        '\u{2069}',
+        '\u{200e}',
+        '\u{200f}',
+        '\u{61c}',
+        '\u{200b}',
+        '\u{feff}',
+        '\u{ad}',
+        '\u{2060}',
+        '\u{e0001}',
+        '\u{e0041}',
+        '\u{7}',
+        '\u{1b}',
+    ] {
+        let name = format!("a{c}b");
+        assert_eq!(visible(&name), format!("a{}b", c.escape_unicode()), "{c:?}");
+    }
+    assert_eq!(visible("a\nb\tc\rd"), "a\\nb\\tc\\rd");
+    assert!(matches!(visible("plain.txt"), Cow::Borrowed("plain.txt")));
+    assert!(matches!(
+        visible("\u{e4}\u{6587}.txt"),
+        Cow::Borrowed("\u{e4}\u{6587}.txt")
+    ));
+}
+
+/// A joiner between two visible characters beyond ASCII joins an emoji sequence or a script's
+/// letters and stays; between ASCII letters or at an edge it only hides, and is spelled out.
+#[test]
+fn a_joiner_inside_a_sequence_stays() {
+    let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}.png";
+    assert!(matches!(visible(family), Cow::Borrowed(_)));
+    let persian = "\u{645}\u{6cc}\u{200c}\u{62e}\u{648}\u{627}\u{647}\u{645}.txt";
+    assert!(matches!(visible(persian), Cow::Borrowed(_)));
+    assert_eq!(visible("a\u{200d}b"), "a\\u{200d}b");
+    assert_eq!(visible("\u{200c}\u{645}"), "\\u{200c}\u{645}");
+    assert_eq!(
+        visible("\u{645}\u{200d}\u{202e}"),
+        "\u{645}\\u{200d}\\u{202e}"
+    );
+}
+
+/// A message keeps its lines and tabs; the rest is spelled out as on one line.
+#[test]
+fn a_message_keeps_its_lines() {
+    assert!(matches!(
+        visible_lines("one\ntwo\tthree\r\n"),
+        Cow::Borrowed(_)
+    ));
+    assert_eq!(visible_lines("one\n\u{202e}two"), "one\n\\u{202e}two");
 }

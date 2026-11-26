@@ -21,6 +21,8 @@ tracing.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+# The envelope's round trip over any key, field and content (RC-110-70).
+proptest.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 tempfile.workspace = true

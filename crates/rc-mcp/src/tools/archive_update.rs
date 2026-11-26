@@ -25,6 +25,7 @@ fn yes() -> bool {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct AddParams {
     /// Entries to add: absolute, or relative to the panel's directory. Omitted or empty: the
@@ -67,6 +68,7 @@ pub(crate) struct AddParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct DeleteParams {
     /// Names in the panel's folder inside an archive. Omitted or empty: the panel's selection,

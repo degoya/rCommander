@@ -52,6 +52,7 @@ pub fn view<'a>(
     let lists = (known::commands(), known::start_menu());
     let find = t!("settings.shortcuts.find");
     let search = text_input(t!("settings.shortcuts.search"), &page.search)
+        .style(theme::text_field)
         .on_input(|search| page_message(ShortcutsMsg::Search(search)))
         .padding([5, 8])
         .size(theme::TEXT_SIZE)
@@ -114,6 +115,7 @@ pub fn view<'a>(
             &crate::keymap::label(&conflict.chord),
             &conflict.holder,
             name,
+            tokens,
         ));
     }
     if let Some(adding) = &page.adding {
@@ -200,7 +202,12 @@ fn key_row<'a>(
 }
 
 /// The question before a key moves: which row has it now and which gets it.
-fn question<'a>(key: &str, holder: &str, name: &str) -> Element<'a, Message> {
+fn question<'a>(
+    key: &str,
+    holder: &str,
+    name: &str,
+    tokens: &'static Tokens,
+) -> Element<'a, Message> {
     let text = t!(
         "settings.shortcuts.conflict",
         key = key,
@@ -220,7 +227,7 @@ fn question<'a>(key: &str, holder: &str, name: &str) -> Element<'a, Message> {
                 Some(page_message(ShortcutsMsg::KeepIt)),
             ),
         ],
-        [Element::from(fit::prose(text).color(theme::DANGER))],
+        [Element::from(fit::prose(text).color(tokens.status.danger))],
     )
 }
 

@@ -11,9 +11,20 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.26.0
+
+- Files unpacked from downloaded archives, copied from downloads or fetched from servers keep Windows' download mark, so SmartScreen and Office's Protected View still warn about them.
+- Large copies and moves between local drives are faster through the system's own copy; inside one network share the server copies by itself. Progress, pause and cancel work as before.
+- rCommander follows Windows' high contrast colours and text size, and uses the Windows menu bar while a screen reader runs. Fields now carry visible captions, not only grey hints.
+- Names with umlauts and accents sort as in Explorer. Numbers, sizes and dates follow your language, counts read right in every language, and many texts were reworded to be clearer.
+- The window no longer waits for a start folder or tabs on an unreachable share, large folders show their first rows at once, and thumbnails of big photos appear much faster.
+- AI agents now have to ask before saving a connection to a new server or copying anything onto a server, and a call with wrong arguments is refused before any question.
+- Unpacking is safer: on Windows a name Windows cannot store gets a safe name as in 7-Zip, unpacking stops at 64 GiB and checks the free space first, and hidden characters in names show as codes.
+- Programs on an SSH server may set the clipboard only when you allow it. The dark looks show errors readably, and About shows the copyright and every library's licence text.
+
 ## 0.25.1
 
-- rCommander now really starts faster after the update to 0.25: the bundled plugins were prepared anew at every start, from the second start on they are not.
+- rCommander now starts faster after the update to 0.25. The bundled plugins are no longer prepared anew at every start.
 - Bundled plugins rebuilt with a new rCommander version now replace the installed ones, so their fixes reach you.
 - The window title now reads "made with ♥ by Alexander Herling / DEGOYA.digital".
 
@@ -22,7 +33,7 @@ changes only, no change in behaviour.
 - rCommander starts faster: the plugins are no longer prepared anew at every start, only after they or rCommander were updated.
 - The first file you open in Lister or Quick View no longer pauses while the viewer plugins load; a setting on the Plugins page turns this off.
 - SFTP connections cope better with unusual servers: an unknown status code or extended file attributes no longer break a session or a folder listing.
-- Updated components: the Rust toolchain and several libraries were brought up to date.
+- Updated libraries with their latest fixes.
 
 ## 0.24.3
 

@@ -18,6 +18,7 @@ pub(crate) enum Mode {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct SelectParams {
     /// The mode whose theme changes: light or dark.

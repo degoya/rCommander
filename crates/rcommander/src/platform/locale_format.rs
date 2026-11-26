@@ -15,3 +15,25 @@ pub fn formats() -> (Option<String>, Option<String>) {
         (None, None)
     }
 }
+
+/// The text `GetLocaleInfoEx` wrote into `buffer`: `written` UTF-16 units, its terminating NUL
+/// included. `None` for a failed call (0), a count past the buffer, units that are no UTF-16,
+/// or an empty text. Apart from the call, so it is tested on every platform (RC-110-70).
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "read by the Windows half and the tests")
+)]
+pub(super) fn written_text(buffer: &[u16], written: i32) -> Option<String> {
+    let written = usize::try_from(written).ok()?;
+    if written > buffer.len() {
+        return None;
+    }
+    let len = written.checked_sub(1)?;
+    String::from_utf16(buffer.get(..len)?)
+        .ok()
+        .filter(|text| !text.is_empty())
+}
+
+#[cfg(test)]
+#[path = "locale_format_tests.rs"]
+mod tests;

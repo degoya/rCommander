@@ -234,10 +234,19 @@ pub fn slot(id: &str) -> Option<Slot> {
         })
 }
 
-/// The setting `appearance.menu_bar_style` in `db`.
+/// The setting `appearance.menu_bar_style` in `db`; never stored while a screen reader runs, the
+/// Win32 menu (RC-110-79). A value that does not read counts as stored.
 pub async fn menu_bar_style(db: rc_db::Db) -> Style {
     let value = stored_setting(&db, MENU_BAR_STYLE_KEY).await;
-    Style::from_value(value.as_ref().and_then(|value| value.as_str()))
+    let stored = !matches!(
+        db.get::<serde_json::Value>(MENU_BAR_STYLE_KEY).await,
+        Ok(None)
+    );
+    Style::of_setting(
+        value.as_ref().and_then(|value| value.as_str()),
+        stored,
+        crate::theme::access::screen_reader(),
+    )
 }
 
 /// The choices made in the bar, as messages.

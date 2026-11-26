@@ -2,13 +2,15 @@
 
 use iced::{
     Alignment, ContentFit, Element, Length,
-    widget::{Column, Row, button, column, container, image, row, scrollable, text, text_input},
+    widget::{
+        Column, Row, button, checkbox, column, container, image, row, scrollable, text, text_input,
+    },
 };
 use rc_engine::about::{About, AboutLink, AboutLinkKind};
 
 use super::{
-    AboutMsg, AboutPage, AboutTab, TABS, about_message, data_fact, facts, licenses, link_messages,
-    logo, shown,
+    AboutMsg, AboutPage, AboutTab, TABS, about_message, copyright, data_fact, facts, license_texts,
+    licenses, link_messages, logo, shown,
 };
 use crate::{
     app::{
@@ -44,7 +46,7 @@ pub fn view<'a>(page: &'a AboutPage, tokens: &'static Tokens) -> Element<'a, Mes
                 .height(Length::Fill)
                 .into()
         }
-        AboutTab::Licenses => licenses_tab(&about, &page.filter, tokens),
+        AboutTab::Licenses => licenses_tab(&about, &page.filter, page.texts, tokens),
     };
     column![tabs, body].spacing(12).height(Length::Fill).into()
 }
@@ -110,6 +112,23 @@ fn about_tab<'a>(
             tokens
         ),
         fact(t!("settings.about.license"), about.license, tokens),
+        prose(label(copyright())),
+        prose(hint(t!("settings.about.warranty"), tokens)),
+        container(layout::keyed(
+            focus::Stop::button(
+                button(layout::marked_icon_button(
+                    None,
+                    t!("settings.about.show_license"),
+                ))
+                .padding([6, 16])
+                .style(button::secondary)
+                .on_press(about_message(AboutMsg::ShowLicense)),
+                t!("settings.about.show_license"),
+                Some(about_message(AboutMsg::ShowLicense)),
+            ),
+            t!("settings.about.show_license"),
+        ))
+        .padding([6, 0]),
         prose(hint(t!("settings.about.thanks"), tokens)),
     ]
     .spacing(4);
@@ -174,35 +193,51 @@ fn address<'a>(link: AboutLink, tokens: &'static Tokens) -> Element<'a, Message>
     .into()
 }
 
-/// rCommander's own licence, the count per licence, the filter and the crates.
+/// rCommander's own licence, the count per licence, the filter and the crates - or, with
+/// `texts`, their licence texts (RC-110-72).
 fn licenses_tab<'a>(
     about: &About,
     filter: &'a str,
+    texts: bool,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let total = licenses::packages().len();
     let summary = licenses::counts()
         .iter()
         .map(|(license, count)| hint(format!("{license} \u{b7} {count}"), tokens).into());
-    let rows = licenses::matching(filter).map(|package| {
-        table_row(
+    let shown = licenses::matching(filter).count();
+    let show_texts = checkbox(texts)
+        .label(t!("settings.about.licenses.texts"))
+        .on_toggle(|on| about_message(AboutMsg::Texts(on)));
+    let body: Element<'a, Message> = if texts {
+        texts_view(filter, tokens)
+    } else {
+        let rows = licenses::matching(filter).map(|package| {
+            table_row(
+                [
+                    (package.name.as_str(), 3, false),
+                    (package.version.as_str(), 2, true),
+                    (package.license.as_str(), 4, false),
+                ],
+                tokens,
+            )
+        });
+        let header = table_row(
             [
-                (package.name.as_str(), 3, false),
-                (package.version.as_str(), 2, true),
-                (package.license.as_str(), 4, false),
+                (t!("settings.about.licenses.name"), 3, true),
+                (t!("settings.about.licenses.version"), 2, true),
+                (t!("settings.about.licenses.license"), 4, true),
             ],
             tokens,
-        )
-    });
-    let shown = licenses::matching(filter).count();
-    let header = table_row(
-        [
-            (t!("settings.about.licenses.name"), 3, true),
-            (t!("settings.about.licenses.version"), 2, true),
-            (t!("settings.about.licenses.license"), 4, true),
-        ],
-        tokens,
-    );
+        );
+        column![
+            container(header).style(move |_| theme::header(tokens)),
+            scrollable(Column::with_children(rows)).height(Length::Fill),
+        ]
+        .spacing(8)
+        .height(Length::Fill)
+        .into()
+    };
     column![
         prose(label(t!(
             "settings.about.licenses.own",
@@ -211,29 +246,68 @@ fn licenses_tab<'a>(
         prose(hint(t!("settings.about.licenses.help"), tokens)),
         Row::with_children(summary).spacing(12).wrap(),
         row![
-            text_input(t!("settings.about.licenses.filter"), filter)
-                .on_input(|filter| about_message(AboutMsg::Filter(filter)))
-                .padding([5, 8])
-                .size(theme::TEXT_SIZE)
-                .font(theme::UI_FONT)
-                .width(240),
+            layout::captioned_beside(
+                t!("field.filter"),
+                text_input(t!("settings.about.licenses.filter"), filter)
+                    .style(theme::text_field)
+                    .on_input(|filter| about_message(AboutMsg::Filter(filter)))
+                    .padding([5, 8])
+                    .size(theme::TEXT_SIZE)
+                    .font(theme::UI_FONT)
+                    .width(240),
+            ),
             hint(
                 t!(
                     "settings.about.licenses.count",
                     shown = shown,
-                    total = total
+                    count = total
                 ),
                 tokens
+            ),
+            focus::toggle(
+                show_texts,
+                "settings.about.licenses.texts",
+                Some(about_message(AboutMsg::Texts(!texts))),
             ),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
-        container(header).style(move |_| theme::header(tokens)),
-        scrollable(Column::with_children(rows)).height(Length::Fill),
+        body,
     ]
     .spacing(8)
     .height(Length::Fill)
     .into()
+}
+
+/// The licence texts of the crates the filter matches, each headed by the crates it covers, as
+/// many as the page lays out at once; a line counts the rest.
+fn texts_view<'a>(filter: &str, tokens: &'static Tokens) -> Element<'a, Message> {
+    let (shown, more) = license_texts::for_filter(filter);
+    let mut body = Column::new().spacing(16);
+    for licence in shown {
+        let covers = licence.covers.iter().map(|line| {
+            hint(*line, tokens)
+                .wrapping(text::Wrapping::WordOrGlyph)
+                .into()
+        });
+        body = body.push(
+            column![
+                Column::with_children(covers).spacing(2),
+                prose(label(licence.body).font(theme::MONO_FONT)),
+            ]
+            .spacing(6),
+        );
+    }
+    if more > 0 {
+        body = body.push(prose(hint(
+            t!("settings.about.licenses.texts_more", more = more),
+            tokens,
+        )));
+    }
+    scrollable(body.padding([0, 12]))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 /// A row of the crate table: one line high, each cell cut at its column's end.

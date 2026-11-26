@@ -16,6 +16,7 @@ use serde_json::Value;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct GetParams {
     /// Only this setting, such as `appearance.theme`; every one when omitted.
     #[serde(default)]
@@ -23,6 +24,7 @@ pub(crate) struct GetParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct SetParams {
     /// The setting, as settings_get names it.

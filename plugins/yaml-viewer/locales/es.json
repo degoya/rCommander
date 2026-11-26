@@ -1,0 +1,7 @@
+{
+  "name": "Visor de YAML",
+  "description": "Muestra YAML en color, como un editor, o como un árbol desplegable.",
+  "codes": {
+    "01a15939-8404-762d-9569-7e4ec903238e.too_many_nodes": "El árbol tiene demasiados rangos abiertos; cierre el visor y vuelva a abrir el archivo."
+  }
+}

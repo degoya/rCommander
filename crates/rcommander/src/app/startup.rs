@@ -8,17 +8,16 @@
 
 use std::{
     error::Error,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{Arc, Mutex},
 };
 
 use iced::{Task, system, window};
 use rc_db::Db;
 use rc_engine::{
-    Command, Engine, EngineError, Keymap, Outcome, VfsPath,
+    Engine, EngineError, Keymap, VfsPath,
     settings::{
-        LANGUAGE_KEY, LEFT_START_KEY, MACOS_CMD_AS_CTRL_KEY, MACOS_LOOK_KEY, RIGHT_START_KEY,
-        THEME_KEY, stored_bool, stored_setting,
+        LANGUAGE_KEY, MACOS_CMD_AS_CTRL_KEY, MACOS_LOOK_KEY, THEME_KEY, stored_bool, stored_setting,
     },
 };
 use rc_vault::Vault;
@@ -36,6 +35,7 @@ use crate::{
 };
 
 mod exit;
+mod folder;
 
 pub(super) use exit::{QUIT_LIMIT, leave, within};
 
@@ -88,6 +88,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     )
     .title(App::title)
     .theme(App::theme)
+    // Windows' text size (RC-110-79).
+    .scale_factor(App::scale_factor)
     .subscription(App::subscription)
     .default_font(theme::UI_FONT)
     // The buttons' icons (RC-080-07) and the symbol collection (RC-110-10), compiled in.
@@ -174,39 +176,41 @@ async fn prepare() -> Result<Setup, EngineError> {
         theme::themes::set_assigned(read.connections);
         theme::colour_rules::set_rules(&read.rules);
     }
-    let home = start_directory();
-    let left = VfsPath::local(start_folder(db.as_ref(), LEFT_START_KEY, &home).await);
-    let right = VfsPath::local(start_folder(db.as_ref(), RIGHT_START_KEY, &home).await);
-    let engine = match Engine::open(left, right).await {
-        Ok(engine) => engine,
-        Err(error) => {
-            tracing::warn!(
-                code = error.code(),
-                "the start folders do not open; both panels start at the root"
-            );
-            Engine::headless(VfsPath::local(root_directory())).await?
-        }
-    };
-    // The shells a terminal can run - local ones and one per WSL distribution - found off the
-    // UI thread, for the picker.
-    match engine.dispatch(Command::ListTerminals {}).await {
-        Ok(Outcome::Terminals { shells, .. }) => crate::term::set_shells(shells),
-        Ok(_) => {}
-        Err(error) => tracing::warn!(code = error.code(), "the terminal shells were not found"),
-    }
+    // The engine opens at home; the panels move to the tabs of the last run or their start
+    // folders once those answered, looked at side by side (RC-110-64).
+    let home = folder::start_directory();
+    let engine =
+        match Engine::open(VfsPath::local(home.clone()), VfsPath::local(home.clone())).await {
+            Ok(engine) => engine,
+            Err(error) => {
+                tracing::warn!(
+                    code = error.code(),
+                    "the home folder does not open; both panels start at the root"
+                );
+                Engine::headless(VfsPath::local(folder::root_directory())).await?
+            }
+        };
+    // The tabs of the last run (RC-010-03), unless a start folder is forced; then the workspace
+    // to start with, if one is set (RC-100-68).
+    let restore_tabs = db.is_some() && std::env::var_os("RC_START_DIR").is_none();
     if let Some(db) = &db {
         engine.attach_db(db.clone());
-        // The hidden-files switch of the last run.
+        // The hidden-files switch of the last run, before the panels are listed again.
         engine.restore_settings().await;
-        // The tabs of the last run (RC-010-03), unless a start folder is forced; then the
-        // workspace to start with, if one is set (RC-100-68).
-        if std::env::var_os("RC_START_DIR").is_none() {
-            match engine.restore_tabs().await {
-                Ok(relocated) => info = info.or(super::tabs::relocated_note(&relocated)),
-                Err(error) => {
-                    tracing::warn!(code = error.code(), "the last run's tabs were not restored");
-                }
-            }
+    }
+    let placed = folder::place_panels(&engine, db.as_ref(), &home, restore_tabs).await;
+    if let Some(silent) = &placed.silent {
+        info = info.or_else(|| {
+            Some(t!(
+                "status.start_folder_silent",
+                folder = silent.display(),
+                home = home.display()
+            ))
+        });
+    }
+    info = info.or(super::tabs::relocated_note(&placed.relocated));
+    if let Some(db) = &db {
+        if restore_tabs {
             workspace = engine.start_workspace().await;
         }
         // The transfers the last run left in the middle, back in the queue, paused (RC-060-07).
@@ -314,46 +318,8 @@ async fn saved_theme(db: &Db) -> ThemeChoice {
     ThemeChoice::from_setting(value.as_ref().and_then(|v| v.as_str()).unwrap_or_default())
 }
 
-/// Where a panel starts: `RC_START_DIR` when set, else its setting when that names a folder,
-/// else `home`.
-async fn start_folder(db: Option<&Db>, key: &str, home: &Path) -> PathBuf {
-    if std::env::var_os("RC_START_DIR").is_some() {
-        return home.to_path_buf();
-    }
-    let stored = match db {
-        Some(db) => stored_setting(db, key).await,
-        None => None,
-    };
-    let folder = stored
-        .as_ref()
-        .and_then(|value| value.as_str())
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from);
-    match folder {
-        Some(folder) if tokio::fs::metadata(&folder).await.is_ok_and(|m| m.is_dir()) => folder,
-        _ => home.to_path_buf(),
-    }
-}
-
 async fn open_db() -> rc_db::Result<Db> {
     Db::open(Db::default_path()?).await
-}
-
-/// Where both panels start: `RC_START_DIR` when set, else the home directory.
-fn start_directory() -> PathBuf {
-    std::env::var_os("RC_START_DIR")
-        .map(PathBuf::from)
-        .or_else(|| directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf()))
-        .unwrap_or_else(root_directory)
-}
-
-/// The start when the home directory cannot be listed.
-fn root_directory() -> PathBuf {
-    if cfg!(windows) {
-        PathBuf::from("C:\\")
-    } else {
-        PathBuf::from("/")
-    }
 }
 
 impl App {
@@ -449,8 +415,12 @@ impl App {
             .discard()
             .chain(crate::platform::taskbar::join(main))
             .chain(app.menu_bar_task())
-            // The viewer plugins, after the window, so the first F3 waits for nothing (RC-110-48).
-            .chain(app.preload_viewers_task());
+            // The viewer plugins, after the window, so the first F3 waits for nothing (RC-110-48);
+            // beside them the terminal shells, whose WSL list may take seconds (RC-110-64).
+            .chain(Task::batch([
+                app.preload_viewers_task(),
+                Task::future(crate::term::load_shells(app.engine.clone())).discard(),
+            ]));
         (
             app,
             Task::batch([

@@ -6,7 +6,7 @@ plugin_type = "viewer"
 api_version = "0.6.0"
 id = "01a159c1-6b39-7240-9bbb-81ecaf343ed1"
 name = "Config viewer"
-version = "0.3.1"
+version = "0.3.2"
 
 [match]
 # rCommander takes what follows the last dot of a name as its extension, so `desktop.ini` matches

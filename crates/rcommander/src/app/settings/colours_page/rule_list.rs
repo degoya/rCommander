@@ -15,7 +15,12 @@ use crate::{
         settings::{SettingsMessage, draft::Draft, view::hint, wrap},
     },
     i18n::t,
-    theme::{Tokens, colours::parse_hex, icon::Icon, layout::secondary_icon_button},
+    theme::{
+        self, Tokens,
+        colours::parse_hex,
+        icon::Icon,
+        layout::{captioned_beside, secondary_icon_button},
+    },
 };
 
 /// One rule as typed: mask, light colour, dark colour (empty: the light one).
@@ -101,7 +106,8 @@ fn edit(index: usize, op: RuleOp) -> Message {
 }
 
 /// The rules by file type: a row each - the mask, the light and the dark colour with their
-/// swatches, Up, Down, Remove - then Add rule. The first rule matching a name colours it.
+/// swatches, Up, Down, Remove - then Add rule. The first rule matching a name colours it. Each
+/// field has its caption before it (RC-110-78); the placeholders are examples.
 pub(in crate::app::settings) fn rules<'a>(
     draft: &'a Draft,
     tokens: &'static Tokens,
@@ -111,12 +117,15 @@ pub(in crate::app::settings) fn rules<'a>(
     let mut list = Column::new().spacing(6);
     for (index, (mask, light, dark)) in typed.iter().enumerate() {
         let mask_field = text_input(t!("settings.colours.mask"), mask)
+            .style(theme::text_field)
             .on_input(move |text| edit(index, RuleOp::Mask(text)))
             .width(Length::Fill);
         let light_field = text_input("#rrggbb", light)
+            .style(theme::text_field)
             .on_input(move |text| edit(index, RuleOp::Light(text)))
             .width(90);
         let dark_field = text_input(t!("settings.colours.dark_same"), dark)
+            .style(theme::text_field)
             .on_input(move |text| edit(index, RuleOp::Dark(text)))
             .width(90);
         let light_colour = parse_hex(light).unwrap_or(Color::TRANSPARENT);
@@ -124,35 +133,45 @@ pub(in crate::app::settings) fn rules<'a>(
         let up = (index > 0).then(|| edit(index, RuleOp::Up));
         let down = (index < last).then(|| edit(index, RuleOp::Down));
         list = list.push(
-            row![mask_field, swatch(light_colour, tokens)]
-                .push(choose(
-                    t!("settings.colours.choose_short"),
-                    PickTarget::Rule { index, dark: false },
-                ))
-                .push(light_field)
-                .push(swatch(dark_colour, tokens))
-                .push(choose(
-                    t!("settings.colours.choose_short"),
-                    PickTarget::Rule { index, dark: true },
-                ))
-                .push(dark_field)
-                .push(secondary_icon_button(
-                    Icon::MoveUp,
-                    t!("settings.colours.up"),
-                    up,
-                ))
-                .push(secondary_icon_button(
-                    Icon::MoveDown,
-                    t!("settings.colours.down"),
-                    down,
-                ))
-                .push(secondary_icon_button(
-                    Icon::Delete,
-                    t!("settings.colours.remove"),
-                    Some(edit(index, RuleOp::Remove)),
-                ))
-                .spacing(6)
-                .align_y(Alignment::Center),
+            row![captioned_beside(
+                t!("settings.colours.rule_mask"),
+                mask_field
+            )]
+            .push(captioned_beside(
+                t!("settings.colours.rule_light"),
+                light_field,
+            ))
+            .push(swatch(light_colour, tokens))
+            .push(choose(
+                t!("settings.colours.choose_short"),
+                PickTarget::Rule { index, dark: false },
+            ))
+            .push(captioned_beside(
+                t!("settings.colours.rule_dark"),
+                dark_field,
+            ))
+            .push(swatch(dark_colour, tokens))
+            .push(choose(
+                t!("settings.colours.choose_short"),
+                PickTarget::Rule { index, dark: true },
+            ))
+            .push(secondary_icon_button(
+                Icon::MoveUp,
+                t!("settings.colours.up"),
+                up,
+            ))
+            .push(secondary_icon_button(
+                Icon::MoveDown,
+                t!("settings.colours.down"),
+                down,
+            ))
+            .push(secondary_icon_button(
+                Icon::Delete,
+                t!("settings.colours.remove"),
+                Some(edit(index, RuleOp::Remove)),
+            ))
+            .spacing(6)
+            .align_y(Alignment::Center),
         );
     }
     list = list.push(secondary_icon_button(

@@ -1,0 +1,10 @@
+{
+  "name": "Visor de SVG",
+  "description": "Muestra imágenes SVG y SVGZ, y su código fuente en color como XML.",
+  "codes": {
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_large": "El SVG supera los 64 MiB, o los supera al descomprimirse.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.bad_gzip": "El SVG comprimido (.svgz) está dañado y no se puede descomprimir.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.not_svg": "La imagen no se puede dibujar: el archivo no es un SVG legible o no tiene tamaño.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_complex": "La imagen repite sus partes (<use>) demasiadas veces para poder dibujarse."
+  }
+}

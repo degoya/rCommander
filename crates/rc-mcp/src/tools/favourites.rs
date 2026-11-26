@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SetFavouriteParams {
     /// The connection's id, from connections_list.
     pub id: i64,
@@ -17,6 +18,7 @@ pub(crate) struct SetFavouriteParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SetFolderFavouriteParams {
     /// The folder's id, from connections_list.
     pub id: i64,

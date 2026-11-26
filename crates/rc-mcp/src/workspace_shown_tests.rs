@@ -61,13 +61,17 @@ async fn the_question_names_the_workspace_and_its_places() {
     .await;
     let id = created["id"].as_i64().expect("an id");
 
-    // A `workspace` the call brings itself does not reach the person.
-    let asked = call(
+    // A `workspace` the call brings itself does not reach the person: the call is refused
+    // before anyone is asked (RC-110-57).
+    let forged = call(
         &client,
         "workspaces_apply",
         json!({ "id": id, "workspace": "Harmless", "left_terminal": "none" }),
     )
     .await;
+    assert_eq!(forged["code"], "invalid_params", "{forged}");
+    assert!(forged.get("confirmation_required").is_none(), "{forged}");
+    let asked = call(&client, "workspaces_apply", json!({ "id": id })).await;
     assert_eq!(asked["confirmation_required"], true, "{asked}");
     let arguments = &asked["arguments"];
     let folder = |name: &str| root.join(name).display().to_string();

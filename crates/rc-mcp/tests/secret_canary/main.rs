@@ -92,6 +92,13 @@ fn on_test_server(tool: &str, arguments: &Value, targets: &Targets) -> bool {
     }
 }
 
+/// Whether a call writes to the sweep's file on the test server: its destination is there.
+fn onto_test_server(arguments: &Value) -> bool {
+    ["target", "left", "right"]
+        .iter()
+        .any(|key| arguments[*key] == json!(args::REMOTE_FILE))
+}
+
 /// Every answer of the sweep, and what the confirmed calls reached.
 #[derive(Default)]
 struct Sweep {
@@ -145,6 +152,11 @@ impl Sweep {
             return on_test_server(tool, arguments, targets);
         }
         if class == "destructive" {
+            return true;
+        }
+        // A copy onto a server asks as a write (RC-110-59); onto the test server it ran unasked
+        // before and is confirmed, so the sweep reaches as far as it did.
+        if class == "write" && onto_test_server(arguments) {
             return true;
         }
         self.unknown.insert(format!("{tool} ({class})"));

@@ -1,6 +1,6 @@
 //! The trait every backend implements.
 
-use std::{path::Path, time::SystemTime};
+use std::{path::Path, sync::Arc, time::SystemTime};
 
 use async_trait::async_trait;
 use tokio::{
@@ -9,8 +9,8 @@ use tokio::{
 };
 
 use crate::{
-    Capabilities, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange, Result,
-    SetAttributes, VfsError,
+    Capabilities, CopyWatch, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange,
+    Result, SetAttributes, VfsError,
 };
 
 /// [`Vfs::rename_no_replace`] for a backend that cannot refuse in the rename itself: `to` is
@@ -122,6 +122,24 @@ pub trait Vfs: Send + Sync {
         _size: u64,
     ) -> Result<WriteStream> {
         self.open_write(path, mode).await
+    }
+
+    /// Copies the file `from` to `to`, a new file of this backend, through the operating
+    /// system's own copy (RC-110-65): on the local backend `CopyFileExW` on Windows - within one
+    /// share the server copies - and `copy_file_range` on Linux - a reflink where the file system
+    /// has one. Only the contents arrive (on Windows with the file's other streams): `to` gets no
+    /// time and no attribute of `from`, as a file written through [`Vfs::open_write`] does not.
+    /// `watch` sees the bytes as they go, holds the copy while it is paused and stops it once
+    /// cancelled (`cancelled`). The length of `to` when done.
+    ///
+    /// `to` must not exist (`already_exists`). Whatever else fails, nothing is left at `to`.
+    /// `Unsupported` - the default, a file system or platform without such a call - comes before
+    /// anything was written: the caller streams the file instead.
+    async fn copy_file(&self, from: &Path, _to: &Path, _watch: Arc<CopyWatch>) -> Result<u64> {
+        Err(VfsError::Unsupported {
+            path: from.to_path_buf(),
+            operation: "copying through the operating system",
+        })
     }
 
     /// Creates a directory; `recursive` creates missing parents too and accepts one that

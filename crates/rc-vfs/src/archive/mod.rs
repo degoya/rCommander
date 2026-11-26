@@ -23,7 +23,7 @@ mod detect;
 mod password;
 mod pipe;
 mod read;
-mod safety;
+pub(crate) mod safety;
 mod session;
 mod sevenz_format;
 mod sevenz_memory;

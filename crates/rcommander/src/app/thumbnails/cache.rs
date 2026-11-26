@@ -1,9 +1,11 @@
 //! The tiles loaded so far, bounded by their bytes: the least recently shown go when a new one
 //! would pass the limit ([`MEMORY_BYTES`], fixed - Total Commander's `ThumbnailMemoryLimit` is an
 //! ini value, not an option). A key is pending from the moment it is asked for until its answer
-//! comes, so it is asked for once; a pending key is never dropped for room.
+//! comes, so it is asked for once; a pending key is never dropped for room. The keys are also
+//! ordered by when they were last wanted, so the eviction finds the oldest without searching the
+//! whole cache (RC-110-67).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::key::ThumbKey;
 
@@ -32,6 +34,8 @@ struct Slot<V> {
 #[derive(Debug)]
 pub struct TileCache<V> {
     slots: HashMap<ThumbKey, Slot<V>>,
+    /// Every key of `slots` by its `used` tick, oldest first; ticks are unique.
+    order: BTreeMap<u64, ThumbKey>,
     /// The bytes the ready tiles may hold.
     budget: usize,
     held: usize,
@@ -42,6 +46,7 @@ impl<V> TileCache<V> {
     pub fn new(budget: usize) -> Self {
         Self {
             slots: HashMap::new(),
+            order: BTreeMap::new(),
             budget,
             held: 0,
             tick: 0,
@@ -54,6 +59,9 @@ impl<V> TileCache<V> {
         self.tick += 1;
         let tick = self.tick;
         if let Some(slot) = self.slots.get_mut(key) {
+            if let Some(key) = self.order.remove(&slot.used) {
+                self.order.insert(tick, key);
+            }
             slot.used = tick;
             return false;
         }
@@ -64,6 +72,7 @@ impl<V> TileCache<V> {
                 used: tick,
             },
         );
+        self.order.insert(tick, key.clone());
         self.evict();
         true
     }
@@ -104,14 +113,16 @@ impl<V> TileCache<V> {
             .slots
             .get(key)
             .is_some_and(|slot| matches!(slot.state, State::Pending))
+            && let Some(slot) = self.slots.remove(key)
         {
-            self.slots.remove(key);
+            self.order.remove(&slot.used);
         }
     }
 
     /// Everything goes, pending keys too: their answers are dropped when they come.
     pub fn clear(&mut self) {
         self.slots.clear();
+        self.order.clear();
         self.held = 0;
     }
 
@@ -126,18 +137,28 @@ impl<V> TileCache<V> {
         self.slots.len()
     }
 
+    /// The keys in the order they go, oldest first.
+    #[cfg(test)]
+    pub fn oldest_first(&self) -> Vec<&ThumbKey> {
+        self.order.values().collect()
+    }
+
     /// Drops the least recently wanted keys that are not pending until the tiles fit their
     /// bytes and the map its keys. The tiles of one screen are the newest, so with a budget above
-    /// a screen's they stay.
+    /// a screen's they stay. The walk from the oldest passes over the pending keys only - the
+    /// loads of about one screen.
     fn evict(&mut self) {
         while self.held > self.budget || self.slots.len() > MAX_KEYS {
             let oldest = self
-                .slots
+                .order
                 .iter()
-                .filter(|(_, slot)| !matches!(slot.state, State::Pending))
-                .min_by_key(|(_, slot)| slot.used)
-                .map(|(key, _)| key.clone());
-            let Some(key) = oldest else {
+                .find(|(_, key)| {
+                    self.slots
+                        .get(*key)
+                        .is_some_and(|slot| !matches!(slot.state, State::Pending))
+                })
+                .map(|(tick, _)| *tick);
+            let Some(key) = oldest.and_then(|tick| self.order.remove(&tick)) else {
                 return;
             };
             if let Some(Slot {

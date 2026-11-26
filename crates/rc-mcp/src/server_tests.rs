@@ -23,6 +23,7 @@ use crate::{
 const PLANTED: &str = "planted-secret-4711";
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct DestroyParams {
     target: String,
     /// The code a first call answered with.
@@ -304,4 +305,60 @@ fn the_instructions_name_only_tools_that_exist() {
         }
     }
     assert!(quoted > 50, "{quoted} tools named");
+}
+
+/// RC-110-57: a call that would not parse is refused before the gate - with `invalid_params`
+/// naming the argument, and without a question for the person.
+#[tokio::test]
+async fn an_unparsable_call_is_refused_before_anyone_is_asked() {
+    let setup = setup().await;
+    let client = connect(&setup.context).await;
+    for arguments in [json!({ "targte": "x" }), json!({ "target": 5 }), json!({})] {
+        let refused = call(&client, "test_destroy", arguments.clone()).await;
+        assert_eq!(refused["code"], "invalid_params", "{arguments}: {refused}");
+        assert!(
+            refused.get("confirmation_required").is_none(),
+            "{arguments}: {refused}"
+        );
+    }
+    let refused = call(&client, "test_destroy", json!({ "targte": "x" })).await;
+    let error = refused["error"].as_str().expect("message");
+    assert!(
+        error.contains("`targte`") && error.contains("target"),
+        "{error}"
+    );
+
+    // A call that parses is asked about as before, and the code is taken with it.
+    let asked = call(&client, "test_destroy", json!({ "target": "x" })).await;
+    assert_eq!(asked["confirmation_required"], true, "{asked}");
+    let code = asked["confirmation"].as_str().expect("code").to_owned();
+    let done = call(
+        &client,
+        "test_destroy",
+        json!({ "target": "x", "confirmation": code }),
+    )
+    .await;
+    assert_eq!(done["destroyed"], "x", "{done}");
+}
+
+/// The audit's case: `ops_move` with `source` for `sources` used to move the panel's selection.
+#[tokio::test]
+async fn a_typo_in_a_key_moves_nothing() {
+    let setup = setup().await;
+    let client = connect(&setup.context).await;
+    let docs = setup._root.path().join("docs");
+    let selected = call(&client, "toggle_selection", json!({ "names": ["docs"] })).await;
+    assert_eq!(selected["selection"], json!(["docs"]), "{selected}");
+    let refused = call(
+        &client,
+        "ops_move",
+        json!({ "source": ["docs/a.txt"], "target": "elsewhere" }),
+    )
+    .await;
+    assert_eq!(refused["code"], "invalid_params", "{refused}");
+    assert!(docs.join("a.txt").exists(), "nothing moved");
+    assert!(!setup._root.path().join("elsewhere").exists());
+
+    let too_many = call(&client, "list_dir", json!({ "limit": 1001 })).await;
+    assert_eq!(too_many["code"], "invalid_params", "{too_many}");
 }

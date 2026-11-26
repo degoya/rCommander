@@ -3,13 +3,18 @@
 //! Every visible string goes through a key: `t!("key")`, or [`error_text`] for a stable error
 //! code. A key is looked up in the language of the interface ([`crate::locale::current`]:
 //! English, German, French or Spanish, RC-100-47) and, where that catalogue lacks it or holds an
-//! empty text, in English; a key no catalogue has shows itself. The repo lint `i18n_keys` holds
-//! the `t!` keys and `locales/en.json` against each other, `catalogues` every other catalogue
-//! against `en.json`.
+//! empty text, in English; a key no catalogue has shows itself. A text that names a number is a
+//! pair, `<key>.one` and `<key>.other` (RC-110-82): `t!("key", count = n)` takes the form the
+//! language's plural rule ([`plural_form`]) asks for `n`. The repo lint `i18n_keys` holds the
+//! `t!` keys and `locales/en.json` against each other, `catalogues` every other catalogue
+//! against `en.json` and every pair against itself. A text that names several numbers is a frame
+//! of parts, each a pair of its own ([`counted`], RC-110-91).
 
 use std::{collections::HashMap, sync::OnceLock};
 
 use crate::locale::{self, Lang};
+
+pub mod counted;
 
 /// One language's strings, by key.
 type Catalogue = HashMap<String, String>;
@@ -58,13 +63,65 @@ pub fn lookup(key: &'static str) -> &'static str {
     find(key).unwrap_or(key)
 }
 
-/// The string `key` with its `{placeholders}` filled from `values`.
+/// The placeholder whose value chooses a pair's plural form.
+const COUNT: &str = "count";
+
+/// The plural form a number takes in `lang`: CLDR's cardinal rule, of which the catalogues use
+/// `one` and `other`. English, German and Spanish say `one` for 1 alone, French for 0 and 1; a
+/// count that is no number takes `other`.
+fn plural_form(lang: Lang, count: Option<u64>) -> &'static str {
+    let one = match lang {
+        Lang::Fr => matches!(count, Some(0 | 1)),
+        Lang::En | Lang::De | Lang::Es => count == Some(1),
+    };
+    if one { "one" } else { "other" }
+}
+
+/// The number a `count` value reads as: its digits, whatever separates their groups
+/// ([`crate::format::count`] puts a comma, a point or a narrow space between them, by language);
+/// `None` without a digit.
+fn number(value: &str) -> Option<u64> {
+    let digits: String = value.chars().filter(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
+/// The pair `key.one`/`key.other` for `count`: the form `lang`'s rule asks for in `primary`,
+/// else the form English's rule asks for in `fallback` - a French "one" is no English one at 0.
+/// `None` where neither catalogue has the form, an empty text being none.
+fn plural<'a>(
+    key: &str,
+    count: Option<u64>,
+    lang: Lang,
+    primary: &'a Catalogue,
+    fallback: &'a Catalogue,
+) -> Option<&'a str> {
+    let form = |lang: Lang, texts: &'a Catalogue| {
+        texts
+            .get(&format!("{key}.{}", plural_form(lang, count)))
+            .filter(|text| !text.is_empty())
+            .map(String::as_str)
+    };
+    form(lang, primary).or_else(|| form(Lang::En, fallback))
+}
+
+/// The string `key` with its `{placeholders}` filled from `values`; with a `count` among them
+/// and a pair under `key`, the pair's form for that count.
 pub fn fill(key: &'static str, values: &[(&str, String)]) -> String {
-    values
+    fill_in(locale::current(), key, values)
+}
+
+/// [`fill`] in `lang`: `t!(in lang; "key", ...)`, for the texts a test reads in every language.
+pub(crate) fn fill_in(lang: Lang, key: &'static str, values: &[(&str, String)]) -> String {
+    let (primary, fallback) = (catalogue(lang), english());
+    let text = values
         .iter()
-        .fold(lookup(key).to_owned(), |text, (name, value)| {
-            text.replace(&format!("{{{name}}}"), value)
-        })
+        .find(|(name, _)| *name == COUNT)
+        .and_then(|(_, count)| plural(key, number(count), lang, primary, fallback))
+        .or_else(|| resolve(key, primary, fallback))
+        .unwrap_or(key);
+    values.iter().fold(text.to_owned(), |text, (name, value)| {
+        text.replace(&format!("{{{name}}}"), value)
+    })
 }
 
 /// The message of a stable error code (the key `error.<code>`), or the code itself where no
@@ -80,8 +137,14 @@ pub fn code_text(prefix: &str, code: &str) -> String {
     find(&format!("{prefix}.{code}")).map_or_else(|| code.to_owned(), str::to_owned)
 }
 
-/// `t!("key")` is the string `key`; `t!("key", name = value, ...)` fills `{name}` placeholders.
+/// `t!("key")` is the string `key`; `t!("key", name = value, ...)` fills `{name}` placeholders,
+/// and `count = n` among them chooses the plural form of a pair `key.one`/`key.other`.
+/// `t!(in lang; "key", name = value, ...)` is the same in `lang` rather than the interface's
+/// language - [`counted`]'s texts, which their tests read in every language.
 macro_rules! t {
+    (in $lang:expr; $key:literal, $($name:ident = $value:expr),+ $(,)?) => {
+        $crate::i18n::fill_in($lang, $key, &[$((stringify!($name), $value.to_string())),+])
+    };
     ($key:literal) => {
         $crate::i18n::lookup($key)
     };

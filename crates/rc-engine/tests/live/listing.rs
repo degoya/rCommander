@@ -35,7 +35,7 @@ fn memory_mib(field: &str) -> String {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_folder_of_100_000_entries_shows_its_first_batch_before_the_end() {
     let live = live_or_skip!();
     let dir = workdir();

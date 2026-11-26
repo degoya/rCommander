@@ -38,6 +38,16 @@ impl Style {
             _ => Self::Drawn,
         }
     }
+
+    /// The bar for the setting's `value`, `stored` whether the person ever stored one: never
+    /// stored while a screen reader runs, the Win32 menu - the one part of the window a screen
+    /// reader reads (RC-110-79); otherwise as [`Style::from_value`].
+    pub fn of_setting(value: Option<&str>, stored: bool, screen_reader: bool) -> Self {
+        if !stored && screen_reader {
+            return Self::Native;
+        }
+        Self::from_value(value)
+    }
 }
 
 /// The system a bar is shown on, for [`active_on`].

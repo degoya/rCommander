@@ -1,7 +1,7 @@
 use iced::Color;
 
 use super::{
-    ThemeChoice, dark, light,
+    ThemeChoice, dark, iced_theme, light, progress, row, scroll_slider,
     system::{DEFAULT_ACCENT, from_palette},
     thumb_fill, tokens,
 };
@@ -134,4 +134,68 @@ fn the_syntax_colours_read_on_the_surface_in_both_looks() {
         assert_ne!(s.string, s.number, "the classes tell themselves apart");
     }
     assert_ne!(tokens(false).syntax, tokens(true).syntax);
+}
+
+/// RC-110-77: the inactive panel's cursor carries a 1-px outline in the lists' quieter text; the
+/// active one and every other row none.
+#[test]
+fn only_the_inactive_cursor_is_outlined() {
+    for look in [
+        light::tokens(DEFAULT_ACCENT.light),
+        dark::tokens(DEFAULT_ACCENT.dark),
+    ] {
+        let look = &look;
+        let inactive = row(look, true, false, false).border;
+        assert_eq!(inactive.width, 1.0);
+        assert_eq!(inactive.color, look.list_text_secondary);
+        for (cursor, active, selected) in [
+            (true, true, false),
+            (false, false, true),
+            (false, false, false),
+        ] {
+            assert_eq!(row(look, cursor, active, selected).border.width, 0.0);
+        }
+    }
+}
+
+/// RC-110-77: iced's widgets draw the look's status colours and its field border - the strong
+/// background shade iced borders a text field, a pick list and a check box with.
+#[test]
+fn the_iced_theme_carries_the_status_colours_and_the_field_border() {
+    for look in [
+        light::tokens(DEFAULT_ACCENT.light),
+        dark::tokens(DEFAULT_ACCENT.dark),
+    ] {
+        let dark = look.dark;
+        let theme = iced_theme(&look);
+        let palette = theme.palette();
+        assert_eq!(palette.danger, look.status.danger);
+        assert_eq!(palette.warning, look.status.warning);
+        assert_eq!(palette.success, look.status.success);
+        let strong = theme.extended_palette().background.strong.color;
+        assert_eq!(strong, look.status.field);
+        assert!(contrast(strong, look.window) >= 3.0, "dark={dark}");
+        assert!(contrast(strong, look.surface) >= 3.0, "dark={dark}");
+    }
+}
+
+/// RC-110-77: a progress bar's track and a slider's rail keep iced's own shade, so the dark look's
+/// light accent stays apart from them; the field border is not theirs.
+#[test]
+fn progress_bars_and_sliders_keep_their_own_track() {
+    for look in [
+        light::tokens(DEFAULT_ACCENT.light),
+        dark::tokens(DEFAULT_ACCENT.dark),
+    ] {
+        let theme = iced_theme(&look);
+        let own = iced::theme::palette::Extended::generate(theme.palette())
+            .background
+            .strong
+            .color;
+        assert_ne!(own, look.status.field);
+        let track = iced::Background::Color(own);
+        assert_eq!(progress(&theme).background, track);
+        let rail = scroll_slider(&theme, iced::widget::slider::Status::Active).rail;
+        assert_eq!(rail.backgrounds.1, track);
+    }
 }

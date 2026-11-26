@@ -95,7 +95,7 @@ fn tildes(lines: &[String]) -> usize {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn vim_draws_takes_keys_writes_its_file_and_gives_the_shell_back() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -142,7 +142,7 @@ async fn vim_draws_takes_keys_writes_its_file_and_gives_the_shell_back() {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn htop_draws_follows_a_new_size_and_quits() {
     let live = live_or_skip!();
     let dir = workdir();

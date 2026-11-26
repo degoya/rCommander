@@ -1,0 +1,8 @@
+{
+  "name": "Log-Viewer",
+  "description": "Zeigt Logdateien farbig: Log-Level, Zeitstempel, Adressen, Pfade und Stacktraces.",
+  "codes": {
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.encoding": "Kodierung",
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.level_colour": "Farbe des Log-Levels"
+  }
+}

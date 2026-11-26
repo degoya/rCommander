@@ -2,7 +2,8 @@ use rc_engine::settings::themes::BUILTIN_THEMES;
 
 use super::{follows_system_accent, look, name};
 use crate::theme::{
-    colours::{MIN_CONTRAST, contrast, low_contrast},
+    colours::{MIN_CONTRAST, contrast, low_contrast, over},
+    status::{MIN_BORDER_CONTRAST, backgrounds},
     system::DEFAULT_ACCENT,
 };
 
@@ -64,6 +65,48 @@ fn every_builtin_passes_the_contrast_check() {
     }
 }
 
+/// RC-110-77: every pair the audit measured, from every built-in look's tokens - danger, warning
+/// and success at 4.5:1 on the window, the surface, the header and the lists; the fields' border
+/// at 3:1 on each of them; the inactive panel's cursor outline at 3:1 on the list and on the
+/// cursor's own fill.
+#[test]
+fn every_builtin_reads_its_status_its_fields_and_its_inactive_cursor() {
+    for theme in BUILTIN_THEMES.iter().filter(|theme| theme.available()) {
+        let accent = if theme.dark {
+            DEFAULT_ACCENT.dark
+        } else {
+            DEFAULT_ACCENT.light
+        };
+        let tokens = look(theme.id, accent).expect("a look");
+        let status = tokens.status;
+        for back in backgrounds(&tokens) {
+            for (what, colour) in [
+                ("danger", status.danger),
+                ("warning", status.warning),
+                ("success", status.success),
+            ] {
+                let ratio = contrast(colour, back);
+                assert!(ratio >= MIN_CONTRAST, "{} {what}: {ratio:.2}:1", theme.id);
+            }
+            let ratio = contrast(status.field, back);
+            assert!(
+                ratio >= MIN_BORDER_CONTRAST,
+                "{} field border: {ratio:.2}:1",
+                theme.id
+            );
+        }
+        let list = tokens.list_fill;
+        for back in [list, over(tokens.cursor_fill_inactive, list)] {
+            let ratio = contrast(tokens.list_text_secondary, back);
+            assert!(
+                ratio >= MIN_BORDER_CONTRAST,
+                "{} inactive cursor outline: {ratio:.2}:1",
+                theme.id
+            );
+        }
+    }
+}
+
 /// The palette themes bring their own terminal colours, which differ from Fluent's, in both
 /// modes.
 #[test]
@@ -102,4 +145,42 @@ fn the_palette_themes_have_their_terminals() {
         dracula.terminal.background,
         iced::Color::from_rgb8(0x28, 0x2a, 0x36)
     );
+}
+
+/// RC-110-78: every built-in look draws a text field's placeholder at 4.5:1 on the field, where
+/// iced's own grey fell to 2.95:1; a disabled field keeps iced's look.
+#[test]
+fn every_builtin_draws_a_readable_placeholder() {
+    use iced::{Background, widget::text_input::Status};
+
+    for theme in BUILTIN_THEMES.iter().filter(|theme| theme.available()) {
+        let accent = if theme.dark {
+            DEFAULT_ACCENT.dark
+        } else {
+            DEFAULT_ACCENT.light
+        };
+        let tokens = look(theme.id, accent).expect("a look");
+        let drawn = crate::theme::iced_theme(&tokens);
+        for state in [
+            Status::Active,
+            Status::Hovered,
+            Status::Focused { is_hovered: false },
+        ] {
+            let style = crate::theme::text_field(&drawn, state);
+            let Background::Color(field) = style.background else {
+                panic!("{}: a field of one colour", theme.id);
+            };
+            let ratio = contrast(style.placeholder, field);
+            assert!(
+                ratio >= MIN_CONTRAST,
+                "{} placeholder: {ratio:.2}:1",
+                theme.id
+            );
+        }
+        let disabled = crate::theme::text_field(&drawn, Status::Disabled);
+        assert_eq!(
+            disabled,
+            iced::widget::text_input::default(&drawn, Status::Disabled)
+        );
+    }
 }

@@ -5,8 +5,9 @@
 # and VERSION.txt, installed - the program in /usr/lib/rcommander, the command linked into
 # /usr/bin, a menu entry (packaging/linux/rcommander.desktop) and the dialog windows' hidden entry
 # (rcommander-popup.desktop, RC-100-70) with the app icon in the hicolor theme (the SVG and its
-# renderings at 48, 64, 128, 256 and 512 px), and an install-kind marker (`deb`, `rpm`) that tells
-# the update check apt or dnf updates it. The version is the one VERSION.txt names. Adapted from rDownloader's scripts/package-deb-rpm.sh (RD-180-05) at commit
+# renderings at 48, 64, 128, 256 and 512 px), an install-kind marker (`deb`, `rpm`) that tells
+# the update check apt or dnf updates it, and the documents with THIRD-PARTY-LICENSES and the
+# DEP-5 /usr/share/doc/rcommander/copyright made from it (scripts/lib/license_dep5.py, RC-110-72). The version is the one VERSION.txt names. Adapted from rDownloader's scripts/package-deb-rpm.sh (RD-180-05) at commit
 # 8c30caac8.
 #
 # Usage:
@@ -69,8 +70,8 @@ trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/unpacked" "$out"
 tar -xzf "$archive" -C "$work/unpacked"
 stage="$work/unpacked/${name%.tar.gz}"
-[[ -f "$stage/rcommander" && -f "$stage/VERSION.txt" && -d "$stage/plugins" ]] || {
-    echo "!! $archive does not hold ${name%.tar.gz}/ with rcommander, VERSION.txt and plugins/" >&2
+[[ -f "$stage/rcommander" && -f "$stage/VERSION.txt" && -d "$stage/plugins" && -f "$stage/THIRD-PARTY-LICENSES" ]] || {
+    echo "!! $archive does not hold ${name%.tar.gz}/ with rcommander, VERSION.txt, THIRD-PARTY-LICENSES and plugins/" >&2
     exit 1
 }
 version="$(sed -n '1s/^rCommander //p' "$stage/VERSION.txt")"
@@ -85,6 +86,10 @@ fi
 if ! grep -q 'profile release$' "$stage/VERSION.txt"; then
     echo "note: $archive is a test package (VERSION.txt names no release profile); packaging it anyway" >&2
 fi
+
+# /usr/share/doc/rcommander/copyright, machine-readable (DEP-5), from the licence texts the
+# tarball carries (RC-110-72).
+python3 -B "$ROOT/scripts/lib/license_dep5.py" "$stage/THIRD-PARTY-LICENSES" "$work/copyright" > /dev/null
 
 # The menu icon in the hicolor theme: the SVG as it is, and its renderings.
 icons="$work/icons"
@@ -114,7 +119,7 @@ for kind in "${formats[@]}"; do
     rc_render_template "$ROOT/packaging/linux/nfpm.yaml.in" "$config" \
         "VERSION=$version" "ARCH=$nfpm_arch" "STAGE=$stage" \
         "KIND_FILE=$work/install-kind.$kind" "PACKAGING=$ROOT/packaging/linux" \
-        "ICONS=$icons"
+        "ICONS=$icons" "COPYRIGHT=$work/copyright"
     if [[ "$render_only" -eq 1 ]]; then
         cp "$config" "$out/nfpm-$kind-$arch.yaml"
         echo "wrote $out/nfpm-$kind-$arch.yaml"

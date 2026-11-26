@@ -1,6 +1,8 @@
 //! What the tests of the crates that work against [`Vfs`] wrap a backend with (RC-080-24):
 //! [`Forward`], a backend that hands every call to an inner one except those it overrides, and
-//! [`Trickle`], the local disk with file streams that move slowly.
+//! [`Trickle`], the local disk with file streams that move slowly. [`archive_name_parts`] cleans
+//! an archive's stored name as the archive view does on Windows or elsewhere, whatever system
+//! the test runs on.
 //!
 //! Compiled for this crate's tests and behind the `memory` feature, as [`crate::MemoryFs`] is.
 
@@ -8,6 +10,7 @@ use std::{
     io,
     path::Path,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll, ready},
     time::{Duration, SystemTime},
 };
@@ -20,18 +23,19 @@ use tokio::{
 };
 
 use crate::{
-    Capabilities, Entry, LocalFs, ReadStream, Result, SetAttributes, Vfs, VfsError, WriteMode,
-    WriteStream,
+    Capabilities, CopyWatch, Entry, LocalFs, ReadStream, Result, SetAttributes, Vfs, VfsError,
+    WriteMode, WriteStream,
 };
 
 /// A backend that forwards to [`Forward::inner`]: a test overrides only the calls it changes
 /// and is a [`Vfs`] through the blanket implementation.
 ///
 /// Only the calls a backend must implement forward, with [`Vfs::list_batches`],
-/// [`Vfs::open_read_at`], [`Vfs::open_write_sized`] and [`Vfs::rename_replacing`] overridable
-/// on top; each defaults to what
+/// [`Vfs::open_read_at`], [`Vfs::open_write_sized`], [`Vfs::rename_replacing`] and
+/// [`Vfs::copy_file`] overridable on top; each defaults to what
 /// [`Vfs`]'s default does, over this backend's own `list`, `open_read` and `open_write`. Every other provided call keeps [`Vfs`]'s default
-/// - a wrapper is exactly the hand-written forward it replaces.
+/// - a wrapper is exactly the hand-written forward it replaces. So a wrapper streams its files,
+/// whatever the inner backend's own system copy (RC-110-65), unless it overrides `copy_file`.
 ///
 /// Implement it by path (`impl rc_vfs::testing::Forward for ...`) without importing it: with
 /// both traits in scope a call on the wrapper is ambiguous.
@@ -104,6 +108,12 @@ pub trait Forward: Send + Sync {
     async fn sync(&self, path: &Path) -> Result<()> {
         self.inner().sync(path).await
     }
+    async fn copy_file(&self, from: &Path, _to: &Path, _watch: Arc<CopyWatch>) -> Result<u64> {
+        Err(VfsError::Unsupported {
+            path: from.to_path_buf(),
+            operation: "copying through the operating system",
+        })
+    }
 }
 
 #[async_trait]
@@ -161,6 +171,9 @@ impl<T: Forward> Vfs for T {
     async fn sync(&self, path: &Path) -> Result<()> {
         Forward::sync(self, path).await
     }
+    async fn copy_file(&self, from: &Path, to: &Path, watch: Arc<CopyWatch>) -> Result<u64> {
+        Forward::copy_file(self, from, to, watch).await
+    }
 }
 
 /// The wait before each read of a [`Trickle`] stream.
@@ -208,6 +221,14 @@ impl AsyncRead for Slowly {
         this.wait = None;
         Poll::Ready(Ok(()))
     }
+}
+
+/// The parts the archive view lists a stored entry `name` under on a system that keeps Windows'
+/// rules (`windows`) or not (RC-110-92): what an unpacking or a copy out of the archive joins
+/// below its target.
+#[must_use]
+pub fn archive_name_parts(name: &str, windows: bool) -> Vec<String> {
+    crate::archive::safety::clean_name_for(name, windows).parts
 }
 
 #[cfg(test)]

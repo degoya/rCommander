@@ -37,8 +37,8 @@ fn a_planted_secret_is_masked_at_any_depth_and_a_path_stays() {
 
 #[test]
 fn an_answer_with_nothing_to_hide_is_not_rewritten() {
-    // Compact on purpose: a rewrite would make it pretty, so equality proves there was none.
-    let text = r#"{"path":"/home/bob","url":"https://Example.COM"}"#;
+    // Keys out of order on purpose: a rewrite would sort them, so equality proves there was none.
+    let text = r#"{"url":"https://Example.COM","path":"/home/bob"}"#;
     let answer = Ok(CallToolResult::success(vec![ContentBlock::text(text)]).into());
     assert_eq!(text_of(mask_response(answer, &|_: &str| None)), text);
 }

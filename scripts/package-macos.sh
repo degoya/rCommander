@@ -6,9 +6,10 @@
 # holding rCommander.app:
 #   Contents/Info.plist          bundle id net.rcommander.app, the version from Cargo.toml
 #   Contents/MacOS/rcommander    the executable
-#   Contents/Resources/          rcommander.icns, README.md, LICENSE, NOTICE, VERSION.txt and
-#                                plugins/ - the bundled plugins, which rCommander installs at its
-#                                first start (rc-plugin-host looks there inside an app bundle)
+#   Contents/Resources/          rcommander.icns, README.md, LICENSE, NOTICE,
+#                                THIRD-PARTY-LICENSES, VERSION.txt and plugins/ - the bundled
+#                                plugins, which rCommander installs at its first start
+#                                (rc-plugin-host looks there inside an app bundle)
 # signed ad hoc (`codesign --sign -`), not notarised: Gatekeeper asks once (the wiki's
 # installation page). One zip per architecture, no universal binary; x86_64 is cross-compiled on
 # the Apple Silicon runner, as rDownloader does.

@@ -71,12 +71,11 @@ impl Question for CertificateQuestion {
 /// The open questions and the dialog over the first of them.
 pub type CertTrustDialogs = QuestionQueue<CertificateQuestion>;
 
-/// A Unix time as the dialog shows it, `YYYY-MM-DD HH:MM UTC`.
+/// A Unix time as the dialog shows it: in local time, as the panels write a file's date
+/// ([`crate::format::instant`], RC-110-83); the number itself beyond jiff's range.
 pub fn date(seconds: i64) -> String {
-    jiff::Timestamp::from_second(seconds).map_or_else(
-        |_| seconds.to_string(),
-        |time| time.strftime("%Y-%m-%d %H:%M UTC").to_string(),
-    )
+    jiff::Timestamp::from_second(seconds)
+        .map_or_else(|_| seconds.to_string(), crate::format::instant)
 }
 
 /// What a dialog's controls and the engine's answer say.

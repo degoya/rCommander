@@ -10,7 +10,8 @@
 //!
 //! Layout: `<data dir>/plugins/<plugin id>/<version>/` holds `manifest.toml`, `component.wasm`,
 //! `signature.ed25519` (unless unsigned in development mode), `locales/<lang>.json` and, for a
-//! bundled package, the empty file `bundled`; `<data dir>/plugins/state.json` the state.
+//! bundled package, the empty file `bundled`; `<data dir>/plugins/state.json` the state, and
+//! `<data dir>/plugins/bundled-seen.json` the bundled packages a start judged already.
 
 pub(crate) mod disk;
 

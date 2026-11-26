@@ -113,3 +113,36 @@ fn debug_shows_no_bytes() {
     assert!(shown.contains("sealed_len: 3"));
     assert!(!shown.contains("[7, 7"));
 }
+
+/// `future` run to its end on a runtime of its own: a property test is no async test.
+fn block_on<T>(future: impl std::future::Future<Output = T>) -> T {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime")
+        .block_on(future)
+}
+
+proptest::proptest! {
+    // Each case derives twice with argon2; a few cases are enough beside the value envelope's
+    // properties in `aead_props_tests.rs` (RC-110-70).
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(16))]
+
+    /// Any content sealed under any export password opens with that password and no other.
+    #[test]
+    fn an_export_round_trips_with_its_password_only(
+        pw in ".{1,24}",
+        other in ".{1,24}",
+        content in proptest::collection::vec(proptest::prelude::any::<u8>(), 0..256),
+    ) {
+        let sealed = block_on(seal_export(&password(&pw), CHEAP, &content)).expect("seals");
+        let opened = block_on(open_export(&password(&pw), &sealed, CHEAP)).expect("opens");
+        proptest::prop_assert_eq!(opened.expose_secret(), content.as_slice());
+        if other != pw {
+            proptest::prop_assert!(matches!(
+                block_on(open_export(&password(&other), &sealed, CHEAP)),
+                Err(VaultError::WrongPassword)
+            ));
+        }
+    }
+}

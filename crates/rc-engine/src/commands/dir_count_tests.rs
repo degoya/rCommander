@@ -1,7 +1,10 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use tokio::sync::broadcast::error::TryRecvError;
+
+use super::SIZES_EVERY;
 use crate::test_support;
-use crate::{Command, DirSize, Engine, PanelId};
+use crate::{Command, DirSize, Engine, EngineEvent, PanelChange, PanelId};
 
 /// `root/` with `big/` (100 bytes), `small/` (1 byte) and a file.
 async fn engine() -> (tempfile::TempDir, Engine) {
@@ -128,4 +131,70 @@ async fn copies_of_the_state_share_the_counted_sizes() {
         .expect("refresh");
     assert_eq!(before.dir_sizes.len(), 2);
     assert!(engine.panel(PanelId::Left).dir_sizes.is_empty());
+}
+
+/// RC-110-63: Alt+Shift+Enter over 10 000 folders shows their sizes in batches - the event that
+/// marks them counting and at most one per [`SIZES_EVERY`] after it, so a window that reads every
+/// event never falls behind - and the sizes add up to what the folders hold.
+#[tokio::test]
+async fn ten_thousand_folders_are_shown_in_batches() {
+    const FOLDERS: usize = 10_000;
+    let root = tempfile::tempdir().expect("temp dir");
+    let mut expected = 0_u64;
+    for index in 0..FOLDERS {
+        let folder = root.path().join(format!("d{index:05}"));
+        std::fs::create_dir(&folder).expect("mkdir");
+        let bytes = index % 7;
+        std::fs::write(folder.join("f"), "x".repeat(bytes)).expect("write");
+        expected += bytes as u64;
+    }
+    let engine = test_support::headless(root.path()).await;
+    let mut events = engine.subscribe();
+    let started = Instant::now();
+    engine
+        .dispatch(Command::CountDirContent { panel: None })
+        .await
+        .expect("count");
+    let mut shown = 0_usize;
+    let mut drain = |events: &mut tokio::sync::broadcast::Receiver<EngineEvent>| loop {
+        match events.try_recv() {
+            Ok(EngineEvent::Panel {
+                panel: PanelId::Left,
+                change: PanelChange::Listing,
+            }) => shown += 1,
+            Ok(_) => {}
+            Err(TryRecvError::Empty) => break,
+            Err(error) => panic!("the window would have fallen behind: {error}"),
+        }
+    };
+    let sizes = loop {
+        drain(&mut events);
+        let sizes = engine.panel(PanelId::Left).dir_sizes;
+        if sizes.len() == FOLDERS && !sizes.values().any(|size| *size == DirSize::Counting) {
+            break sizes;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(240),
+            "the count did not end"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    };
+    let elapsed = started.elapsed();
+    // The last batch's event follows its sizes.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    drain(&mut events);
+    let batches = elapsed.as_millis() / SIZES_EVERY.as_millis();
+    let most = usize::try_from(batches).expect("a few batches") + 2;
+    assert!(
+        (2..=most).contains(&shown),
+        "{shown} events in {elapsed:?}, at most {most}"
+    );
+    let total: u64 = sizes
+        .values()
+        .map(|size| match size {
+            DirSize::Bytes(bytes) => *bytes,
+            DirSize::Counting => 0,
+        })
+        .sum();
+    assert_eq!(total, expected);
 }

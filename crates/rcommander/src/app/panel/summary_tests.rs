@@ -90,3 +90,93 @@ fn many_changed_names_or_an_unlisted_one_count_again() {
         None
     );
 }
+
+/// `old` with the counted sizes `sizes`, in a map of its own as the engine hands out a batch.
+fn sizing(old: &PanelState, sizes: &[(&str, DirSize)]) -> PanelState {
+    let mut new = old.clone();
+    new.dir_sizes = sizes
+        .iter()
+        .map(|(name, size)| ((*name).to_owned(), *size))
+        .collect::<BTreeMap<_, _>>()
+        .into();
+    new
+}
+
+/// RC-110-63: a batch of counted folders adds only the sizes that changed and comes to what a
+/// count of the whole folder says - a selected folder in the selection's bytes too, a folder
+/// still counting or no longer counted as nothing, a name the listing does not show nowhere.
+#[test]
+fn counted_sizes_add_only_what_changed() {
+    let old = selecting(&folder(), &["outer", "f00.txt"], 0);
+    let summary = Summary::of(&old);
+    let folders = super::listed_folders(&old);
+    let counting = sizing(
+        &old,
+        &[
+            ("inner", DirSize::Bytes(500)),
+            ("outer", DirSize::Counting),
+            ("filtered", DirSize::Counting),
+        ],
+    );
+    let step = summary.resized(
+        &old.dir_sizes,
+        &counting.dir_sizes,
+        &old.selection,
+        &folders,
+    );
+    assert_eq!(step, Summary::of(&counting));
+    let counted = sizing(
+        &old,
+        &[
+            ("inner", DirSize::Bytes(700)),
+            ("outer", DirSize::Bytes(300)),
+            ("filtered", DirSize::Bytes(999)),
+        ],
+    );
+    let step = step.resized(
+        &counting.dir_sizes,
+        &counted.dir_sizes,
+        &old.selection,
+        &folders,
+    );
+    assert_eq!(step, Summary::of(&counted));
+    assert_eq!((step.bytes, step.selected_bytes), (1400, 310));
+    // A folder that could not be counted leaves the map.
+    let failed = sizing(&old, &[("outer", DirSize::Bytes(300))]);
+    let step = step.resized(
+        &counted.dir_sizes,
+        &failed.dir_sizes,
+        &old.selection,
+        &folders,
+    );
+    assert_eq!(step, Summary::of(&failed));
+}
+
+/// The pane carries its summary through a batch of sizes and a selection change in one new
+/// state, and counts the whole folder again for new entries.
+#[test]
+fn the_pane_adds_counted_sizes_to_its_summary() {
+    let old = folder();
+    let mut pane = super::super::Pane::new(old.clone());
+    let mut new = sizing(
+        &old,
+        &[
+            ("inner", DirSize::Bytes(500)),
+            ("outer", DirSize::Bytes(40)),
+        ],
+    );
+    new.selection = ["outer".to_owned()].into();
+    pane.show(new.clone(), false);
+    assert_eq!(*pane.summary(), Summary::of(&new));
+    assert_eq!(pane.summary().selected_bytes, 40);
+    let mut relisted = sizing(&new, &[("outer", DirSize::Bytes(41))]);
+    relisted.entries = new
+        .entries
+        .iter()
+        .skip(1)
+        .cloned()
+        .collect::<Vec<_>>()
+        .into();
+    pane.show(relisted.clone(), false);
+    assert_eq!(*pane.summary(), Summary::of(&relisted));
+}

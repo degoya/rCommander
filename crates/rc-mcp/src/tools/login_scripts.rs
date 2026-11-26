@@ -26,7 +26,7 @@ use crate::{
 
 /// One step, as tools write it.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-#[serde(tag = "step", rename_all = "snake_case")]
+#[serde(tag = "step", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum StepArg {
     /// Wait until the output since the last match (colour codes removed) matches `pattern`, a
     /// regular expression of at most 512 characters; `timeout_ms` defaults to the script's.
@@ -65,7 +65,7 @@ fn enter_by_default() -> bool {
 
 /// Where a `send_secret` step's secret is stored.
 #[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum SourceArg {
     /// The password stored with the connection the script runs on.
     ConnectionPassword,
@@ -74,12 +74,14 @@ pub(crate) enum SourceArg {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct IdParams {
     /// The script's id, from login_scripts_list.
     pub id: i64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct CreateParams {
     /// Unique among the scripts, ignoring case.
@@ -96,6 +98,7 @@ pub(crate) struct CreateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct UpdateParams {
     /// The script's id.
@@ -112,6 +115,7 @@ pub(crate) struct UpdateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct DeleteParams {
     /// The script's id.
@@ -119,6 +123,7 @@ pub(crate) struct DeleteParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct AssignParams {
     /// The connection's id, from connections_list.

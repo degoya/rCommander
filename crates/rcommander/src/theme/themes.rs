@@ -29,7 +29,7 @@ use rc_engine::settings::themes::{Theme, ThemeAccent, ThemesState};
 pub use connections::{Assigned, of_connection, of_distro, of_path, set_assigned};
 pub use slots::{KEYS, flatten, hex_of, seen, slot};
 
-use super::{Tokens, builtin, colours::parse_hex, dark, light};
+use super::{Tokens, builtin, colours::parse_hex, dark, light, status};
 
 use crate::recover::LockOrRecover as _;
 use crate::recover::RwLockOrRecover as _;
@@ -56,6 +56,8 @@ pub fn build(theme: &Theme, system: Color) -> Tokens {
             *place = colour;
         }
     }
+    // Its own backgrounds take the status colours along (RC-110-77).
+    status::fit(&mut tokens);
     tokens
 }
 

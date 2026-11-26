@@ -14,11 +14,14 @@ use crate::{
 };
 
 /// Folder chains whose files start with the session, in lower case: Windows' Startup folders
-/// (`%APPDATA%\Microsoft\Windows\...` and `%ProgramData%\...`) and the XDG autostart folder.
+/// (`%APPDATA%\Microsoft\Windows\...` and `%ProgramData%\...`), the XDG autostart folder and
+/// launchd's agents and daemons on macOS (`~/Library/...` and `/Library/...`, RC-110-58).
 const AUTOSTART: &[&[&str]] = &[
     &["start menu", "programs", "startup"],
     &[".config", "autostart"],
     &[".config", "systemd", "user"],
+    &["library", "launchagents"],
+    &["library", "launchdaemons"],
 ];
 
 /// Folder chains, in lower case, whose files a tool runs or obeys on its own, with the reason:
@@ -40,6 +43,12 @@ const RUN_BY_TOOLS: &[(&[&str], &str)] = &[
     (&[".local", "share", "applications"], "a desktop launcher"),
     (&[".config", "environment.d"], "the session's environment"),
     (&["plasma-workspace", "env"], "the session's environment"),
+    // Programs installed per user (`%LOCALAPPDATA%\Programs`): a library planted beside one is
+    // loaded at its next start (RC-110-58).
+    (
+        &["appdata", "local", "programs"],
+        "a folder of installed programs",
+    ),
 ];
 
 /// File names a tool reads its programs from wherever they are: Git's configuration names an

@@ -2,8 +2,11 @@
 #
 # Fuzzes the parsers of data from outside (RC-080-72): the cargo-fuzz targets in fuzz/ - FTP
 # listings, known_hosts, archive listings, Total Commander's INI files, the terminal's OSC
-# sequences, plugin manifests and the certificate viewer's files - each for a while with libFuzzer, on the nightly pinned in
-# scripts/lib/tool-versions.sh (fuzz/ is a workspace of its own; the main one stays on stable).
+# sequences, plugin manifests, the certificate viewer's files, and (RC-110-68) an MCP request over
+# stdio with its arguments, an ssh_config, the update manifest and the multi-rename rules - each
+# for a while with libFuzzer, on the nightly pinned in scripts/lib/tool-versions.sh (fuzz/ is a
+# workspace of its own; the main one stays on stable). .github/workflows/fuzz.yml runs this weekly
+# on GitHub.
 #
 # Usage:
 #   scripts/fuzz.sh                       # every target, 60 s each
@@ -129,8 +132,8 @@ FUZZ_DIR="${RC_FUZZ_DIR:-$ROOT/target/fuzz}"
 LOG="${RC_FUZZ_LOGS:-/tmp/claude-$(id -u)/fuzz-$(basename "$ROOT")}/$(date +%Y%m%d-%H%M%S)-$$"
 mkdir -p "$LOG" "$FUZZ_DIR/build" || exit 1
 
-# The files whose bytes start a target's corpus: the test data of its parser. The OSC target has
-# none on disk; osc_seeds writes its seeds, everything_seeds those of Everything's answers.
+# The files whose bytes start a target's corpus: the test data of its parser. The targets with
+# none on disk have their seeds written instead (write_seeds).
 seeds() {
     case "$1" in
         archive_listing) find crates/rc-vfs/tests/fixtures/archives -type f ! -name '*.py' ;;
@@ -140,6 +143,7 @@ seeds() {
         tc_ini) find crates/rc-engine/tests/fixtures/total_commander -type f -iname '*.ini' ;;
         git_porcelain) find crates/rc-engine/tests/fixtures/git_porcelain -type f ;;
         cert_viewer) find crates/rc-cert/tests/fixtures -type f ;;
+        ssh_config) find crates/rc-engine/tests/fixtures/ssh_config -type f ;;
     esac 2> /dev/null | sort
 }
 
@@ -159,15 +163,67 @@ everything_seeds() {
     printf '\000\000\000\000\034\000\000\000\004\000\000\000C\000:\000\134\000a\000\000\000' >> "$1/seed-everything-one"
 }
 
-# Copies the seeds into `corpus` once; a seed already there (by its path) is left alone.
+# What an agent sends `rcommander mcp`, a JSON-RPC message per line (RC-110-68): the handshake and
+# calls whose arguments fit, one with a misspelt key, one with a value of the wrong type.
+# shellcheck disable=SC2016  # `$1` in a replacement is the regex group, not the shell's
+mcp_seeds() {
+    {
+        echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"fuzz","version":"1.0"}}}'
+        echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+        echo '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+        echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ops_move","arguments":{"sources":["a.txt"],"target":"/tmp","on_conflict":"skip","keep_attributes":true}}}'
+    } > "$1/seed-mcp-session"
+    echo '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"ops_move","arguments":{"source":["a.txt"],"confirmation":"abc"}}}' > "$1/seed-mcp-typo"
+    echo '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"multi_rename_preview","arguments":{"name_mask":"[N]_[C]","case":"lower","counter_width":3,"search":{"find":"a(.)","replace":"$1","regex":true},"panel":"left"}}}' > "$1/seed-mcp-rename"
+    echo '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"files_set_attributes","arguments":{"paths":["x"],"hidden":"yes","apply_to":"both","modified":"2026-11-25T10:00:00Z"}}}' > "$1/seed-mcp-type"
+}
+
+# A manifest's payload as a release publishes it (RC-110-68); the target signs it, on either
+# channel, and reads the bytes as an envelope as well.
+update_seeds() {
+    local artifact='"platform":"windows","arch":"x86_64","kind":"zip","url":"https://github.com/degoya/rCommander/releases/download/v1.8.0/rcommander-1.8.0-windows-x64.zip","sha256":"'
+    artifact="$artifact$(printf 'ab%.0s' {1..32})\",\"size\":1024"
+    printf '{"schema_version":1,"sequence":1788220800,"issued_at":"2026-09-01T00:00:00Z","not_after":"2027-02-01T00:00:00Z","channel":"stable","version":"1.8.0","released_at":"2026-09-01T00:00:00Z","notes":"- Update check","artifacts":[{%s}]}' \
+        "$artifact" > "$1/seed-update-stable"
+    printf '{"schema_version":1,"sequence":1788220801,"issued_at":"2026-09-01T00:00:01.250Z","not_after":"2027-02-01T00:00:00Z","channel":"beta","version":"1.9.0-beta.1","released_at":"2026-09-01T00:00:00Z","artifacts":[],"schema_change":false}' \
+        > "$1/seed-update-beta"
+    printf '{"payload":{"schema_version":1},"signatures":[{"key_id":"rcommander-update-v1","algorithm":"ed25519","signature":"AAAA"}]}' \
+        > "$1/seed-update-envelope"
+}
+
+# A multi-rename rule (RC-110-68): four switch bytes - case and the search's flags, the file
+# system with a search and a clipboard and the counter's width, the counter's start and step -
+# then name mask, extension mask, search, replacement, clipboard and date format, one per line.
+# shellcheck disable=SC2016  # `$2-$1` is the replacement's regex groups, not the shell's
+rename_seeds() {
+    printf '\000\000\001\001[N]\n[E]' > "$1/seed-rename-keep"
+    printf '\001\061\012\005[N2-5]_[C]_[YMD]\n[E]' > "$1/seed-rename-counter"
+    printf '\014\016\001\001[N] [X]\n[E2-]\n(\\w+) (\\d+)\n$2-$1\nclip\ndd.MM.yyyy' > "$1/seed-rename-regex"
+    printf '\040\005\001\001[N1]\\[N]\n[E]\no\n0' > "$1/seed-rename-subfolder"
+}
+
+# Writes the seeds of a target without test data on disk into the folder $2; 1 for any other.
+write_seeds() {
+    case "$1" in
+        osc) osc_seeds "$2" ;;
+        everything_reply) everything_seeds "$2" ;;
+        mcp_request) mcp_seeds "$2" ;;
+        update_manifest) update_seeds "$2" ;;
+        rename_pattern) rename_seeds "$2" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Copies the seeds into `corpus` once; a seed already there (by its name) is left alone. Written
+# seeds are written beside the corpus first, then copied the same way.
 seed() {
-    local target="$1" corpus="$2" file name count=0
-    if [[ "$target" == osc ]]; then
-        [[ -e "$corpus/seed-osc7" ]] || osc_seeds "$corpus"
-        return 0
-    fi
-    if [[ "$target" == everything_reply ]]; then
-        [[ -e "$corpus/seed-everything-one" ]] || everything_seeds "$corpus"
+    local target="$1" corpus="$2" file name count=0 written="$FUZZ_DIR/written-seeds/$1"
+    rm -rf -- "$written" && mkdir -p "$written" || return 1
+    if write_seeds "$target" "$written"; then
+        for file in "$written"/seed-*; do
+            [[ -e "$file" ]] || continue
+            [[ -e "$corpus/${file##*/}" ]] || cp -- "$file" "$corpus/"
+        done
         return 0
     fi
     while IFS= read -r file; do

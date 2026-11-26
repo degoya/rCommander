@@ -74,14 +74,12 @@ impl Engine {
         let in_place = rules::needs_in_place(owner, &details, user.as_deref());
         let file = self.fetch_copy(&remote, &name).await?;
         let dir = file.parent().map(Path::to_path_buf).unwrap_or_default();
-        let marked = file.clone();
-        let in_step = tokio::task::spawn_blocking(move || {
-            rules::mark_from_internet(&marked);
-            rules::local_stamp(&marked)
-        })
-        .await
-        .log_panic("remote_edit.stamp")
-        .unwrap_or_default();
+        // The fetch job gave the copy the internet's zone with the server (RC-110-56).
+        let stamped = file.clone();
+        let in_step = tokio::task::spawn_blocking(move || rules::local_stamp(&stamped))
+            .await
+            .log_panic("remote_edit.stamp")
+            .unwrap_or_default();
         let edit = Edit {
             shown: target,
             remote,
@@ -222,9 +220,14 @@ impl Engine {
     }
 }
 
-/// Whether the job `snapshot` went through: completed, nothing failed or skipped.
+/// Whether the job `snapshot` went through: completed, nothing failed or skipped - a copy that
+/// only lost its zone went through.
 pub(super) fn clean(snapshot: &JobSnapshot) -> bool {
-    snapshot.state == JobState::Completed && snapshot.failures.is_empty() && snapshot.skipped == 0
+    let whole = snapshot
+        .failures
+        .iter()
+        .all(|failure| failure.code == "zone_not_kept");
+    snapshot.state == JobState::Completed && whole && snapshot.skipped == 0
 }
 
 /// The file name of `target`.

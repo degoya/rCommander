@@ -2,7 +2,11 @@
 
 use iced::Color;
 
-use super::{Tokens, hex, syntax, terminal};
+use super::{
+    Tokens, hex,
+    status::{self, Status},
+    syntax, terminal,
+};
 
 /// The cards' and the panels' fill, and the text on them.
 const SURFACE: u32 = 0xFFFFFF;
@@ -13,7 +17,7 @@ pub(super) fn tokens(accent: Color) -> Tokens {
     let surface = hex(SURFACE, 1.0);
     let text = hex(TEXT, 1.0);
     let text_secondary = hex(0x616161, 1.0);
-    Tokens {
+    let mut tokens = Tokens {
         dark: false,
         window: hex(0xF3F3F3, 1.0),
         surface,
@@ -37,5 +41,8 @@ pub(super) fn tokens(accent: Color) -> Tokens {
         marked: accent,
         syntax: syntax::LIGHT,
         terminal: terminal::ONE_HALF_LIGHT,
-    }
+        status: Status::LIGHT,
+    };
+    status::fit(&mut tokens);
+    tokens
 }

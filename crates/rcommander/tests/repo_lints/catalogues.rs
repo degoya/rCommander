@@ -3,7 +3,10 @@
 //! `en.json`'s keys, each once, with the same `{placeholders}` per key and no empty text; and
 //! the names of the languages, which the language setting shows, stay in their own language in
 //! every catalogue. A key a translation lacks would fall back to English at run time; the lint
-//! keeps that from shipping.
+//! keeps that from shipping. A text that names a number is a pair, `<key>.one` and `<key>.other`
+//! (RC-110-82): in every catalogue, `en.json` too, each form has its partner, both name
+//! `{count}` - the value that chooses between them - and the `one` form names no placeholder the
+//! `other` form lacks, since one call fills both.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -16,7 +19,7 @@ use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
 use crate::workspace_root;
 
 /// The catalogues `i18n.rs` compiles in beside English.
-const TRANSLATIONS: &[&str] = &["de", "fr", "es"];
+pub(crate) const TRANSLATIONS: &[&str] = &["de", "fr", "es"];
 
 /// The keys whose text is the same in every catalogue: each language's name in that language.
 const SAME_EVERYWHERE: &[&str] = &[
@@ -26,11 +29,16 @@ const SAME_EVERYWHERE: &[&str] = &[
     "setting.appearance.language.es",
 ];
 
+/// The placeholder that chooses a pair's form, and the forms.
+const COUNT: &str = "count";
+const ONE: &str = ".one";
+const OTHER: &str = ".other";
+
 /// How many keys of one kind a failure lists before it only counts the rest.
 const SHOWN: usize = 20;
 
 /// A catalogue's entries in file order, a key given twice listed twice.
-struct Entries(Vec<(String, String)>);
+pub(crate) struct Entries(pub(crate) Vec<(String, String)>);
 
 impl<'de> Deserialize<'de> for Entries {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -53,7 +61,7 @@ impl<'de> Deserialize<'de> for Entries {
 }
 
 /// The `{name}` placeholders of `text`, each once.
-fn placeholders(text: &str) -> BTreeSet<&str> {
+pub(crate) fn placeholders(text: &str) -> BTreeSet<&str> {
     let mut found = BTreeSet::new();
     let mut rest = text;
     while let Some(open) = rest.find('{') {
@@ -71,7 +79,7 @@ fn placeholders(text: &str) -> BTreeSet<&str> {
 }
 
 /// `keys` as one line: the first [`SHOWN`], then how many more.
-fn listed(keys: &[&str]) -> String {
+pub(crate) fn listed(keys: &[&str]) -> String {
     let line = keys
         .iter()
         .take(SHOWN)
@@ -86,7 +94,11 @@ fn listed(keys: &[&str]) -> String {
 }
 
 /// What is wrong with the catalogue `name` against `english`, one line per kind of fault.
-fn faults(name: &str, english: &[(String, String)], other: &[(String, String)]) -> Vec<String> {
+pub(crate) fn faults(
+    name: &str,
+    english: &[(String, String)],
+    other: &[(String, String)],
+) -> Vec<String> {
     let mut faults = Vec::new();
     let mut seen = BTreeSet::new();
     let mut twice = Vec::new();
@@ -144,8 +156,57 @@ fn faults(name: &str, english: &[(String, String)], other: &[(String, String)]) 
     faults
 }
 
+/// What is wrong with the pairs of the catalogue `name`: a form whose text names `{count}` and
+/// whose partner is missing or names no `{count}`, and a `one` form with a placeholder its
+/// `other` form lacks. A key ending in `.one` or `.other` without `{count}` is no form.
+fn pair_faults(name: &str, entries: &[(String, String)]) -> Vec<String> {
+    let texts: BTreeMap<&str, &str> = entries
+        .iter()
+        .map(|(key, text)| (key.as_str(), text.as_str()))
+        .collect();
+    let counted = |key: &str| {
+        texts
+            .get(key)
+            .is_some_and(|text| placeholders(text).contains(COUNT))
+    };
+    let mut alone = Vec::new();
+    let mut extra = Vec::new();
+    for (&key, &text) in &texts {
+        let partner = if let Some(stem) = key.strip_suffix(ONE) {
+            format!("{stem}{OTHER}")
+        } else if let Some(stem) = key.strip_suffix(OTHER) {
+            format!("{stem}{ONE}")
+        } else {
+            continue;
+        };
+        if !counted(key) {
+            continue;
+        }
+        if !counted(partner.as_str()) {
+            alone.push(key);
+        }
+        // A partner without `{count}` is already reported as alone.
+        if let (Some(stem), Some(other)) = (key.strip_suffix(ONE), texts.get(partner.as_str()))
+            && counted(partner.as_str())
+            && !placeholders(text).is_subset(&placeholders(other))
+        {
+            extra.push(stem);
+        }
+    }
+    let mut faults = Vec::new();
+    for (what, keys) in [
+        ("plural forms without their partner (with {count})", alone),
+        ("one forms with a placeholder the other form lacks", extra),
+    ] {
+        if !keys.is_empty() {
+            faults.push(format!("{name}: {} {what}: {}", keys.len(), listed(&keys)));
+        }
+    }
+    faults
+}
+
 /// The entries of the catalogue `<lang>.json`.
-fn entries(root: &Path, lang: &str) -> Vec<(String, String)> {
+pub(crate) fn entries(root: &Path, lang: &str) -> Vec<(String, String)> {
     let path = root.join(format!("crates/rcommander/locales/{lang}.json"));
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("locales/{lang}.json is not readable: {error}"));
@@ -167,6 +228,22 @@ fn every_translation_has_the_english_keys_and_placeholders() {
     assert!(
         found.is_empty(),
         "catalogues differ from en.json:\n{}",
+        found.join("\n")
+    );
+}
+
+/// Every pair in every catalogue is whole (RC-110-82): a lone form would read its partner from
+/// English, or show its key.
+#[test]
+fn every_plural_pair_is_whole() {
+    let root = workspace_root();
+    let found: Vec<String> = std::iter::once("en")
+        .chain(TRANSLATIONS.iter().copied())
+        .flat_map(|lang| pair_faults(&format!("{lang}.json"), &entries(&root, lang)))
+        .collect();
+    assert!(
+        found.is_empty(),
+        "plural pairs are not whole:\n{}",
         found.join("\n")
     );
 }
@@ -235,5 +312,32 @@ fn the_lint_reports_every_kind_of_fault() {
     assert_eq!(
         placeholders("{a} {b_2} {} {not one} {a}"),
         BTreeSet::from(["a", "b_2"])
+    );
+}
+
+/// The pair lint fails on a lone form, on a partner without `{count}` and on a `one` form that
+/// names more than its `other` form; a key that only ends in `.other` is no form.
+#[test]
+fn the_lint_reports_a_broken_pair() {
+    let entries: Vec<(String, String)> = [
+        ("queue.marked.one", "{count} job selected"),
+        ("queue.marked.other", "{count} jobs selected"),
+        ("queue.title.other", "{name}: {count} jobs"),
+        ("ops.failed.one", "{count} file failed"),
+        ("ops.failed.other", "Files failed"),
+        ("drop.refused.one", "{count} of {total} path was not taken"),
+        ("drop.refused.other", "{count} paths were not taken"),
+        ("queue.kind.other", "Other"),
+    ]
+    .iter()
+    .map(|(key, text)| ((*key).to_owned(), (*text).to_owned()))
+    .collect();
+    assert_eq!(
+        pair_faults("bad.json", &entries),
+        [
+            "bad.json: 2 plural forms without their partner (with {count}): ops.failed.one, \
+             queue.title.other",
+            "bad.json: 1 one forms with a placeholder the other form lacks: drop.refused",
+        ]
     );
 }

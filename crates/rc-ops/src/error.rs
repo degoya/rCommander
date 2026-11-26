@@ -133,7 +133,8 @@ pub enum OpsError {
     /// The archive file is read-only.
     #[error("{}: the archive file is read-only", path.display())]
     ArchiveFileReadOnly { path: PathBuf },
-    /// The drive has not room for the new archive beside the old one.
+    /// The drive has not room for the new archive beside the old one, or for the files an
+    /// unpacking writes (RC-110-62).
     #[error("{}: not enough space: {needed} bytes needed, {free} free", path.display())]
     NotEnoughSpace {
         path: PathBuf,
@@ -148,6 +149,10 @@ pub enum OpsError {
     /// over (RC-110-16); the listing would wait behind the transfer and show the old state.
     #[error("the device is busy with a transfer; its folder is read again afterwards")]
     DeviceBusy,
+    /// A file was copied but its Mark-of-the-Web could not be written (RC-110-56): the target
+    /// has no streams (FAT) or refused it. The copy stands.
+    #[error("{}: copied without its mark that it came from the internet", path.display())]
+    ZoneNotKept { path: PathBuf },
 }
 
 impl OpsError {
@@ -192,6 +197,7 @@ impl OpsError {
         "not_enough_space",
         "target_in_transfer",
         "device_busy",
+        "zone_not_kept",
     ];
 
     /// The stable code.
@@ -237,6 +243,7 @@ impl OpsError {
             Self::NotEnoughSpace { .. } => "not_enough_space",
             Self::TargetInTransfer { .. } => "target_in_transfer",
             Self::DeviceBusy => "device_busy",
+            Self::ZoneNotKept { .. } => "zone_not_kept",
         }
     }
 

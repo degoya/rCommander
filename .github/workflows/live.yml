@@ -1,0 +1,88 @@
+name: Live
+
+# The live suites against real servers in containers (RC-110-69): OpenSSH for SFTP, the SSH
+# terminal and `rcommander mcp` headless (scripts/live-servers/sftp/), vsftpd, pure-ftpd and
+# ProFTPD for plain FTP and FTPS, passive and active, and server to server with SFTP
+# (scripts/live-servers/ftp/). Their tests are #[ignore]d and need Docker, so ci.yml never runs
+# them; this workflow does - every week on main, which is the last release at its Cargo.lock, so a
+# server-side or dependency change (suppaftp, russh, russh-sftp) that breaks a transfer shows up
+# without anyone remembering the suites - and by hand on any branch:
+#   gh workflow run live.yml --ref ci/<branch>                 # both suites
+#   gh workflow run live.yml --ref ci/<branch> -f suite=ftp    # one
+# A ci/ branch comes from scripts/export-public.sh --branch ci/<name> --skip-push-ci.
+on:
+  schedule:
+    # Mondays 03:17 UTC: off the full hour, when GitHub's scheduler is busiest. GitHub pauses a
+    # schedule after 60 days without a commit to the repository; a release is one.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: The suite to run
+        type: choice
+        options: [both, sftp, ftp]
+        default: both
+
+# Nothing by default: the job reads the tree, and no step sees a secret. The servers' logins are
+# throw-away values of the images, bound to the runner's 127.0.0.1.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # A runner runs one job: the build lock and the memory gate of scripts/lib/lock.sh are for a
+  # shared workstation.
+  RC_NO_LOCK: 1
+  RC_MIN_FREE_MB: 0
+
+jobs:
+  # One runner per suite: each builds its own profile (release-test for SFTP, which prints the
+  # times a person gets; the test profile for FTP), and the SFTP servers alone hold 2 GB of random
+  # files beside 200 000 empty ones.
+  live:
+    name: live (${{ matrix.suite }})
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ (inputs.suite == 'sftp' || inputs.suite == 'ftp') && fromJSON(format('["{0}"]', inputs.suite)) || fromJSON('["sftp","ftp"]') }}
+    # x64: the FTP suite runs the test binary in the server's Debian image (in-container.sh).
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    # A hang is cut off rather than left running for six hours.
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Free runner disk
+        uses: ./.github/actions/free-runner-disk
+      - uses: ./.github/actions/rust-tests-cache
+      - name: Docker
+        run: docker version
+      # The suite's own script: it builds the images, starts the servers, runs the ignored tests
+      # with --run-ignored only and removes every container on its way out.
+      - name: Live suite
+        env:
+          SUITE: ${{ matrix.suite }}
+          RC_LIVE_LOGS: ${{ runner.temp }}/live
+          RC_JOBS: 4
+        run: scripts/live-servers/"${SUITE}"/run.sh
+      - name: Upload the suite's logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-${{ matrix.suite }}-logs
+          path: ${{ runner.temp }}/live
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Disk and memory after a failure
+        if: failure()
+        shell: bash
+        run: |
+          df -h . || true
+          du -sh target 2> /dev/null || true
+          free -m || true
+          docker ps -a || true

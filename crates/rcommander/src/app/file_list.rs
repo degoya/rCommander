@@ -31,7 +31,7 @@ use super::{
     resize::Resize,
 };
 use crate::{
-    i18n::t,
+    i18n::{counted::Counted, t},
     theme::{self, Tokens, fit, fonts},
 };
 
@@ -210,7 +210,7 @@ impl App {
 
 fn status_text<'a>(pane: &'a Pane, tokens: &'static Tokens) -> Element<'a, Message> {
     let (message, color) = match (&pane.error, &pane.transfer_hint) {
-        (Some(error), _) => (error.clone(), theme::DANGER),
+        (Some(error), _) => (error.clone(), tokens.status.danger),
         // The device takes a file: its list is as it was before the transfer (RC-110-16).
         (None, Some(hint)) => (hint.clone(), tokens.accent),
         (None, None) if pane.state.listing.is_some() => {
@@ -219,14 +219,13 @@ fn status_text<'a>(pane: &'a Pane, tokens: &'static Tokens) -> Element<'a, Messa
         }
         (None, None) => {
             let sums = pane.summary();
-            let text = t!(
-                "panel.status",
-                selected_size = crate::format::size(sums.selected_bytes),
-                size = crate::format::size(sums.bytes),
-                selected_files = crate::format::count(sums.selected_files as u64),
-                files = crate::format::count(sums.files as u64),
-                selected_dirs = crate::format::count(sums.selected_dirs as u64),
-                dirs = crate::format::count(sums.dirs as u64),
+            let text = Counted::now().panel_status(
+                (
+                    crate::format::size(sums.selected_bytes),
+                    crate::format::size(sums.bytes),
+                ),
+                (sums.selected_files as u64, sums.files as u64),
+                (sums.selected_dirs as u64, sums.dirs as u64),
             );
             (text, tokens.text_secondary)
         }

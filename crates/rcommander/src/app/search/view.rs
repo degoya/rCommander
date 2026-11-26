@@ -13,7 +13,7 @@ use super::{Attribute, Field, Flag, Form, Run, SearchDialog, SearchMsg, Tab, Tri
 use crate::{
     app::Message,
     format,
-    i18n::t,
+    i18n::{counted::Counted, t},
     theme::{
         self, Tokens,
         fit::{self, line},
@@ -85,27 +85,31 @@ pub fn body<'a>(dialog: &'a SearchDialog, tokens: &'static Tokens) -> Element<'a
     .into()
 }
 
-/// What a flat panel says beside its path: a branch view or search hits, still reading, cut.
+/// What a flat panel says beside its path: a branch view or search hits, still reading, cut -
+/// each a text of its own, joined by dashes (RC-110-86).
 pub fn flat_badge<'a>(flat: &FlatView, tokens: &'static Tokens) -> Element<'a, Message> {
-    let mut label = match flat.source {
-        FlatSource::Branch => t!("flat.branch").to_owned(),
-        FlatSource::Selection => t!("flat.selection").to_owned(),
-        FlatSource::Paths => t!("flat.paths").to_owned(),
-        FlatSource::Duplicates => t!("flat.duplicates").to_owned(),
-    };
+    let mut parts = vec![
+        match flat.source {
+            FlatSource::Branch => t!("flat.branch"),
+            FlatSource::Selection => t!("flat.selection"),
+            FlatSource::Paths => t!("flat.paths"),
+            FlatSource::Duplicates => t!("flat.duplicates"),
+        }
+        .to_owned(),
+    ];
     if flat.loading {
-        label.push_str(t!("flat.loading"));
+        parts.push(t!("flat.loading").to_owned());
     }
     if flat.truncated {
-        label.push_str(&t!(
+        parts.push(t!(
             "flat.truncated",
             limit = format::count(MAX_FLAT_ENTRIES as u64)
         ));
     }
     if flat.skipped > 0 {
-        label.push_str(&t!("flat.skipped", count = format::count(flat.skipped)));
+        parts.push(t!("flat.skipped", count = format::count(flat.skipped)));
     }
-    line(label).color(tokens.accent).into()
+    line(parts.join(" - ")).color(tokens.accent).into()
 }
 
 fn general<'a>(dialog: &'a SearchDialog, tokens: &'static Tokens) -> Element<'a, Message> {
@@ -335,42 +339,42 @@ fn buttons(dialog: &SearchDialog) -> Element<'_, Message> {
 
 /// Where the search stands, or the field that does not read.
 fn status<'a>(dialog: &'a SearchDialog, tokens: &'static Tokens) -> Element<'a, Message> {
-    let danger = theme::DANGER;
+    let danger = tokens.status.danger;
     let hits = format::count(dialog.results.len() as u64);
     let (message, color) = match (&dialog.invalid, &dialog.run) {
         (Some(field), _) => (invalid(*field).to_owned(), danger),
         (None, Run::Idle) => (t!("search.idle").to_owned(), tokens.text_secondary),
         (None, Run::Running { dir, stats }) => (
-            t!(
-                "search.running",
-                hits = hits,
-                entries = format::count(stats.entries),
-                dir = dir.as_ref().map(hits::shown).unwrap_or_default()
+            Counted::now().search_running(
+                dialog.results.len() as u64,
+                stats.entries,
+                dir.as_ref().map(hits::shown).unwrap_or_default(),
             ),
             tokens.text_secondary,
         ),
+        // One whole sentence per fact (RC-110-86).
         (None, Run::Finished { stats, cancelled }) => {
-            let mut done = if *cancelled {
-                t!("search.cancelled", hits = hits)
+            let mut done = vec![if *cancelled {
+                t!("search.cancelled", count = hits)
             } else {
-                t!("search.finished", hits = hits)
-            };
+                t!("search.finished", count = hits)
+            }];
             if stats.skipped > 0 {
-                done.push_str(&t!("search.skipped", count = format::count(stats.skipped)));
+                done.push(t!("search.skipped", count = format::count(stats.skipped)));
             }
             if dialog.results.is_duplicates() {
-                done.push_str(&t!(
+                done.push(t!(
                     "search.groups",
                     count = format::count(dialog.results.group_count() as u64)
                 ));
             }
             if dialog.results.truncated || stats.truncated {
-                done.push_str(&t!(
+                done.push(t!(
                     "search.truncated",
                     limit = format::count(MAX_FLAT_ENTRIES as u64)
                 ));
             }
-            (done, tokens.accent)
+            (done.join(" "), tokens.accent)
         }
         (None, Run::Failed(error)) => (error.clone(), danger),
     };
@@ -439,6 +443,7 @@ fn field<'a>(
     label: &'static str,
 ) -> Element<'a, Message> {
     let input = text_input(placeholder, value)
+        .style(theme::text_field)
         .on_input(move |text| wrap(SearchMsg::Text(field, text)))
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)

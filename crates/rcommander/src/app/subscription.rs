@@ -1,13 +1,17 @@
 //! What the window listens to: input, the engine's events, the job queue's results, the
-//! system's light or dark mode, the menu bar's choices and the screens of the terminals the
-//! panels show.
+//! system's light or dark mode and on Windows its high contrast and text size, the menu bar's
+//! choices and the screens of the terminals the panels show.
 //!
 //! The job queue is one stream: it runs every job to its end before it takes the next, so
 //! commands reach the engine in the order the keys were pressed (Tab, then ArrowDown, moves the
-//! cursor in the panel Tab made active). The engine's events come on a stream of their own, so
+//! cursor in the panel Tab made active); cursor steps that piled up meanwhile are one step
+//! (`coalesce.rs`). The engine's events come on a stream of their own, so
 //! the changes an MCP client makes arrive the same way as the window's own.
 
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::VecDeque,
+    hash::{Hash, Hasher},
+};
 
 use iced::{
     Subscription,
@@ -19,8 +23,8 @@ use rc_engine::Engine;
 use tokio::sync::broadcast::error::RecvError;
 
 use super::{
-    App, JobQueue, Message, queue_window::QueueMsg, run_job, terminal_pane::widget_message,
-    window_state::WindowChange,
+    App, JobQueue, Message, coalesce, queue_window::QueueMsg, run_job,
+    terminal_pane::widget_message, window_state::WindowChange,
 };
 use crate::keymap;
 use crate::recover::LockOrRecover as _;
@@ -49,7 +53,11 @@ impl App {
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => Some(
                 Message::FileOps(super::file_ops::FileOpsMsg::Modifiers(modifiers)),
             ),
+            // iced reports the corner divided by the text size's scale as well, but places a
+            // window at a position without it: kept as the place it opens at (RC-110-79).
             Event::Window(window::Event::Moved(at)) => {
+                let scale = crate::theme::access::text_scale();
+                let at = iced::Point::new(at.x * scale, at.y * scale);
                 Some(Message::WindowChanged(id, WindowChange::Moved(at)))
             }
             Event::Window(window::Event::Resized(size)) => {
@@ -109,6 +117,10 @@ impl App {
         if self.follow_system {
             all.push(system::theme_changes().map(Message::SystemTheme));
         }
+        // Windows' high contrast and text size, switched while the app runs (RC-110-79).
+        if cfg!(windows) {
+            all.push(Subscription::run(crate::theme::access::changes).map(Message::SystemAccess));
+        }
         all.extend(
             self.terms
                 .widgets
@@ -153,9 +165,14 @@ impl Hash for Jobs {
 fn job_results(jobs: &Jobs) -> impl Stream<Item = Message> + use<> {
     let engine = jobs.engine.clone();
     let receiver = jobs.queue.lock_or_recover("subscription.queue").take();
-    stream::unfold((engine, receiver), |(engine, mut receiver)| async move {
-        let job = receiver.as_mut()?.recv().await?;
-        let message = run_job(&engine, job).await;
-        Some((message, (engine, receiver)))
-    })
+    let waiting = VecDeque::new();
+    stream::unfold(
+        (engine, receiver, waiting),
+        |(engine, mut receiver, mut waiting)| async move {
+            // The cursor steps that piled up behind a slow job are one step (RC-110-67).
+            let job = coalesce::next(receiver.as_mut()?, &mut waiting).await?;
+            let message = run_job(&engine, job).await;
+            Some((message, (engine, receiver, waiting)))
+        },
+    )
 }

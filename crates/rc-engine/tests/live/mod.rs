@@ -1,7 +1,7 @@
 //! The harness of the live SFTP tests (RC-080-14): real OpenSSH servers in Docker, started by
-//! `scripts/live/sftp/run.sh`, which also sets the environment read here. Without it every test
-//! says so and passes without doing anything; the tests are `#[ignore]` besides, so a plain
-//! `cargo nextest run` never reaches a server.
+//! `scripts/live-servers/sftp/run.sh`, which also sets the environment read here. Without it
+//! every test says so and passes without doing anything; the tests are `#[ignore]` besides, so a
+//! plain `cargo nextest run` never reaches a server.
 //!
 //! Each test has an engine of its own, with a database file and a vault in a folder below the
 //! build's temporary directory (on disk: `/tmp` may be memory), and its own folder on a server.
@@ -27,7 +27,7 @@ use rc_vfs::VfsPath;
 pub const MASTER: &str = "live test master password";
 
 /// The servers, in the order of their ports from `RC_LIVE_SFTP_PORT_BASE`; the same table as
-/// `scripts/live/sftp/ctl.sh`.
+/// `scripts/live-servers/sftp/ctl.sh`.
 const ROLES: [&str; 13] = [
     "a",
     "b",
@@ -59,7 +59,9 @@ pub struct Live {
 pub fn live() -> Option<Live> {
     let var = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
     let Some(ctl) = var("RC_LIVE_SFTP_CTL") else {
-        eprintln!("skipped: RC_LIVE_SFTP_CTL is not set (scripts/live/sftp/run.sh sets it)");
+        eprintln!(
+            "skipped: RC_LIVE_SFTP_CTL is not set (scripts/live-servers/sftp/run.sh sets it)"
+        );
         return None;
     };
     let number = |name: &str, default: u64| {

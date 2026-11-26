@@ -210,9 +210,14 @@ async fn missed_questions_are_read_again() {
     assert!(harness.app.cert_trust.shown().is_some());
 }
 
+/// The dialog's dates read as a file's date does, in local time (RC-110-83); a time beyond
+/// jiff's range shows its number.
 #[test]
-fn dates_read_as_utc() {
-    assert_eq!(date(1_577_836_800), "2020-01-01 00:00 UTC");
+fn dates_read_as_the_panels_write_them() {
+    let at = jiff::Timestamp::from_second(1_577_836_800).expect("in range");
+    assert_eq!(date(1_577_836_800), crate::format::instant(at));
+    assert!(!date(1_577_836_800).contains("UTC"));
+    assert_eq!(date(i64::MAX), i64::MAX.to_string());
 }
 
 /// RC-080-67: a plain FTP login's question shows the server and no certificate, starts on

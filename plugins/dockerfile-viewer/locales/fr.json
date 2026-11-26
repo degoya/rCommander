@@ -1,0 +1,4 @@
+{
+  "name": "Visionneuse Dockerfile",
+  "description": "Affiche les Dockerfiles et Containerfiles en couleurs, comme un éditeur."
+}

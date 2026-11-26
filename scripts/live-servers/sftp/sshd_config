@@ -1,0 +1,17 @@
+# The live tests' server: password login, the SFTP subsystem, and DEBUG1 so the log shows every
+# `userauth-request` - the test that no password goes out before the key is trusted reads it.
+# No per-source penalties (OpenSSH 9.8+): every connection a test refuses at the host key would
+# count against 127.0.0.1 and slow down or refuse the tests that run beside it.
+Port 22
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitRootLogin no
+UseDNS no
+LogLevel DEBUG1
+MaxStartups 30:50:100
+MaxSessions 30
+PerSourcePenalties no
+Subsystem sftp internal-sftp

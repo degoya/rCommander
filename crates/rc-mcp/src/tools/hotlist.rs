@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::{RcMcpServer, answer::ToolResult, tools::panels::PanelArg};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HotlistAddParams {
     /// The folder: absolute, or relative to the panel's folder; the panel's own when omitted.
     #[serde(default)]
@@ -30,6 +31,7 @@ pub(crate) struct HotlistAddParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HotlistFolderParams {
     /// The folder's name.
     pub name: String,
@@ -39,6 +41,7 @@ pub(crate) struct HotlistFolderParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HotlistUpdateParams {
     /// The entry's or hotlist folder's id.
     pub id: i64,
@@ -59,6 +62,7 @@ pub(crate) struct HotlistUpdateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HotlistMoveParams {
     pub id: i64,
     /// The hotlist folder to move it into; the top when omitted.
@@ -70,11 +74,13 @@ pub(crate) struct HotlistMoveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HotlistIdParams {
     pub id: i64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HotlistOpenParams {
     /// An entry's id from hotlist_list.
     pub id: i64,

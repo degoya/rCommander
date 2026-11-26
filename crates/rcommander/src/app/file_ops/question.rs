@@ -97,7 +97,7 @@ pub(super) fn card<'a>(job: &'a Tracked, tokens: &'static Tokens) -> Card<'a> {
                     ));
             }
             let body = body
-                .push(fit::prose(error_text(&failure.code)).color(theme::DANGER))
+                .push(fit::prose(error_text(&failure.code)).color(tokens.status.danger))
                 .push(buttons);
             let title = line(t!("ops.error.title")).font(theme::UI_FONT_STRONG);
             (title.into(), body.into())
@@ -208,6 +208,7 @@ fn conflict_card<'a>(
         .spacing(6)
         .wrap(),
         row![
+            // field-label: the Rename answers over it ask for the new name, Rename to beside it
             text_input("", &job.rename_to)
                 .id(PROPOSAL_ID)
                 .on_input(move |text| wrap(FileOpsMsg::ProposalInput(id, text)))
@@ -226,7 +227,7 @@ fn conflict_card<'a>(
     ]
     .spacing(10);
     if let Some(code) = job.note {
-        body = body.push(fit::prose(error_text(code)).color(theme::DANGER));
+        body = body.push(fit::prose(error_text(code)).color(tokens.status.danger));
     }
     // The answers stand in the body; the row holds Compare at the left and Cancel.
     let mut extra = Vec::new();

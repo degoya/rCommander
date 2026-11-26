@@ -68,6 +68,8 @@ pub(crate) struct WatchDesk {
     quiet: [AtomicBool; 2],
     /// By [`PanelId::index`]: how often the watcher read the panel.
     reads: [AtomicU64; 2],
+    /// By [`PanelId::index`]: a reading waits that the loop may begin now (tests wait for it).
+    busy: [AtomicBool; 2],
 }
 
 impl WatchDesk {
@@ -125,6 +127,19 @@ impl Engine {
     #[cfg(test)]
     pub(crate) fn watch_reads(&self, panel: PanelId) -> u64 {
         self.inner.watch.reads[panel.index()].load(Ordering::Acquire)
+    }
+
+    /// Whether the loop has taken every signal sent to it and no panel waits for a reading it
+    /// may begin: the tests wait on this, not on the clock (RC-110-70). Taken is handled, but
+    /// for the last signal's own turn - a probe sent last makes that one a no-op.
+    #[cfg(test)]
+    pub(crate) fn watch_settled(&self) -> bool {
+        let desk = &self.inner.watch;
+        let drained = desk
+            .signals
+            .get()
+            .is_some_and(|signals| signals.capacity() == signals.max_capacity());
+        drained && desk.busy.iter().all(|busy| !busy.load(Ordering::Acquire))
     }
 }
 

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::{case_path, is_temp_name, pack_path, part_path, save_path};
+use super::{case_path, is_temp_name, pack_path, part_path, save_path, system_copy_path};
 
 #[test]
 fn a_part_file_sits_beside_its_target() {
@@ -16,6 +16,14 @@ fn the_temporary_archive_is_hidden_beside_the_target() {
         pack_path(Path::new("/out/site.zip"), 7),
         PathBuf::from("/out/.site.zip.7.rcpart")
     );
+}
+
+#[test]
+fn a_system_copy_is_hidden_beside_its_target_and_never_a_part_to_continue() {
+    let temp = system_copy_path(Path::new("/up/big.bin"), 7);
+    assert_eq!(temp, PathBuf::from("/up/.big.bin.7.rcpart"));
+    assert_ne!(temp, part_path(Path::new("/up/big.bin")));
+    assert!(is_temp_name(".big.bin.7.rcpart"));
 }
 
 #[test]

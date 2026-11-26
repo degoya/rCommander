@@ -1,0 +1,10 @@
+{
+  "name": "Visor de CSV",
+  "description": "Muestra CSV y TSV con cada columna en su propio color, o los registros como árbol.",
+  "codes": {
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.encoding": "Codificación",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.header": "La primera línea es un encabezado",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.separator": "Separador",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.too_many_nodes": "El árbol tiene demasiados rangos abiertos; cierre el visor y vuelva a abrir el archivo."
+  }
+}

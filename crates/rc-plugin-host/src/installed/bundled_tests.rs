@@ -1,11 +1,16 @@
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use anyhow::Result;
 
-use super::{BUNDLED_MARKER, bundled_dir_of, sync_with};
+use super::{
+    BUNDLED_MARKER, bundled_dir_of,
+    seen::{Seen, context},
+    sync_with,
+};
 use crate::{
     PluginInstaller, PluginState, PluginVerifier,
     installed::{entry, plugins_root},
@@ -254,4 +259,75 @@ fn a_version_a_person_installed_is_never_replaced() {
     );
     assert_eq!(installed_key(data.path()), key_of(OLD));
     assert!(!version_dir(data.path()).join(BUNDLED_MARKER).exists());
+}
+
+/// Whether the record of the judged packages holds `file`, under the state in `data`.
+fn recorded(data: &Path, file: &Path) -> bool {
+    let state = PluginState::read(data).expect("state");
+    Seen::read(data, &context("test roots", &state)).holds(file)
+}
+
+#[test]
+fn an_unchanged_bundled_package_is_not_read_again() {
+    let data = tempfile::tempdir().expect("temp dir");
+    PluginState::default().write(data.path()).expect("state");
+    let current = roots(NEW_KEY_ID, NEW);
+    let bundled = shipped(NEW_KEY_ID, NEW);
+    let file = bundled.path().join("csv.rcplug");
+    assert_eq!(
+        sync_with(data.path(), bundled.path(), &current)
+            .expect("sync")
+            .len(),
+        1
+    );
+    assert!(recorded(data.path(), &file));
+
+    // Other bytes of the same size under the same time: a start that read them would refuse
+    // them and drop their record.
+    let metadata = std::fs::metadata(&file).expect("metadata");
+    let modified = metadata.modified().expect("time");
+    let size = usize::try_from(metadata.len()).expect("small");
+    std::fs::write(&file, vec![0_u8; size]).expect("write");
+    let set_time = |time| {
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .and_then(|opened| opened.set_modified(time))
+            .expect("time");
+    };
+    set_time(modified);
+    assert!(
+        sync_with(data.path(), bundled.path(), &current)
+            .expect("again")
+            .is_empty()
+    );
+    assert!(recorded(data.path(), &file), "passed over unread");
+
+    // Another time: read, refused, no longer recorded; the installed version stays.
+    set_time(modified + Duration::from_secs(2));
+    assert!(
+        sync_with(data.path(), bundled.path(), &current)
+            .expect("checked")
+            .is_empty()
+    );
+    assert!(!recorded(data.path(), &file));
+    assert!(version_dir(data.path()).is_dir());
+}
+
+#[test]
+fn a_recorded_package_whose_version_is_gone_is_installed_again() {
+    let data = tempfile::tempdir().expect("temp dir");
+    PluginState::default().write(data.path()).expect("state");
+    let current = roots(NEW_KEY_ID, NEW);
+    let bundled = shipped(NEW_KEY_ID, NEW);
+    assert_eq!(
+        sync_with(data.path(), bundled.path(), &current)
+            .expect("sync")
+            .len(),
+        1
+    );
+    std::fs::remove_dir_all(version_dir(data.path())).expect("remove");
+    let again = sync_with(data.path(), bundled.path(), &current).expect("again");
+    assert_eq!(again, [(PLUGIN_ID.to_owned(), "1.0.0".to_owned())]);
+    assert!(version_dir(data.path()).join(BUNDLED_MARKER).is_file());
 }

@@ -25,7 +25,7 @@ pub(crate) mod title;
 pub use error::TabsError;
 pub use frequent::{FREQUENT_SHOWN_KEY, FrequentFolder};
 pub use history::HISTORY_LIMIT;
-pub use persist::Relocated;
+pub use persist::{LookedTabs, Relocated};
 pub use rename::{CONFIRM_CLOSE_ALL_KEY, MAX_TAB_TITLE, checked_title};
 pub(crate) use set::{Tab, TabSet, Tabs};
 pub use set::{TabId, TabView};

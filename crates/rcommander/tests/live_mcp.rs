@@ -6,8 +6,8 @@
 //! a copy up and one down byte for byte, `ssh_exec` refused without a person and run with the
 //! code, and a server whose key nobody trusted refused.
 //!
-//! Every test is `#[ignore]` and needs the servers: `scripts/live/sftp/run.sh` starts them and
-//! runs this target beside `live_sftp`; without them a test says so and returns.
+//! Every test is `#[ignore]` and needs the servers: `scripts/live-servers/sftp/run.sh` starts
+//! them and runs this target beside `live_sftp`; without them a test says so and returns.
 
 use std::{
     path::{Path, PathBuf},
@@ -24,7 +24,7 @@ use rmcp::{RoleClient, ServiceExt as _, model::CallToolRequestParams, service::R
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-/// The server every test here uses (`a` of `scripts/live/sftp/ctl.sh`, the first port).
+/// The server every test here uses (`a` of `scripts/live-servers/sftp/ctl.sh`, the first port).
 const ROLE: &str = "a";
 /// A server whose host key no test here trusts (`b`, the second port).
 const UNTRUSTED: &str = "b";
@@ -41,7 +41,9 @@ struct Live {
 fn live() -> Option<Live> {
     let var = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
     let Some(ctl) = var("RC_LIVE_SFTP_CTL") else {
-        eprintln!("skipped: RC_LIVE_SFTP_CTL is not set (scripts/live/sftp/run.sh sets it)");
+        eprintln!(
+            "skipped: RC_LIVE_SFTP_CTL is not set (scripts/live-servers/sftp/run.sh sets it)"
+        );
         return None;
     };
     Some(Live {
@@ -266,11 +268,11 @@ fn sha256(path: &Path) -> String {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn headless_mcp_lists_and_copies_both_ways_and_refuses_an_untrusted_server() {
     let Some(live) = live() else { return };
     let world = World::new(&live, "t-mcp-copy").await;
-    let _db = world.as_the_window(&live).await;
+    let db = world.as_the_window(&live).await;
     let (client, _child) = world.mcp().await;
 
     let tree = ok(&client, "connections_list", json!({})).await;
@@ -297,12 +299,15 @@ async fn headless_mcp_lists_and_copies_both_ways_and_refuses_an_untrusted_server
         .flat_map(|i| i.wrapping_mul(2_654_435_761).to_le_bytes())
         .collect();
     std::fs::write(&local, &bytes).expect("a local file");
-    let up = ok(
-        &client,
-        "ops_copy",
-        json!({ "sources": [local.to_string_lossy()], "target": remote }),
-    )
-    .await;
+    // A copy onto a server asks (RC-110-59): headless, the person allows codes and agrees.
+    db.set(MCP_HEADLESS_CODE_KEY, &true)
+        .await
+        .expect("the setting");
+    let mut upload = json!({ "sources": [local.to_string_lossy()], "target": remote });
+    let question = ok(&client, "ops_copy", upload.clone()).await;
+    assert_eq!(question["confirmation_required"], true, "{question}");
+    upload["confirmation"] = question["confirmation"].clone();
+    let up = ok(&client, "ops_copy", upload).await;
     completes(&client, &up).await;
     let on_server = live.ctl(&["sha256", ROLE, &format!("{}/up.bin", world.remote)]);
     assert_eq!(on_server.trim(), sha256(&local));
@@ -346,7 +351,7 @@ async fn headless_mcp_lists_and_copies_both_ways_and_refuses_an_untrusted_server
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn headless_ssh_exec_is_refused_without_a_person_and_runs_with_the_code() {
     let Some(live) = live() else { return };
     let world = World::new(&live, "t-mcp-exec").await;

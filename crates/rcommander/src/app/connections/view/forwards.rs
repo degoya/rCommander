@@ -129,37 +129,47 @@ fn editor<'a>(
             row![
                 label(t!("connections.forwards.local")),
                 bind,
-                field(t!("connections.forwards.port"), &edit.port)
-                    .id(FORWARD_PORT_FIELD)
-                    .width(90)
-                    .on_input(|text| forward(ForwardMsg::Port(text)))
-                    .on_submit(save.clone()),
+                layout::captioned_beside(
+                    t!("connections.forwards.port"),
+                    field("", &edit.port)
+                        .id(FORWARD_PORT_FIELD)
+                        .width(90)
+                        .on_input(|text| forward(ForwardMsg::Port(text)))
+                        .on_submit(save.clone()),
+                ),
             ]
             .spacing(6)
             .align_y(Alignment::Center),
         )
         .push(
             row![
-                label(t!("connections.forwards.target")),
-                field(t!("connections.forwards.host"), &edit.host)
-                    .on_input(|text| forward(ForwardMsg::Host(text)))
-                    .on_submit(save.clone()),
-                field(t!("connections.forwards.port"), &edit.target_port)
-                    .width(90)
-                    .on_input(|text| forward(ForwardMsg::TargetPort(text)))
-                    .on_submit(save.clone()),
+                // The host's placeholder is a hint: the target as the server sees it.
+                layout::captioned_beside(
+                    t!("connections.forwards.target"),
+                    field(t!("connections.forwards.host"), &edit.host)
+                        .on_input(|text| forward(ForwardMsg::Host(text)))
+                        .on_submit(save.clone()),
+                ),
+                layout::captioned_beside(
+                    t!("connections.forwards.port"),
+                    field("", &edit.target_port)
+                        .width(90)
+                        .on_input(|text| forward(ForwardMsg::TargetPort(text)))
+                        .on_submit(save.clone()),
+                ),
             ]
             .spacing(6)
             .align_y(Alignment::Center),
         )
-        .push(
-            field(t!("connections.forwards.name"), &edit.name)
+        .push(layout::captioned_beside(
+            t!("connections.forwards.name"),
+            field("", &edit.name)
                 .on_input(|text| forward(ForwardMsg::Name(text)))
                 .on_submit(save.clone()),
-        )
+        ))
         .push(auto_start);
     if let Some(error) = &edit.error {
-        block = block.push(fit::prose(error.as_str()).color(theme::DANGER));
+        block = block.push(fit::prose(error.as_str()).color(tokens.status.danger));
     }
     block
         .push(

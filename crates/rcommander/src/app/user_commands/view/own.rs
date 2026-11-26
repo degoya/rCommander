@@ -42,9 +42,12 @@ pub(super) fn list_side<'a>(
     commands: &[UserCommand],
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
-    let filter = field(t!("user_commands.filter"), &window.filter)
-        .id(FILTER_FIELD)
-        .on_input(|text| wrap(UcMsg::Filter(text)));
+    let filter = layout::captioned_beside(
+        t!("field.filter"),
+        field(t!("user_commands.filter"), &window.filter)
+            .id(FILTER_FIELD)
+            .on_input(|text| wrap(UcMsg::Filter(text))),
+    );
     let active = matches!(window.focus, Focus::List | Focus::Filter);
     let shown = list::shown_commands(commands, &window.filter);
     let mut lines = Column::new().spacing(1);
@@ -212,10 +215,12 @@ fn symbol_row<'a>(form: &'a OwnForm, shown: &Shown) -> Row<'a, Message> {
     let mut symbol = Row::new()
         .push(preview)
         .push(
+            // field-label: the row's label Symbol (`form_rows`); the placeholder is a hint
             field(t!("user_commands.icon_placeholder"), &form.icon_path)
                 .on_input(|typed| own(OwnMsg::IconPath(typed))),
         )
         .push(
+            // field-label: the row's label Symbol (`form_rows`): the icon's index in its file
             field("0", &form.icon_index.to_string())
                 .width(56)
                 .on_input(|typed| own(OwnMsg::IconIndex(typed))),

@@ -286,15 +286,20 @@ fn list_row<'a>(
         |name| {
             let mark = sized(cells.mark.clone(), font, size);
             if cells.warn {
-                row![name.color(theme::DANGER), mark.color(theme::DANGER)]
+                row![
+                    name.color(tokens.status.danger),
+                    mark.color(tokens.status.danger)
+                ]
             } else {
                 row![name, mark.color(secondary)]
             }
         },
     );
     let name = with_badge(name, cells.badge, state);
-    let mut columns: Vec<Element<'a, Message>> =
-        vec![pill(state, tokens), named(cells.icon, cells.hidden, name)];
+    let mut columns: Vec<Element<'a, Message>> = vec![
+        pill(state, tokens),
+        named(cells.icon, cells.hidden, name, tokens),
+    ];
     for (value, width, right, column) in cells.values {
         let colour = value_colour(column, cells.rule, state.selected, secondary);
         let value = sized(value, font, size).color(colour);
@@ -344,7 +349,7 @@ pub(super) fn brief_cell<'a>(
     });
     let name = with_badge(name, badge, state);
     let hidden = state.names.mark_hidden && entry.is_some_and(is_hidden);
-    let content = row![pill(state, tokens), named(icon, hidden, name)]
+    let content = row![pill(state, tokens), named(icon, hidden, name, tokens)]
         .spacing(6)
         .padding([0, 6])
         .align_y(Alignment::Center);
@@ -443,10 +448,11 @@ fn named<'a>(
     icon: Option<Handle>,
     hidden: bool,
     name: impl Into<Element<'a, Message>>,
+    tokens: &Tokens,
 ) -> Element<'a, Message> {
     let name: Element<'a, Message> = name.into();
     match icon {
-        Some(icon) => row![crate::app::icons::view(icon, hidden), name]
+        Some(icon) => row![crate::app::icons::view(icon, hidden, tokens), name]
             .spacing(ICON_GAP)
             .align_y(Alignment::Center)
             .into(),
@@ -459,16 +465,20 @@ pub(super) fn cell<'a>(content: impl text::IntoFragment<'a>, font: Font) -> text
     sized(content, font, theme::TEXT_SIZE)
 }
 
-/// One cell at `size`: a single line, clipped by its column.
+/// One cell at `size`: a single line, clipped by its column, with what cannot be seen spelled out
+/// (`ellipsis::visible`, RC-110-62) - a name the list has not measured yet too.
 pub(super) fn sized<'a>(
     content: impl text::IntoFragment<'a>,
     font: Font,
     size: f32,
 ) -> text::Text<'a> {
-    text(content)
-        .size(size)
-        .font(font)
-        .wrapping(text::Wrapping::None)
+    text(theme::ellipsis::visible_text(
+        content.into_fragment(),
+        false,
+    ))
+    .size(size)
+    .font(font)
+    .wrapping(text::Wrapping::None)
 }
 
 #[cfg(test)]

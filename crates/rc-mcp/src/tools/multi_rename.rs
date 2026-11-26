@@ -74,6 +74,7 @@ impl From<CaseArg> for CaseMode {
 
 /// Search and replace after the masks and the case.
 #[derive(Debug, Clone, Default, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[serde(default)]
 pub(crate) struct SearchArg {
     /// What to look for. Plain text takes several terms separated by | (ae|oe), and the
@@ -110,6 +111,7 @@ impl From<SearchArg> for SearchReplace {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct RenameParams {
     /// Entries of the folder, in the order the counter counts them. Omitted or empty: the
@@ -256,6 +258,7 @@ fn now() -> DateTime {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct PresetSaveParams {
     /// The preset's name, 1 to 64 characters; a preset of that name (in any case) is replaced.
@@ -286,6 +289,7 @@ pub(crate) struct PresetSaveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct PresetNameParams {
     /// The preset's name, in any case.
@@ -293,6 +297,7 @@ pub(crate) struct PresetNameParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct PresetRenameParams {
     /// The preset's name, in any case.
@@ -302,6 +307,7 @@ pub(crate) struct PresetRenameParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct UndoParams {}
 

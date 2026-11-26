@@ -38,6 +38,12 @@ pub(crate) mod fake;
 // The parsing of `/proc/mounts` compiles and is tested everywhere; only Unix reads the file.
 #[cfg(target_os = "macos")]
 mod macos;
+// The drive letters of Windows' mask compile and are tested everywhere; only Windows reads them.
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "only Windows has drive letters")
+)]
+mod letters;
 #[cfg_attr(windows, allow(dead_code, reason = "only Unix reads /proc/mounts"))]
 mod mounts;
 pub(crate) mod network;

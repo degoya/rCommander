@@ -130,7 +130,8 @@ fn gated_tools() -> Vec<(String, &'static str)> {
         .collect()
 }
 
-/// Every gated call: the gated tools without arguments, then the escalated calls.
+/// Every gated call: the gated tools with only their required arguments, then the escalated
+/// calls.
 fn gated_calls() -> Vec<(String, Value, &'static str)> {
     let mut calls: Vec<(String, Value, &'static str)> = gated_tools()
         .into_iter()
@@ -142,6 +143,100 @@ fn gated_calls() -> Vec<(String, Value, &'static str)> {
             .map(|(tool, arguments, class)| (tool.to_owned(), arguments, class)),
     );
     calls
+}
+
+/// A placeholder value of a JSON schema: the first variant of an enum, `a.txt` for a string, 1
+/// for a number, and an object with its required properties filled the same way.
+fn placeholder(schema: &Value, defs: &Value) -> Value {
+    if let Some(reference) = schema["$ref"].as_str() {
+        let name = reference.rsplit('/').next().unwrap_or_default();
+        return placeholder(&defs[name], defs);
+    }
+    if let Some(constant) = schema.get("const") {
+        return constant.clone();
+    }
+    if let Some(first) = schema["enum"].as_array().and_then(|values| values.first()) {
+        return first.clone();
+    }
+    for key in ["oneOf", "anyOf", "allOf"] {
+        if let Some(first) = schema[key].as_array().and_then(|variants| variants.first()) {
+            return placeholder(first, defs);
+        }
+    }
+    let kind = match &schema["type"] {
+        Value::Array(kinds) => kinds
+            .iter()
+            .filter_map(Value::as_str)
+            .find(|kind| *kind != "null")
+            .unwrap_or("null"),
+        kind => kind.as_str().unwrap_or("object"),
+    };
+    match kind {
+        "string" => json!("a.txt"),
+        "integer" | "number" => json!(1),
+        "boolean" => json!(false),
+        "array" => json!([placeholder(&schema["items"], defs)]),
+        "object" => with_required(schema, defs, json!({})),
+        _ => Value::Null,
+    }
+}
+
+/// `arguments` with each required property of `schema` they lack set to a placeholder.
+fn with_required(schema: &Value, defs: &Value, mut arguments: Value) -> Value {
+    for name in schema["required"].as_array().into_iter().flatten() {
+        let Some(name) = name.as_str() else { continue };
+        if arguments.get(name).is_none() {
+            arguments[name] = placeholder(&schema["properties"][name], defs);
+        }
+    }
+    arguments
+}
+
+/// [`gated_calls`] with the required arguments each tool's schema names, so the calls read
+/// (RC-110-57 reads them before the gate) and only the gate stands between them and running;
+/// `workspaces_apply` shows a stored workspace in its question, so it gets one over `root`.
+async fn complete_calls(
+    client: &RunningService<RoleClient, ()>,
+    root: &std::path::Path,
+) -> Vec<(String, Value, &'static str)> {
+    let tab = json!({ "location": { "backend": "local", "path": root.join("docs") } });
+    let spec = json!({
+        "version": 1,
+        "active": "left",
+        "split_permille": 500,
+        "left": { "tabs": [tab], "active_tab": 0 },
+        "right": { "tabs": [tab], "active_tab": 0 }
+    });
+    let created = call(
+        client,
+        "workspaces_create",
+        &json!({ "name": "gate", "spec": spec }),
+    )
+    .await;
+    let workspace = created["id"]
+        .as_i64()
+        .unwrap_or_else(|| panic!("{created}"));
+    let tools = client.list_all_tools().await.expect("tools");
+    gated_calls()
+        .into_iter()
+        .map(|(tool, mut arguments, class)| {
+            if tool == "workspaces_apply" {
+                arguments["id"] = json!(workspace);
+            }
+            let schema = tools
+                .iter()
+                .find(|served| served.name == tool)
+                .map(|served| Value::Object((*served.input_schema).clone()))
+                .unwrap_or_else(|| panic!("{tool} is not served"));
+            let defs = schema
+                .get("$defs")
+                .or_else(|| schema.get("definitions"))
+                .cloned()
+                .unwrap_or(Value::Null);
+            let arguments = with_required(&schema, &defs, arguments);
+            (tool, arguments, class)
+        })
+        .collect()
 }
 
 struct Setup {
@@ -226,7 +321,7 @@ fn the_gated_tools_are_served_and_hold_the_reviewed_ones() {
 async fn headless_without_codes_every_gated_call_is_refused() {
     let setup = setup(false).await;
     let client = connect(&setup.context).await;
-    for (tool, arguments, _) in gated_calls() {
+    for (tool, arguments, _) in complete_calls(&client, setup.root.path()).await {
         let answer = call(&client, &tool, &arguments).await;
         assert_eq!(answer["code"], "headless_ask_denied", "{tool}: {answer}");
         // A code the agent made up changes nothing.
@@ -240,7 +335,7 @@ async fn headless_without_codes_every_gated_call_is_refused() {
 async fn with_codes_every_gated_call_asks_and_a_forged_code_does_not_answer() {
     let setup = setup(true).await;
     let client = connect(&setup.context).await;
-    for (tool, arguments, class) in gated_calls() {
+    for (tool, arguments, class) in complete_calls(&client, setup.root.path()).await {
         code_of(&call(&client, &tool, &arguments).await, &tool, class);
         let forged = with_code(&arguments, "0123456789abcdef0123456789abcdef");
         code_of(&call(&client, &tool, &forged).await, &tool, class);
@@ -251,7 +346,7 @@ async fn with_codes_every_gated_call_asks_and_a_forged_code_does_not_answer() {
 async fn a_code_answers_no_other_gated_call() {
     let setup = setup(true).await;
     let client = connect(&setup.context).await;
-    let calls = gated_calls();
+    let calls = complete_calls(&client, setup.root.path()).await;
     assert!(calls.len() >= 2);
     let mut codes = Vec::new();
     for (tool, arguments, class) in &calls {

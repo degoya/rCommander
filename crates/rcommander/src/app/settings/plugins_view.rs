@@ -28,12 +28,15 @@ const PORTIONS: [u16; 4] = [6, 2, 2, 3];
 /// The tab "Installed": install, the preview, the table, the selected plugin.
 pub fn view<'a>(page: &'a PluginsPage, tokens: &'static Tokens) -> Column<'a, Message> {
     let idle = !page.busy;
-    let path = text_input(t!("settings.plugins.path"), &page.path)
-        .on_input(|path| page_message(PluginsMsg::Path(path)))
-        .padding([5, 8])
-        .size(theme::TEXT_SIZE)
-        .font(theme::UI_FONT)
-        .width(Length::Fill);
+    let path = layout::captioned_beside(
+        t!("settings.plugins.path"),
+        text_input("", &page.path)
+            .on_input(|path| page_message(PluginsMsg::Path(path)))
+            .padding([5, 8])
+            .size(theme::TEXT_SIZE)
+            .font(theme::UI_FONT)
+            .width(Length::Fill),
+    );
     let install = layout::secondary_icon_button(
         Icon::Import,
         t!("settings.plugins.install"),
@@ -123,7 +126,7 @@ fn preview_card<'a>(
             .collect();
         lines = lines.push(
             fit::prose(t!("settings.plugins.added", permissions = asked.join(", ")))
-                .color(theme::DANGER),
+                .color(tokens.status.danger),
         );
     }
     if !shown.installed_versions.is_empty() {
@@ -144,7 +147,7 @@ fn preview_card<'a>(
             .map(|reason| t!("settings.plugins.incompatible", reason = reason.clone()))
     };
     if let Some(refusal) = refusal {
-        lines = lines.push(fit::prose(refusal).color(theme::DANGER));
+        lines = lines.push(fit::prose(refusal).color(tokens.status.danger));
     }
     let buttons = layout::button_row(
         Some(layout::primary_icon_button(
@@ -432,6 +435,7 @@ fn setting_row<'a>(page: &'a PluginsPage, setting: &'a PluginSettingInfo) -> Ele
         )
     } else {
         // A masked setting (a licence key) is typed hidden, as a password is (RC-100-36).
+        // field-label: the plugin setting's name in its row (`setting_row`)
         text_input("", &current)
             .secure(setting.masked)
             .on_input(move |value| page_message(PluginsMsg::Setting(name.clone(), value)))

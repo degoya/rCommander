@@ -284,3 +284,24 @@ fn a_build_reads_the_channel_of_its_own_version_until_one_is_chosen() {
     assert_eq!(Channel::of_version("1.1.0"), Channel::Stable);
     assert_eq!(Channel::of_version("garbage"), Channel::Stable);
 }
+
+/// What every installation in the field fetches is `rcommander-update-<channel>.json`, and that
+/// name is the schema-1 manifest's for good: a later schema is published beside it under a name of
+/// its own, never in its place (`docs/security/updates.md`, "A new schema version", RC-110-90).
+#[test]
+fn a_v1_client_finds_the_v1_manifest_under_the_unversioned_name() {
+    assert_eq!(
+        UPDATE_MANIFEST_SCHEMA_VERSION, 1,
+        "a new schema version gets a file name of its own, and v1 keeps being published"
+    );
+    for (channel, name, version) in [
+        (Channel::Stable, "rcommander-update-stable.json", "1.8.0"),
+        (Channel::Beta, "rcommander-update-beta.json", "1.8.0-beta.1"),
+    ] {
+        assert_eq!(channel.file_name(), name);
+        let published = manifest(channel, version, 1);
+        let read = verified(&signed(&published), channel).expect("a v1 client reads v1");
+        assert_eq!(read.schema_version, 1);
+        assert_eq!(read.version, version);
+    }
+}

@@ -392,8 +392,9 @@ async fn the_top_question_has_the_window_and_the_next_follows() {
     assert_eq!(harness.app.small_question(), None);
 }
 
-/// The MCP call's window opens on Deny, the safe answer (RC-010-13, RC-080-12): no key allows -
-/// Enter and Space without a focused button, a letter, Tab - and Escape denies.
+/// The MCP call's window opens on Deny, the safe answer (RC-010-13, RC-080-12): in its first
+/// second no key answers (RC-110-80) - Enter and Space without a focused button, a letter, Tab -
+/// and Escape denies.
 #[tokio::test]
 async fn the_mcp_window_opens_on_deny_and_no_key_allows() {
     assert_eq!(

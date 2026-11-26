@@ -49,7 +49,9 @@ pub(super) fn field<'a>(
     field: Field,
     placeholder: &'a str,
 ) -> Element<'a, Message> {
+    // field-label: each call names its field; `placeholder` is an example or a hint
     text_input(placeholder, value)
+        .style(theme::text_field)
         .id(field.id())
         .on_input(move |text| wrap(MrMsg::Text(field, text)))
         .font(theme::UI_FONT)
@@ -65,7 +67,9 @@ pub(super) fn mask_field<'a>(
     placeholder: &'a str,
     locked: bool,
 ) -> Element<'a, Message> {
+    // field-label: each call names its field; `placeholder` is an example
     text_input(placeholder, value)
+        .style(theme::text_field)
         .id(field.id())
         .on_input_maybe((!locked).then_some(move |text| wrap(MrMsg::Text(field, text))))
         .font(theme::UI_FONT)
@@ -75,6 +79,7 @@ pub(super) fn mask_field<'a>(
 }
 
 pub(super) fn field_sized(value: &str, field: Field, width: f32) -> Element<'_, Message> {
+    // field-label: each call names its field
     text_input("", value)
         .id(field.id())
         .on_input(move |text| wrap(MrMsg::Text(field, text)))

@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse PowerShell",
+  "description": "Affiche les scripts et modules PowerShell (.ps1, .psm1, .psd1) en couleurs, comme un éditeur.",
+  "codes": {
+    "01a159b6-c865-7f56-a6e7-db2cc02c4981.setting.encoding": "Encodage"
+  }
+}

@@ -15,6 +15,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct IdParams {
     /// The connection's id, from connections_list.
     pub id: i64,
@@ -40,6 +41,7 @@ impl From<MethodArg> for AuthKind {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct PrefsParams {
     /// The connection's id.
     pub id: i64,

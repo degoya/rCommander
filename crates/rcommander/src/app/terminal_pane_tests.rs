@@ -33,7 +33,7 @@ async fn a_one_line_paste_with_a_control_character_asks_about_it() {
     assert_eq!(paste_question(text), t!("terminal.paste_control"));
     assert_eq!(
         paste_question("ls\nrm -rf sub"),
-        t!("terminal.paste_question", lines = 2)
+        t!("terminal.paste_question", count = 2)
     );
 }
 

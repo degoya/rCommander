@@ -262,6 +262,7 @@ async fn an_exec_tool_can_be_allowed_on_its_target() {
         "terminal_send_input",
         class,
         on(3).as_ref(),
+        None,
     )
     .await;
     assert!(matches!(first.expect("asks"), Gate::Run(None)), "allowed");
@@ -276,6 +277,7 @@ async fn an_exec_tool_can_be_allowed_on_its_target() {
         "terminal_send_input",
         class,
         on(3).as_ref(),
+        None,
     )
     .await;
     assert!(
@@ -294,6 +296,7 @@ async fn an_exec_tool_can_be_allowed_on_its_target() {
             "terminal_send_input",
             class,
             arguments.as_ref(),
+            None,
         );
         let Gate::Answer(refused) = other.await.expect("asks") else {
             panic!("refused: {session} on {terminal}");
@@ -315,6 +318,7 @@ async fn an_exec_tool_can_be_allowed_on_its_target() {
         "terminal_send_input",
         class,
         on(3).as_ref(),
+        None,
     )
     .await;
     assert!(

@@ -5,7 +5,8 @@
 # kept), so the targets fuzz the dependency versions rCommander ships.
 #
 # The targets call only public functions; one a parser lacked is `#[doc(hidden)] pub` in its
-# crate (rc_remote::ftp::parse_listing).
+# crate (rc_remote::ftp::parse_listing; rc_mcp::check_arguments and
+# rc_engine::import::ssh_config::parse_str, RC-110-68).
 
 [package]
 name = "rc-fuzz"
@@ -18,14 +19,23 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+# The instants of the update manifest and the rename dates; at the main workspace's version.
+jiff = { version = "1", default-features = false, features = ["std"] }
 libfuzzer-sys = "0.4"
 rc-cert = { path = "../crates/rc-cert" }
 rc-engine = { path = "../crates/rc-engine" }
+rc-mcp = { path = "../crates/rc-mcp" }
 rc-plugin-host = { path = "../crates/rc-plugin-host" }
 rc-remote = { path = "../crates/rc-remote" }
+rc-rename = { path = "../crates/rc-rename" }
 rc-term = { path = "../crates/rc-term" }
+rc-update = { path = "../crates/rc-update" }
 rc-vfs = { path = "../crates/rc-vfs" }
-tokio = { version = "1", features = ["rt"] }
+# The stdio transport the MCP target frames its input with, as rc-mcp has it.
+rmcp = { version = "3.2", default-features = false, features = ["server"] }
+# The update target signs a fuzzed payload as the bytes it arrived as.
+serde_json = { version = "1", features = ["raw_value"] }
+tokio = { version = "1", features = ["io-util", "rt"] }
 
 [workspace]
 members = ["."]
@@ -93,6 +103,34 @@ bench = false
 [[bin]]
 name = "cert_viewer"
 path = "fuzz_targets/cert_viewer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_request"
+path = "fuzz_targets/mcp_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ssh_config"
+path = "fuzz_targets/ssh_config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_manifest"
+path = "fuzz_targets/update_manifest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rename_pattern"
+path = "fuzz_targets/rename_pattern.rs"
 test = false
 doc = false
 bench = false

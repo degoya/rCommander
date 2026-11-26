@@ -163,7 +163,7 @@ fn session_line<'a>(
             ),
         ),
         Some(status) => (
-            t!("connections.session.connected", channels = status.channels),
+            t!("connections.session.connected", count = status.channels),
             (
                 Icon::Disconnect,
                 t!("connections.disconnect"),
@@ -338,7 +338,7 @@ fn field_row<'a>(
             let now = super::certificate::unix_now();
             for (line, warning) in super::certificate::lines(certificate, now) {
                 let line = if warning {
-                    label(line).size(12).color(theme::DANGER)
+                    label(line).size(12).color(tokens.status.danger)
                 } else {
                     hint(line, tokens)
                 };
@@ -347,7 +347,9 @@ fn field_row<'a>(
         }
     }
     if let Some(error) = form.error(shown) {
-        column = column.push(indented(label(error).size(12).color(theme::DANGER).into()));
+        column = column.push(indented(
+            label(error).size(12).color(tokens.status.danger).into(),
+        ));
     }
     column.into()
 }
@@ -357,6 +359,7 @@ fn indented(content: Element<'_, Message>) -> Element<'_, Message> {
 }
 
 fn text<'a>(value: &str, shown: Field, edit: fn(String) -> Edit) -> Element<'a, Message> {
+    // field-label: the form's label column beside it (`line`)
     field("", value)
         .id(shown.id())
         .on_input(move |typed| wrap(ConnMsg::Edit(edit(typed))))
@@ -378,6 +381,7 @@ fn secret<'a>(
         t!("connections.secret_none")
     };
     let id = secret_field(kind).id();
+    // field-label: the form's label column beside it (`line`); the placeholder is a hint
     field(placeholder, typed.expose_secret())
         .id(id)
         .secure(!form.reveal)

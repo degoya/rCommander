@@ -31,7 +31,11 @@ mod tokyo_night;
 
 use iced::Color;
 
-use super::{Syntax, Tokens, dark, hex, light, terminal::Terminal};
+use super::{
+    Syntax, Tokens, dark, hex, light,
+    status::{self, Status},
+    terminal::Terminal,
+};
 use crate::i18n::t;
 
 /// A built-in look's colours, every one opaque `0xRRGGBB`.
@@ -62,10 +66,10 @@ pub(super) struct Palette {
 }
 
 impl Palette {
-    /// The look of these colours.
+    /// The look of these colours, the status colours of its mode fitted to them (`status.rs`).
     fn tokens(&self) -> Tokens {
         let c = |rgb: u32| hex(rgb, 1.0);
-        Tokens {
+        let mut tokens = Tokens {
             dark: self.dark,
             window: c(self.window),
             surface: c(self.surface),
@@ -86,7 +90,14 @@ impl Palette {
             marked: c(self.marked),
             syntax: Syntax::of(self.syntax),
             terminal: Terminal::of(self.terminal),
-        }
+            status: if self.dark {
+                Status::DARK
+            } else {
+                Status::LIGHT
+            },
+        };
+        status::fit(&mut tokens);
+        tokens
     }
 }
 
@@ -126,6 +137,12 @@ pub fn look(id: &str, accent: Color) -> Option<Tokens> {
         "ayu-dark" => ayu::DARK.tokens(),
         _ => return None,
     })
+}
+
+/// The built-in High contrast theme in the colours of Windows' high-contrast theme `colours`,
+/// the look of every part of the window while it is on (RC-110-79, `access.rs`).
+pub fn system_high_contrast(colours: &super::access::SystemColours) -> Tokens {
+    high_contrast::with_system(colours)
 }
 
 /// Whether the built-in theme `id` draws with the system's accent (Fluent, Mac); the others

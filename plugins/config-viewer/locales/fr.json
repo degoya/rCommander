@@ -1,0 +1,8 @@
+{
+  "name": "Visionneuse de configuration",
+  "description": "Affiche les fichiers INI, .reg, .env, properties, TOML, unités systemd et solutions Visual Studio en couleurs, ou leurs sections et clés sous forme d'arborescence.",
+  "codes": {
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.setting.encoding": "Encodage",
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.too_many_nodes": "L'arborescence a trop de plages ouvertes ; fermez la visionneuse et rouvrez le fichier."
+  }
+}

@@ -20,7 +20,7 @@
 mod grid;
 mod summary;
 
-use std::{ops::Range, sync::Arc};
+use std::{collections::HashSet, ops::Range, sync::Arc};
 
 use rc_engine::{Command, CursorStep, Entry, ListMode, PanelId, PanelState, extension};
 
@@ -48,6 +48,9 @@ pub struct Pane {
     parent_asked: bool,
     /// The status line's counts and sums, worked out when entries or selection change.
     summary: Summary,
+    /// The names of the listing's folders, gathered when a folder size first changes for these
+    /// entries ([`Summary::resized`]); gone with them.
+    folders: Option<HashSet<String>>,
     /// The last command that failed on this panel, shown in its status line until the panel
     /// shows another directory.
     pub error: Option<String>,
@@ -66,6 +69,7 @@ impl Pane {
             on_parent: state.cursor == 0,
             parent_asked: false,
             summary: Summary::of(&state),
+            folders: None,
             state,
             top: 0,
             page_rows: 1,
@@ -96,19 +100,36 @@ impl Pane {
         } else if state.cursor != 0 {
             self.on_parent = false;
         }
-        let listed = Arc::ptr_eq(&self.state.entries, &state.entries)
-            && Arc::ptr_eq(&self.state.dir_sizes, &state.dir_sizes);
-        if !listed {
+        if Arc::ptr_eq(&self.state.entries, &state.entries) {
+            self.carry_summary(&state);
+        } else {
+            self.folders = None;
             self.summary = Summary::of(&state);
-        } else if self.state.selection != state.selection {
-            // Only the selection changed: only the names that changed count (RC-080-53).
-            self.summary = self
-                .summary
-                .reselected(&self.state, &state)
-                .unwrap_or_else(|| Summary::of(&state));
         }
         self.state = state;
         self.ensure_visible();
+    }
+
+    /// The summary of the same entries carried over to `state`: counted folder sizes (Space,
+    /// Alt+Shift+Enter) add only what changed (RC-110-63), and so does a selection (RC-080-53).
+    fn carry_summary(&mut self, state: &PanelState) {
+        if !Arc::ptr_eq(&self.state.dir_sizes, &state.dir_sizes) {
+            let folders = self
+                .folders
+                .get_or_insert_with(|| summary::listed_folders(state));
+            self.summary = self.summary.resized(
+                &self.state.dir_sizes,
+                &state.dir_sizes,
+                &self.state.selection,
+                folders,
+            );
+        }
+        if self.state.selection != state.selection {
+            self.summary = self
+                .summary
+                .reselected(&self.state, state)
+                .unwrap_or_else(|| Summary::of(state));
+        }
     }
 
     /// The engine moved the cursor (`PanelChange::Cursor`): onto the first entry it leaves the

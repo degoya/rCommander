@@ -4,17 +4,20 @@
 //! (from the command it wraps) is held against the policy, a confirmation code is asked for
 //! where the policy says so, and the answer - refusals included - leaves through the credential
 //! mask. In one place rather than in each tool, so no tool can forget either. What the gate
-//! decided is one row of the audit log (`audit.rs`, RC-080-66).
+//! decided is one row of the audit log (`audit.rs`, RC-080-66). Before the gate the arguments
+//! are held against the tool's schema (`arguments.rs`, RC-110-57): a call that would not parse
+//! is refused with `invalid_params` and nobody is asked about it.
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use rc_db::Db;
-use rc_engine::{CommandClass, Engine, spec};
+use rc_engine::{CommandClass, Engine};
 use rmcp::{
     RoleServer, ServerHandler,
     handler::server::{router::tool::ToolRouter, tool::ToolCallContext},
     model::{
-        CallToolRequestParams, CallToolResponse, Implementation, ServerCapabilities, ServerConfig,
+        CacheScope, CallToolRequestParams, CallToolResponse, Implementation, ListToolsResult,
+        PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig, Tool,
     },
     service::RequestContext,
     tool_handler,
@@ -24,12 +27,11 @@ use crate::{
     answer::error_result,
     ask::Gate,
     audit::{Audit, Decision},
-    confirm::Confirmations,
-    coverage::{COVERAGE, Coverage},
+    confirm::{CODE_ARGUMENT, Confirmations},
     gate_settings::GateSettings,
     mask,
-    policy::Rule,
-    tools::{connections::refuse_secrets, with_call_cancel},
+    policy::{Policy, Rule},
+    tools::{connections::refuse_secrets, paging::ListPages, with_call_cancel},
 };
 
 /// What the server tells an agent at the start, kept as text beside the code: every tool it
@@ -49,6 +51,8 @@ pub struct McpContext {
     pub(crate) answer_within: Duration,
     /// The program's folder under every name it has: no call writes there (`guard_write.rs`).
     pub(crate) program_dirs: Vec<std::path::PathBuf>,
+    /// The listings the list tools keep between their pages (RC-110-61).
+    pub(crate) list_pages: Arc<ListPages>,
 }
 
 impl McpContext {
@@ -60,27 +64,14 @@ impl McpContext {
     pub fn new(engine: Engine, db: Db) -> Self {
         let _ = engine.attach_db(db.clone());
         let _ = engine.attach_read_judge(crate::guard::sensitive_path);
-        let classes = COVERAGE
-            .iter()
-            .filter_map(|(id, coverage)| match coverage {
-                Coverage::Covered(tool) => spec(id).map(|spec| ((*tool).to_owned(), spec.class)),
-                Coverage::Omitted(_) => None,
-            })
-            // A tool that covers two commands is held to the stricter of their classes.
-            .fold(HashMap::new(), |mut classes, (tool, class)| {
-                classes
-                    .entry(tool)
-                    .and_modify(|held: &mut CommandClass| *held = held.stricter(class))
-                    .or_insert(class);
-                classes
-            });
         Self {
             engine,
             db,
             confirmations: Confirmations::default(),
-            classes: Arc::new(classes),
+            classes: Arc::new(crate::tool_list::tool_classes()),
             answer_within: crate::ask::ANSWER_WITHIN,
             program_dirs: crate::guard_write::program_dirs(),
+            list_pages: Arc::default(),
         }
     }
 
@@ -127,8 +118,13 @@ impl RcMcpServer {
         }
     }
 
-    /// Every tool this server offers.
+    /// Every tool this server offers, each with the hints of its class (`tool_list.rs`).
     pub(crate) fn router() -> ToolRouter<Self> {
+        crate::tool_list::annotate(Self::groups())
+    }
+
+    /// Every tool group's router, added up.
+    fn groups() -> ToolRouter<Self> {
         Self::panels_router()
             + Self::connections_router()
             + Self::connections_save_router()
@@ -184,16 +180,20 @@ impl RcMcpServer {
             + Self::button_bars_router()
     }
 
+    /// Every tool, sorted by name, with its schema and hints, whatever the policy: what the
+    /// contract snapshot holds (`tests/tool_contract.rs`, RC-110-60).
+    #[must_use]
+    pub fn tools() -> Vec<Tool> {
+        Self::router().list_all()
+    }
+
     /// The names of every tool, sorted: what the coverage test holds the table against.
     #[must_use]
     pub fn tool_names() -> Vec<String> {
-        let mut names: Vec<String> = Self::router()
-            .list_all()
+        Self::tools()
             .into_iter()
             .map(|tool| tool.name.into_owned())
-            .collect();
-        names.sort();
-        names
+            .collect()
     }
 
     /// The session a question belongs to: the transport's MCP session id over HTTP (one key
@@ -227,6 +227,14 @@ impl RcMcpServer {
         if self.tool_router.has_route(&tool) {
             audit.decision = Decision::Refused;
             if let Some(refusal) = refuse_secrets(&tool, request.arguments.as_ref()) {
+                return Ok(refusal.into());
+            }
+            // Arguments the tool would not take, before anyone is asked about them: a typo in a
+            // key is refused, never dropped (RC-110-57).
+            if let Some(listed) = self.tool_router.get(&tool)
+                && let Err(refusal) =
+                    crate::arguments::check(&tool, &listed.input_schema, request.arguments.as_ref())
+            {
                 return Ok(refusal.into());
             }
             // A share on another machine, before anything opens it (RC-080-10).
@@ -279,6 +287,18 @@ impl RcMcpServer {
             {
                 rule = Rule::Ask;
             }
+            // A new host, or a copy onto a server, asks where the policy would let it run
+            // (RC-110-59); the question names the server.
+            let remote = match rule {
+                Rule::Deny => None,
+                Rule::Allowed | Rule::Ask => {
+                    crate::remote_ask::remote(&self.context, &tool, request.arguments.as_ref())
+                        .await
+                }
+            };
+            if remote.is_some() && rule == Rule::Allowed {
+                rule = Rule::Ask;
+            }
             match rule {
                 Rule::Allowed => audit.decision = Decision::Allowed,
                 Rule::Deny => {
@@ -303,6 +323,7 @@ impl RcMcpServer {
                         &tool,
                         class,
                         arguments,
+                        remote.as_ref(),
                     );
                     audit.decision = Decision::Declined;
                     match asked.await? {
@@ -321,23 +342,31 @@ impl RcMcpServer {
                 }
             }
         }
+        let pins = frozen.map(|frozen| {
+            request.arguments = Some(frozen.arguments);
+            frozen.pins
+        });
+        // The code is the gate's: no tool reads it, and a parameter type that denies unknown
+        // fields would refuse it (RC-110-57).
+        if let Some(arguments) = request.arguments.as_mut() {
+            arguments.remove(CODE_ARGUMENT);
+        }
         // The call runs on what its class was judged on, or not at all (RC-080-66).
-        let Some(frozen) = frozen else {
-            let call = ToolCallContext::new(self, request, context);
-            let run = with_call_cancel(cancel, self.tool_router.call(call));
-            return rc_engine::with_mcp_judged(judged, run).await;
-        };
-        request.arguments = Some(frozen.arguments);
         let call = ToolCallContext::new(self, request, context);
         let run = with_call_cancel(cancel, self.tool_router.call(call));
-        rc_engine::with_mcp_judged(judged, rc_engine::with_mcp_pins(frozen.pins, run)).await
+        let answer = match pins {
+            None => rc_engine::with_mcp_judged(judged, run).await,
+            Some(pins) => {
+                rc_engine::with_mcp_judged(judged, rc_engine::with_mcp_pins(pins, run)).await
+            }
+        };
+        crate::arguments::as_invalid_params(answer)
     }
 }
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for RcMcpServer {
-    /// One gate and one mask for every tool; replaces the macro's passthrough and keeps its
-    /// `list_tools`.
+    /// One gate and one mask for every tool; replaces the macro's passthrough.
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -360,6 +389,32 @@ impl ServerHandler for RcMcpServer {
         )
         .await;
         answer
+    }
+
+    /// The tools the policy in force allows, read anew with each request (RC-110-60); an
+    /// unreadable policy lists them all, and the gate refuses as it does with every call.
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, rmcp::ErrorData> {
+        let tools = self.tool_router.list_all();
+        let tools = match Policy::load(&self.context.db).await {
+            Ok(policy) => crate::tool_list::listed(tools, &self.context.classes, &policy),
+            Err(error) => {
+                tracing::warn!(%error, "the MCP policy cannot be read");
+                tools
+            }
+        };
+        let mut listed = ListToolsResult::with_all_items(tools);
+        if context
+            .protocol_version()
+            .is_some_and(|version| version >= ProtocolVersion::V_2026_07_28)
+        {
+            // The list follows the person's policy: nobody keeps it.
+            listed = listed.with_ttl_ms(0).with_cache_scope(CacheScope::Private);
+        }
+        Ok(listed)
     }
 
     fn get_info(&self) -> ServerConfig {

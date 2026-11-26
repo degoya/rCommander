@@ -1,8 +1,9 @@
 //! The icons loaded so far, bounded: the least recently shown goes when a new one would pass
 //! the limit. A key is pending from the moment it is asked for until its answer comes, so it is
-//! asked for once.
+//! asked for once. The keys are also ordered by when they were last wanted, so the eviction takes
+//! the oldest in O(log n) instead of searching the whole cache (RC-110-67).
 
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{BTreeMap, HashMap, hash_map::Entry};
 
 use super::key::IconKey;
 
@@ -27,6 +28,8 @@ struct Slot<V> {
 #[derive(Debug)]
 pub struct IconCache<V> {
     slots: HashMap<IconKey, Slot<V>>,
+    /// Every key of `slots` by its `used` tick, oldest first; ticks are unique.
+    order: BTreeMap<u64, IconKey>,
     capacity: usize,
     tick: u64,
 }
@@ -36,6 +39,7 @@ impl<V> IconCache<V> {
     pub fn new(capacity: usize) -> Self {
         Self {
             slots: HashMap::new(),
+            order: BTreeMap::new(),
             capacity: capacity.max(1),
             tick: 0,
         }
@@ -48,7 +52,11 @@ impl<V> IconCache<V> {
         let tick = self.tick;
         match self.slots.entry(key) {
             Entry::Occupied(mut slot) => {
-                slot.get_mut().used = tick;
+                let slot = slot.get_mut();
+                if let Some(key) = self.order.remove(&slot.used) {
+                    self.order.insert(tick, key);
+                }
+                slot.used = tick;
                 None
             }
             Entry::Vacant(slot) => {
@@ -57,6 +65,7 @@ impl<V> IconCache<V> {
                     state: State::Pending,
                     used: tick,
                 });
+                self.order.insert(tick, key.clone());
                 self.evict();
                 Some(key)
             }
@@ -90,14 +99,16 @@ impl<V> IconCache<V> {
             .slots
             .get(key)
             .is_some_and(|slot| matches!(slot.state, State::Pending))
+            && let Some(slot) = self.slots.remove(key)
         {
-            self.slots.remove(key);
+            self.order.remove(&slot.used);
         }
     }
 
     /// Everything goes, pending keys too: their answers are dropped when they come.
     pub fn clear(&mut self) {
         self.slots.clear();
+        self.order.clear();
     }
 
     #[cfg(test)]
@@ -105,16 +116,17 @@ impl<V> IconCache<V> {
         self.slots.len()
     }
 
+    /// The keys in the order they go, oldest first.
+    #[cfg(test)]
+    pub fn oldest_first(&self) -> Vec<&IconKey> {
+        self.order.values().collect()
+    }
+
     /// Drops the least recently wanted keys until the cache fits. The keys of one screen are
     /// always the newest, so with a capacity above a screen's rows they stay.
     fn evict(&mut self) {
         while self.slots.len() > self.capacity {
-            let oldest = self
-                .slots
-                .iter()
-                .min_by_key(|(_, slot)| slot.used)
-                .map(|(key, _)| key.clone());
-            let Some(key) = oldest else {
+            let Some((_, key)) = self.order.pop_first() else {
                 return;
             };
             self.slots.remove(&key);

@@ -27,6 +27,7 @@ CODESIGN_LOG="$SCRATCH/codesign.log"
 source "$ROOT/scripts/tests/lib/expect.sh"
 
 mkdir -p "$TREE/scripts/lib" "$TREE/plugins/demo-viewer" "$TREE/crates/rcommander/resources/brand" \
+    "$TREE/crates/rcommander/resources/licenses" \
     "$BIN" "$SIGNED/fresh"
 cp "$ROOT/scripts/package-macos.sh" "$TREE/scripts/"
 cp "$ROOT/scripts/lib/jobs.sh" "$ROOT/scripts/lib/lock.sh" "$ROOT/scripts/lib/package.sh" \
@@ -40,6 +41,7 @@ printf '%s\n' '/artifacts/' '/target/' > "$TREE/.gitignore"
 printf 'readme\n' > "$TREE/README.md"
 printf 'licence\n' > "$TREE/LICENSE"
 printf 'notice\n' > "$TREE/NOTICE"
+printf 'texts\n' > "$TREE/crates/rcommander/resources/licenses/THIRD-PARTY-LICENSES"
 printf 'signed package\n' > "$SIGNED/demo-viewer-0.4.0.rcplug"
 
 # A PNG of $2 x $2 pixels as far as a reader of its header can tell, into $1; an .ico holding
@@ -107,7 +109,7 @@ listing="$(zip_listing)"
 contents="rCommander.app/Contents"
 expect_true "the executable is in Contents/MacOS, executable" \
     'grep -qx "$contents/MacOS/rcommander 0o755" <<< "$listing"'
-for member in Info.plist Resources/README.md Resources/LICENSE Resources/NOTICE \
+for member in Info.plist Resources/README.md Resources/LICENSE Resources/NOTICE Resources/THIRD-PARTY-LICENSES \
     Resources/VERSION.txt Resources/rcommander.icns Resources/plugins/demo-viewer-0.4.0.rcplug; do
     expect_true "rCommander.app holds Contents/$member" 'grep -q "^$contents/$member " <<< "$listing"'
 done

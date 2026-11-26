@@ -39,30 +39,28 @@ pub(super) fn vault_fields<'a>(
     let (_, help) = prompt_words(prompt);
     let mut body = column![
         hint(help, tokens),
-        field(
+        layout::captioned(
             t!("connections.vault.password"),
-            prompt.password.expose_secret()
-        )
-        .id(VAULT_FIELD)
-        .secure(true)
-        .on_input(|value| wrap(ConnMsg::VaultInput(false, SecretString::from(value))))
-        .on_submit(wrap(ConnMsg::VaultSubmit)),
+            field("", prompt.password.expose_secret())
+                .id(VAULT_FIELD)
+                .secure(true)
+                .on_input(|value| wrap(ConnMsg::VaultInput(false, SecretString::from(value))))
+                .on_submit(wrap(ConnMsg::VaultSubmit)),
+        ),
     ]
     .spacing(10)
     .max_width(460);
     if prompt.ask == Ask::Create {
-        body = body.push(
-            field(
-                t!("connections.vault.repeat"),
-                prompt.repeat.expose_secret(),
-            )
-            .secure(true)
-            .on_input(|value| wrap(ConnMsg::VaultInput(true, SecretString::from(value))))
-            .on_submit(wrap(ConnMsg::VaultSubmit)),
-        );
+        body = body.push(layout::captioned(
+            t!("connections.vault.repeat"),
+            field("", prompt.repeat.expose_secret())
+                .secure(true)
+                .on_input(|value| wrap(ConnMsg::VaultInput(true, SecretString::from(value))))
+                .on_submit(wrap(ConnMsg::VaultSubmit)),
+        ));
     }
     if let Some(error) = &prompt.error {
-        body = body.push(fit::prose(error.as_str()).color(theme::DANGER));
+        body = body.push(fit::prose(error.as_str()).color(tokens.status.danger));
     }
     let buttons = layout::button_row(
         Some(layout::primary_icon_button(

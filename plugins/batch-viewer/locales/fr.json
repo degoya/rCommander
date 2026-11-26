@@ -1,0 +1,7 @@
+{
+  "name": "Visionneuse de fichiers batch",
+  "description": "Affiche les fichiers batch Windows (.bat, .cmd) en couleurs, comme un éditeur.",
+  "codes": {
+    "01a15987-72b1-716d-be3c-960b779597e3.setting.encoding": "Encodage"
+  }
+}

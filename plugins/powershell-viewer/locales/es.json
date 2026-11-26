@@ -1,0 +1,7 @@
+{
+  "name": "Visor de PowerShell",
+  "description": "Muestra scripts y módulos de PowerShell (.ps1, .psm1, .psd1) en color, como un editor.",
+  "codes": {
+    "01a159b6-c865-7f56-a6e7-db2cc02c4981.setting.encoding": "Codificación"
+  }
+}

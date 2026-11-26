@@ -21,7 +21,7 @@ use rc_engine::{Chord, Command, Engine, EngineEvent, ImportReport, Outcome};
 use super::{Page, SettingsMessage, wrap};
 use crate::{
     app::{App, Effect, Message},
-    i18n::{error_text, t},
+    i18n::{counted::Counted, error_text, t},
 };
 
 /// A stored entry, by its table and id.
@@ -269,13 +269,14 @@ fn order(stored: &Stored) -> (bool, bool, &str, Option<u16>, &str) {
 
 /// The note an import leaves: how many keys came, stayed, differ and were skipped.
 pub fn import_note(report: &ImportReport) -> String {
-    t!(
-        "settings.host_keys.imported",
-        path = report.path,
-        added = report.added,
-        unchanged = report.unchanged,
-        conflicts = report.conflicts.len(),
-        skipped = report.skipped.len()
+    Counted::now().host_keys_imported(
+        &report.path,
+        [
+            report.added as u64,
+            report.unchanged as u64,
+            report.conflicts.len() as u64,
+            report.skipped.len() as u64,
+        ],
     )
 }
 

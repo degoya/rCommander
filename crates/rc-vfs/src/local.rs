@@ -5,11 +5,14 @@
 //! stop at 260 characters; errors carry the path as the caller gave it. Listing and `stat` run
 //! as one blocking task each: a directory of 100 000 entries is one task, not one per entry.
 
+mod batches;
 mod describe;
+mod link_target;
 mod links;
 #[cfg(any(windows, test))]
 mod reparse;
 pub(crate) mod space;
+mod system_copy;
 #[cfg(not(windows))]
 mod unix;
 #[cfg(windows)]
@@ -23,16 +26,17 @@ use windows as platform;
 use std::{
     io,
     path::{Path, PathBuf},
+    sync::Arc,
     time::SystemTime,
 };
 
 use async_trait::async_trait;
-use tokio::io::AsyncSeekExt;
+use tokio::{io::AsyncSeekExt, sync::mpsc::Sender};
 
 use crate::{
-    Capabilities, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange, ReadStream,
-    Result, SeekStream, SetAttributes, Vfs, VfsError, WriteMode, WriteStream, long_path,
-    work::blocking,
+    Capabilities, CopyWatch, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange,
+    ReadStream, Result, SeekStream, SetAttributes, Vfs, VfsError, WriteMode, WriteStream,
+    copy_watch::StopOnDrop, long_path, work::blocking,
 };
 
 /// The local file system.
@@ -116,6 +120,11 @@ impl Vfs for LocalFs {
         blocking(WORK, dir, move || describe::list(&shown)).await
     }
 
+    /// In parts of about 4096 entries as they are read (`batches.rs`, RC-110-66).
+    async fn list_batches(&self, dir: &Path, parts: Sender<Vec<Entry>>) -> Result<()> {
+        batches::list_batches(dir, parts).await
+    }
+
     async fn stat(&self, path: &Path) -> Result<Entry> {
         let shown = path.to_path_buf();
         blocking(WORK, path, move || describe::stat(&shown)).await
@@ -154,6 +163,30 @@ impl Vfs for LocalFs {
         }
         let file = options.open(long_path(path)).await.map_err(io_err(path))?;
         Ok(Box::new(file))
+    }
+
+    /// The system's own copy on a blocking thread (`local/system_copy.rs`, RC-110-65). Dropped
+    /// before its end, the call stops the copy, which removes what it wrote.
+    async fn copy_file(&self, from: &Path, to: &Path, watch: Arc<CopyWatch>) -> Result<u64> {
+        let (real_from, real_to) = (long_path(from), long_path(to));
+        let stop = StopOnDrop::new(&watch);
+        let ended = Arc::clone(&watch);
+        let copied = blocking(WORK, from, move || {
+            Ok(system_copy::copy(&real_from, &real_to, &watch))
+        })
+        .await;
+        stop.done();
+        match copied? {
+            Ok(length) => Ok(length),
+            Err(_) if ended.is_cancelled() => Err(VfsError::Cancelled {
+                path: from.to_path_buf(),
+            }),
+            // The target is the side an existing file refuses.
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                Err(VfsError::from_io(error, to))
+            }
+            Err(error) => Err(VfsError::from_io(error, from)),
+        }
     }
 
     async fn mkdir(&self, path: &Path, recursive: bool) -> Result<()> {

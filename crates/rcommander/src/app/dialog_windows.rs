@@ -195,7 +195,11 @@ impl App {
         layers.extend(self.ask_layer(tokens));
         layers.extend(self.host_key_layer(tokens));
         layers.extend(self.cert_trust_layer(tokens));
-        layers.extend(mcp_confirm::layer(&self.mcp_questions, tokens));
+        layers.extend(mcp_confirm::layer(
+            &self.mcp_questions,
+            self.mcp_armed(),
+            tokens,
+        ));
         layers
     }
 

@@ -11,12 +11,10 @@ use crate::{
     remote::sftp::tests::harness, settings::FTP_ASK_PLAINTEXT_KEY,
 };
 
+/// The window's way to the protected setting (RC-110-58), as the settings dialog stores it.
 async fn ask(engine: &Engine, on: bool) {
     engine
-        .dispatch(Command::SetSetting {
-            key: FTP_ASK_PLAINTEXT_KEY.into(),
-            value: serde_json::json!(on),
-        })
+        .set_protected_setting(FTP_ASK_PLAINTEXT_KEY, &serde_json::json!(on))
         .await
         .expect("set");
 }
@@ -107,4 +105,36 @@ async fn off_the_login_goes_at_once_and_an_mcp_call_is_refused_alike() {
     assert_eq!(refused.code(), "ftp_plaintext_unconfirmed");
     assert_eq!(server.passwords_received(), 1);
     assert_eq!(engine.certificate_questions().len(), 1);
+}
+
+/// RC-110-58: only a person in the window switches the question - `settings.set` refuses it from
+/// MCP and from the window's command alike - while the FTP row's other setting stays an
+/// agent's to change.
+#[tokio::test]
+async fn only_the_window_switches_the_question() {
+    let (_root, engine) = crate::test_support::engine_with_db(&[]).await;
+    assert!(crate::settings::is_protected(FTP_ASK_PLAINTEXT_KEY));
+    for via_mcp in [false, true] {
+        let command = Command::SetSetting {
+            key: FTP_ASK_PLAINTEXT_KEY.into(),
+            value: serde_json::json!(false),
+        };
+        let refused = if via_mcp {
+            engine.dispatch_mcp(command).await
+        } else {
+            engine.dispatch(command).await
+        };
+        assert_eq!(refused.expect_err("refused").code(), "setting_protected");
+    }
+    ask(&engine, false).await;
+    assert!(!crate::settings::is_protected(
+        crate::settings::FTP_RESOLVE_LINKS_KEY
+    ));
+    engine
+        .dispatch_mcp(Command::SetSetting {
+            key: crate::settings::FTP_RESOLVE_LINKS_KEY.into(),
+            value: serde_json::json!(true),
+        })
+        .await
+        .expect("an MCP caller may set it");
 }

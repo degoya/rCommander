@@ -122,7 +122,7 @@ pub fn status(lister: &Lister) -> Option<String> {
     Some(if document.tree.full {
         t!("viewer.status_tree_full", nodes = nodes)
     } else {
-        t!("viewer.status_tree", nodes = nodes)
+        t!("viewer.status_tree", count = nodes)
     })
 }
 

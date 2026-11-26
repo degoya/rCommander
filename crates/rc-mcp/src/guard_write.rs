@@ -9,7 +9,9 @@
 //! `rcommander.portable`, which would start the next run on an empty data folder), every `.ssh` folder (`authorized_keys`,
 //! `config` - locally and on a server), the autostart folders (Windows' `Start Menu\Programs\
 //! Startup` of the user and of all users, `~/.config/autostart`, systemd's user units in
-//! `~/.config/systemd/user`), shells' start-up files (`.bashrc`, `.profile`, `.bash_logout`,
+//! `~/.config/systemd/user`, launchd's `Library/LaunchAgents` and `Library/LaunchDaemons` on
+//! macOS), the programs installed per user on Windows (`%LOCALAPPDATA%\Programs`, where a
+//! planted library is loaded beside a program; RC-110-58), shells' start-up files (`.bashrc`, `.profile`, `.bash_logout`,
 //! fish's `config.fish`, PowerShell's `profile.ps1`, ...), and what a tool runs on its own: Git's
 //! hooks (`.git/hooks`) and its configuration (`.gitconfig`, which names programs Git starts),
 //! and an editor's tasks (`.vscode/tasks.json`; the owner's list of 2026-10-28, RC-080-42). A
@@ -421,3 +423,7 @@ mod program_tests;
 #[cfg(test)]
 #[path = "guard_write_source_tests.rs"]
 mod source_tests;
+
+#[cfg(test)]
+#[path = "guard_write_places_tests.rs"]
+mod places_tests;

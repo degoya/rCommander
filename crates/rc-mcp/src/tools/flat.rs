@@ -11,6 +11,7 @@ use super::panels::PanelArg;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct BranchViewParams {
     /// `left` or `right`; the active panel when omitted.
     #[serde(default)]
@@ -29,6 +30,7 @@ fn shown() -> bool {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FeedPathsParams {
     /// Files and folders to show: absolute, or relative to `root`. At most 100000.
     pub paths: Vec<String>,

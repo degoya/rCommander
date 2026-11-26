@@ -1,0 +1,8 @@
+{
+  "name": "Konfigurations-Viewer",
+  "description": "Zeigt INI-, .reg-, .env-, Properties-, TOML-, systemd-Unit- und Visual-Studio-Projektmappendateien farbig oder ihre Abschnitte und Schlüssel als Baum.",
+  "codes": {
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.setting.encoding": "Kodierung",
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.too_many_nodes": "Im Baum sind zu viele Bereiche geöffnet; schließen Sie den Viewer und öffnen Sie die Datei erneut."
+  }
+}

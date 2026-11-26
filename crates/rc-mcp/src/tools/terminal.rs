@@ -20,6 +20,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct TerminalOpenParams {
     /// A shell id from terminal_list (pwsh, powershell, cmd, bash, zsh, sh, wsl, ...); the
@@ -51,6 +52,7 @@ pub(crate) struct TerminalOpenParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TerminalReadParams {
     /// The terminal's id (terminal_open, terminal_list).
     pub terminal: u64,
@@ -60,6 +62,7 @@ pub(crate) struct TerminalReadParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct TerminalInputParams {
     /// The terminal's id (terminal_open, terminal_list).
@@ -69,12 +72,14 @@ pub(crate) struct TerminalInputParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TerminalShowParams {
     /// The terminal's id (terminal_open, terminal_list).
     pub terminal: u64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct TerminalCloseParams {
     /// The terminal's id (terminal_open, terminal_list).

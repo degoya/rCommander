@@ -13,7 +13,7 @@ use super::disk_usage::{DiskUsageWindow, Stand, UsageMsg, UsageTab, wrap};
 use crate::{
     app::Message,
     format,
-    i18n::t,
+    i18n::{counted::Counted, t},
     theme::{
         self, Tokens,
         fit::{self, line},
@@ -198,7 +198,7 @@ fn file_list<'a>(window: &'a DiskUsageWindow, tokens: &'static Tokens) -> Elemen
 fn name_of(row: &FolderRow) -> String {
     match row.node {
         None => t!("disk_usage.own_files").to_owned(),
-        Some(_) if row.unreadable => format!("{}{}", row.name, t!("disk_usage.unreadable")),
+        Some(_) if row.unreadable => t!("disk_usage.unreadable", name = row.name),
         Some(_) => row.name.clone(),
     }
 }
@@ -282,31 +282,40 @@ fn listed<'a>(
 /// Where the walk stands and what the folder shown holds.
 fn status<'a>(window: &'a DiskUsageWindow, tokens: &'static Tokens) -> Element<'a, Message> {
     let total = &window.total;
-    let mut text = t!(
-        "disk_usage.total",
-        size = size_of(window.choices.size_by, total),
-        files = format::count(total.files),
-        folders = format::count(total.dirs)
-    );
-    let (state, color) = match &window.stand {
+    // One whole sentence per fact (RC-110-86).
+    let mut text = vec![Counted::now().disk_usage_total(
+        size_of(window.choices.size_by, total),
+        total.files,
+        total.dirs,
+    )];
+    let color = match &window.stand {
         Stand::Starting | Stand::Running => {
-            (t!("disk_usage.running").to_owned(), tokens.text_secondary)
+            text.push(t!("disk_usage.running").to_owned());
+            tokens.text_secondary
         }
-        Stand::Done => (String::new(), tokens.accent),
-        Stand::Stopped => (t!("disk_usage.stopped").to_owned(), tokens.accent),
-        Stand::Failed(error) => (error.clone(), theme::DANGER),
+        Stand::Done => tokens.accent,
+        Stand::Stopped => {
+            text.push(t!("disk_usage.stopped").to_owned());
+            tokens.accent
+        }
+        Stand::Failed(error) => {
+            text.push(error.clone());
+            tokens.status.danger
+        }
     };
-    text.push_str(&state);
     if total.unreadable > 0 {
-        text.push_str(&t!(
+        text.push(t!(
             "disk_usage.unreadable_count",
             count = format::count(total.unreadable)
         ));
     }
     if window.truncated {
-        text.push_str(t!("disk_usage.truncated"));
+        text.push(t!(
+            "disk_usage.truncated",
+            count = format::count(rc_engine::disk_usage::MAX_FOLDERS as u64)
+        ));
     }
-    fit::path_line(text, color, tokens)
+    fit::path_line(text.join(" "), color, tokens)
 }
 
 /// Up, Show in panel and Feed to listbox at the left, Read again, Stop or Close at the right.

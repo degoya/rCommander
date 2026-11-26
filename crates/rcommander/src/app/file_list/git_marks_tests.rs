@@ -24,15 +24,15 @@ fn files_carry_a_letter_and_folders_a_dot() {
     let tokens = theme::tokens(false);
     assert_eq!(
         badge(Some(GitMark::Modified), false, tokens),
-        Some(("M", theme::WARNING))
+        Some(("M", tokens.status.warning))
     );
     assert_eq!(
         badge(Some(GitMark::Untracked), false, tokens),
-        Some(("U", theme::SUCCESS))
+        Some(("U", tokens.status.success))
     );
     assert_eq!(
         badge(Some(GitMark::Conflict), true, tokens),
-        Some(("\u{25cf}", theme::DANGER))
+        Some(("\u{25cf}", tokens.status.danger))
     );
     assert_eq!(badge(Some(GitMark::Ignored), false, tokens), None);
     assert_eq!(badge(None, false, tokens), None);
@@ -228,11 +228,11 @@ mod window {
             .expect("marks");
         assert_eq!(
             badge(git.mark("new.txt"), false, tokens),
-            Some(("U", theme::SUCCESS))
+            Some(("U", tokens.status.success))
         );
         assert_eq!(
             badge(git.mark("src"), true, tokens),
-            Some(("\u{25cf}", theme::WARNING))
+            Some(("\u{25cf}", tokens.status.warning))
         );
         assert!(dimmed(git.mark("debug.log")));
         assert_eq!(badge(git.mark("README.md"), false, tokens), None);

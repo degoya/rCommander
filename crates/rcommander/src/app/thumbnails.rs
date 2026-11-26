@@ -6,7 +6,8 @@
 //! on screen and one line below - one screen, whatever the folder's length - and starts the
 //! loads of those not known yet; at most two run at once (`load.rs`), and one whose tile left the
 //! screen before its turn is skipped. A tile comes from the disk cache (`disk.rs`), from
-//! rCommander's own decoder with the Lister's limits (`decode.rs`), or from Explorer
+//! rCommander's own decoder with the Lister's limits (`decode.rs`; a JPEG from its EXIF
+//! thumbnail or decoded at a fraction of its size, `jpeg.rs`), or from Explorer
 //! (`explorer.rs`, Windows, `thumbnails.explorer`); it is kept in a bounded LRU of 64 MiB
 //! (`cache.rs`) by the file's path, size and time and the tile size (`key.rs`). Explorer's
 //! handler has ten seconds for a tile, and the disk cache is trimmed as it grows (`load.rs`). A file on a
@@ -18,6 +19,7 @@ mod cache;
 mod decode;
 mod disk;
 mod explorer;
+mod jpeg;
 mod key;
 mod load;
 mod settings;

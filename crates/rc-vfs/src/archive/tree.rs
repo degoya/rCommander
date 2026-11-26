@@ -4,7 +4,9 @@
 //! Directories the archive names only through paths below them (`a/b/c.txt` without `a/`) are
 //! made up. Where two entries land on one path the later one wins, as when unpacking - except
 //! that an entry with a safe name is never replaced by one whose name had to be cleaned, and a
-//! directory with entries is never replaced by a file.
+//! directory with entries is never replaced by a file. On Windows a name Windows cannot hold is
+//! listed renamed (`a:b` as `a_b`, `con` as `_con`, RC-110-92), so every path the tree hands out
+//! joins below a target as one plain name per part.
 
 use std::{
     collections::BTreeMap,
@@ -14,7 +16,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::safety::{UnsafeName, clean_name};
+use super::safety::{UnsafeName, clean_name_here};
 use crate::{Attributes, Entry, EntryKind, Result, VfsError};
 
 /// What an archive says about one entry beyond the [`Entry`] every backend returns.
@@ -188,7 +190,7 @@ impl Tree {
             nodes: vec![Node::implied_dir(String::new())],
         };
         for raw in raws {
-            let clean = clean_name(&raw.name);
+            let clean = clean_name_here(&raw.name);
             let Some((leaf, parents)) = clean.parts.split_last() else {
                 // `./`, `/` or `..`: nothing to show.
                 continue;

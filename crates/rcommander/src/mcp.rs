@@ -18,7 +18,27 @@ use rc_db::Db;
 use rc_engine::Engine;
 use rc_mcp::{HttpHandle, McpContext, McpHttpConfig, McpToken, config, serve_http};
 
-use crate::recover::LockOrRecover as _;
+use crate::{i18n::error_text, recover::LockOrRecover as _};
+
+/// A token that could not be read, made or renewed: logged, and said by its code.
+fn token_failed(error: &rc_db::DbError) -> McpStatus {
+    tracing::warn!(%error, "the MCP token could not be read or written");
+    McpStatus::Failed(error_text("mcp_token_unavailable"))
+}
+
+/// A server that did not start: logged, and said by its code - a port in use apart.
+fn serve_failed(error: &anyhow::Error) -> McpStatus {
+    tracing::warn!("the MCP server did not start: {error:#}");
+    let in_use = error
+        .downcast_ref::<std::io::Error>()
+        .is_some_and(|io| io.kind() == std::io::ErrorKind::AddrInUse);
+    let code = if in_use {
+        "mcp_port_in_use"
+    } else {
+        "mcp_start_failed"
+    };
+    McpStatus::Failed(error_text(code))
+}
 
 /// What the status bar says about the server.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +68,7 @@ pub async fn start(
     let port = config::port(&db).await;
     let token = match McpToken::load_or_create(&db).await {
         Ok(token) => token,
-        Err(error) => return (None, McpStatus::Failed(error.to_string())),
+        Err(error) => return (None, token_failed(&error)),
     };
     let config = McpHttpConfig {
         port,
@@ -60,7 +80,7 @@ pub async fn start(
             let addr = handle.addr();
             (Some(handle), McpStatus::Serving(addr))
         }
-        Err(error) => (None, McpStatus::Failed(format!("{error:#}"))),
+        Err(error) => (None, serve_failed(&error)),
     }
 }
 
@@ -74,7 +94,7 @@ pub async fn launch(
     if config::enabled(&db).await
         && let Err(error) = McpToken::at_start(&db).await
     {
-        return (None, McpStatus::Failed(error.to_string()));
+        return (None, token_failed(&error));
     }
     start(engine, db, instance_file).await
 }

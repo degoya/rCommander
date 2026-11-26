@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "plugins/json-viewer", "plugins/xml-viewer", "plugins/yaml-viewer", "plugins/csv-viewer", "plugins/batch-viewer", "plugins/shell-viewer", "plugins/diff-viewer", "plugins/config-viewer", "plugins/powershell-viewer", "plugins/python-viewer", "plugins/log-viewer", "plugins/web-viewer", "plugins/svg-viewer", "plugins/dockerfile-viewer", "plugins/sql-viewer", "plugins/make-viewer", "plugins/server-config-viewer", "plugins/c-family-viewer", "plugins/hcl-viewer", "plugins/schema-viewer", "plugins/script-viewer", "plugins/markup-viewer", "plugins/office-viewer", "plugins/media-viewer", "plugins/pdf-viewer"]
 
 [workspace.package]
-version = "0.25.1"
+version = "0.26.0"
 authors = ["Alexander Herling / DEGOYA.digital"]
 edition = "2024"
 rust-version = "1.100"
@@ -50,6 +50,10 @@ iced_core = "0.14"
 iced_graphics = { version = "0.14", default-features = false }
 # The viewer's image mode (rcommander, RC-020-07): decoders for the formats Lister shows, no more.
 image = { version = "0.25", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "webp"] }
+# Thumbnails of large JPEG photos (rcommander, RC-110-67): decoded at 1/2, 1/4 or 1/8 of their
+# size in the inverse DCT, which zune-jpeg (image's decoder) cannot. Pure Rust, MIT or Apache-2.0,
+# image's own JPEG decoder before 0.25; no `rayon`, one tile is one thread.
+jpeg-decoder = { version = "0.3", default-features = false }
 # Dates and times (RC-110-36, in place of chrono): instants, civil times, the system's time zone
 # (the bundled tzdb on Windows, the system's elsewhere) and `strftime`. Unlicense OR MIT. No
 # `serde` feature: the stored formats are written by the crates' own `time` modules.
@@ -132,6 +136,9 @@ tokio-util = "0.7"
 toml = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+# Already in the tree through `stringprep`, at its version: rc-rename's macOS name keys and the
+# panels' name order (RC-110-84).
+unicode-normalization = { version = "0.1.26", default-features = false, features = ["std"] }
 url = "2"
 # The plugin runtime (rc-plugin-host only, RC-100-08; docs/plugins.md "New dependencies"):
 # rDownloader's version and features. `cache` keeps compiled plugins on disk between starts,

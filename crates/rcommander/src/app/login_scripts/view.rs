@@ -90,7 +90,10 @@ impl Editor {
             t!("login_scripts.total_timeout"),
         );
         let mut form = column![
-            text_input(t!("login_scripts.name"), &draft.name).on_input(Message::Name),
+            layout::captioned_beside(
+                t!("login_scripts.name"),
+                text_input("", &draft.name).on_input(Message::Name)
+            ),
             row![
                 caption(step_timeout, None),
                 keyed(
@@ -127,7 +130,12 @@ impl Editor {
                 t!("login_scripts.test_run_help"),
                 tokens
             ),
-            text_input(t!("login_scripts.sample_hint"), &self.sample).on_input(Message::Sample),
+            layout::captioned(
+                t!("login_scripts.sample"),
+                text_input(t!("login_scripts.sample_hint"), &self.sample)
+                    .style(theme::text_field)
+                    .on_input(Message::Sample)
+            ),
             secondary_icon_button(
                 Icon::Test,
                 t!("login_scripts.rehearse"),
@@ -139,7 +147,7 @@ impl Editor {
             form = form.push(self.rehearsal(rehearsal));
         }
         if let Some(code) = &self.error {
-            form = form.push(prose(error_text(code)).color(theme::DANGER));
+            form = form.push(prose(error_text(code)).color(tokens.status.danger));
         }
         form
     }
@@ -180,18 +188,23 @@ impl Editor {
         line = match step.kind {
             StepKind::WaitFor => line
                 .push(
+                    // field-label: the step's kind before it (Wait for); the placeholder is a hint
                     text_input(t!("login_scripts.pattern"), &step.text)
+                        .style(theme::text_field)
                         .on_input(move |value| Message::Text(at, value))
                         .width(Length::Fill),
                 )
-                .push(
-                    text_input(t!("login_scripts.timeout_hint"), &step.timeout)
+                .push(layout::captioned_beside(
+                    t!("login_scripts.timeout_hint"),
+                    text_input("", &step.timeout)
                         .on_input(move |value| Message::Timeout(at, value))
-                        .width(150),
-                ),
+                        .width(90),
+                )),
             StepKind::SendText => line
                 .push(
+                    // field-label: the step's kind before it (Send text); the placeholder is a hint
                     text_input(t!("login_scripts.text"), &step.text)
+                        .style(theme::text_field)
                         .on_input(move |value| Message::Text(at, value))
                         .width(Length::Fill),
                 )
@@ -205,11 +218,12 @@ impl Editor {
                     .width(Length::Fill),
             ),
             StepKind::Sleep => line
-                .push(
-                    text_input(t!("login_scripts.sleep_hint"), &step.ms)
+                .push(layout::captioned_beside(
+                    t!("login_scripts.sleep_hint"),
+                    text_input("", &step.ms)
                         .on_input(move |value| Message::Sleep(at, value))
                         .width(120),
-                )
+                ))
                 .push(Space::new().width(Length::Fill)),
             StepKind::SendTotp => line
                 .push(
@@ -240,15 +254,18 @@ impl Editor {
         let mut card = column![line].spacing(4);
 
         if let Some(code) = step.error {
-            card = card.push(note(error_text(code), theme::DANGER));
+            card = card.push(note(error_text(code), tokens.status.danger));
         }
         if self.warn_prompt {
             match self.draft.secret_warning(at) {
                 Some(SecretWarning::NoWait) => {
-                    card = card.push(note(t!("login_scripts.warn.no_wait"), theme::DANGER));
+                    card = card.push(note(t!("login_scripts.warn.no_wait"), tokens.status.danger));
                 }
                 Some(SecretWarning::NoPrompt) => {
-                    card = card.push(note(t!("login_scripts.warn.no_prompt"), theme::DANGER));
+                    card = card.push(note(
+                        t!("login_scripts.warn.no_prompt"),
+                        tokens.status.danger,
+                    ));
                 }
                 None => {}
             }
@@ -332,14 +349,16 @@ impl Editor {
             ),
             Column::with_children(stored).spacing(4),
             row![
-                text_input(t!("login_scripts.secret_label"), &self.secret_label)
-                    .on_input(Message::SecretLabel),
-                text_input(
+                layout::captioned_beside(
+                    t!("login_scripts.secret_label"),
+                    text_input("", &self.secret_label).on_input(Message::SecretLabel)
+                ),
+                layout::captioned_beside(
                     t!("login_scripts.secret_value"),
-                    self.secret_value.expose_secret()
-                )
-                .secure(true)
-                .on_input(|value| Message::SecretValue(value.into())),
+                    text_input("", self.secret_value.expose_secret())
+                        .secure(true)
+                        .on_input(|value| Message::SecretValue(value.into()))
+                ),
                 secondary_icon_button(
                     Icon::Save,
                     t!("login_scripts.store_secret"),

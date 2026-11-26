@@ -95,7 +95,7 @@ fn mask_text(text: &str, known: Known<'_>) -> Option<String> {
             if !mask_value_with(&mut value, known) {
                 return None;
             }
-            serde_json::to_string_pretty(&value).ok()
+            serde_json::to_string(&value).ok()
         }
         Err(_) => mask_string(text, known),
     }

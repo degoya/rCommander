@@ -39,9 +39,9 @@ pub(super) fn letter(mark: GitMark) -> Option<&'static str> {
 /// success, a rename in the accent.
 pub(super) fn colour(mark: GitMark, tokens: &Tokens) -> Color {
     match mark {
-        GitMark::Conflict => theme::DANGER,
-        GitMark::Modified => theme::WARNING,
-        GitMark::Added | GitMark::Untracked => theme::SUCCESS,
+        GitMark::Conflict => tokens.status.danger,
+        GitMark::Modified => tokens.status.warning,
+        GitMark::Added | GitMark::Untracked => tokens.status.success,
         GitMark::Renamed => tokens.accent,
         GitMark::Ignored => tokens.list_text_secondary,
     }

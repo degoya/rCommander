@@ -41,11 +41,12 @@ async fn plain_ftp(harness: &mut Harness) -> (ConnectionId, String) {
         })
         .await
         .expect("the vault");
+    // Protected (RC-110-58): the window's way, as the settings dialog stores it.
     engine
-        .dispatch(Command::SetSetting {
-            key: rc_engine::settings::FTP_ASK_PLAINTEXT_KEY.into(),
-            value: serde_json::json!(true),
-        })
+        .set_protected_setting(
+            rc_engine::settings::FTP_ASK_PLAINTEXT_KEY,
+            &serde_json::json!(true),
+        )
         .await
         .expect("the question on");
     let port = std::net::TcpListener::bind("127.0.0.1:0")

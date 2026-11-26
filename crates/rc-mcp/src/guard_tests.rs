@@ -239,3 +239,67 @@ fn tokens_histories_and_browser_passwords_are_sensitive() {
         assert_eq!(sensitive_path(&path(parts)), None, "{parts:?}");
     }
 }
+
+/// RC-110-58: browsers' signed-in sessions - their cookies, Chromium's key to them and Firefox's
+/// site storage - never leave through MCP, written in any case; names that merely resemble them
+/// do.
+#[test]
+fn browser_sessions_are_sensitive() {
+    for parts in [
+        &[
+            "home",
+            "bob",
+            ".mozilla",
+            "firefox",
+            "x.default",
+            "cookies.sqlite",
+        ][..],
+        &[
+            "home",
+            "bob",
+            ".mozilla",
+            "firefox",
+            "x.default",
+            "webappsstore.sqlite",
+        ],
+        &["home", "bob", ".config", "chromium", "Default", "Cookies"],
+        &[
+            "Users",
+            "Bob",
+            "AppData",
+            "Local",
+            "Google",
+            "Chrome",
+            "User Data",
+            "Default",
+            "Network",
+            "COOKIES",
+        ],
+        &[
+            "Users",
+            "Bob",
+            "AppData",
+            "Local",
+            "Microsoft",
+            "Edge",
+            "User Data",
+            "Local State",
+        ],
+        &["profile", "Cookies.SQLite"],
+        &["profile", "cookies.sqlite-wal"],
+    ] {
+        assert_eq!(
+            sensitive_path(&path(parts)),
+            Some("a file of credentials"),
+            "{parts:?}"
+        );
+    }
+    for parts in [
+        &["site", "css", "cookie-banner.css"][..],
+        &["project", "local-state.json"],
+        &["project", "local state.md"],
+        &["project", "state"],
+    ] {
+        assert_eq!(sensitive_path(&path(parts)), None, "{parts:?}");
+    }
+}

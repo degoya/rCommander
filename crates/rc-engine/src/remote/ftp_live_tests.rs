@@ -1,6 +1,6 @@
 //! FTP and FTPS against real servers (vsftpd, pure-ftpd, ProFTPD in containers), through the
 //! engine as the window drives it. Opt-in: every test is `#[ignore]`d and reads the server from
-//! `RC_LIVE_FTP_*`; `scripts/live/ftp/run.sh` starts the servers, runs these tests in the
+//! `RC_LIVE_FTP_*`; `scripts/live-servers/ftp/run.sh` starts the servers, runs these tests in the
 //! servers' network namespace and removes the containers again. A normal test run never needs
 //! Docker.
 //!
@@ -26,7 +26,7 @@ use crate::{
 /// The connection's name in `ftp://live/...` locations.
 pub(super) const NAME: &str = "live";
 
-/// The server under test, from the environment `scripts/live/ftp/run.sh` sets.
+/// The server under test, from the environment `scripts/live-servers/ftp/run.sh` sets.
 pub(super) struct Env {
     pub port: u16,
     pub kind: ConnectionKind,
@@ -38,7 +38,8 @@ pub(super) struct Env {
 }
 
 pub(super) fn var(name: &str) -> String {
-    std::env::var(name).unwrap_or_else(|_| panic!("{name} is not set: run scripts/live/ftp/run.sh"))
+    std::env::var(name)
+        .unwrap_or_else(|_| panic!("{name} is not set: run scripts/live-servers/ftp/run.sh"))
 }
 
 /// An optional port of the environment, such as the slow instance's.
@@ -293,7 +294,7 @@ pub(super) async fn read_remote(vfs: &Arc<dyn Vfs>, path: &str) -> Vec<u8> {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_core_test_and_open_at_login_with_rights() {
     let live = live(true).await;
     live.test().await.expect("Test passes");
@@ -326,7 +327,7 @@ async fn live_ftp_core_test_and_open_at_login_with_rights() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_core_opens_in_the_start_folder() {
     let start = format!("{}/start", env().home);
     let live = live_on(None, Some(&start), true).await;
@@ -335,7 +336,7 @@ async fn live_ftp_core_opens_in_the_start_folder() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_core_upload_list_download() {
     let live = live(true).await;
     live.open(PanelId::Right).await.expect("the panel opens");
@@ -373,7 +374,7 @@ async fn live_ftp_core_upload_list_download() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_core_big_file_byte_for_byte_both_ways() {
     let live = live(true).await;
     live.open(PanelId::Right).await.expect("the panel opens");
@@ -406,7 +407,7 @@ async fn live_ftp_core_big_file_byte_for_byte_both_ways() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_tls_unknown_certificate_accept_once_then_trust() {
     let live = live(false).await;
     let passwords = passwords_logged(live.env.port);
@@ -435,7 +436,7 @@ async fn live_ftp_tls_unknown_certificate_accept_once_then_trust() {
 /// The server's certificate replaced and the instance restarted (`RC_LIVE_FTP_RECERT`, run in
 /// the server's namespaces) after it was trusted: refused as `certificate_changed`, a hard stop.
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_tls_changed_certificate_is_refused() {
     let live = live(true).await;
     live.test().await.expect("trusted");

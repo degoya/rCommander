@@ -8,13 +8,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::support::{Harness, damaged_zip, payload};
+use crate::support::{Harness, damaged_zip, payload, write};
 use rc_ops::{
     Answer, Backend, ConflictChoice, ErrorPolicy, ExtractSettings, JobChange, JobKind, JobOptions,
     JobSpec, JobState, PackSettings, Question,
 };
 use rc_vfs::{
-    ArchiveFormat, ArchiveFs, ArchiveLimits, ArchivePassword, ArchiveSettings, LocalFs, VfsPath,
+    ArchiveFormat, ArchiveFs, ArchiveLimits, ArchivePassword, ArchiveSettings, BackendId, LocalFs,
+    MemoryFs, Vfs, VfsPath,
 };
 use secrecy::SecretString;
 
@@ -393,4 +394,32 @@ async fn an_unpack_job_reads_under_the_queues_decoder_memory() {
         done.failures
     );
     assert!(files(root.path()).is_empty());
+}
+
+/// RC-110-62: files that would not fit the target drive's free space are refused before the
+/// first is written - `not_enough_space`, naming the bytes needed and free.
+#[tokio::test]
+async fn an_unpacking_larger_than_the_free_space_writes_nothing() {
+    let bytes = fs::read(fixture("tree.zip")).expect("fixture");
+    let disk = MemoryFs::with_capacity(bytes.len() as u64 + 1);
+    write(&disk, "/in/tree.zip", &bytes).await;
+    let harness = Harness::start();
+    harness
+        .queue
+        .register(BackendId::Local, Backend::new(Arc::new(disk.clone())));
+    let mut spec = extract(
+        &[PathBuf::from("/in/tree.zip")],
+        Path::new("/out"),
+        ExtractSettings::default(),
+    );
+    spec.options.on_error = ErrorPolicy::Skip;
+    let done = harness.run(spec).await;
+    assert_eq!(codes(&done), ["not_enough_space"], "{:?}", done.failures);
+    let message = &done.failures[0].message;
+    assert!(
+        message.contains("bytes needed, 1 free"),
+        "the size and the free space: {message}"
+    );
+    let written = disk.list(Path::new("/out")).await.expect("list");
+    assert!(written.is_empty(), "{written:?}");
 }

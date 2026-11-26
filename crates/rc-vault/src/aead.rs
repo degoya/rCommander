@@ -86,3 +86,7 @@ pub(crate) fn open(key: &VaultKey, aad: &[u8], value: &[u8]) -> Result<Zeroizing
 #[cfg(test)]
 #[path = "aead_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "aead_props_tests.rs"]
+mod props_tests;

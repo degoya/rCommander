@@ -17,6 +17,11 @@
 //! old build and compile the new one at every start. Only that: a version under a key the person
 //! trusts, one a person installed, one withdrawn or changed on disk stays as it is. The switch,
 //! the version choice and the settings are kept by id and version, outside the folder.
+//!
+//! New in rCommander (RC-110-64): a package unchanged since the last start, under unchanged
+//! trust, with its version still installed, is passed over unread (`seen.rs`).
+
+mod seen;
 
 use std::path::{Path, PathBuf};
 
@@ -31,6 +36,7 @@ use crate::{
     PluginInstaller, PluginVerifier, VerifiedPackage,
     package::{MAX_PACKAGE_BYTES, PACKAGE_EXTENSION},
 };
+use seen::{FileStamp, Seen};
 
 /// The refusals of an installed bundled version that its bundled package replaces: signed, but by
 /// a key this build does not trust (any more) under that key id.
@@ -70,14 +76,31 @@ fn bundled_dir_of(exe: &Path) -> Option<PathBuf> {
 ///
 /// The roots do not decode.
 pub fn sync_bundled(data_dir: &Path, bundled: &Path) -> Result<Vec<(String, String)>> {
-    sync_with(data_dir, bundled, || PluginVerifier::with_roots(false))
+    sync_stamped(
+        data_dir,
+        bundled,
+        || PluginVerifier::with_roots(false),
+        &seen::roots_stamp(),
+    )
 }
 
 /// [`sync_bundled`] under the verifiers `roots` makes, so a test can stand in for the roots.
+#[cfg(test)]
 pub(crate) fn sync_with(
     data_dir: &Path,
     bundled: &Path,
     roots: impl Fn() -> Result<PluginVerifier>,
+) -> Result<Vec<(String, String)>> {
+    sync_stamped(data_dir, bundled, roots, "test roots")
+}
+
+/// [`sync_bundled`] under the verifiers `roots` makes, which `roots_stamp` names for the record
+/// of the packages judged already.
+fn sync_stamped(
+    data_dir: &Path,
+    bundled: &Path,
+    roots: impl Fn() -> Result<PluginVerifier>,
+    roots_stamp: &str,
 ) -> Result<Vec<(String, String)>> {
     let installer = PluginInstaller::new(super::plugins_root(data_dir), roots()?);
     let mut installed = Vec::new();
@@ -85,12 +108,20 @@ pub(crate) fn sync_with(
         return Ok(installed);
     };
     // The installed versions are judged as `list` runs them: the roots with the person's keys and
-    // withdrawals. A state that does not read replaces nothing.
-    let current = match PluginState::read(data_dir).and_then(|state| state.verifier_on(roots()?)) {
-        Ok(verifier) => Some(verifier),
+    // withdrawals. A state that does not read replaces nothing, and keeps no record.
+    let judged = PluginState::read(data_dir).and_then(|state| {
+        let verifier = state.verifier_on(roots()?)?;
+        Ok((verifier, seen::context(roots_stamp, &state)))
+    });
+    let (current, mut seen, last) = match judged {
+        Ok((verifier, context)) => (
+            Some(verifier),
+            Some(Seen::new(context.clone())),
+            Seen::read(data_dir, &context),
+        ),
         Err(error) => {
             tracing::warn!(%error, "the plugin state does not decode; no bundled plugin is replaced");
-            None
+            (None, None, Seen::default())
         }
     };
     let mut files: Vec<PathBuf> = entries
@@ -104,6 +135,13 @@ pub(crate) fn sync_with(
         .collect();
     files.sort();
     for file in files {
+        let stamp = FileStamp::of(&file);
+        if let Some(judged) = last.unchanged(&file, stamp, &installer) {
+            if let Some(seen) = seen.as_mut() {
+                seen.keep(&file, judged.clone());
+            }
+            continue;
+        }
         let verified = read_bounded_file(&file, MAX_PACKAGE_BYTES)
             .map_err(crate::VerifyError::from)
             .and_then(|bytes| installer.verifier().verify_bytes(&bytes));
@@ -125,6 +163,9 @@ pub(crate) fn sync_with(
                 .as_ref()
                 .and_then(|current| replacement(&destination, &package, current))
             else {
+                if let Some(seen) = seen.as_mut() {
+                    seen.record(&file, stamp, &package);
+                }
                 continue;
             };
             match replace(&installer, &package, &destination) {
@@ -145,6 +186,9 @@ pub(crate) fn sync_with(
                         ),
                     }
                     installed.push((manifest.id.clone(), manifest.version.clone()));
+                    if let Some(seen) = seen.as_mut() {
+                        seen.record(&file, stamp, &package);
+                    }
                 }
                 Err(error) => tracing::warn!(
                     plugin_id = %manifest.id,
@@ -157,13 +201,24 @@ pub(crate) fn sync_with(
             continue;
         }
         match installer.install_verified(&package, true) {
-            Ok(done) => installed.push((done.manifest.id, done.manifest.version)),
+            Ok(done) => {
+                installed.push((done.manifest.id, done.manifest.version));
+                if let Some(seen) = seen.as_mut() {
+                    seen.record(&file, stamp, &package);
+                }
+            }
             Err(error) => tracing::warn!(
                 package = %file.display(),
                 %error,
                 "a bundled plugin package could not be installed"
             ),
         }
+    }
+    // A record that is not written costs the next start a full check, nothing else.
+    if let Some(seen) = seen
+        && let Err(error) = seen.write(data_dir)
+    {
+        tracing::warn!(%error, "the record of the bundled plugins could not be written");
     }
     Ok(installed)
 }

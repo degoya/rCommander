@@ -1,5 +1,6 @@
 //! The names rCommander gives a file beside its target for a while, in one place (RC-080-48): a
-//! copy's part file `<name>.rcpart`, a packed archive's `.<name>.<job>.rcpart`, a case-only
+//! copy's part file `<name>.rcpart`, a packed archive's and a copy through the operating
+//! system's (RC-110-65) `.<name>.<job>.rcpart`, a case-only
 //! rename's `.rc-tmp-<process>-<time>-<n>`, the compare window's save `.rc-tmp-<process>-<time>-save`
 //! (RC-100-94) and a multi-rename's `.rc-rename-<tag>-<n>` - the last
 //! made by `rc_rename`, which this crate builds on, from its [`rc_rename::TEMP_PREFIX`].
@@ -27,6 +28,14 @@ pub(crate) fn pack_path(dest: &Path, job: u64) -> PathBuf {
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
     dest.with_file_name(format!(".{name}.{job}{PART_SUFFIX}"))
+}
+
+/// The file a copy through the operating system's own call (RC-110-65) is written to before it
+/// takes `dest`'s name: hidden beside it, as [`pack_path`] - never `<name>.rcpart`, which a
+/// restart continues, while a system copy broken off may hold its whole length with only a part
+/// of it written (`CopyFileExW` sets the size first).
+pub(crate) fn system_copy_path(dest: &Path, job: u64) -> PathBuf {
+    pack_path(dest, job)
 }
 
 /// The `n`-th candidate in `dir` for a case-only rename's temporary name, `nanos` the run's

@@ -1,0 +1,8 @@
+{
+  "name": "Visionneuse de journaux",
+  "description": "Affiche les fichiers journaux en couleurs : niveaux, horodatages, adresses, chemins et traces de pile.",
+  "codes": {
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.encoding": "Encodage",
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.level_colour": "Couleur du niveau"
+  }
+}

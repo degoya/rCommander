@@ -107,7 +107,7 @@ fn create_view<'a>(create: &'a CreateDialog, tokens: &'static Tokens) -> Element
     ]
     .spacing(10);
     if !ok {
-        form = form.push(prose(t!("checksum.create.name_invalid")).color(theme::DANGER));
+        form = form.push(prose(t!("checksum.create.name_invalid")).color(tokens.status.danger));
     }
     form.push(buttons(t!("checksum.create.ok"), ok)).into()
 }
@@ -142,13 +142,13 @@ fn split_view<'a>(split: &'a SplitDialog, tokens: &'static Tokens) -> Element<'a
         Ok((part, parts)) => (
             prose(t!(
                 "checksum.split.parts",
-                parts = parts,
+                count = parts,
                 size = format::size(part),
             ))
             .color(tokens.text_secondary),
             true,
         ),
-        Err(code) => (prose(error_text(code)).color(theme::DANGER), false),
+        Err(code) => (prose(error_text(code)).color(tokens.status.danger), false),
     };
     column![
         prose(t!(
@@ -171,6 +171,7 @@ fn split_view<'a>(split: &'a SplitDialog, tokens: &'static Tokens) -> Element<'a
 
 fn combine_view<'a>(combine: &'a CombineDialog, tokens: &'static Tokens) -> Element<'a, Message> {
     let name = text_input(t!("checksum.combine.name_placeholder"), &combine.name)
+        .style(theme::text_field)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([6, 8])
@@ -195,7 +196,7 @@ fn combine_view<'a>(combine: &'a CombineDialog, tokens: &'static Tokens) -> Elem
 /// The result list with its Close: in the large dialog, or filling a window of its own
 /// (RC-080-15, `dialog_windows.rs`).
 pub fn results_view<'a>(sections: &'a [Section], tokens: &'static Tokens) -> Element<'a, Message> {
-    let danger = theme::DANGER;
+    let danger = tokens.status.danger;
     let mut list = column![].spacing(4);
     for section in sections {
         list = list.push(prose(section.title.as_str()).font(theme::UI_FONT_STRONG));
@@ -252,6 +253,7 @@ fn target<'a>(value: &'a str, label: &'static str) -> Element<'a, Message> {
 
 /// A text field that confirms the dialog on Enter; editable once it has `on_input`.
 fn field(value: &str) -> text_input::TextInput<'_, Message> {
+    // field-label: each call keys it to its caption
     text_input("", value)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)

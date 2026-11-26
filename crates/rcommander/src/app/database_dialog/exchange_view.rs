@@ -38,14 +38,14 @@ fn tick<'a>(
     layout::check(label, on, live, move |on| msg(toggle(on)))
 }
 
-/// A field whose text is never shown.
+/// A field whose text is never shown, under its caption `label` (RC-110-78).
 fn secret<'a>(
-    placeholder: &'static str,
+    label: &'static str,
     value: &'a str,
     live: bool,
     typed: fn(SecretString) -> ExchangeMsg,
 ) -> Element<'a, Message> {
-    let mut field = text_input(placeholder, value)
+    let mut field = text_input("", value)
         .secure(true)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
@@ -53,7 +53,7 @@ fn secret<'a>(
     if live {
         field = field.on_input(move |text| msg(typed(SecretString::from(text))));
     }
-    field.into()
+    layout::captioned(label, field)
 }
 
 fn part_label(part: Part) -> &'static str {
@@ -114,7 +114,7 @@ pub fn export<'a>(
     ));
     if form.secrets && form.parts.connections && !form.encrypted {
         body = body
-            .push(prose(t!("exchange.plain_warning")).color(theme::DANGER))
+            .push(prose(t!("exchange.plain_warning")).color(tokens.status.danger))
             .push(tick(
                 t!("exchange.plain_confirm"),
                 form.plain_confirmed,
@@ -301,11 +301,14 @@ fn vault<'a>(
 }
 
 /// The problem that keeps the form from running, in the danger colour.
-pub fn problem<'a>(dialog: &DatabaseDialog) -> Option<Element<'a, Message>> {
+pub fn problem<'a>(
+    dialog: &DatabaseDialog,
+    tokens: &'static Tokens,
+) -> Option<Element<'a, Message>> {
     dialog
         .exchange
         .problem
-        .map(|problem| prose(problem).color(theme::DANGER).into())
+        .map(|problem| prose(problem).color(tokens.status.danger).into())
 }
 
 /// The import's extra buttons: every choosable row ticked, or none.

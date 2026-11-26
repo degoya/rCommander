@@ -140,7 +140,7 @@ fn question<'a>(ask: Ask, tokens: &'static Tokens) -> Element<'a, Message> {
 
 /// What the edit mode says under the paths: the cursor's line and side, changes not saved, a
 /// side that stays read-only, a save that failed.
-pub fn note<'a>(window: &DiffWindow, _tokens: &'static Tokens) -> Option<Element<'a, Message>> {
+pub fn note<'a>(window: &DiffWindow, tokens: &'static Tokens) -> Option<Element<'a, Message>> {
     let text = match window.note {
         Some(Note::ReadOnly(side, why)) => {
             let side = side_name(side);
@@ -159,7 +159,7 @@ pub fn note<'a>(window: &DiffWindow, _tokens: &'static Tokens) -> Option<Element
         Some(Note::Failed(code)) => t!("compare.save_failed", error = error_text(code)),
         None => return None,
     };
-    Some(line(text).color(theme::DANGER).into())
+    Some(line(text).color(tokens.status.danger).into())
 }
 
 /// The cursor's place and whether changes are not saved, in the edit mode.

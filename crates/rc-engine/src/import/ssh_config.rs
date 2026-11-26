@@ -97,13 +97,14 @@ pub(crate) fn load_scoped(
 }
 
 /// Reads configuration text as if it were the file `origin`; its includes come from disk. The
-/// tests' way in: the import reads a file ([`load`]).
+/// tests' and the fuzz target's way in (`fuzz/`, RC-110-68): the import reads a file
+/// ([`load`]). Not an API.
 ///
 /// # Errors
 ///
 /// [`LoadError::KeyMaterial`] when the text or an included file is a key.
-#[cfg(test)]
-pub(crate) fn parse_str(
+#[doc(hidden)]
+pub fn parse_str(
     text: &str,
     origin: &Path,
     context: &SshConfigContext,

@@ -1,5 +1,10 @@
 # Changes
 
+## 0.3.2
+
+Speaks German, French and Spanish: its name, description, settings and error messages follow
+rCommander's language instead of staying English. Built against plugin contract 0.6.0.
+
 ## 0.3.1
 
 Rebuilt against plugin contract 0.6.0; no other change.

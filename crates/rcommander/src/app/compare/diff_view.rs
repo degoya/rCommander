@@ -103,7 +103,9 @@ fn text_body<'a>(
 ) -> Element<'a, Message> {
     match shown {
         Shown::Loading => center(line(t!("compare.loading"))).into(),
-        Shown::Failed(code) => center(fit::prose(error_text(code)).color(theme::DANGER)).into(),
+        Shown::Failed(code) => {
+            center(fit::prose(error_text(code)).color(tokens.status.danger)).into()
+        }
         Shown::Bytes(comparison) => bytes(comparison),
         Shown::Text(diff) => rows(window, diff, tokens),
     }

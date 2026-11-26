@@ -47,6 +47,7 @@ pub fn title(dialog: &ExecDialog) -> String {
 /// The command line, the result and the buttons: on the card, or filling a window of its own.
 pub fn body<'a>(dialog: &'a ExecDialog, tokens: &'static Tokens) -> Element<'a, Message> {
     let mut input = text_input(t!("ssh_exec.command_hint"), &dialog.command)
+        .style(theme::text_field)
         .id(COMMAND_FIELD)
         .font(theme::MONO_FONT)
         .size(theme::TEXT_SIZE)
@@ -57,7 +58,7 @@ pub fn body<'a>(dialog: &'a ExecDialog, tokens: &'static Tokens) -> Element<'a, 
             .on_submit(Message::SshExec(ExecMsg::Run));
     }
     let mut body = column![
-        input,
+        layout::captioned(t!("ssh_exec.command"), input),
         label_or_glyph(t!("ssh_exec.note")).color(tokens.text_secondary),
     ]
     .spacing(10);
@@ -68,7 +69,7 @@ pub fn body<'a>(dialog: &'a ExecDialog, tokens: &'static Tokens) -> Element<'a, 
         (Some(Ok(output)), Some(shown)) => body = body.push(result(output, shown, tokens)),
         (Some(Ok(_)), None) => {}
         (Some(Err(code)), _) => {
-            body = body.push(label_or_glyph(i18n::error_text(code)).color(theme::DANGER));
+            body = body.push(label_or_glyph(i18n::error_text(code)).color(tokens.status.danger));
         }
         (None, _) => {}
     }
@@ -106,7 +107,7 @@ fn result<'a>(
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let end = if output.timed_out {
-        t!("ssh_exec.timed_out", seconds = output.duration_ms / 1000)
+        t!("ssh_exec.timed_out", count = output.duration_ms / 1000)
     } else if let Some(signal) = &output.exit_signal {
         t!("ssh_exec.exit_signal", signal = signal)
     } else if let Some(code) = output.exit_code {

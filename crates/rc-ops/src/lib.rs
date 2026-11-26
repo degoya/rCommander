@@ -7,7 +7,9 @@
 //! The core never looks at a local path: a copy is `open_read` on the source backend streamed
 //! through a few buffers into `open_write` on the target backend, reading and writing at once
 //! (`stream_pair.rs`, RC-060-06), so local to local, local to a server and server to server
-//! (with no file in between, two servers or one) are the same code. A [`Queue`] holds
+//! (with no file in between, two servers or one) are the same code. From disk to disk a file of
+//! 1 MiB or more goes through the operating system's own copy instead, behind the same trait
+//! ([`rc_vfs::Vfs::copy_file`], `system_copy.rs`, RC-110-65). A [`Queue`] holds
 //! the backends by [`rc_vfs::BackendId`] ([`Queue::register`]), runs jobs one after another per
 //! target backend - a few at once per server, a file written there under a part name until it is
 //! complete (RC-060-05) - or in parallel ([`Scheduling`]), and reports through an [`EventSink`]:
@@ -40,6 +42,10 @@
 //! Changing an archive (`update/`, RC-110-05) is a job as well: entries added to and removed
 //! from a local zip, 7z or plain tar by writing a new archive beside the old one, checking it,
 //! and renaming it onto the old one only then.
+//!
+//! A file a copy, a move or an unpacking writes onto this machine's disks keeps its
+//! Mark-of-the-Web (`zone.rs`, RC-110-56): its own `Zone.Identifier` stream, its archive's, or the
+//! internet's zone for a file from a server. A stream that cannot be written fails no copy.
 
 mod archive_test;
 mod attributes;
@@ -71,11 +77,14 @@ mod resume;
 mod runner;
 mod staging;
 mod stream_pair;
+mod system_copy;
 pub mod temp_name;
 mod trash;
 mod update;
 mod verify;
 mod walk;
+pub mod zone;
+mod zone_keep;
 
 pub use attributes::{
     ApplyTo, AttributeFailure, AttributeReport, MAX_LISTED_FAILURES, set_properties_tree,

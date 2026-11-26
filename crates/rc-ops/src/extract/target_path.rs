@@ -4,7 +4,9 @@
 //! The archive backend hands out cleaned names already (no `..`, no root, no drive); here every
 //! part must also be one plain name Windows can hold ([`crate::check_name`]): no separator, no
 //! `:` (an NTFS stream), no device name, no trailing dot or space that Windows would strip into
-//! another name. The joined path is held against the target once more at the end.
+//! another name. On Windows the archive backend has renamed such a part already (`C:` to `C_`,
+//! RC-110-92); elsewhere it is skipped here. The joined path is held against the target once more
+//! at the end.
 
 use std::path::{Component, Path, PathBuf};
 

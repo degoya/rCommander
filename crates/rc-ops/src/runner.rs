@@ -169,6 +169,8 @@ pub(crate) struct Runner {
     pub(crate) archive_release: Option<Arc<dyn crate::ArchiveRelease>>,
     /// What a copy's or a move's walk leaves out (`ignore.rs`); `None` for every other job.
     pub(crate) ignore: Option<Arc<dyn crate::IgnoreRule>>,
+    /// The Mark-of-the-Web the files written carry on (`zone_keep.rs`, RC-110-56).
+    pub(crate) zone: crate::zone_keep::ZoneState,
     meter: Meter,
     throttle: Throttle,
     /// The progress moved since the snapshot last took it (RC-080-45).
@@ -206,6 +208,7 @@ impl Runner {
             archive: setup.archive,
             archive_release: setup.archive_release,
             ignore: setup.ignore,
+            zone: crate::zone_keep::ZoneState::default(),
             meter: Meter::default(),
             throttle: Throttle::new(setup.progress_interval),
             unpublished: false,

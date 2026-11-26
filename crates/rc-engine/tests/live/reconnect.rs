@@ -69,7 +69,7 @@ async fn lists(engine: &Engine, name: &str) {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn the_keepalive_holds_an_idle_session_notices_a_hang_and_a_restart_and_the_next_use_connects()
  {
     let live = live_or_skip!();
@@ -123,7 +123,7 @@ async fn the_keepalive_holds_an_idle_session_notices_a_hang_and_a_restart_and_th
 /// with the pool's session, so the first listing after it does not answer `connection_lost`
 /// once more.
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn the_first_listing_after_an_announced_loss_connects_again() {
     let live = live_or_skip!();
     let dir = workdir();

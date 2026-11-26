@@ -1,0 +1,8 @@
+{
+  "name": "Visor de configuración",
+  "description": "Muestra archivos INI, .reg, .env, properties, TOML, unidades de systemd y soluciones de Visual Studio en color, o sus secciones y claves como árbol.",
+  "codes": {
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.setting.encoding": "Codificación",
+    "01a159c1-6b39-7240-9bbb-81ecaf343ed1.too_many_nodes": "El árbol tiene demasiados rangos abiertos; cierre el visor y vuelva a abrir el archivo."
+  }
+}

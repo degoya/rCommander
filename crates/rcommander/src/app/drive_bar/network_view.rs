@@ -176,6 +176,7 @@ fn map_card<'a>(form: &'a MapForm, tokens: &'static Tokens) -> Element<'a, Messa
         t!("network.folder_hint")
     };
     let mut remote = text_input(hint, &form.remote)
+        .style(theme::text_field)
         .id(REMOTE_FIELD)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
@@ -294,7 +295,7 @@ fn unmap_card<'a>(form: &'a UnmapForm, tokens: &'static Tokens) -> Element<'a, M
     };
     let question = prose(question);
     body = body.push(if form.in_use {
-        question.color(theme::DANGER)
+        question.color(tokens.status.danger)
     } else {
         question
     });
@@ -317,7 +318,7 @@ fn push_phase<'a>(
     match phase {
         Phase::Editing => body,
         Phase::Running => body.push(prose(waiting).color(tokens.text_secondary)),
-        Phase::Failed(error) => body.push(prose(error.as_str()).color(theme::DANGER)),
+        Phase::Failed(error) => body.push(prose(error.as_str()).color(tokens.status.danger)),
     }
 }
 

@@ -48,6 +48,7 @@ impl From<FtpEncodingArg> for FtpEncoding {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct StatParams {
     /// The entry: absolute, relative to the panel's directory, ftp://<connection name>/<path> or
     /// sftp://<connection name>/<path>.

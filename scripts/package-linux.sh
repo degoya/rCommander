@@ -5,8 +5,9 @@
 # x64 natively; arm64 cross-compiled with gcc-aarch64-linux-gnu (the linker is set in
 # .cargo/config.toml, the cc crate finds the compiler by the target's prefix), or natively on an
 # arm64 machine such as release.yml's runner (RC-100-31), with the system's `cc`.
-# with rcommander, README.md, LICENSE, NOTICE (the bundled icons' licence), VERSION.txt and
-# plugins/ - the bundled plugins, built, signed and checked by scripts/build-plugins.sh (which
+# with rcommander, README.md, LICENSE, NOTICE (the bundled third-party material),
+# THIRD-PARTY-LICENSES (the crates' licence texts), VERSION.txt and plugins/ - the bundled
+# plugins, built, signed and checked by scripts/build-plugins.sh (which
 # needs the signing key, RC_PLUGIN_KEY) and installed by rCommander at its first start.
 #
 # Usage:

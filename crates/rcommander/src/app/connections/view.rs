@@ -152,7 +152,7 @@ pub fn body<'a>(manager: &'a ConnectionManager, tokens: &'static Tokens) -> Elem
     let note: Element<'a, Message> = match &manager.note {
         Some((note, error)) => {
             let color = if *error {
-                theme::DANGER
+                tokens.status.danger
             } else {
                 tokens.text_secondary
             };
@@ -195,9 +195,12 @@ pub(super) fn prompt_words(prompt: &VaultPrompt) -> (&'static str, &'static str)
     }
 }
 
-/// A one-line text field of the dialog's look.
+/// A one-line text field of the dialog's look; `placeholder` is an example or a hint, its label
+/// stands beside or over it (RC-110-78).
 pub(super) fn field<'a>(placeholder: &str, value: &str) -> text_input::TextInput<'a, Message> {
+    // field-label: each call names its field
     text_input(placeholder, value)
+        .style(theme::text_field)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([5, 8])

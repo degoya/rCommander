@@ -70,6 +70,7 @@ pub(crate) enum SelectAction {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SortParams {
     /// `name`, `ext`, `size`, `date` (modified), `created`, `accessed` or `comment`.
     pub key: SortKeyArg,
@@ -83,6 +84,7 @@ pub(crate) struct SortParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SetViewParams {
     /// `full` (name, ext, size, date columns), `brief` (names only, several columns), `custom`
     /// (the column set `set`) or `comments` (name, ext, comment).
@@ -96,6 +98,7 @@ pub(crate) struct SetViewParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ShowTreeParams {
     /// `true` shows the folder tree, `false` the files again; omitted, it switches.
     #[serde(default)]
@@ -106,6 +109,7 @@ pub(crate) struct ShowTreeParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ShowHiddenParams {
     /// `true` shows hidden and system entries, `false` hides them; omitted, it switches.
     #[serde(default)]
@@ -113,6 +117,7 @@ pub(crate) struct ShowHiddenParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SelectParams {
     pub action: SelectAction,
     /// `left` or `right`; the active panel when omitted.
@@ -121,6 +126,7 @@ pub(crate) struct SelectParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MaskParams {
     /// Total Commander masks: several separated by `;`, `*` and `?` as wildcards, masks after
     /// `|` excluded (`*.txt;*.md|draft*`). They match files only; a mask ending in `\` matches
@@ -133,6 +139,7 @@ pub(crate) struct MaskParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct OpenParams {
     /// Absolute, or relative to the panel's directory; the entry under the cursor when omitted.
     #[serde(default)]

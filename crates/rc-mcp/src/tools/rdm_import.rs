@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ImportRdmParams {
     /// Path of the export: a .rdm file Remote Desktop Manager wrote without a master key.
     pub path: String,

@@ -14,6 +14,7 @@ use super::panels::PanelArg;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct RunParams {
     /// The own command's name as user_commands_list names it (em_..., case does not count).
@@ -36,6 +37,7 @@ impl RunParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct StartRunParams {
     /// The Start menu entry's id as start_menu_list names it.

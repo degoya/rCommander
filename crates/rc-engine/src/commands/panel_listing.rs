@@ -2,7 +2,8 @@
 //! entries shows its first ones while the rest is still on its way.
 //!
 //! The backend sends its entries in batches ([`rc_vfs::Vfs::list_batches`]; SFTP one per
-//! `READDIR` answer, every other backend the whole listing at once). A listing that ends within
+//! `READDIR` answer, FTP as they arrive, the local backend parts of 4096 entries (RC-110-66),
+//! every other backend the whole listing at once). A listing that ends within
 //! [`FIRST_SHOWN`] is shown complete, as before; a longer one is shown with what arrived by then,
 //! marked as still arriving ([`crate::PanelState::listing`]), and a task of its own takes in the
 //! rest. Like the flat view's (`flat.rs`), it shows what arrived sorted in the panel's order every
@@ -139,8 +140,10 @@ impl Arriving {
     }
 
     /// Everything that arrived, in the order `order` and `names`: what came since the last time
-    /// merged in, or - the panel sorted another way meanwhile - the whole sorted anew.
-    fn sorted(&mut self, order: SortOrder, names: Names) -> Vec<Entry> {
+    /// merged in, or - the panel sorted another way meanwhile - the whole sorted anew. A copy for
+    /// the panel while more is to come; with `last` the entries themselves, so a complete listing
+    /// is held once, not twice (RC-110-93).
+    fn sorted(&mut self, order: SortOrder, names: Names, last: bool) -> Vec<Entry> {
         let (found, fresh) = (
             std::mem::take(&mut self.found),
             std::mem::take(&mut self.fresh),
@@ -154,7 +157,11 @@ impl Arriving {
             all
         };
         self.sorted_as = (order, names);
-        self.found.clone()
+        if last {
+            std::mem::take(&mut self.found)
+        } else {
+            self.found.clone()
+        }
     }
 
     /// Takes in the rest of the listing for panel `panel`, in a task of its own.
@@ -172,14 +179,18 @@ impl Arriving {
 }
 
 /// `batch` of the folder `dir` added to `found`, hidden entries only when they are shown, none the
-/// ignore list hides (RC-100-92).
+/// ignore list hides (RC-100-92). The first batch becomes `found`; the others are appended at
+/// once, not entry by entry (RC-110-93).
 fn keep(found: &mut Vec<Entry>, mut batch: Vec<Entry>, show_hidden: bool, dir: &VfsPath) {
     crate::ignore_list::retain_shown(dir, &mut batch);
-    found.extend(
-        batch
-            .into_iter()
-            .filter(|entry| show_hidden || !is_hidden(entry)),
-    );
+    if !show_hidden {
+        batch.retain(|entry| !is_hidden(entry));
+    }
+    if found.is_empty() {
+        *found = batch;
+    } else {
+        found.append(&mut batch);
+    }
 }
 
 /// The listing task's end as an engine error; a task that did not finish is an I/O error on
@@ -274,7 +285,7 @@ impl Follower {
                 }
                 (panel.sort, names_for(&panel.path))
             };
-            let sorted = self.dirty.then(|| self.arriving.sorted(order, names));
+            let sorted = self.dirty.then(|| self.arriving.sorted(order, names, done));
             {
                 let mut state = self.engine.state();
                 let panel = state.panel_mut(self.panel);
@@ -282,8 +293,12 @@ impl Follower {
                     return false;
                 }
                 if sorted.is_some() && panel.sort != order {
-                    // Sorted another way meanwhile: the next flush has it, the last one waits.
+                    // Sorted another way meanwhile: the next flush has it, the last one waits -
+                    // with the entries the last flush took, given back.
                     if done {
+                        if let Some(entries) = sorted {
+                            self.arriving.found = entries;
+                        }
                         continue;
                     }
                     self.last_flush = Instant::now();

@@ -4,6 +4,9 @@
 //! punctuation and symbols (`_`, `$`, `[`, ...) before digits, digits before letters, and the
 //! hyphen and the apostrophe count only between names that are otherwise equal - so
 //! `--- incoming ---` sorts as ` incoming ` would, before `$RECYCLE.BIN` (owner, 2026-10-19).
+//! Accents, too, count only there: a letter sorts by its base, an umlaut at its vowel and the
+//! sharp s as `ss`, as in Explorer (RC-110-84, `sort/fold.rs`). Two ASCII names, which have no
+//! accents, are compared in one pass of their bytes (RC-110-93, `sort/ascii.rs`).
 //!
 //! `sort.names` chooses another order (owner, 2026-10-19): the byte order of Linux' `ls` in the C
 //! locale (case counts, symbols by their code), or each by the panel's target - Windows' on the
@@ -16,9 +19,13 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU8, Ordering as Atomic},
 };
 
+use fold::{Cursor, Read};
 use rc_rename::split_name;
 use rc_vfs::{BackendId, Entry, EntryKind, VfsPath, parse_wsl_unc};
 use serde::{Deserialize, Serialize};
+
+mod ascii;
+mod fold;
 
 /// What a panel sorts by.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -179,10 +186,21 @@ pub fn compare_names(a: &str, b: &str, names: Names) -> Ordering {
     match (names.linux, names.numbers) {
         (true, false) => a.cmp(b),
         (true, true) => byte_cmp(a, b),
+        // Equal names are equal in every pass; ASCII names take one pass of bytes, the rest -
+        // and what the bytes leave open - the passes below (RC-110-93).
+        (false, _) if a == b => Ordering::Equal,
         (false, numbers) => {
-            word_cmp(a, b, true, numbers).then_with(|| word_cmp(a, b, false, numbers))
+            ascii::compare(a, b, numbers).unwrap_or_else(|| word_order(a, b, numbers))
         }
     }
+}
+
+/// `a` against `b` in Windows' word sort: its passes, each deciding only where the one before
+/// found a tie ([`Read`]).
+fn word_order(a: &str, b: &str, numbers: bool) -> Ordering {
+    word_cmp(a, b, Read::Base, numbers)
+        .then_with(|| word_cmp(a, b, Read::Accents, numbers))
+        .then_with(|| word_cmp(a, b, Read::Raw, numbers))
 }
 
 /// `a` against `b` by their characters' codes - UTF-8's byte order -, runs of digits by value.
@@ -226,44 +244,65 @@ fn ignored(c: char) -> bool {
     matches!(c, '-' | '\'')
 }
 
-/// `a` against `b` in Windows' word sort, passing over [`ignored`] characters when `skip`, runs
-/// of digits by their value with `numbers`.
-fn word_cmp(a: &str, b: &str, skip: bool, numbers: bool) -> Ordering {
-    let (mut a, mut b) = (a, b);
+/// `a` against `b` in one pass of Windows' word sort ([`Read`]), runs of digits by their value
+/// with `numbers`.
+fn word_cmp(a: &str, b: &str, read: Read, numbers: bool) -> Ordering {
+    let (mut a, mut b) = (Cursor::new(a, read), Cursor::new(b, read));
     loop {
-        if skip {
-            (a, b) = (a.trim_start_matches(ignored), b.trim_start_matches(ignored));
+        match read {
+            Read::Base => {
+                let skip = |c: char| ignored(c) || fold::mark(c);
+                a.skip(skip);
+                b.skip(skip);
+            }
+            Read::Accents => {
+                a.skip(ignored);
+                b.skip(ignored);
+            }
+            Read::Raw => {}
         }
-        let (Some(x), Some(y)) = (a.chars().next(), b.chars().next()) else {
+        if numbers && a.at_digit() && b.at_digit() {
+            let (order, x_rest, y_rest) = digits_cmp(a.rest, b.rest);
+            if order != Ordering::Equal {
+                return order;
+            }
+            (a.rest, b.rest) = (x_rest, y_rest);
+            continue;
+        }
+        let (x, y) = (a.next_char(), b.next_char());
+        let (Some(x), Some(y)) = (x, y) else {
             // The shorter name first; equal when both ended.
-            return a.is_empty().cmp(&b.is_empty()).reverse();
+            return x.is_none().cmp(&y.is_none()).reverse();
         };
-        if numbers && x.is_ascii_digit() && y.is_ascii_digit() {
-            let (order, x_rest, y_rest) = digits_cmp(a, b);
-            if order != Ordering::Equal {
-                return order;
-            }
-            (a, b) = (x_rest, y_rest);
-        } else {
-            let order = class(x)
-                .cmp(&class(y))
-                .then_with(|| symbol_rank(x).cmp(&symbol_rank(y)))
-                .then_with(|| x.to_lowercase().cmp(y.to_lowercase()));
-            if order != Ordering::Equal {
-                return order;
-            }
-            (a, b) = (&a[x.len_utf8()..], &b[y.len_utf8()..]);
+        let order = class(x)
+            .cmp(&class(y))
+            .then_with(|| symbol_rank(x).cmp(&symbol_rank(y)))
+            .then_with(|| caseless_cmp(x, y));
+        if order != Ordering::Equal {
+            return order;
         }
     }
 }
 
+/// `x` against `y` without regard to case; ASCII without the Unicode tables.
+fn caseless_cmp(x: char, y: char) -> Ordering {
+    if x.is_ascii() && y.is_ascii() {
+        x.to_ascii_lowercase().cmp(&y.to_ascii_lowercase())
+    } else {
+        x.to_lowercase().cmp(y.to_lowercase())
+    }
+}
+
 /// Where a character stands in Windows' order: symbols and punctuation, then digits, then
-/// letters (any script); a hyphen or an apostrophe, deciding a tie, after all of them.
+/// letters (any script); a hyphen or an apostrophe, deciding a tie, after all of them, and an
+/// accent ([`fold::mark`]) last, so a name without it comes first.
 fn class(c: char) -> u8 {
     if ignored(c) {
         3
     } else if c.is_ascii_digit() {
         1
+    } else if fold::mark(c) {
+        4
     } else if c.is_alphanumeric() {
         2
     } else {

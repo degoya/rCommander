@@ -135,7 +135,7 @@ pub fn body<'a>(
     let note: Element<'a, Message> = match &window.note {
         Some((note, error)) => {
             let color = if *error {
-                theme::DANGER
+                tokens.status.danger
             } else {
                 tokens.text_secondary
             };

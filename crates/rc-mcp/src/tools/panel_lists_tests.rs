@@ -108,7 +108,7 @@ async fn an_existing_selection_file_stays() {
 }
 
 #[test]
-fn only_the_selection_file_writes() {
+fn only_the_selection_file_and_the_saved_filters_write() {
     let class = |tool| {
         command_of(tool)
             .and_then(spec)
@@ -116,12 +116,13 @@ fn only_the_selection_file_writes() {
             .expect("a covered tool")
     };
     assert_eq!(class("panel_selection_to_file"), CommandClass::Write);
+    // A saved filter is stored data: saving and renaming write it, deleting loses it (RC-110-60).
+    assert_eq!(class("filters_save"), CommandClass::Write);
+    assert_eq!(class("filters_rename"), CommandClass::Write);
+    assert_eq!(class("filters_delete"), CommandClass::Destructive);
     for tool in [
         "panel_file_filter",
         "filters_list",
-        "filters_save",
-        "filters_rename",
-        "filters_delete",
         "panel_toggle_ignore_list",
         "panel_save_selection",
         "panel_selection_from_file",

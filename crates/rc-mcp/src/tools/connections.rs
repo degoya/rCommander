@@ -14,82 +14,28 @@ use rc_engine::{
 use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
 use serde::{Deserialize, Serialize};
 
-use super::remote::{FtpEncodingArg, FtpModeArg};
+use super::{
+    connections_page::{self, ListParams},
+    paging,
+    remote::{FtpEncodingArg, FtpModeArg},
+};
 use crate::{
     RcMcpServer,
     answer::{ToolResult, respond},
 };
 
+pub(crate) use super::connections_args::{AuthArg, KindArg, ViewArg};
 pub(crate) use super::secret_args::refuse_secrets;
 
-/// A connection's protocol, as tools name it.
-#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum KindArg {
-    Ssh,
-    Ftp,
-    Ftps,
-    FtpsImplicit,
-}
-
-impl From<KindArg> for ConnectionKind {
-    fn from(kind: KindArg) -> Self {
-        match kind {
-            KindArg::Ssh => Self::Ssh,
-            KindArg::Ftp => Self::Ftp,
-            KindArg::Ftps => Self::Ftps,
-            KindArg::FtpsImplicit => Self::FtpsImplicit,
-        }
-    }
-}
-
-/// How a connection authenticates, as tools name it.
-#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum AuthArg {
-    Password,
-    Key,
-    Agent,
-    Interactive,
-    Anonymous,
-}
-
-impl From<AuthArg> for AuthMethod {
-    fn from(method: AuthArg) -> Self {
-        match method {
-            AuthArg::Password => Self::Password,
-            AuthArg::Key => Self::Key,
-            AuthArg::Agent => Self::Agent,
-            AuthArg::Interactive => Self::Interactive,
-            AuthArg::Anonymous => Self::Anonymous,
-        }
-    }
-}
-
-/// What a panel shows when the connection opens, as tools name it.
-#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum ViewArg {
-    Files,
-    Terminal,
-}
-
-impl From<ViewArg> for DefaultView {
-    fn from(view: ViewArg) -> Self {
-        match view {
-            ViewArg::Files => Self::Files,
-            ViewArg::Terminal => Self::Terminal,
-        }
-    }
-}
-
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct IdParams {
     /// The connection's id, from connections_list.
     pub id: i64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct CreateParams {
     /// The name shown in the tree; unique in its folder, ignoring case.
     pub name: String,
@@ -141,6 +87,7 @@ pub(crate) struct CreateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct UpdateParams {
     /// The connection's id.
     pub id: i64,
@@ -186,6 +133,7 @@ pub(crate) struct UpdateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MoveParams {
     /// The connection's id.
     pub id: i64,
@@ -199,6 +147,7 @@ pub(crate) struct MoveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct DeleteParams {
     /// The connection's id.
@@ -206,6 +155,7 @@ pub(crate) struct DeleteParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FolderCreateParams {
     /// The folder's name; unique among its parent's folders, ignoring case.
     pub name: String,
@@ -215,6 +165,7 @@ pub(crate) struct FolderCreateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FolderRenameParams {
     /// The folder's id.
     pub id: i64,
@@ -222,6 +173,7 @@ pub(crate) struct FolderRenameParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FolderMoveParams {
     /// The folder's id.
     pub id: i64,
@@ -235,6 +187,7 @@ pub(crate) struct FolderMoveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct FolderDeleteParams {
     /// The folder's id.
@@ -253,6 +206,11 @@ enum View {
         #[serde(flatten)]
         tree: ConnectionTree,
         sessions: Vec<SessionStatus>,
+        /// The tree's items (folders, connections, credentials), on every page.
+        total: usize,
+        truncated: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        next_cursor: Option<String>,
     },
     Tree(ConnectionTree),
     Connection(Connection),
@@ -292,22 +250,45 @@ impl RcMcpServer {
 #[tool_router(router = connections_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "The connection tree: folders (id, name, parent_id, sort_order, with their folders, connections and credentials) and the root's connections and credentials, in display order. A connection has id, name, kind, host, port, username, auth_method, key_path, default_view, start_directory, notes, ftp_data_mode and ftp_encoding (FTP; null is passive and latin1), theme_light and theme_dark (the theme ids its panel and SSH terminal draw with in each mode; null is the window's), has_password, has_key, has_passphrase, has_totp_seed: whether a secret of that kind is stored (has_totp_seed: a one-time code seed for the SSH login), key: a private key stored in the vault as {type, fingerprint, comment, stored: true, certificate}, or null (certificate: the OpenSSH user certificate stored with it as {type, key_id, serial, principals, valid_after, valid_before (Unix seconds; null is forever), ca_fingerprint}, absent without one), and credential_id: the shared credential it takes its secrets (and, without a username of its own, its user) from, or null, and jump_id: the saved SSH connection its sessions go through (a jump host), or null. A credential has id, folder_id, name, username, has_password, has_key, has_passphrase, has_totp_seed, key and connections (how many use it). bar_folders: the ids of the folders the drive bar shows as buttons (connections_set_folder_favourite). sessions: the connections with an SSH session up or being set up, each with connection_id, state (connecting, connected), login (the method that got in), host_key_fingerprint and channels. Never a password, key, passphrase or one-time code seed itself."
+        description = "The connection tree in display order: folders with their folders, connections and credentials, and the root's connections and credentials; bar_folders (the folders the drive bar shows as buttons, connections_set_folder_favourite) and sessions (the connections with an SSH session up or being set up). A connection has its fields (id, name, kind, host, port, username, auth_method, key_path, the views, themes and FTP options), has_password, has_key, has_passphrase and has_totp_seed (whether such a secret is stored), key (a private key in the vault with its certificate, or null), credential_id (the shared credential it takes its secrets from) and jump_id (the jump host its sessions go through); every field: the instructions. Never a password, key, passphrase or one-time code seed itself. At most limit items (folders, connections and credentials, in display order; 1000 when omitted, at most 1000) per call, the folders above them kept around them; total counts the tree's items: with truncated true, call again with next_cursor as cursor for the next page."
     )]
-    pub(crate) async fn connections_list(&self) -> ToolResult {
+    pub(crate) async fn connections_list(
+        &self,
+        Parameters(params): Parameters<ListParams>,
+    ) -> ToolResult {
         let engine = &self.context.engine;
-        respond(
-            engine
-                .dispatch_mcp(Command::ListConnections)
-                .await
-                .map(|outcome| match outcome {
-                    Outcome::ConnectionTree { tree } => View::Listed {
-                        tree,
-                        sessions: engine.ssh_sessions(),
-                    },
-                    other => view(other),
-                }),
-        )
+        let pages = &self.context.list_pages.connections;
+        let request = paging::print(&"connections_list");
+        let start = match pages.start(request, params.cursor.as_deref()) {
+            Ok(start) => start,
+            Err(refused) => return Ok(refused),
+        };
+        let tree = match start.kept.clone() {
+            Some(kept) => kept,
+            None => match engine.dispatch_mcp(Command::ListConnections).await {
+                Ok(Outcome::ConnectionTree { tree }) => std::sync::Arc::new(tree),
+                other => return respond(other.map(view)),
+            },
+        };
+        let total = connections_page::items(&tree);
+        // The tree has no print of its own: a cursor goes on with the tree as it is by then.
+        let page = match pages.page(
+            request,
+            0,
+            &start,
+            params.limit.unwrap_or(paging::PAGE),
+            (&tree, total),
+        ) {
+            Ok(page) => page,
+            Err(refused) => return Ok(refused),
+        };
+        respond(Ok(View::Listed {
+            tree: connections_page::page(&tree, page.from, page.to),
+            sessions: engine.ssh_sessions(),
+            total,
+            truncated: page.truncated(),
+            next_cursor: page.next_cursor,
+        }))
     }
 
     #[tool(

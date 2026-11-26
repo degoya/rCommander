@@ -27,7 +27,7 @@ pub fn layer<'a>(
 ) -> Element<'a, Message> {
     let mut title = line(title).font(theme::UI_FONT_STRONG);
     if warning {
-        title = title.color(theme::DANGER);
+        title = title.color(tokens.status.danger);
     }
     layout::warning_card(
         Message::dialog_head(title),
@@ -75,7 +75,7 @@ pub fn finish<'a, Q: Question>(
         body = body.push(prose(busy).color(tokens.text_secondary));
     }
     if let Some(note) = queue.note() {
-        body = body.push(prose(note).color(theme::DANGER));
+        body = body.push(prose(note).color(tokens.status.danger));
     }
     if queue.waiting() > 0 {
         body = body.push(prose(waiting(queue.waiting())).color(tokens.text_secondary));

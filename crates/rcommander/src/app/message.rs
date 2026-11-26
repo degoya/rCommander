@@ -28,6 +28,7 @@ use super::{
 };
 use crate::theme::{
     Tokens,
+    access::Access,
     layout::{self, Head},
 };
 
@@ -59,6 +60,9 @@ pub enum Message {
     /// A mouse button went down anywhere: the panel under the pointer becomes active.
     Press,
     SystemTheme(SystemMode),
+    /// Windows' high contrast or text size, read at once and again after each change
+    /// (`theme::access`, RC-110-79).
+    SystemAccess(Access),
     /// The terminals: a widget's redraw or paste, the session bar, the shell picker.
     Terminal(TermMessage),
     /// A window moved or changed its size; it counts once it is known not to be maximized.

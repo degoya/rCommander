@@ -1,8 +1,18 @@
 //! High contrast: black on white and white on black, a strong cursor - yellow with black text on
 //! light, blue with white text on dark - and marks that stay readable on it; every pair far above
-//! WCAG AA. Windows' own high-contrast themes are no theme here: rCommander draws its colours.
+//! WCAG AA. While Windows' own high contrast is on, the window draws this theme in the system's
+//! colours instead ([`with_system`], RC-110-79).
+
+use iced::Color;
 
 use super::Palette;
+use crate::theme::{
+    Syntax, Tokens,
+    access::SystemColours,
+    colours::{MIN_CONTRAST, contrast},
+    hex,
+    status::{self, readable},
+};
 
 pub(in crate::theme) const LIGHT: Palette = Palette {
     dark: false,
@@ -61,3 +71,63 @@ pub(in crate::theme) const DARK: Palette = Palette {
         0xC0C0C0, 0x808080, 0xFF8080, 0x80FF80, 0xFFFF80, 0x80B0FF, 0xFF80FF, 0x80FFFF, 0xFFFFFF,
     ],
 };
+
+/// This theme in the colours of Windows' high-contrast theme `colours` (RC-110-79), of the mode
+/// its window colour belongs to: every background in the window colour, the text and the lines
+/// in its text colour, the active cursor in the highlight with its text, the inactive one in the
+/// grey text, the accent and the marked names in the link colour. What the system leaves weak is
+/// moved until it reads: the link colour and the syntax colours on the window, the inactive
+/// cursor under the highlight's text. The terminal keeps this theme's ANSI colours on the
+/// system's background.
+pub(in crate::theme) fn with_system(colours: &SystemColours) -> Tokens {
+    let c = |rgb: u32| hex(rgb, 1.0);
+    let window = c(colours.window);
+    let text = c(colours.window_text);
+    let dark = contrast(window, Color::WHITE) > contrast(window, Color::BLACK);
+    let mut tokens = if dark { DARK.tokens() } else { LIGHT.tokens() };
+    let on_window = |colour: Color| readable(colour, dark, &[window], MIN_CONTRAST);
+    let link = on_window(c(colours.hot_light));
+    let cursor_text = c(colours.highlight_text);
+    let light_cursor_text =
+        contrast(cursor_text, Color::BLACK) > contrast(cursor_text, Color::WHITE);
+    tokens.window = window;
+    tokens.surface = window;
+    tokens.header = window;
+    tokens.list_fill = window;
+    tokens.control = window;
+    tokens.stripe_fill = window;
+    tokens.selected_fill = window;
+    tokens.stroke = text;
+    tokens.text = text;
+    tokens.text_secondary = text;
+    tokens.list_text = text;
+    tokens.list_text_secondary = text;
+    tokens.accent = link;
+    tokens.marked = link;
+    tokens.cursor_fill = c(colours.highlight);
+    tokens.cursor_text = cursor_text;
+    tokens.cursor_fill_inactive = readable(
+        c(colours.gray_text),
+        !light_cursor_text,
+        &[cursor_text],
+        MIN_CONTRAST,
+    );
+    let syntax = tokens.syntax;
+    tokens.syntax = Syntax {
+        keyword: on_window(syntax.keyword),
+        key: on_window(syntax.key),
+        string: on_window(syntax.string),
+        number: on_window(syntax.number),
+        literal: on_window(syntax.literal),
+        comment: on_window(syntax.comment),
+        punctuation: on_window(syntax.punctuation),
+        operator: on_window(syntax.operator),
+        type_name: on_window(syntax.type_name),
+        function: on_window(syntax.function),
+        invalid: on_window(syntax.invalid),
+    };
+    tokens.terminal.foreground = text;
+    tokens.terminal.background = window;
+    status::fit(&mut tokens);
+    tokens
+}

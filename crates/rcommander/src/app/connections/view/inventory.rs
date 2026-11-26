@@ -18,7 +18,7 @@ use crate::{
         Message,
         connections::inventory::{InventoryMsg, InventoryPage, msg},
     },
-    i18n::{error_text, t},
+    i18n::{counted::Counted, error_text, t},
     theme::{self, Tokens, fit, focus, icon::Icon, layout},
 };
 
@@ -155,20 +155,19 @@ fn form<'a>(page: &'a InventoryPage, tokens: &'static Tokens) -> Element<'a, Mes
         lines = lines.push(report_view(report));
     }
     if let Some(error) = &page.error {
-        lines = lines.push(fit::prose(error.as_str()).color(theme::DANGER));
+        lines = lines.push(fit::prose(error.as_str()).color(tokens.status.danger));
     }
     lines.into()
 }
 
 /// What the last preview or sync did, in one paragraph.
 fn report_view<'a>(report: &InventoryReport) -> Element<'a, Message> {
-    let key_counts = t!(
-        "inventory.report",
-        created = report.created,
-        updated = report.updated,
-        unchanged = report.unchanged,
-        missing = report.missing + report.still_missing,
-        skipped = report.skipped + report.refused
+    let key_counts = Counted::now().inventory_report(
+        report.created as u64,
+        report.updated as u64,
+        report.unchanged as u64,
+        (report.missing + report.still_missing) as u64,
+        (report.skipped + report.refused) as u64,
     );
     let head = if report.preview {
         t!("inventory.report_preview")

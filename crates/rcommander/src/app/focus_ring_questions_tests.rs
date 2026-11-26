@@ -2,7 +2,8 @@
 //! host-key and certificate questions keep their own walk over their buttons (Tab and the
 //! arrows, the button under the keyboard is the primary, Enter takes it) and have every button in
 //! the ring as well; the MCP question has Deny as its one stop, the ring on it as it opens, and
-//! Allow only for a click; the login-script editor and "Run command" walk every control.
+//! Allow only for a click in its first second, then in the ring too (RC-110-80); the
+//! login-script editor and "Run command" walk every control.
 
 use std::time::Duration;
 
@@ -175,9 +176,10 @@ async fn the_certificate_question_walks_its_own_buttons_round() {
 }
 
 /// A call of the class `exec` asks in the window: Deny is the one stop and has the ring as the
-/// question opens, so Enter and Space deny; Allow is no stop - only a click allows.
+/// question opens, and its Enter and Space are no answer yet; Allow is no stop - only a click
+/// allows. A second later (RC-110-80) Tab goes from Deny to Allow and Enter there allows.
 #[tokio::test]
-async fn the_mcp_question_starts_on_deny_and_allows_only_by_a_click() {
+async fn the_mcp_question_starts_on_deny_and_allows_by_key_after_a_second() {
     let root = tempfile::tempdir().expect("temp dir");
     let engine = headless_engine(root.path()).await;
     engine.attach_window();
@@ -197,9 +199,11 @@ async fn the_mcp_question_starts_on_deny_and_allows_only_by_a_click() {
     }
     harness.settle().await;
     let id = harness.app.mcp_questions.first().expect("a question").id;
+    assert!(!harness.app.mcp_armed(), "the question's first second");
+    let mut early = Vec::new();
     {
-        let layer =
-            mcp_confirm::layer(&harness.app.mcp_questions, theme::tokens(false)).expect("shown");
+        let layer = mcp_confirm::layer(&harness.app.mcp_questions, false, theme::tokens(false))
+            .expect("shown");
         let mut screen = Screen::new(layer).await;
         screen.focus(DENY_ID);
         assert_eq!(
@@ -219,20 +223,46 @@ async fn the_mcp_question_starts_on_deny_and_allows_only_by_a_click() {
             let deny = press_on(&mut screen, "Deny", key);
             assert!(matches!(
                 deny[..],
-                [Message::McpConfirm(McpConfirmMsg::Answer(
-                    _,
-                    McpAnswer::Deny
-                ))]
+                [Message::McpConfirm(McpConfirmMsg::Key(_, McpAnswer::Deny))]
             ));
+            early.extend(deny);
         }
     }
+    for message in early {
+        harness.send(message).await;
+    }
+    assert_eq!(harness.app.mcp_questions.len(), 1, "no key answered yet");
+    assert!(!call.is_finished());
+
     harness
-        .send(Message::McpConfirm(McpConfirmMsg::Answer(
-            id,
-            McpAnswer::Deny,
-        )))
+        .send(Message::McpConfirm(McpConfirmMsg::Armed(id)))
         .await;
-    assert_eq!(call.await.expect("joins"), McpVerdict::Denied);
+    assert!(harness.app.mcp_armed(), "a second later");
+    let allow = {
+        let layer = mcp_confirm::layer(&harness.app.mcp_questions, true, theme::tokens(false))
+            .expect("shown");
+        let mut screen = Screen::new(layer).await;
+        screen.focus(DENY_ID);
+        assert_eq!(screen.at(), Some(1), "Deny keeps the ring");
+        let stops = walk_round(&mut screen, "MCP question, armed");
+        assert_eq!(kinds(&stops), [Some(Kind::Button); 2], "Allow and Deny");
+        assert!(stops[0].text.contains("Allow"), "{stops:?}");
+        assert_eq!(screen.loose_buttons(), 1, "the head's X");
+        screen.focus(DENY_ID);
+        screen.tab(false);
+        assert_eq!(screen.at(), Some(0), "Tab goes from Deny to Allow");
+        let (allow, taken) = screen.press(Named::Enter);
+        assert!(taken, "Allow takes Enter");
+        assert!(matches!(
+            allow[..],
+            [Message::McpConfirm(McpConfirmMsg::Key(_, McpAnswer::Allow))]
+        ));
+        allow
+    };
+    for message in allow {
+        harness.send(message).await;
+    }
+    assert_eq!(call.await.expect("joins"), McpVerdict::Allowed);
 }
 
 #[tokio::test]

@@ -215,6 +215,7 @@ fn line(
 pub(super) fn prompt_field<'a>(label: &'static str, value: &'a str) -> Element<'a, Message> {
     row![
         text(label).size(theme::TEXT_SIZE).font(theme::UI_FONT),
+        // field-label: the prompt's label before it
         text_input("", value)
             .id(PROMPT_ID)
             .on_input(Message::PromptInput)

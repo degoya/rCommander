@@ -178,7 +178,9 @@ impl App {
                     Some(msg(QueueMsg::Confirm)),
                 )),
                 [secondary_button(no, Some(msg(QueueMsg::Keep)))],
-                [Element::from(fit::prose(question).color(theme::DANGER))],
+                [Element::from(
+                    fit::prose(question).color(tokens.status.danger),
+                )],
             ));
         }
         body.push(fit::help_line(t!("queue.keys"), tokens))
@@ -252,6 +254,7 @@ impl App {
             progress_bar(0.0..=1.0, share)
                 .length(BAR_LENGTH)
                 .girth(6)
+                .style(theme::progress)
                 .into(),
             line(format::percent(share)).width(PERCENT_WIDTH).into(),
         ]);
@@ -410,7 +413,7 @@ fn route(kind: &JobKind) -> String {
     let shown = |path: &VfsPath| rc_engine::shown_path(path).display().to_string();
     let from = first.map(shown).unwrap_or_default();
     let from = if count > 1 {
-        t!("queue.sources", first = from, more = count - 1)
+        t!("queue.sources", first = from, count = count - 1)
     } else {
         from
     };

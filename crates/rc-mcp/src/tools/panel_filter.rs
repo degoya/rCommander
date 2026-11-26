@@ -9,6 +9,7 @@ use super::panels::PanelArg;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FilterParams {
     /// With `*` or `?` the whole name must match (`*.txt`); a text without them matches any
     /// part of the name. Case is ignored. Omitted or empty: every entry shows again. At most 256

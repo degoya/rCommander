@@ -38,16 +38,21 @@ zip.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 # User and group names of the owner column (`local/unix.rs`); the space of a file system
-# (`local/space.rs`).
-nix.workspace = true
+# (`local/space.rs`); `copy_file_range` (`local/system_copy/linux.rs`, RC-110-65).
+nix = { workspace = true, features = ["zerocopy"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg.workspace = true
 # The attribute flags, file identities and shortcuts (`local/windows.rs`, RC-020-06): safe
 # wrappers, so no `unsafe` of ours for them.
 winsafe = { workspace = true, features = ["kernel", "shell"] }
-# `DeviceIoControl` for a junction (`local/windows/junction.rs`), the one call no safe crate wraps.
-windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_IO"] }
+# `DeviceIoControl` for a junction (`local/windows/junction.rs`) and `CopyFileExW` with its
+# progress routine (`local/system_copy/windows.rs`, RC-110-65): the calls no safe crate wraps.
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+] }
 # Portable devices over WPD (`device/windows*`, RC-100-61): COM interfaces only, which windows-sys
 # has as raw vtables; the version already in the lock.
 windows = { workspace = true, features = [

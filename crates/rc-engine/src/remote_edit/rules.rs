@@ -86,22 +86,6 @@ pub(crate) fn local_stamp(file: &Path) -> Option<Stamp> {
     })
 }
 
-/// Marks the fetched copy `file` as coming from the internet (`Zone.Identifier`, zone 3), so
-/// SmartScreen and the Office protected view treat it as such. Only Windows has the stream; a
-/// file system without streams (FAT) leaves the copy unmarked.
-#[cfg(windows)]
-pub(crate) fn mark_from_internet(file: &Path) {
-    let mut stream = file.as_os_str().to_owned();
-    stream.push(":Zone.Identifier");
-    if let Err(error) = std::fs::write(&stream, b"[ZoneTransfer]\r\nZoneId=3\r\n") {
-        tracing::warn!(%error, "a fetched server file was not marked as coming from the internet");
-    }
-}
-
-/// Nothing outside Windows: no zone streams there.
-#[cfg(not(windows))]
-pub(crate) fn mark_from_internet(_file: &Path) {}
-
 #[cfg(test)]
 #[path = "rules_tests.rs"]
 mod tests;

@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::{RcMcpServer, answer::ToolResult, tools::panels::PanelArg};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DrivesListParams {
     /// Ask every drive again, network drives included (which may wake a sleeping share), and
     /// read the WSL distributions again. Default false.
@@ -19,6 +20,7 @@ pub(crate) struct DrivesListParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ChangeDriveParams {
     /// The drive: an id from drives_list, a drive letter (c, C:, C:\) or a label such as a WSL
     /// distribution's name.
@@ -29,6 +31,7 @@ pub(crate) struct ChangeDriveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct UnmapNetworkParams {
     /// The network drive, as drives_list lists it with kind network: its letter (Z, Z:, Z:\) on

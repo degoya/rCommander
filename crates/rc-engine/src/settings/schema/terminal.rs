@@ -56,7 +56,9 @@ pub const PASTE_RIGHT_CLICK_KEY: &str = "terminal.paste_right_click";
 pub const OSC52_COPY_KEY: &str = "terminal.osc52_copy";
 
 /// With [`OSC52_COPY_KEY`] on, a program in an SSH terminal may put text on the clipboard too, as
-/// in Windows Terminal; off, only the local and WSL terminals may (RC-080-65).
+/// in Windows Terminal; off, only the local and WSL terminals may (RC-080-65). Off by default
+/// (RC-110-62): a hostile server could put a command there for the person to paste; a value
+/// stored earlier stays as it is.
 pub const OSC52_REMOTE_KEY: &str = "terminal.osc52_remote";
 
 /// The clipboard's image pasted into a terminal as a file path (RC-040-08, Ctrl+Alt+V); on a
@@ -130,7 +132,7 @@ pub(super) const OSC52_COPY: SettingSpec = SettingSpec {
 pub(super) const OSC52_REMOTE: SettingSpec = SettingSpec {
     key: OSC52_REMOTE_KEY,
     page: SettingPage::Terminal,
-    kind: SettingKind::Bool { default: true },
+    kind: SettingKind::Bool { default: false },
     label: "setting.terminal.osc52_remote",
     help: "setting.terminal.osc52_remote.help",
     protected: false,

@@ -21,7 +21,7 @@ use super::{
 use crate::{
     app::Message,
     format,
-    i18n::{error_text, t},
+    i18n::{counted::Counted, error_text, t},
     theme::{
         self, Tokens,
         fit::{self, line},
@@ -80,7 +80,7 @@ pub fn body<'a>(dialog: &'a SyncDialog, tokens: &'static Tokens) -> Element<'a, 
     let folders = row![path(&dialog.left, tokens), path(&dialog.right, tokens)].spacing(8);
     column![
         folders,
-        form(dialog),
+        form(dialog, tokens),
         filters(dialog.filter, tokens),
         status(dialog, tokens),
         list(dialog, tokens),
@@ -101,7 +101,7 @@ pub fn question<'a>(
         .map(|confirm| confirmation(confirm, tokens))
 }
 
-fn form(dialog: &SyncDialog) -> Element<'_, Message> {
+fn form<'a>(dialog: &'a SyncDialog, tokens: &'static Tokens) -> Element<'a, Message> {
     let form = &dialog.form;
     let switch = |label: &'static str, on: bool, which: Flag| {
         layout::check(label, on, true, move |on| {
@@ -123,6 +123,7 @@ fn form(dialog: &SyncDialog) -> Element<'_, Message> {
     );
     let (tolerance_label, masks_label) = (t!("sync.tolerance"), t!("sync.masks"));
     let tolerance = text_input("2", &form.tolerance)
+        .style(theme::text_field)
         .on_input(|text| wrap(CompareMsg::SyncTolerance(text)))
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
@@ -133,12 +134,16 @@ fn form(dialog: &SyncDialog) -> Element<'_, Message> {
         tolerance_label,
     );
     let masks = text_input(t!("sync.masks_all"), &form.masks)
+        .style(theme::text_field)
         .on_input(|text| wrap(CompareMsg::SyncMasks(text)))
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([5, 8]);
     let masks = layout::keyed(focus::Stop::field(masks, masks_label), masks_label);
-    let tolerance_label = layout::caption(tolerance_label, dialog.invalid.then_some(theme::DANGER));
+    let tolerance_label = layout::caption(
+        tolerance_label,
+        dialog.invalid.then_some(tokens.status.danger),
+    );
     column![
         row![
             layout::caption(mode_label, None),
@@ -238,33 +243,35 @@ fn filters<'a>(current: RowFilter, tokens: &'static Tokens) -> Element<'a, Messa
 /// Where the comparison stands; with a plan, what it found and what it would do.
 fn status<'a>(dialog: &SyncDialog, tokens: &'static Tokens) -> Element<'a, Message> {
     let (message, color) = match (&dialog.phase, dialog.summary()) {
-        _ if dialog.invalid => (t!("sync.invalid_tolerance").to_owned(), theme::DANGER),
+        _ if dialog.invalid => (
+            t!("sync.invalid_tolerance").to_owned(),
+            tokens.status.danger,
+        ),
         (Phase::Idle, _) => (t!("sync.idle").to_owned(), tokens.text_secondary),
         (Phase::Comparing, _) => (t!("sync.comparing").to_owned(), tokens.text_secondary),
         (Phase::Starting, _) => (t!("sync.starting").to_owned(), tokens.text_secondary),
         (Phase::Nothing, _) => (t!("sync.nothing").to_owned(), tokens.accent),
-        (Phase::Failed(code), _) => (error_text(code), theme::DANGER),
+        (Phase::Failed(code), _) => (error_text(code), tokens.status.danger),
         (Phase::Ready, Some(summary)) => (found(&summary, dialog), tokens.accent),
         (Phase::Ready, None) => (String::new(), tokens.accent),
     };
     fit::prose(message).color(color).into()
 }
 
+/// What the comparison found and how to change it, one whole sentence each (RC-110-86).
 fn found(summary: &SyncSummary, dialog: &SyncDialog) -> String {
-    let mut text = t!(
-        "sync.found",
-        equal = format::count(summary.equal),
-        different = format::count(
-            summary.left_newer + summary.right_newer + summary.different + summary.kind_mismatch
-        ),
-        left_only = format::count(summary.left_only),
-        right_only = format::count(summary.right_only)
-    );
+    let mut text = vec![Counted::now().sync_found([
+        summary.equal,
+        summary.left_newer + summary.right_newer + summary.different + summary.kind_mismatch,
+        summary.left_only,
+        summary.right_only,
+    ])];
     let skipped = dialog.plan.as_ref().map_or(0, |plan| plan.skipped);
     if skipped > 0 {
-        text.push_str(&t!("sync.skipped", count = format::count(skipped)));
+        text.push(t!("sync.skipped", count = format::count(skipped)));
     }
-    text
+    text.push(t!("sync.hint").to_owned());
+    text.join(" ")
 }
 
 /// The header and the rows on screen; the wheel scrolls, the list reports its size.
@@ -367,8 +374,8 @@ fn action(action: SyncAction, state: PairState, tokens: &'static Tokens) -> (&'s
     match action {
         SyncAction::CopyToRight => (t!("sync.action_copy_right"), tokens.accent),
         SyncAction::CopyToLeft => (t!("sync.action_copy_left"), tokens.accent),
-        SyncAction::DeleteRight => (t!("sync.action_delete_right"), theme::DANGER),
-        SyncAction::DeleteLeft => (t!("sync.action_delete_left"), theme::DANGER),
+        SyncAction::DeleteRight => (t!("sync.action_delete_right"), tokens.status.danger),
+        SyncAction::DeleteLeft => (t!("sync.action_delete_left"), tokens.status.danger),
         SyncAction::None => match state {
             PairState::Equal => (t!("sync.state_equal"), tokens.text_secondary),
             PairState::LeftOnly | PairState::RightOnly => ("", tokens.text_secondary),
@@ -411,7 +418,7 @@ fn confirmation_body(confirm: &Confirm) -> Element<'_, Message> {
     if right.files > 0 {
         body = body.push(fit::prose(t!(
             "sync.confirm_copy_right",
-            files = format::count(right.files),
+            count = format::count(right.files),
             size = format::size(right.bytes)
         )));
     }
@@ -419,7 +426,7 @@ fn confirmation_body(confirm: &Confirm) -> Element<'_, Message> {
     if left.files > 0 {
         body = body.push(fit::prose(t!(
             "sync.confirm_copy_left",
-            files = format::count(left.files),
+            count = format::count(left.files),
             size = format::size(left.bytes)
         )));
     }

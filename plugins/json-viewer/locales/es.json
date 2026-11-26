@@ -1,0 +1,7 @@
+{
+  "name": "Visor de JSON",
+  "description": "Muestra JSON, JSONC, JSON5 y JSON Lines en color, como un editor, o como un árbol desplegable.",
+  "codes": {
+    "01a1588a-5ec2-7323-9d13-2eaae3eef934.too_many_nodes": "El árbol tiene demasiados rangos abiertos; cierre el visor y vuelva a abrir el archivo."
+  }
+}

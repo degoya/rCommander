@@ -7,7 +7,9 @@
 //! server and on this machine's disks the file is written under a part name and renamed when
 //! complete (`staging.rs`), also out of an archive (RC-080-37); into other backends it is
 //! written in place - onto a portable device with its size stated first, so the device streams
-//! it and the progress is its upload's (RC-110-16).
+//! it and the progress is its upload's (RC-110-16). From disk to disk a larger file goes through
+//! the operating system's own copy instead, with the same progress, pause and cancel
+//! (`system_copy.rs`, RC-110-65).
 //!
 //! A copy to or from a server goes through `<name>.rcpart` on the target, also onto a local disk -
 //! a download that broke off must leave its part to be continued - and survives a lost
@@ -40,6 +42,7 @@ use crate::{
     copy_dirs::{DirDone, DirOutcome, OpenLink, subtree_end},
     links::{LinkDone, is_dir_link},
     name::{check_target, keeps_windows_rules},
+    resume::Placement,
     runner::{Runner, Step, Stop, attempt},
     staging::{Resolved, is_resumable, is_staged, open_part, remove_leftover, replace_by_rename},
     temp_name::part_path,
@@ -173,6 +176,7 @@ impl Runner {
         self.staged = is_staged(&target.backend);
         self.resumable = is_resumable(&self.src_id, &target.backend);
         self.dst_id = Some(target.backend.clone());
+        self.zone.onto(&target.backend);
         let dst = Arc::clone(&self.dst);
         if attempt!(self, target, ensure_dir(dst.as_ref(), &target.path).await).is_none() {
             return Ok(());
@@ -421,6 +425,11 @@ impl Runner {
                 Err(error) if falls_back(&error) => self.rename_ok = false,
                 Err(error) => return Err(error.into()),
             }
+            // A move to another disk: the system's copy where it can (RC-110-65).
+            let placement = Placement::new(dest.to_path_buf(), mode);
+            if let Some(moved) = self.copy_by_system(item, &placement).await? {
+                return Ok(moved);
+            }
         }
         self.failed_on = None;
         // Staged, the copy is written under a part name, replaced when it is left over.
@@ -463,6 +472,7 @@ impl Runner {
             }
             return Err(step);
         }
+        self.keep_zone(item, dest).await;
         self.preserve(&item.entry, dest).await;
         Ok(Moved::Copied)
     }

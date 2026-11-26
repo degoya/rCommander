@@ -7,13 +7,19 @@
 //! disagree - and "Copy version info" puts one line for a bug report on the clipboard.
 //! *Licences* shows rCommander's own licence and every crate the binary links with its licence,
 //! from the list `scripts/licenses.sh` generates ([`licenses`]), with a filter and a count per
-//! licence. An address the repository does not publish yet is text marked "not yet published",
+//! licence; "Show licence texts" puts the texts of the crates the filter matches in the table's
+//! place ([`license_texts`], RC-110-72). An address the repository does not publish yet is text marked "not yet published",
 //! never a link. A published one opens in the default browser with a click (RC-100-64, which
 //! reverses RC-010-19's copy-only links): through the Markdown preview's
 //! [`links::open`](crate::app::viewer::links::open) - only `http`, `https` or `mailto`, its length
 //! capped, `open::that_detached` on a blocking thread. The copy button beside it puts the address
 //! on the clipboard; when the system refuses to open it, the address is copied and a note says so.
+//!
+//! The credits carry the notices GPL section 0 asks of an interactive program (RC-110-75): the
+//! copyright line, that rCommander comes without any warranty and may be passed on under its
+//! licence, and "Show licence", which opens the licence's text on the *Licences* tab.
 
+mod license_texts;
 mod licenses;
 mod logo;
 mod view;
@@ -40,12 +46,17 @@ pub enum AboutTab {
 
 const TABS: [AboutTab; 2] = [AboutTab::About, AboutTab::Licenses];
 
+/// The year rCommander was first published, for the copyright line.
+const COPYRIGHT_YEAR: &str = "2026";
+
 /// What the page keeps while the dialog is open.
 #[derive(Debug, Default)]
 pub struct AboutPage {
     tab: AboutTab,
     /// The licence list's filter: a crate's name or licence contains it, ignoring case.
     filter: String,
+    /// Whether the licences tab shows the matching crates' licence texts instead of the table.
+    texts: bool,
     /// The update channel and the last check, once the self-update's state is read (RC-100-05).
     update_facts: Vec<(&'static str, String)>,
 }
@@ -55,10 +66,10 @@ impl AboutPage {
     pub(in crate::app) fn set_update_facts(&mut self, status: &rc_engine::UpdateStatus) {
         let checked = match (&status.last_check, &status.last_code) {
             (None, _) => t!("settings.about.update_never").to_owned(),
-            (Some(at), None) => at.strftime("%Y-%m-%d %H:%M UTC").to_string(),
+            (Some(at), None) => crate::format::instant(*at),
             (Some(at), Some(code)) => format!(
                 "{} ({})",
-                at.strftime("%Y-%m-%d %H:%M UTC"),
+                crate::format::instant(*at),
                 crate::i18n::error_text(code)
             ),
         };
@@ -78,6 +89,10 @@ impl AboutPage {
 pub enum AboutMsg {
     Tab(AboutTab),
     Filter(String),
+    /// Show the licence texts (true) or the table.
+    Texts(bool),
+    /// "Show licence": rCommander's own licence text, at the head of the *Licences* tab's texts.
+    ShowLicense,
     CopyVersion,
     /// A published address, to the clipboard.
     CopyLink(String),
@@ -106,6 +121,15 @@ pub fn window_title() -> String {
         "app.title",
         name = NAME,
         version = VERSION,
+        author = author()
+    )
+}
+
+/// The copyright line of the credits: the year of the first release and the author.
+fn copyright() -> String {
+    t!(
+        "settings.about.copyright",
+        year = COPYRIGHT_YEAR,
         author = author()
     )
 }
@@ -173,6 +197,17 @@ impl App {
             }
             AboutMsg::Filter(filter) => {
                 dialog.about.filter = filter;
+                return Vec::new();
+            }
+            AboutMsg::Texts(shown) => {
+                dialog.about.texts = shown;
+                return Vec::new();
+            }
+            // The empty filter puts the own licence first (`license_texts::for_filter`).
+            AboutMsg::ShowLicense => {
+                dialog.about.tab = AboutTab::Licenses;
+                dialog.about.texts = true;
+                dialog.about.filter.clear();
                 return Vec::new();
             }
             AboutMsg::CopyVersion => {

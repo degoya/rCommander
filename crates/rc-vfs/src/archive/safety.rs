@@ -3,7 +3,12 @@
 //!
 //! A name is never joined to a real path. One that climbs out (`..`), is absolute, starts with a
 //! drive letter or a UNC prefix is listed under its cleaned path and marked with the
-//! [`UnsafeName`] it showed; backslashes are separators, as Windows reads them.
+//! [`UnsafeName`] it showed; backslashes are separators, as Windows reads them. On Windows every
+//! part is also made a name Windows can hold, as 7-Zip unpacks it there ([`windows_name`],
+//! RC-110-92): a `C:` or `x.exe:Zone.Identifier` in the middle of a name would otherwise be a
+//! drive or a data stream once joined to the target.
+
+mod windows_name;
 
 use std::path::Path;
 
@@ -29,6 +34,11 @@ pub enum UnsafeName {
 /// xz and 7-Zip asks for (64 MiB at most).
 const DEFAULT_DECODER_MEMORY: u64 = 256 << 20;
 
+/// [`ArchiveLimits::max_unpacked_size`] unless configured: 64 GiB (RC-110-62; 1 TiB before), so
+/// an archive of about 130 MiB at the ratio's 500:1 cannot ask for more; an unpacking holds its
+/// files against the target's free space besides.
+const DEFAULT_UNPACKED_SIZE: u64 = 64 << 30;
+
 /// The limits against archive bombs, with safe defaults; the settings may raise them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -52,7 +62,7 @@ impl Default for ArchiveLimits {
     fn default() -> Self {
         Self {
             max_entries: 1_000_000,
-            max_unpacked_size: 1 << 40,
+            max_unpacked_size: DEFAULT_UNPACKED_SIZE,
             max_ratio: 500,
             ratio_threshold: 256 << 20,
             max_decoder_memory: DEFAULT_DECODER_MEMORY,
@@ -188,7 +198,33 @@ pub(crate) struct CleanName {
     pub issue: Option<UnsafeName>,
 }
 
-/// Cleans a stored name: `/` and `\` separate, `..` and every prefix are dropped and noted.
+/// Cleans a stored name as the archive view lists it on this system: [`clean_name_for`] with
+/// Windows' rules on Windows.
+pub(crate) fn clean_name_here(name: &str) -> CleanName {
+    clean_name_for(name, cfg!(windows))
+}
+
+/// Cleans a stored name for a system that keeps Windows' rules (`windows`) or not: the parts
+/// [`clean_name`] leaves, each made a name Windows can hold when `windows` - `<>:"|?*` and
+/// control characters become `_`, a device name gets a `_` in front, a dot or space at the end
+/// becomes `_`. Such a part is renamed, not unsafe: unpacking writes it under the new name, as
+/// 7-Zip does; the stored name stays in [`ArchiveEntryInfo::stored_name`].
+///
+/// [`ArchiveEntryInfo::stored_name`]: super::ArchiveEntryInfo::stored_name
+pub(crate) fn clean_name_for(name: &str, windows: bool) -> CleanName {
+    let mut clean = clean_name(name);
+    if windows {
+        for part in &mut clean.parts {
+            if let Some(held) = windows_name::holdable(part) {
+                *part = held;
+            }
+        }
+    }
+    clean
+}
+
+/// Cleans a stored name: `/` and `\` separate, `..` and every prefix are dropped and noted. The
+/// parts may still be names Windows cannot hold ([`clean_name_for`]).
 pub(crate) fn clean_name(name: &str) -> CleanName {
     let bytes = name.as_bytes();
     let separator = |byte: u8| byte == b'/' || byte == b'\\';

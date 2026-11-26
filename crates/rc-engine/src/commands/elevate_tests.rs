@@ -93,3 +93,17 @@ async fn an_elevated_line_starts_the_system_cmd_as_administrator() {
     );
     assert!(started.params.ends_with(" && dir\""), "{}", started.params);
 }
+
+#[test]
+fn a_window_opens_as_the_command_says() {
+    assert_eq!(show_command(Show::Normal), 1);
+    assert_eq!(show_command(Show::Minimized), 7);
+    assert_eq!(show_command(Show::Maximized), 3);
+}
+
+#[test]
+fn a_no_to_windows_question_is_no_error() {
+    assert_eq!(refused(1223), Ok(ShellStarted::Cancelled));
+    assert_eq!(refused(5), Err(5));
+    assert_eq!(refused(-1), Err(0));
+}

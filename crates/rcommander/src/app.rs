@@ -21,6 +21,7 @@ mod button_bar;
 mod cert_trust;
 mod checksum;
 mod cmdline;
+mod coalesce;
 mod compare;
 mod connections;
 mod context_menu;
@@ -149,6 +150,8 @@ pub struct App {
     host_keys: hostkeys::HostKeyDialogs,
     /// The MCP calls waiting for the person, oldest first; the first is shown (RC-010-13).
     mcp_questions: Vec<rc_engine::McpQuestion>,
+    /// The question on top and whether its keys work yet (RC-110-80).
+    mcp_shown: Option<mcp_confirm::Shown>,
     /// The MCP calls a person allowed for a session, for the status bar (RC-010-27).
     mcp_grants: Vec<rc_engine::McpGrant>,
     /// The file icons of the lists.
@@ -252,6 +255,7 @@ impl App {
             database: None,
             host_keys: hostkeys::HostKeyDialogs::default(),
             mcp_questions: Vec::new(),
+            mcp_shown: None,
             mcp_grants: Vec::new(),
             icons: icons::Icons::default(),
             tabs: tab_rows,
@@ -392,6 +396,11 @@ impl App {
             Message::SystemTheme(mode) => {
                 self.system_theme(mode);
                 self.restyle_terminals();
+            }
+            Message::SystemAccess(access) => {
+                if theme::access::apply(access) {
+                    self.restyle_terminals();
+                }
             }
             Message::Terminal(message) => return self.on_terminal(message),
             Message::WindowChanged(id, change) => {

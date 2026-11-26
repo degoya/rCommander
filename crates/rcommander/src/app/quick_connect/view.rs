@@ -132,7 +132,7 @@ pub fn body<'a>(dialog: &'a QuickDialog, tokens: &'static Tokens) -> Element<'a,
             body = body.push(prose(t!("quick.connecting")).color(tokens.text_secondary));
         }
         QuickPhase::Failed(error) => {
-            body = body.push(prose(error.as_str()).color(theme::DANGER));
+            body = body.push(prose(error.as_str()).color(tokens.status.danger));
         }
     }
     let buttons = layout::button_row(

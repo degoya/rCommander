@@ -1,6 +1,10 @@
 //! The watcher on a real temporary folder: a new file shows, a burst is a few readings, a lost
 //! notice is one, a size change only with its switch, a deleted folder is left, and nothing is
 //! read in the background until the return.
+//!
+//! No test waits on the clock (RC-110-70): a reading is awaited with [`until`], and "no further
+//! reading" is checked once the loop has [`settle`]d - every signal taken, no reading due. A
+//! notice the system sends is awaited by what it does: a panel no longer quiet.
 
 use std::{
     fs,
@@ -43,6 +47,26 @@ async fn until(what: &str, limit: Duration, check: impl Fn() -> bool) -> Duratio
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     started.elapsed()
+}
+
+/// Waits until the loop has taken everything sent to it so far - a no-op wake sent last, the
+/// engine's events go first - and no panel waits for a reading it may begin.
+async fn settle(engine: &Engine) {
+    assert!(engine.inner.watch.send(Signal::Foreground), "the loop runs");
+    until("the watcher settles", Duration::from_secs(10), || {
+        engine.watch_settled()
+    })
+    .await;
+}
+
+/// Waits until a notice of the system about `panel`'s folder reached the loop.
+async fn noticed(engine: &Engine, panel: PanelId) {
+    until(
+        "the system's notice arrives",
+        Duration::from_secs(5),
+        || !engine.watch_quiet(panel),
+    )
+    .await;
 }
 
 fn lists(engine: &Engine, panel: PanelId, name: &str) -> bool {
@@ -126,14 +150,14 @@ async fn ten_thousand_files_in_one_burst_are_a_few_readings_then_none() {
     })
     .await;
     // What was noticed during the last reading is read once more, then all is quiet.
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    settle(&engine).await;
     let settled = engine.watch_reads(LEFT);
     eprintln!(
         "RC-110-02: 10 000 new files took {} readings",
         settled - before
     );
     assert!(settled - before <= 8, "{} readings", settled - before);
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    settle(&engine).await;
     assert_eq!(engine.watch_reads(LEFT), settled, "no change, no reading");
 }
 
@@ -149,7 +173,7 @@ async fn a_full_channel_or_a_lost_notice_is_one_full_reading() {
         engine.watch_reads(LEFT) > before
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    settle(&engine).await;
     assert_eq!(engine.watch_reads(LEFT), before + 1);
 }
 
@@ -158,7 +182,9 @@ async fn a_size_change_is_read_only_with_watch_changes() {
     let (root, engine) = watching(&[("a.txt", "a")]).await;
     let before = engine.watch_reads(LEFT);
     append(&root.path().join("a.txt"));
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    // The watcher saw it, so coming back to the window reads the panel (RC-100-69).
+    noticed(&engine, LEFT).await;
+    settle(&engine).await;
     // On macOS the write arrives as a creation too (FSEvents keeps a path's flags together);
     // a.txt is listed, so it is no new entry either.
     assert_eq!(
@@ -166,17 +192,15 @@ async fn a_size_change_is_read_only_with_watch_changes() {
         before,
         "without panels.watch_changes"
     );
-    // The watcher saw it, so coming back to the window reads the panel (RC-100-69).
-    assert!(!engine.watch_quiet(LEFT));
     set(&engine, WATCH_CHANGES_KEY, true).await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    settle(&engine).await;
     let before = engine.watch_reads(LEFT);
     append(&root.path().join("a.txt"));
     until("one reading", Duration::from_secs(2), || {
         engine.watch_reads(LEFT) > before
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    settle(&engine).await;
     assert_eq!(engine.watch_reads(LEFT), before + 1);
 }
 
@@ -193,7 +217,7 @@ async fn a_creation_notice_for_a_listed_name_is_a_change_of_content() {
     let (root, engine) = watching(&[("a.txt", "a")]).await;
     let before = engine.watch_reads(LEFT);
     assert!(engine.inner.watch.send(created(root.path(), "a.txt")));
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    settle(&engine).await;
     assert_eq!(engine.watch_reads(LEFT), before, "a.txt is listed");
     assert!(!engine.watch_quiet(LEFT));
     assert!(engine.inner.watch.send(created(root.path(), "b.txt")));
@@ -203,7 +227,7 @@ async fn a_creation_notice_for_a_listed_name_is_a_change_of_content() {
     .await;
     let before = engine.watch_reads(LEFT);
     set(&engine, WATCH_CHANGES_KEY, true).await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    settle(&engine).await;
     assert!(engine.inner.watch.send(created(root.path(), "a.txt")));
     until(
         "a reading with panels.watch_changes",
@@ -239,10 +263,11 @@ async fn in_the_background_nothing_is_read_until_the_return() {
     let (root, engine) = watching(&[("a.txt", "a")]).await;
     set(&engine, WATCH_BACKGROUND_KEY, false).await;
     engine.set_foreground(false);
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    settle(&engine).await;
     let before = engine.watch_reads(LEFT);
     fs::write(root.path().join("c.txt"), "c").expect("write");
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    noticed(&engine, LEFT).await;
+    settle(&engine).await;
     assert_eq!(engine.watch_reads(LEFT), before);
     assert!(!lists(&engine, LEFT, "c.txt"));
     engine.set_foreground(true);
@@ -250,7 +275,7 @@ async fn in_the_background_nothing_is_read_until_the_return() {
         lists(&engine, LEFT, "c.txt")
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    settle(&engine).await;
     assert_eq!(engine.watch_reads(LEFT), before + 1, "read once");
 }
 
@@ -269,6 +294,6 @@ async fn the_switch_and_the_command_turn_the_watcher_off() {
     .await;
     let before = engine.watch_reads(LEFT);
     fs::write(root.path().join("c.txt"), "c").expect("write");
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    settle(&engine).await;
     assert_eq!(engine.watch_reads(LEFT), before);
 }

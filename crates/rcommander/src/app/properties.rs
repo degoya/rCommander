@@ -24,7 +24,7 @@ pub(super) use self::{
     view::{body, overlay, title},
 };
 use super::{App, Effect, Message};
-use crate::i18n::{error_text, t};
+use crate::i18n::{counted::Counted, error_text, t};
 
 /// Which dialog is open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -372,7 +372,7 @@ impl App {
     /// The engine's answer, for the open dialog or the clipboard.
     fn properties_finished(&mut self, result: Result<Outcome, &'static str>) -> Vec<Effect> {
         if let Ok(Outcome::ClipboardText { text }) = result {
-            self.info = Some(t!("props.copied", lines = text.lines().count()));
+            self.info = Some(t!("props.copied", count = text.lines().count()));
             return vec![Effect::Task(iced::clipboard::write(text))];
         }
         let Some(dialog) = self.properties.as_mut() else {
@@ -397,14 +397,11 @@ impl App {
                 dialog.phase = Phase::Done(String::new());
             }
             Ok(Outcome::AttributesSet(report)) if report.failed > 0 => {
-                dialog.phase = Phase::Failed(t!(
-                    "props.attributes_partly",
-                    changed = report.changed,
-                    failed = report.failed
-                ));
+                dialog.phase =
+                    Phase::Failed(Counted::now().attributes_partly(report.changed, report.failed));
             }
             Ok(Outcome::AttributesSet(report)) => {
-                self.info = Some(t!("props.attributes_done", changed = report.changed));
+                self.info = Some(t!("props.attributes_done", count = report.changed));
                 self.properties = None;
             }
             Ok(Outcome::LinkCreated { link, .. }) => {

@@ -47,7 +47,7 @@ from pathlib import Path
 path, version = Path(sys.argv[1]), sys.argv[2]
 stem = path.name.removesuffix(".zip").removesuffix(".tar.gz")
 files = {f"{stem}/VERSION.txt": f"rCommander {version}\ncommit 1234abcd-dirty\nbuilt now\ntarget t, profile release\n",
-         f"{stem}/README.md": "r", f"{stem}/LICENSE": "l", f"{stem}/NOTICE": "n",
+         f"{stem}/README.md": "r", f"{stem}/LICENSE": "l", f"{stem}/NOTICE": "n", f"{stem}/THIRD-PARTY-LICENSES": "t",
          f"{stem}/plugins/a-1.0.0.rcplug": "a", f"{stem}/plugins/b-1.0.0.rcplug": "b"}
 path.parent.mkdir(parents=True, exist_ok=True)
 if path.suffix == ".zip":

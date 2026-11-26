@@ -1,5 +1,10 @@
 # Changes
 
+## 0.1.8
+
+Speaks German, French and Spanish: its name, description and error messages follow rCommander's
+language instead of staying English. Built against plugin contract 0.6.0.
+
 ## 0.1.7
 
 Draws with resvg 0.50. Three ways a small file could still keep the plugin busy end with "too

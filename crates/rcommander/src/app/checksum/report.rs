@@ -5,7 +5,7 @@ use rc_engine::{JobKind, JobReport, JobSnapshot, VerifyEntry, VerifyStatus};
 
 use crate::{
     format,
-    i18n::{code_text, error_text, t},
+    i18n::{code_text, counted::Counted, error_text, t},
 };
 
 /// One line of the result list.
@@ -53,14 +53,16 @@ pub fn shown(job: &JobSnapshot) -> Option<Shown> {
             JobReport::ChecksumsVerified { report, omitted },
         ) => {
             let summary = &report.summary;
-            let title = t!(
-                "checksum.result.verified",
-                file = file(path),
-                ok = summary.ok,
-                mismatch = summary.mismatch,
-                missing = summary.missing,
-                unreadable = summary.unreadable,
-                invalid = summary.invalid,
+            let title = Counted::now().checksum_verified(
+                &file(path),
+                [
+                    summary.ok,
+                    summary.mismatch,
+                    summary.missing,
+                    summary.unreadable,
+                    summary.invalid,
+                ]
+                .map(|lines| lines as u64),
             );
             // The bad lines first, each group in the file's order (RC-020-05, RC-020-10).
             let mut rows: Vec<Row> = report.entries.iter().map(verify_row).collect();
@@ -75,7 +77,7 @@ pub fn shown(job: &JobSnapshot) -> Option<Shown> {
             let title = t!(
                 "checksum.result.created",
                 count = report.files.len() + omitted,
-                files = report.written.join(", "),
+                names = report.written.join(", "),
             );
             let rows = report
                 .files

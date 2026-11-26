@@ -1,7 +1,8 @@
 use rc_engine::{Command, Outcome};
 
 use super::{
-    AboutMsg, AboutTab, data_fact, facts, link_messages, shown, version_line, window_title,
+    AboutMsg, AboutTab, copyright, data_fact, facts, link_messages, shown, version_line,
+    window_title,
 };
 use crate::{
     app::{
@@ -76,6 +77,16 @@ async fn the_page_opens_from_the_settings_and_keeps_its_tab_and_filter() {
     let dialog = harness.app.settings.as_ref().expect("open");
     assert_eq!(dialog.about.tab, AboutTab::Licenses);
     assert_eq!(dialog.about.filter, "mit");
+    assert!(!dialog.about.texts, "the table first");
+
+    harness
+        .send(Message::Settings(SettingsMessage::About(AboutMsg::Texts(
+            true,
+        ))))
+        .await;
+    let dialog = harness.app.settings.as_ref().expect("open");
+    assert!(dialog.about.texts, "the licence texts in the table's place");
+    assert_eq!(dialog.about.filter, "mit", "under the same filter");
 
     harness
         .send(Message::Settings(SettingsMessage::About(
@@ -86,6 +97,46 @@ async fn the_page_opens_from_the_settings_and_keeps_its_tab_and_filter() {
     let (note, error) = dialog.note.as_ref().expect("a note");
     assert!(!error);
     assert_eq!(note, crate::i18n::t!("settings.about.version_copied"));
+}
+
+/// The credits carry GPL section 0's notices: copyright, no warranty, the licence to read
+/// (RC-110-75).
+#[test]
+fn the_credits_name_the_copyright_holder() {
+    assert_eq!(
+        copyright(),
+        "Copyright \u{a9} 2026 Alexander Herling / DEGOYA.digital"
+    );
+    let warranty = t!("settings.about.warranty");
+    assert!(warranty.contains("NO WARRANTY"), "{warranty}");
+    assert!(warranty.contains("version 3 or later"), "{warranty}");
+}
+
+/// "Show licence" turns to the licence texts under an empty filter, which puts rCommander's own
+/// first, whatever the tab showed before (RC-110-75).
+#[tokio::test]
+async fn show_licence_opens_the_own_licence_text() {
+    let (_root, mut harness) = Harness::temp_with_db().await;
+    harness
+        .send(Message::Settings(SettingsMessage::OpenPage(Page::About)))
+        .await;
+    harness
+        .send(Message::Settings(SettingsMessage::About(AboutMsg::Filter(
+            "mit".into(),
+        ))))
+        .await;
+    let before = harness.app.settings.as_ref().expect("open").note.clone();
+    harness
+        .send(Message::Settings(SettingsMessage::About(
+            AboutMsg::ShowLicense,
+        )))
+        .await;
+    let dialog = harness.app.settings.as_ref().expect("open");
+    assert_eq!(dialog.about.tab, AboutTab::Licenses);
+    assert!(dialog.about.texts, "the texts, not the table");
+    assert!(dialog.about.filter.is_empty(), "the filter cleared");
+    // The page may carry a note of its own (a database a test harness lacks); none is added.
+    assert_eq!(dialog.note, before, "nothing copied");
 }
 
 #[tokio::test]

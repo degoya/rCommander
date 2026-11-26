@@ -24,6 +24,7 @@ impl From<DirectionArg> for Direction {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FilesCompareApplyParams {
     /// The left file: absolute, or relative to the left panel's directory.
     pub left: String,

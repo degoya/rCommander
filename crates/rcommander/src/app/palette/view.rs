@@ -19,6 +19,7 @@ const CARD_WIDTH: f32 = 560.0;
 /// The palette over the window.
 pub fn overlay<'a>(palette: &'a Palette, tokens: &'static Tokens) -> Element<'a, Message> {
     let field = text_input(t!("palette.placeholder"), &palette.query)
+        .style(theme::text_field)
         .id(FIELD_ID)
         .on_input(|query| Message::Palette(PaletteMsg::Query(query)))
         .font(theme::UI_FONT)

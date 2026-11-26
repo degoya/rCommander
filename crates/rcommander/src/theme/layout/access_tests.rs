@@ -4,7 +4,7 @@ use iced::{
     widget::{text, text_input},
 };
 
-use super::{caption, check, keyed, marked_icon_button};
+use super::{caption, captioned, captioned_beside, check, keyed, marked_icon_button};
 use crate::theme::{
     focus::{Kind, State, Stop},
     icon::Icon,
@@ -64,4 +64,20 @@ fn a_field_and_a_button_take_the_key_their_label_marks() {
         "&Copy",
     );
     assert_eq!(stop_state(&copy).letter(), Some('c'));
+}
+
+/// RC-110-78: a captioned field keeps its caption beside or over it and takes the caption's key.
+#[test]
+fn a_captioned_field_keeps_its_caption_and_takes_its_key() {
+    let over: Member<'_> = captioned("&Name", text_input("home", "").on_input(|_| true));
+    let beside: Member<'_> = captioned_beside("&Name", text_input("", "").on_input(|_| true));
+    for field in [over, beside] {
+        let tree = Tree::new(field.as_widget());
+        assert_eq!(tree.children.len(), 2, "the caption and the field");
+        let stop = &tree.children[1];
+        assert_eq!(stop.tag, Tag::of::<State>(), "the field's stop");
+        let state = *stop.state.downcast_ref::<State>();
+        assert_eq!(state.kind(), Kind::Field);
+        assert_eq!(state.letter(), Some('n'));
+    }
 }

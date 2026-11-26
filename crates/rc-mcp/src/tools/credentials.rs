@@ -19,6 +19,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SaveParams {
     /// The entry to change, from connections_list; omitted, a new one is added.
     #[serde(default)]
@@ -36,6 +37,7 @@ pub(crate) struct SaveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MoveParams {
     /// The entry's id.
     pub id: i64,
@@ -45,6 +47,7 @@ pub(crate) struct MoveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct DeleteParams {
     /// The entry's id.

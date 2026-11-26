@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ListParams {
     /// The SSH connection whose forwards to list, from connections_list; omitted, every running
     /// forward of every connection.
@@ -19,12 +20,14 @@ pub(crate) struct ListParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ForwardParams {
     /// The forward's id, from forwards_list.
     pub id: i64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct StopAllParams {
     /// Only this connection's forwards; omitted, every running one.
     #[serde(default)]

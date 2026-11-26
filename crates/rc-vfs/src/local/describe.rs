@@ -3,9 +3,11 @@
 use std::{
     fs::{self, Metadata},
     io,
+    ops::ControlFlow,
     path::Path,
 };
 
+use super::link_target;
 use super::platform::{self, Owners};
 use crate::{
     Details, Entry, EntryKind, Result, TargetKind, VfsError, long_path, parse_wsl_unc,
@@ -18,6 +20,17 @@ pub(super) fn list(dir: &Path) -> Result<Vec<Entry>> {
     walk(dir, |name, real, meta, in_wsl| {
         describe(name, real, meta, in_wsl, &mut owners)
     })
+}
+
+/// The entries of `dir` as [`list`] has them, each handed to `take` as it is read; the reading
+/// stops at the entry `take` breaks at (RC-110-66).
+pub(super) fn list_each(dir: &Path, take: impl FnMut(Entry) -> ControlFlow<()>) -> Result<()> {
+    let mut owners = Owners::new();
+    walk_each(
+        dir,
+        |name, real, meta, in_wsl| describe(name, real, meta, in_wsl, &mut owners),
+        take,
+    )
 }
 
 /// [`list`] with each entry's [`Details`] from the same metadata.
@@ -37,13 +50,23 @@ pub(super) fn details(path: &Path) -> Result<Details> {
 }
 
 /// One item per entry of `dir`, made by `make` from its name, path and not-followed metadata.
-fn walk<T>(
+fn walk<T>(dir: &Path, make: impl FnMut(String, &Path, &Metadata, bool) -> T) -> Result<Vec<T>> {
+    let mut entries = Vec::new();
+    walk_each(dir, make, |item| {
+        entries.push(item);
+        ControlFlow::Continue(())
+    })?;
+    Ok(entries)
+}
+
+/// [`walk`] with each item handed to `take` as it is made, until `take` breaks.
+fn walk_each<T>(
     dir: &Path,
     mut make: impl FnMut(String, &Path, &Metadata, bool) -> T,
-) -> Result<Vec<T>> {
+    mut take: impl FnMut(T) -> ControlFlow<()>,
+) -> Result<()> {
     let in_wsl = parse_wsl_unc(dir).is_some();
     let read = fs::read_dir(long_path(dir)).map_err(|error| VfsError::from_io(error, dir))?;
-    let mut entries = Vec::new();
     for item in read {
         let item = item.map_err(|error| VfsError::from_io(error, dir))?;
         let name = item.file_name().to_string_lossy().into_owned();
@@ -54,9 +77,11 @@ fn walk<T>(
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) => return Err(VfsError::from_io(error, dir.join(&name))),
         };
-        entries.push(make(name, &item.path(), &meta, in_wsl));
+        if take(make(name, &item.path(), &meta, in_wsl)).is_break() {
+            break;
+        }
     }
-    Ok(entries)
+    Ok(())
 }
 
 /// The entry at `path`, a link described as the link.
@@ -84,17 +109,16 @@ fn describe(
 ) -> Entry {
     let (kind, shown) = if meta.file_type().is_symlink() {
         let raw = fs::read_link(real).ok();
-        // A link onto a share is not followed to describe it: following it signs in there with
-        // the person's Windows account, by merely listing the folder (RC-080-10).
-        let onto_share = cfg!(windows)
-            && raw
-                .as_deref()
-                .is_some_and(|target| crate::network_path(&target.to_string_lossy()).is_some());
+        // A link onto a share or a network drive is not followed to describe it
+        // (`link_target.rs`); it is looked up when it is used.
+        let far = raw.as_deref().is_some_and(link_target::not_followed);
         let target = raw
             .map(|target| strip_verbatim(&target))
             .unwrap_or_default();
-        let followed = if onto_share {
-            Err(io::Error::other("a link onto a share is not followed"))
+        let followed = if far {
+            Err(io::Error::other(
+                "a link onto another machine is not followed",
+            ))
         } else {
             fs::metadata(real)
         };

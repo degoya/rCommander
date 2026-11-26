@@ -5,7 +5,11 @@
 
 use iced::Color;
 
-use super::{Tokens, hex, syntax, terminal};
+use super::{
+    Tokens, hex,
+    status::{self, Status},
+    syntax, terminal,
+};
 
 use crate::recover::RwLockOrRecover as _;
 
@@ -25,7 +29,7 @@ pub(super) fn light(accent: Color) -> Tokens {
     let surface = hex(0xFFFFFF, 1.0);
     let text = hex(0x1D1D1F, 1.0);
     let text_secondary = hex(0x6E6E73, 1.0);
-    Tokens {
+    let mut tokens = Tokens {
         dark: false,
         window: hex(0xECECEC, 1.0),
         surface,
@@ -47,7 +51,10 @@ pub(super) fn light(accent: Color) -> Tokens {
         marked: accent,
         syntax: syntax::LIGHT,
         terminal: terminal::ONE_HALF_LIGHT,
-    }
+        status: Status::LIGHT,
+    };
+    status::fit(&mut tokens);
+    tokens
 }
 
 /// The dark tokens with `accent` (`controlAccentColor` for a dark background).
@@ -55,7 +62,7 @@ pub(super) fn dark(accent: Color) -> Tokens {
     let surface = hex(0x1E1E1E, 1.0);
     let text = hex(0xE5E5E7, 1.0);
     let text_secondary = hex(0x98989D, 1.0);
-    Tokens {
+    let mut tokens = Tokens {
         dark: true,
         window: hex(0x2A2A2A, 1.0),
         surface,
@@ -76,5 +83,8 @@ pub(super) fn dark(accent: Color) -> Tokens {
         marked: accent,
         syntax: syntax::DARK,
         terminal: terminal::CAMPBELL,
-    }
+        status: Status::DARK,
+    };
+    status::fit(&mut tokens);
+    tokens
 }

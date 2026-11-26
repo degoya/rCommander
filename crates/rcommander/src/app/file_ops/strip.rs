@@ -309,7 +309,10 @@ fn background_row<'a>(entry: &'a QueueEntry, tokens: &'static Tokens) -> Element
     row![
         fit::line(kind_title(&job.kind)),
         fit::path_line(what, tokens.text_secondary, tokens),
-        progress_bar(0.0..=1.0, share).length(160).girth(6),
+        progress_bar(0.0..=1.0, share)
+            .length(160)
+            .girth(6)
+            .style(theme::progress),
         fit::line(crate::format::percent(share)),
         pause,
         action(t!("ops.cancel"), FileOpsMsg::Abort(id), tokens),

@@ -21,6 +21,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ListParams {
     /// Only keys whose host, key type or fingerprint contains this, ignoring case; a host name
     /// also finds its hashed entries on port 22.
@@ -63,6 +64,7 @@ impl From<KnownHost> for KnownHostView {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RevokedParams {
     /// Only keys whose names, key type or fingerprint contain this, ignoring case.
     #[serde(default)]

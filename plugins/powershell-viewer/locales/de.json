@@ -1,0 +1,7 @@
+{
+  "name": "PowerShell-Viewer",
+  "description": "Zeigt PowerShell-Skripte und -Module (.ps1, .psm1, .psd1) farbig wie ein Editor.",
+  "codes": {
+    "01a159b6-c865-7f56-a6e7-db2cc02c4981.setting.encoding": "Kodierung"
+  }
+}

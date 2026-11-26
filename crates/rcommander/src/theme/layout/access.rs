@@ -7,7 +7,7 @@
 
 use iced::{
     Alignment, Color, Element,
-    widget::{checkbox, mouse_area, row},
+    widget::{checkbox, column, mouse_area, row},
 };
 
 use super::{face, marked_label, tinted_label};
@@ -76,6 +76,41 @@ pub fn keyed<'a, Message: Clone + 'a>(
     label: &str,
 ) -> Element<'a, Message> {
     stop.letter(Label::parse(label).letter).into()
+}
+
+/// The space between a caption and the field under it (`docs/design.md`, a compact group).
+const CAPTION_SPACING: f32 = 6.0;
+/// The space between a caption and the field beside it (`docs/design.md`, a form label).
+const BESIDE_SPACING: f32 = 8.0;
+
+/// A text field under its caption `label` (RC-110-78): the caption names the field and stays
+/// while it is typed in - a placeholder is no label, it is gone with the first letter - and its
+/// access key gives the field the keyboard ([`keyed`]). The field's placeholder, if any, is an
+/// example (`theme::text_field`).
+pub fn captioned<'a, Message: Clone + 'a>(
+    label: &'a str,
+    field: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    column![
+        caption(label, None),
+        keyed(focus::Stop::field(field, label), label)
+    ]
+    .spacing(CAPTION_SPACING)
+    .into()
+}
+
+/// [`captioned`] on one line: the caption, then the field - for a field in a row of others.
+pub fn captioned_beside<'a, Message: Clone + 'a>(
+    label: &'a str,
+    field: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    row![
+        caption(label, None),
+        keyed(focus::Stop::field(field, label), label)
+    ]
+    .spacing(BESIDE_SPACING)
+    .align_y(Alignment::Center)
+    .into()
 }
 
 /// The face of a button in a style of its own (a settings page's): `icon`, then `label` read for

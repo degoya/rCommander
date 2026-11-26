@@ -33,9 +33,12 @@ fn wrap(message: WsMsg) -> Message {
     Message::Workspaces(message)
 }
 
-/// A one-line text field of the dialog's look.
+/// A one-line text field of the dialog's look; `placeholder` is an example or a hint, its label
+/// stands beside or over it (RC-110-78).
 fn field<'a>(placeholder: &str, value: &str) -> text_input::TextInput<'a, Message> {
+    // field-label: each call names its field
     text_input(placeholder, value)
+        .style(theme::text_field)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([5, 8])
@@ -76,7 +79,7 @@ pub fn body<'a>(
     let note: Element<'a, Message> = match &window.note {
         Some((note, error)) => {
             let color = if *error {
-                theme::DANGER
+                tokens.status.danger
             } else {
                 tokens.text_secondary
             };
@@ -126,9 +129,12 @@ fn list_side<'a>(
     rows: &[WorkspaceRow],
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
-    let filter = field(t!("workspaces.filter"), &window.filter)
-        .id(FILTER_FIELD)
-        .on_input(|text| wrap(WsMsg::Filter(text)));
+    let filter = layout::captioned_beside(
+        t!("field.filter"),
+        field(t!("workspaces.filter"), &window.filter)
+            .id(FILTER_FIELD)
+            .on_input(|text| wrap(WsMsg::Filter(text))),
+    );
     let active = matches!(window.focus, Focus::List | Focus::Filter);
     let shown = list::shown(rows, &window.filter);
     let mut lines = Column::new().spacing(1);
@@ -255,11 +261,13 @@ fn name_field(window: &WorkspaceWindow) -> Element<'_, Message> {
         Some(Pending::Name { text, .. }) => text.as_str(),
         _ => "",
     };
-    field(t!("workspaces.name_placeholder"), text)
-        .id(NAME_FIELD)
-        .on_input(|typed| wrap(WsMsg::NameInput(typed)))
-        .on_submit(wrap(WsMsg::NameSubmit))
-        .into()
+    layout::captioned_beside(
+        t!("workspaces.field.name"),
+        field("", text)
+            .id(NAME_FIELD)
+            .on_input(|typed| wrap(WsMsg::NameInput(typed)))
+            .on_submit(wrap(WsMsg::NameSubmit)),
+    )
 }
 
 /// "Delete the workspace ...?", Delete and Keep.

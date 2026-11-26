@@ -6,7 +6,12 @@ use std::path::Path;
 
 use crate::{files_with, relative, workspace_root};
 
-const ALLOWED_FILES: &[&str] = &["crates/rcommander/tests/repo_lints/no_german.rs"];
+/// This lint's own word list, and the test that reads the four catalogues' counted texts word
+/// for word (RC-110-91).
+const ALLOWED_FILES: &[&str] = &[
+    "crates/rcommander/tests/repo_lints/no_german.rs",
+    "crates/rcommander/src/i18n/counted_tests.rs",
+];
 const GERMAN_CHARS: &str = "\u{e4}\u{f6}\u{fc}\u{c4}\u{d6}\u{dc}\u{df}";
 /// Whole words, case-sensitive: the nouns and verbs a German user text in a file manager is made
 /// of and an English source never spells this way. Short words (`die`, `das`, `und`) are not

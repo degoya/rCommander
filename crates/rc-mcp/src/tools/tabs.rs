@@ -16,6 +16,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TabOpenParams {
     /// The folder: absolute, or relative to the panel's folder. Omitted: the panel's own folder,
     /// or with `cursor` the folder under the panel's cursor.
@@ -33,6 +34,7 @@ pub(crate) struct TabOpenParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TabParams {
     /// A tab id from tab_list; the panel's shown tab when omitted.
     #[serde(default)]
@@ -43,6 +45,7 @@ pub(crate) struct TabParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TabSelectParams {
     /// A tab id from tab_list.
     pub tab: u64,
@@ -52,6 +55,7 @@ pub(crate) struct TabSelectParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TabLockParams {
     /// A tab id from tab_list; the panel's shown tab when omitted.
     #[serde(default)]
@@ -65,6 +69,7 @@ pub(crate) struct TabLockParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TabMoveParams {
     /// A tab id from tab_list.
     pub tab: u64,
@@ -77,6 +82,7 @@ pub(crate) struct TabMoveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct PanelSwapParams {
     /// Swap the whole tab rows (Ctrl+Shift+U) instead of the shown folders (Ctrl+U).
     #[serde(default)]
@@ -84,6 +90,7 @@ pub(crate) struct PanelSwapParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct PanelTransferParams {
     /// `left` or `right`: the panel that shows the folder.
     pub to: PanelArg,
@@ -97,6 +104,7 @@ pub(crate) struct PanelTransferParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HistoryJumpParams {
     /// An index into the entries of history_list.
     pub index: usize,

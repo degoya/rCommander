@@ -32,6 +32,10 @@ tarball() {
     printf '%s\n' "rCommander ${3:-$1}" "commit 1a2b3c4d" "built 2026-10-31T00:00:00Z" \
         "target x86_64-unknown-linux-gnu, profile release" > "$stage/VERSION.txt"
     touch "$stage/README.md" "$stage/LICENSE" "$stage/NOTICE"
+    printf '%s\n' "Third-party licences" "" "=== Licence $(printf '=%.0s' {1..68})" \
+        "demo 1.0.0 (MIT): LICENSE" "--- Text $(printf -- '-%.0s' {1..71})" \
+        "Copyright (c) 2026 Demo" "" "Permission is hereby granted, free of charge, to any person" \
+        > "$stage/THIRD-PARTY-LICENSES"
     tar -C "$SCRATCH/build" -czf "$SCRATCH/rcommander-$1-linux-$2.tar.gz" "rcommander-$1-linux-$2"
     rm -rf "$SCRATCH/build"
     echo "$SCRATCH/rcommander-$1-linux-$2.tar.gz"
@@ -53,6 +57,9 @@ expect "the program, its plugins, VERSION.txt, the marker and the link" \
     "$(config "$deb" '" ".join(sorted(e["dst"] for e in c["contents"] if "/usr/lib/" in e["dst"] or e["dst"].startswith("/usr/bin")))')"
 expect "the link points at the program" "/usr/lib/rcommander/rcommander" \
     "$(config "$deb" '[e["src"] for e in c["contents"] if e["dst"] == "/usr/bin/rcommander"][0]')"
+expect "the licence texts and the DEP-5 copyright" \
+    "/usr/share/doc/rcommander/THIRD-PARTY-LICENSES /usr/share/doc/rcommander/copyright" \
+    "$(config "$rpm" '" ".join(sorted(e["dst"] for e in c["contents"] if e["dst"].endswith(("/THIRD-PARTY-LICENSES", "/copyright"))))')"
 expect "the menu entry" "1" "$(config "$deb" 'sum(e["dst"] == "/usr/share/applications/rcommander.desktop" for e in c["contents"])')"
 expect "the dialogs' hidden entry" "1" "$(config "$deb" 'sum(e["dst"] == "/usr/share/applications/rcommander-popup.desktop" for e in c["contents"])')"
 expect "the rpm carries it too" "1" "$(config "$rpm" 'sum(e["dst"] == "/usr/share/applications/rcommander-popup.desktop" for e in c["contents"])')"

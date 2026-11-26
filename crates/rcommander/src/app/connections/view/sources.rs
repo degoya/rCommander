@@ -137,6 +137,7 @@ fn reason_row(panel: &SourcePanel) -> Element<'_, Message> {
 fn search_block<'a>(search: &'a SourceSearch, tokens: &'static Tokens) -> Element<'a, Message> {
     let mut block = Column::new().spacing(4).push(
         row![
+            // field-label: the Search button beside it names it; the placeholder is a hint
             field(t!("connections.source.query"), &search.query)
                 .id(SOURCE_QUERY_FIELD)
                 .on_input(|text| source(SourceMsg::Query(text)))
@@ -151,7 +152,7 @@ fn search_block<'a>(search: &'a SourceSearch, tokens: &'static Tokens) -> Elemen
         .align_y(Alignment::Center),
     );
     if let Some(error) = &search.error {
-        block = block.push(fit::prose(error.as_str()).color(theme::DANGER));
+        block = block.push(fit::prose(error.as_str()).color(tokens.status.danger));
     } else if search.searched && search.entries.is_empty() {
         block = block.push(hint(t!("connections.source.none_found").to_owned(), tokens));
     }

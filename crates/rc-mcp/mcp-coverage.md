@@ -313,10 +313,10 @@ asks by.
 | `remote_edit.skip` | gui_only | omitted: GUI only: human decision | Leave a server file's change in its copy for now (Not now, Cancel, Later) |
 | `remote_edit.upload` | gui_only | omitted: GUI only: human decision | Upload a server file's copy: checked first, over the server's file, as a copy beside it or in place |
 | `remote_edit.window` | gui_only | omitted: GUI only: human decision | Open the list of server files being edited |
-| `filters.delete` | read | `filters_delete` | Delete a saved file filter by its name |
+| `filters.delete` | destructive | `filters_delete` | Delete a saved file filter by its name |
 | `filters.list` | read | `filters_list` | The saved file filters (Ctrl+F12), each a name and a mask |
-| `filters.rename` | read | `filters_rename` | Give a saved file filter another name |
-| `filters.save` | read | `filters_save` | Save a file filter's mask under a name, replacing one of the same name |
+| `filters.rename` | write | `filters_rename` | Give a saved file filter another name |
+| `filters.save` | write | `filters_save` | Save a file filter's mask under a name, replacing one of the same name |
 | `panel.file_filter` | read | `panel_file_filter` | Show all files (Ctrl+F10, also lifts the quick filter), only programs (Ctrl+F11) or the files a mask matches (Ctrl+F12); folders always show |
 | `panel.load_list` | read | `panel_load_list` | Show the paths of a list file in a panel as a flat view, missing ones skipped and counted |
 | `panel.save_selection` | read | `panel_save_selection` | Keep the panel's selection in memory; panel.restore_selection (Num /) brings it back |

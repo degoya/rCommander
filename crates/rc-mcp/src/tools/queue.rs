@@ -50,6 +50,7 @@ impl From<StepArg> for Reorder {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MoveParams {
     /// The waiting job's id, as queue_list and ops_list answer it.
     pub job: u64,
@@ -58,6 +59,7 @@ pub(crate) struct MoveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MoveManyParams {
     /// The jobs' ids; the waiting ones move, keeping their order among themselves.
     pub jobs: Vec<u64>,
@@ -66,12 +68,14 @@ pub(crate) struct MoveManyParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct JobsParams {
     /// The jobs' ids, as queue_list answers them.
     pub jobs: Vec<u64>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct AssignManyParams {
     /// The jobs' ids.
     pub jobs: Vec<u64>,
@@ -80,6 +84,7 @@ pub(crate) struct AssignManyParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ClearParams {
     /// The list to clear, as queue_lists answers it; 0 is the default list.
     #[serde(default)]
@@ -90,12 +95,14 @@ pub(crate) struct ClearParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RemoveParams {
     /// The waiting job's id.
     pub job: u64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct NameParams {
     /// The list's name: not blank, at most 100 characters.
     pub name: String,
@@ -105,12 +112,14 @@ pub(crate) struct NameParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ListParams {
     /// The list's id, as queue_lists answers it; 0 is the default list.
     pub list: u64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RenameListParams {
     pub list: u64,
     /// The new name.
@@ -118,6 +127,7 @@ pub(crate) struct RenameListParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct AssignParams {
     /// The job's id.
     pub job: u64,
@@ -126,6 +136,7 @@ pub(crate) struct AssignParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SaveParams {
     pub list: u64,
     /// The saved list's name; the list's own name when omitted. A saved list of that name is
@@ -138,6 +149,7 @@ pub(crate) struct SaveParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SavedParams {
     /// The saved list's id, as queue_lists answers it under saved.
     pub saved: i64,

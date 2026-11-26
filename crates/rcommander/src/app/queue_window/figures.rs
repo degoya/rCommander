@@ -4,7 +4,11 @@
 
 use rc_engine::{JobSnapshot, JobState, QueueEntry};
 
-use crate::{app::file_ops::duration, format, i18n::t};
+use crate::{
+    app::file_ops::duration,
+    format,
+    i18n::{counted::Counted, t},
+};
 
 /// The share done, from 0 to 1: by bytes, or by files where there are no bytes.
 pub(super) fn share(job: &JobSnapshot) -> f32 {
@@ -78,12 +82,12 @@ pub(super) fn detail(job: &JobSnapshot) -> Option<String> {
     if progress.files_total == 0 {
         return None;
     }
-    let counts = t!(
-        "ops.progress_counts",
-        files_done = format::count(progress.files_done),
-        files = format::count(progress.files_total),
-        bytes_done = format::size(progress.bytes_done),
-        bytes = format::size(progress.bytes_total),
+    let counts = Counted::now().progress_counts(
+        (progress.files_done, progress.files_total),
+        (
+            format::size(progress.bytes_done),
+            format::size(progress.bytes_total),
+        ),
     );
     Some(match progress.eta_seconds {
         Some(eta) if job.state == JobState::Running => t!(

@@ -94,11 +94,11 @@ fn tab_line<'a>(
         &name,
         PLACE_WIDTH,
     );
-    let path = field(
+    let path = layout::captioned_beside(
         t!("workspaces.tab.path"),
-        &tab.location.path.to_string_lossy(),
-    )
-    .on_input(move |typed| message(id, PanelMsg::Path(at, typed)));
+        field("", &tab.location.path.to_string_lossy())
+            .on_input(move |typed| message(id, PanelMsg::Path(at, typed))),
+    );
     let last = spec.tabs.len() - 1;
     let glyph = |icon, label, change: Option<PanelMsg>| {
         layout::glyph_button(

@@ -15,12 +15,14 @@ use super::panels::PanelArg;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct GetParams {
     /// The bar's id as button_bars_list names it.
     pub id: i64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct RunParams {
     /// The bar's id as button_bars_list names it.

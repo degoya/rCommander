@@ -20,15 +20,14 @@ use iced::{
 };
 
 use super::{
-    DANGER, DIALOG_ID, LARGE_DIALOG_MARGIN, TEXT_SIZE, Tokens, UI_FONT, UI_FONT_STRONG, backdrop,
-    dialog,
+    DIALOG_ID, LARGE_DIALOG_MARGIN, TEXT_SIZE, Tokens, UI_FONT, UI_FONT_STRONG, backdrop, dialog,
     fit::line,
     focus,
     icon::{self, Icon},
     mnemonic::{self, Label},
 };
 
-pub use access::{caption, check, keyed, marked_icon_button};
+pub use access::{caption, captioned, captioned_beside, check, keyed, marked_icon_button};
 
 /// A question or a prompt: a few lines and its buttons.
 pub const SMALL_DIALOG_WIDTH: f32 = 480.0;
@@ -164,7 +163,7 @@ pub fn warning_card<'a, Message: Clone + 'a>(
         .style(move |_| {
             let mut style = dialog(tokens);
             if warning {
-                style.border = style.border.width(2.0).color(DANGER);
+                style.border = style.border.width(2.0).color(tokens.status.danger);
             }
             style
         });
@@ -227,7 +226,7 @@ pub fn warning_window_body<'a, Message: 'a>(
         .style(move |_| {
             let mut style = dialog(tokens);
             style.border = if warning {
-                Border::default().width(2.0).color(DANGER)
+                Border::default().width(2.0).color(tokens.status.danger)
             } else {
                 Border::default()
             };

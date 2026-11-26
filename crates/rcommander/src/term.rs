@@ -5,7 +5,7 @@
 use std::sync::OnceLock;
 
 use iced::keyboard::Modifiers;
-use rc_engine::{KeyContext, Keymap};
+use rc_engine::{Command, Engine, KeyContext, Keymap, Outcome};
 use rc_term::ShellProfile;
 use rc_term_widget::{CopySettings, FontSettings, ReservedKey, Settings};
 
@@ -14,21 +14,38 @@ use crate::{
     theme::{self, Tokens},
 };
 
-/// The shells the picker offers; filled once.
+/// The shells the picker offers, as `terminal.list` found them; filled once.
 static SHELLS: OnceLock<Vec<ShellProfile>> = OnceLock::new();
+/// The local shells alone, offered until [`SHELLS`] is filled.
+static LOCAL: OnceLock<Vec<ShellProfile>> = OnceLock::new();
 
 /// This machine's shells, the default first, then one WSL profile per installed distribution -
 /// looked up once: the `PATH` scan stats files and WSL is asked through `wsl.exe`, which the UI
 /// thread does not do on every Ctrl+Shift+O-umlaut. The start fills it from the engine's
-/// `terminal.list` before the window opens ([`set_shells`]); unfilled, the local shells.
+/// `terminal.list` after the window opens ([`load_shells`], RC-110-64); until then the local
+/// shells. `terminal.list` puts the same local shells first, so a row picked from the shorter
+/// list names the same shell in the longer one.
 pub fn shells() -> &'static [ShellProfile] {
-    SHELLS.get_or_init(rc_term::local_shells)
+    SHELLS.get().map_or_else(
+        || LOCAL.get_or_init(rc_term::local_shells).as_slice(),
+        Vec::as_slice,
+    )
 }
 
 /// Keeps `shells` (`terminal.list`'s) as the picker's list; the first call wins.
 pub fn set_shells(shells: Vec<ShellProfile>) {
     // A list read before is as good: the second one is dropped.
     let _ = SHELLS.set(shells);
+}
+
+/// The picker's list from the engine's `terminal.list`, asked once the window is open: WSL may
+/// take seconds to answer, and the window does not wait for it (RC-110-64).
+pub async fn load_shells(engine: Engine) {
+    match engine.dispatch(Command::ListTerminals {}).await {
+        Ok(Outcome::Terminals { shells, .. }) => set_shells(shells),
+        Ok(_) => {}
+        Err(error) => tracing::warn!(code = error.code(), "the terminal shells were not found"),
+    }
 }
 
 /// A shell's name in the picker: the catalogue's for a shell it names, the profile's id for

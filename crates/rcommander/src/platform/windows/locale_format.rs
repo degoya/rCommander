@@ -20,10 +20,7 @@ fn info(kind: u32) -> Option<String> {
     // UTF-16 units, the size passed, and the call writes at most that many, its terminating
     // null included. It returns the units written, or 0 on failure.
     let written = unsafe { GetLocaleInfoEx(std::ptr::null(), kind, buffer.as_mut_ptr(), size) };
-    let len = usize::try_from(written).ok()?.checked_sub(1)?;
-    String::from_utf16(buffer.get(..len)?)
-        .ok()
-        .filter(|format| !format.is_empty())
+    super::super::locale_format::written_text(&buffer, written)
 }
 
 /// The short date and the time format of the user's locale.

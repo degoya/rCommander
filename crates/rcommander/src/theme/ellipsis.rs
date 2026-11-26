@@ -11,6 +11,10 @@
 //! The cut falls between characters, never inside one, and keeps a character with the combining
 //! marks, variation selectors and emoji modifiers after it and a zero-width-joiner sequence whole:
 //! close to grapheme clusters, without a segmentation dependency.
+//!
+//! What a person cannot see is spelled out before the cut ([`visible`], RC-110-62): a name with
+//! a right-to-left override, `photo<U+202E>gpj.exe`, shows as `photo\u{202e}gpj.exe`, not as
+//! the picture `photoexe.jpg`, as the MCP questions show it (`rc_engine::mcp_readable`).
 
 use std::borrow::Cow;
 
@@ -25,8 +29,16 @@ pub fn middle_ellipsis(text: &str, max_width: f32, size: f32) -> Cow<'_, str> {
 
 /// [`middle_ellipsis`] with the width of a piece of text from `width`; the width of a run is the
 /// sum of its characters' widths. The end gets half the room first, the start what is left, then
-/// the end again what the start left over.
+/// the end again what the start left over. [`visible`] spells out what cannot be seen first.
 pub fn middle_ellipsis_by(text: &str, max_width: f32, width: impl Fn(&str) -> f32) -> Cow<'_, str> {
+    match visible(text) {
+        Cow::Borrowed(text) => middle_cut(text, max_width, width),
+        Cow::Owned(shown) => Cow::Owned(middle_cut(&shown, max_width, width).into_owned()),
+    }
+}
+
+/// [`middle_ellipsis_by`] of a text already [`visible`].
+fn middle_cut(text: &str, max_width: f32, width: impl Fn(&str) -> f32) -> Cow<'_, str> {
     let clusters = clusters(text);
     let widths: Vec<f32> = clusters
         .iter()
@@ -63,8 +75,16 @@ pub fn middle_ellipsis_by(text: &str, max_width: f32, width: impl Fn(&str) -> f3
 }
 
 /// `text` in at most `max_width` by `width`: unchanged when it fits, else as much of its start as
-/// fits beside [`ELLIPSIS`], then the ellipsis.
+/// fits beside [`ELLIPSIS`], then the ellipsis. [`visible`] spells out what cannot be seen first.
 pub fn end_ellipsis_by(text: &str, max_width: f32, width: impl Fn(&str) -> f32) -> Cow<'_, str> {
+    match visible(text) {
+        Cow::Borrowed(text) => end_cut(text, max_width, width),
+        Cow::Owned(shown) => Cow::Owned(end_cut(&shown, max_width, width).into_owned()),
+    }
+}
+
+/// [`end_ellipsis_by`] of a text already [`visible`].
+fn end_cut(text: &str, max_width: f32, width: impl Fn(&str) -> f32) -> Cow<'_, str> {
     let clusters = clusters(text);
     let widths: Vec<f32> = clusters
         .iter()
@@ -81,6 +101,76 @@ pub fn end_ellipsis_by(text: &str, max_width: f32, width: impl Fn(&str) -> f32) 
     }
     let head_end = if head == 0 { 0 } else { clusters[head - 1].1 };
     Cow::Owned(format!("{}{ELLIPSIS}", &text[..head_end]))
+}
+
+/// `text` on one line with every character a person cannot see spelled out, as
+/// `rc_engine::mcp_readable` does (RC-110-62): a line break or a tab as `\n`, `\t`, a control,
+/// zero-width, direction or other format character ([`rc_rename::invisible`]) as `\u{202e}`. A
+/// zero-width joiner or non-joiner between two visible characters beyond ASCII stays: it joins an
+/// emoji sequence or the letters of a script (Persian, the Indic ones). Unchanged, and borrowed,
+/// when there is nothing to spell out.
+pub fn visible(text: &str) -> Cow<'_, str> {
+    spelled_out(text, false)
+}
+
+/// [`visible`] for text that may run over lines - a message, a label: its line breaks and tabs
+/// stay.
+pub fn visible_lines(text: &str) -> Cow<'_, str> {
+    spelled_out(text, true)
+}
+
+/// [`visible`], or [`visible_lines`] with `lines`, of a text that may be owned: it stays as it
+/// was given, borrowed or owned, when there is nothing to spell out.
+pub fn visible_text(text: Cow<'_, str>, lines: bool) -> Cow<'_, str> {
+    match text {
+        Cow::Borrowed(text) => spelled_out(text, lines),
+        Cow::Owned(text) => {
+            // Taken out of the borrow first: `text` moves when nothing was spelled out.
+            let spelled = match spelled_out(&text, lines) {
+                Cow::Borrowed(_) => None,
+                Cow::Owned(spelled) => Some(spelled),
+            };
+            Cow::Owned(spelled.unwrap_or(text))
+        }
+    }
+}
+
+fn spelled_out(text: &str, lines: bool) -> Cow<'_, str> {
+    if !text.chars().any(rc_rename::invisible) {
+        return Cow::Borrowed(text);
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let mut shown = String::with_capacity(text.len() + 16);
+    for (at, &c) in chars.iter().enumerate() {
+        if !hidden(&chars, at, lines) {
+            shown.push(c);
+        } else if matches!(c, '\r' | '\n' | '\t') {
+            shown.extend(c.escape_default());
+        } else {
+            shown.extend(c.escape_unicode());
+        }
+    }
+    if shown == text {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(shown)
+    }
+}
+
+/// Whether the character at `at` is one [`visible`] spells out.
+fn hidden(chars: &[char], at: usize, lines: bool) -> bool {
+    let c = chars[at];
+    if !rc_rename::invisible(c) || (lines && matches!(c, '\r' | '\n' | '\t')) {
+        return false;
+    }
+    if matches!(c, '\u{200c}' | '\u{200d}') {
+        let joins = |near: Option<&char>| {
+            near.is_some_and(|&near| !near.is_ascii() && !rc_rename::invisible(near))
+        };
+        let before = at.checked_sub(1).and_then(|before| chars.get(before));
+        return !(joins(before) && joins(chars.get(at + 1)));
+    }
+    true
 }
 
 /// The width of `text` in pixels in the interface font at `size`, estimated from Segoe UI's

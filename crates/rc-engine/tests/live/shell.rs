@@ -35,7 +35,7 @@ async fn shows(engine: &Engine, terminal: TermId, needle: &str) {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn the_sudo_login_script_ends_in_a_root_shell() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -118,7 +118,7 @@ async fn the_sudo_login_script_ends_in_a_root_shell() {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn run_command_answers_output_and_exit_code() {
     let live = live_or_skip!();
     let dir = workdir();

@@ -27,6 +27,7 @@ use crate::{
 use super::panels::PanelArg;
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct StatParams {
     /// The entries: absolute, or relative to the panel's directory. Empty: the panel's
     /// selection, or the entry under its cursor.
@@ -59,6 +60,7 @@ impl From<ApplyToArg> for ApplyTo {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct SetAttributesParams {
     /// The entries: absolute, or relative to the panel's directory.
@@ -129,6 +131,7 @@ impl From<LinkKindArg> for LinkKind {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct CreateLinkParams {
     /// What the link leads to: absolute, or relative to the panel's directory.
@@ -144,6 +147,7 @@ pub(crate) struct CreateLinkParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DirSizeParams {
     /// Files and folders: absolute, or relative to the panel's directory. Empty: the panel's
     /// selection, or the entry under its cursor.
@@ -154,6 +158,7 @@ pub(crate) struct DirSizeParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct SetCommentParams {
     /// The entry: absolute, or relative to the panel's directory.

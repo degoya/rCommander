@@ -18,6 +18,12 @@
 //! backend runs it on a blocking thread, which finishes or fails on its own and whose answer is
 //! dropped. Dropping a call's future stops it the same way.
 //!
+//! A copy through the operating system ([`Vfs::copy_file`], RC-110-65) is one call as long as
+//! the file: it gets no time limit, but one on its silence - a copy whose bytes do not move for
+//! the request limit, unless it is paused, is stopped and is `drive_timed_out`. It is not among
+//! the waiting calls of [`IoCancel`], which would take a long copy for a drive that hangs; the
+//! job that runs it stops it.
+//!
 //! A listing sent in batches (`Vfs::list_batches`, RC-060-02) is bounded as `list` is: the
 //! folder answers within the request limit, then the whole listing gets the listing limit; the
 //! batches pass on unchanged, so a backend that reads in blocks still shows the first ones early.
@@ -36,8 +42,8 @@ use async_trait::async_trait;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    Capabilities, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange, ReadStream,
-    Result, SeekStream, SetAttributes, Vfs, VfsError, WriteMode, WriteStream,
+    Capabilities, CopyWatch, Details, Entry, LinkKind, PropertyCapabilities, PropertyChange,
+    ReadStream, Result, SeekStream, SetAttributes, Vfs, VfsError, WriteMode, WriteStream,
 };
 
 pub use cancel::IoCancel;
@@ -45,6 +51,9 @@ use stream::Timed;
 
 /// How long a call on one path may wait for its answer unless the caller says otherwise.
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+/// How often a system copy's bytes are looked at for its silence.
+const SILENCE_LOOK: Duration = Duration::from_millis(500);
+
 /// How long a whole listing may take unless the caller says otherwise.
 pub const DEFAULT_LISTING_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -190,6 +199,31 @@ impl Vfs for TimeoutFs {
             .request(path, self.inner.open_write_sized(path, mode, size))
             .await?;
         Ok(Box::new(self.timed(stream, path)))
+    }
+
+    async fn copy_file(&self, from: &Path, to: &Path, watch: Arc<CopyWatch>) -> Result<u64> {
+        let copy = self.inner.copy_file(from, to, Arc::clone(&watch));
+        tokio::pin!(copy);
+        let limit = self.timeouts.request;
+        let (mut seen, mut since) = (watch.copied(), tokio::time::Instant::now());
+        loop {
+            tokio::select! {
+                done = &mut copy => return done,
+                () = tokio::time::sleep(SILENCE_LOOK) => {
+                    let copied = watch.copied();
+                    if copied != seen || watch.is_paused() {
+                        (seen, since) = (copied, tokio::time::Instant::now());
+                    } else if since.elapsed() >= limit {
+                        // Dropping the call stops the copy; its thread removes what it wrote.
+                        watch.cancel();
+                        return Err(VfsError::TimedOut {
+                            path: from.to_path_buf(),
+                            seconds: limit.as_secs(),
+                        });
+                    }
+                }
+            }
+        }
     }
 
     async fn mkdir(&self, path: &Path, recursive: bool) -> Result<()> {

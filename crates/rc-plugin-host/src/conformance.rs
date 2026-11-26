@@ -13,7 +13,9 @@
 //! Adapted: rCommander's kinds (the viewer in stage 1; `docs/plugins.md`, "SDK" names the
 //! question of each later kind), no network to refuse (no viewer is granted one), and English
 //! as the only required language, which verification already holds - rDownloader's
-//! `locales_required` has nothing to ask yet.
+//! `locales_required` has nothing to ask a third-party plugin. The plugins rCommander bundles
+//! ship all four of its languages; the repository's `plugin_catalogues` lint holds them to it
+//! (RC-110-85).
 //!
 //! Deliberately not here: whether the plugin shows a real file correctly. A package that passes
 //! every check can still be wrong about its format; the report says what was verified, not that

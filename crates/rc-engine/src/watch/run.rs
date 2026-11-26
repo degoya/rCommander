@@ -125,6 +125,9 @@ impl Watcher {
             let sleep = sleep_until(wake);
             let (mut follow, mut reload) = (false, false);
             tokio::select! {
+                // The engine's events first: a setting stored before a signal was sent is in
+                // force when the signal is taken, so a probe settles after it (RC-110-70).
+                biased;
                 event = events.recv() => match event {
                     Ok(EngineEvent::SettingChanged { key }) => {
                         reload = WATCH_KEYS.contains(&key.as_str());
@@ -370,13 +373,17 @@ impl Watcher {
         }
     }
 
-    /// Tells the window which panels have a quiet system watcher ([`Engine::watch_quiet`]).
+    /// Tells the window which panels have a quiet system watcher ([`Engine::watch_quiet`]),
+    /// and the tests which wait for a reading.
     fn publish(&self, engine: &Engine) {
-        for (slot, quiet) in self.slots.iter().zip(&engine.inner.watch.quiet) {
+        let paused = self.paused(engine);
+        let desk = &engine.inner.watch;
+        for ((slot, quiet), busy) in self.slots.iter().zip(&desk.quiet).zip(&desk.busy) {
             quiet.store(
                 slot.mode == Some(Mode::Native) && slot.quiet,
                 Ordering::Release,
             );
+            busy.store(!paused && slot.due().is_some(), Ordering::Release);
         }
     }
 }

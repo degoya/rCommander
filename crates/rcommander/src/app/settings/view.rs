@@ -152,7 +152,7 @@ impl SettingsDialog {
         // The last note stands at the left of the row and wraps.
         let note = self.note.as_ref().map(|(note, error)| {
             let color = if *error {
-                theme::DANGER
+                tokens.status.danger
             } else {
                 tokens.text_secondary
             };
@@ -350,12 +350,15 @@ fn setting_row<'a>(
             let list = pick_list(options, Some(chosen), edit).width(240);
             focus::Stop::pick(list, key, moves).into()
         }
+        // field-label: the setting's label in its row, as every control here
         SettingKind::Int { .. } => text_input("", text)
             .on_input(move |text| wrap(SettingsMessage::Edit(key, text)))
             .width(120)
             .into(),
         SettingKind::Path { .. } => row![
+            // field-label: the setting's label in its row; the placeholder is a hint
             text_input(path_placeholder(spec.page), text)
+                .style(theme::text_field)
                 .on_input(move |text| wrap(SettingsMessage::Edit(key, text)))
                 .width(Length::Fill),
             browse::button(PathField::Setting(spec), text, true),
@@ -384,6 +387,7 @@ fn setting_row<'a>(
         | SettingKind::Proxy { .. }
         | SettingKind::Arguments { .. }
         | SettingKind::Drives { .. }
+        // field-label: the setting's label in its row
         | SettingKind::Keymap { .. } => text_input("", text)
             .on_input(move |text| wrap(SettingsMessage::Edit(key, text)))
             .width(240)
@@ -425,6 +429,7 @@ fn retention<'a>(draft: &'a Draft, tokens: &'static Tokens) -> Element<'a, Messa
     for (index, table) in draft.retention.iter().enumerate() {
         let status = &table.status;
         let field = |value: &str, limit: Limit| {
+            // field-label: each use - its row's label (rows, days)
             text_input("", value)
                 .on_input(move |text| wrap(SettingsMessage::Retention(index, limit, text)))
                 .width(100)

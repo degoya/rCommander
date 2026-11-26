@@ -10,14 +10,19 @@
 //! against the per-class policy (`mcp.policy`: allowed, ask, deny), `ask` - always for
 //! destructive and exec tools - waits for the person's answer in the window (`ask.rs`; headless,
 //! a single-use confirmation code where the person allowed that, `confirm.rs`), and every answer
-//! has its credentials masked (`mask.rs`). Before the gate, a path argument that reaches a share
-//! on another machine is refused (`unc.rs`). `coverage.rs` says which tool covers
+//! has its credentials masked (`mask.rs`). Before the gate, arguments the tool's schema does not
+//! take are refused (`arguments.rs`) and a path argument that reaches a share on another machine
+//! is refused (`unc.rs`). `coverage.rs` says which tool covers
 //! each engine command (the rows in `coverage/<group>.rs`, one file per registry group), and `tests/mcp_coverage.rs` fails when a command has no entry.
+//! `tool_list.rs` gives each tool its class and the MCP hints of it, and leaves the tools the
+//! policy denies out of `tools/list`; `tests/tool_contract.rs` holds every tool's name, class and
+//! schema against the snapshot `tests/tools.json`.
 //! `config.rs` reads the switch and the port; switched off, neither transport serves.
 
 #![warn(unreachable_pub)]
 
 mod answer;
+mod arguments;
 mod ask;
 mod audit;
 mod codes;
@@ -34,16 +39,21 @@ mod mask;
 mod policy;
 mod recover;
 mod redact;
+mod remote_ask;
 mod roots;
 mod server;
 mod stdio;
 #[cfg(test)]
 mod test_support;
 mod token;
+mod tool_list;
 mod tools;
 mod unc;
 mod workspace_shown;
 
+/// The argument check before the gate, for the fuzz target (`fuzz/`, RC-110-68); not an API.
+#[doc(hidden)]
+pub use arguments::check as check_arguments;
 pub use codes::ALL_CODES;
 pub use guard::sensitive_path;
 pub use guard_write::protected_target;
@@ -55,3 +65,4 @@ pub use rc_db::BACKUP_DIR;
 pub use server::{McpContext, RcMcpServer};
 pub use stdio::{proxy_io, run_stdio, serve_io};
 pub use token::{McpToken, TOKEN_KEY};
+pub use tool_list::tool_classes;

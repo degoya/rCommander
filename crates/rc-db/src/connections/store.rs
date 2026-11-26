@@ -51,6 +51,22 @@ impl Db {
             .collect::<sqlx::Result<Vec<_>>>()?)
     }
 
+    /// Whether a stored connection reaches `host` on `port`, the host compared ignoring ASCII
+    /// case and the blanks around it: how MCP tells a new host from a known one (RC-110-59).
+    ///
+    /// # Errors
+    ///
+    /// The read fails.
+    pub async fn has_connection_to(&self, host: &str, port: u16) -> TreeResult<bool> {
+        let row =
+            sqlx::query("SELECT 1 FROM connections WHERE host = ? COLLATE NOCASE AND port = ?")
+                .bind(host.trim())
+                .bind(i64::from(port))
+                .fetch_optional(self.readers())
+                .await?;
+        Ok(row.is_some())
+    }
+
     /// Adds a connection to `folder` (the root when `None`), after its folder's last one.
     ///
     /// # Errors

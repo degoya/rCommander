@@ -3,9 +3,9 @@ name: Release
 # A version tag builds, packages and publishes rCommander (RC-100-31, RC-100-44, adapted from
 # rDownloader's release.yml): the bundled plugins signed once, the packages of every system with
 # them - Windows natively with MSVC, Linux natively on x64 and arm64, macOS for Apple Silicon and
-# Intel on the Apple Silicon runner - then SHA256SUMS over them, its keyless Sigstore signature,
-# the signed update manifests and the GitHub release, whose text is the version's section of
-# RELEASE-NOTES.md. The deb and rpm packages are built from the two Linux tarballs (RC-100-54).
+# Intel on the Apple Silicon runner - and the CycloneDX SBOMs of the application and the plugins
+# (RC-110-73), then SHA256SUMS over them, its keyless Sigstore signature, the signed update
+# manifests and the GitHub release, whose text is the version's section of RELEASE-NOTES.md. The deb and rpm packages are built from the two Linux tarballs (RC-100-54).
 # After the release the package channels follow it (RC-100-52 ... RC-100-54): the Homebrew tap,
 # the Scoop bucket, winget and the apt and dnf repository, one job each. The only workflow that
 # reads a secret.
@@ -205,8 +205,38 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # RC-110-73: the CycloneDX SBOMs of rcommander and the bundled plugins from Cargo.lock
+  # (scripts/release-assets.sh sbom): `rcommander-<version>.cdx.json` and
+  # `rcommander-<version>-plugins.cdx.tar.gz`, into SHA256SUMS with the packages. cargo-cyclonedx
+  # reads `cargo metadata` and compiles nothing of the workspace; installing it builds a
+  # third-party crate, so in a job of its own without a secret and with read rights only.
+  sbom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-rust
+      - name: Install cargo-cyclonedx
+        shell: bash
+        run: |
+          source scripts/lib/tool-versions.sh
+          cargo install cargo-cyclonedx --version "${RC_CARGO_CYCLONEDX_VERSION}" --locked
+      - name: Write the SBOMs
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p artifacts/sbom
+          scripts/release-assets.sh sbom artifacts/sbom "${REF_NAME#v}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: artifacts/sbom/*
+          if-no-files-found: error
+          retention-days: 3
+
   publish:
-    needs: [plugins, packages, distribution]
+    needs: [plugins, packages, distribution, sbom]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -236,6 +266,10 @@ jobs:
           pattern: package-*
           path: release-assets
           merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: release-assets
       # The upload's three patterns share artifacts/ as their root, so each package arrives in
       # windows/, linux/ or macos/; every later step reads one flat folder (v0.9.0's run).
       - name: Gather the packages in one folder

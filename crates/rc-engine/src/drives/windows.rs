@@ -7,27 +7,25 @@
 //! through `winsafe`, whose safe wrappers keep `unsafe` out of rCommander; the network drives'
 //! folders, mapping and disconnecting are `WNet` calls winsafe does not have (`wnet.rs`).
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{io, path::Path, sync::Arc};
 
 use rc_vfs::DeviceHub;
 
 use winsafe::{self as w, co};
 
-use super::{Details, DriveKind, DriveSource, RawDrive, space, wnet};
+use super::{
+    Details, DriveKind, DriveSource, RawDrive,
+    letters::{present_letters, raw_drive, with_remembered},
+    space, wnet,
+};
 
 pub(super) struct System;
 
 impl DriveSource for System {
     fn drives(&self) -> Vec<RawDrive> {
-        let present = w::GetLogicalDrives();
-        let mut drives: Vec<RawDrive> = (0u8..26)
-            .filter(|bit| present & (1 << bit) != 0)
-            .map(|bit| {
-                let letter = char::from(b'A' + bit);
+        let drives: Vec<RawDrive> = present_letters(w::GetLogicalDrives())
+            .into_iter()
+            .map(|letter| {
                 let root = format!("{letter}:\\");
                 let mut kind = kind_of(w::GetDriveType(Some(&root)));
                 // A remembered drive that is not connected may not tell its kind.
@@ -43,13 +41,7 @@ impl DriveSource for System {
             })
             .collect();
         // A remembered drive not yet connected since sign-in has no letter yet (`wnet.rs`).
-        for (letter, remote) in wnet::remembered() {
-            if !drives.iter().any(|drive| drive.id.starts_with(letter)) {
-                drives.push(raw_drive(letter, DriveKind::Network, Some(remote)));
-            }
-        }
-        drives.sort_by(|left, right| left.id.cmp(&right.id));
-        drives
+        with_remembered(drives, wnet::remembered())
     }
 
     fn details(&self, root: &Path) -> io::Result<Details> {
@@ -87,16 +79,6 @@ impl DriveSource for System {
     /// The phones and cameras of Windows Portable Devices, RC-100-61.
     fn device_hub(&self) -> Arc<dyn DeviceHub> {
         rc_vfs::system_hub()
-    }
-}
-
-fn raw_drive(letter: char, kind: DriveKind, remote: Option<String>) -> RawDrive {
-    RawDrive {
-        id: format!("{letter}:"),
-        label: format!("{letter}:"),
-        kind,
-        root: PathBuf::from(format!("{letter}:\\")),
-        remote,
     }
 }
 

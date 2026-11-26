@@ -14,7 +14,7 @@ use crate::live_or_skip;
 const LONG: Duration = Duration::from_secs(240);
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn copies_and_moves_between_two_servers_and_within_one_are_byte_for_byte() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -71,7 +71,7 @@ async fn copies_and_moves_between_two_servers_and_within_one_are_byte_for_byte()
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_target_that_refuses_the_write_is_named_as_the_target() {
     let live = live_or_skip!();
     let dir = workdir();

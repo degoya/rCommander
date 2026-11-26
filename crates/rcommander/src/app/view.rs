@@ -41,6 +41,11 @@ impl App {
         Some(theme::iced_theme(theme::tokens(self.dark)))
     }
 
+    /// The scale of every window: Windows' text size, 1 elsewhere (RC-110-79, `theme::access`).
+    pub(in crate::app) fn scale_factor(&self, _window: iced::window::Id) -> f32 {
+        theme::access::text_scale()
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         let tokens = theme::tokens(self.dark);
         // The maximized panel takes the area of both; the other is hidden, not closed.

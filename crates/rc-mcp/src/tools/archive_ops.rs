@@ -71,6 +71,7 @@ fn yes() -> bool {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct ExtractParams {
     /// Archives: absolute, or relative to the panel's directory. Omitted or empty: the panel's
@@ -102,6 +103,7 @@ pub(crate) struct ExtractParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct PackParams {
     /// Entries to pack: absolute, or relative to the panel's directory. Omitted or empty: the
@@ -285,7 +287,7 @@ pub(crate) async fn refuse_sensitive_sources(
 #[tool_router(router = archive_ops_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Unpack zip, 7z and tar archives (plain, gz, xz, bz2, zst, and single compressed files) into a directory, as a background job of the operations queue; answers at once with the queued job, follow it with ops_list. own_folder puts each archive into a folder named after it; mask picks files by name; keep_paths=false drops the folders. Entries whose names would leave the target (zip slip, absolute, drive or UNC names) and links stored in the archive are never written: they are listed in failures (unsafe_entry, link_not_extracted). Encrypted entries fail with password_required: no tool takes a password, a person unpacks them in rCommander. Existing files follow on_conflict (skip by default; overwrite needs a confirmation code). A target in rCommander's data folder, an SSH folder or an autostart folder, or an entry that would land in one or on a shell's start-up file, is refused with protected_target before anything is unpacked. Errors: not_an_archive, archive_limit, archive_damaged, archive_decoder_memory (an xz or 7z archive needs more decoder memory than the setting archive.decoder_memory_mib allows), sensitive_path, protected_target."
+        description = "Unpack zip, 7z and tar archives (plain, gz, xz, bz2, zst, and single compressed files) into a directory, as a background job of the operations queue; answers at once with the queued job, follow it with ops_list. own_folder puts each archive into a folder named after it; mask picks files by name; keep_paths=false drops the folders. Entries whose names would leave the target (zip slip, absolute, drive or UNC names) and links stored in the archive are never written: they are listed in failures (unsafe_entry, link_not_extracted). Each unpacked file keeps the archive's Mark-of-the-Web; a target that cannot hold it (FAT) lists zone_not_kept once and the job goes on. Encrypted entries fail with password_required: no tool takes a password, a person unpacks them in rCommander. Existing files follow on_conflict (skip by default; overwrite needs a confirmation code). A target in rCommander's data folder, an SSH folder or an autostart folder, or an entry that would land in one or on a shell's start-up file, is refused with protected_target before anything is unpacked. Errors: not_an_archive, archive_limit (more than 64 GiB unpacked, or a compression ratio past 500:1), archive_damaged, archive_decoder_memory (an xz or 7z archive needs more decoder memory than the setting archive.decoder_memory_mib allows), not_enough_space (the files would not fit the target drive's free space; nothing is written), sensitive_path, protected_target."
     )]
     pub(crate) async fn archives_extract(
         &self,

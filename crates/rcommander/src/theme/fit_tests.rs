@@ -1,6 +1,8 @@
-use super::{overflows, shortened, status_parts};
+use std::borrow::Cow;
+
+use super::{overflows, shortened, shown, status_parts};
 use crate::theme::{
-    STATUS_SIZE,
+    STATUS_SIZE, TEXT_SIZE,
     ellipsis::{ELLIPSIS, estimate_width},
 };
 
@@ -79,4 +81,24 @@ fn a_status_line_without_room_shows_the_ellipsis_and_an_empty_one_nothing() {
     assert_eq!(shown, ELLIPSIS);
     assert_eq!(tip.as_deref(), Some(DEVICE_MESSAGE));
     assert_eq!(status_parts("", 0.0, STATUS_SIZE), (String::new(), None));
+}
+
+/// RC-110-62: a dialog's text shows a direction override and the other invisible characters
+/// spelled out, its line breaks kept; a plain text stays as it was given.
+#[test]
+fn a_dialog_text_spells_out_what_cannot_be_seen() {
+    assert_eq!(
+        shown("Delete photo\u{202E}gpj.exe?"),
+        "Delete photo\\u{202e}gpj.exe?"
+    );
+    assert_eq!(
+        shown(String::from("a\u{2066}b\nc\u{feff}")),
+        "a\\u{2066}b\nc\\u{feff}"
+    );
+    assert!(matches!(shown("plain\ntext"), Cow::Borrowed("plain\ntext")));
+    assert!(matches!(shown(String::from("owned")), Cow::Owned(text) if text == "owned"));
+    assert!(
+        overflows("a\u{202e}", 3.0 * estimate_width("a", TEXT_SIZE)),
+        "measured as shown"
+    );
 }

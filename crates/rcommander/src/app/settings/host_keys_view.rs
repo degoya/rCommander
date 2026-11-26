@@ -21,12 +21,16 @@ use crate::{
 const PORTIONS: [u16; 5] = [4, 1, 3, 7, 3];
 
 pub fn view<'a>(page: &'a HostKeysPage, tokens: &'static Tokens) -> Element<'a, Message> {
-    let search = text_input(t!("settings.host_keys.search"), &page.filter)
-        .on_input(|filter| page_message(HostKeysMsg::Filter(filter)))
-        .padding([5, 8])
-        .size(theme::TEXT_SIZE)
-        .font(theme::UI_FONT)
-        .width(240);
+    let search = layout::captioned_beside(
+        t!("field.search"),
+        text_input(t!("settings.host_keys.search"), &page.filter)
+            .style(theme::text_field)
+            .on_input(|filter| page_message(HostKeysMsg::Filter(filter)))
+            .padding([5, 8])
+            .size(theme::TEXT_SIZE)
+            .font(theme::UI_FONT)
+            .width(240),
+    );
     let count = page.entries.as_ref().map(|entries| {
         hint(
             t!("settings.host_keys.count", count = entries.len()),
@@ -83,7 +87,7 @@ pub fn view<'a>(page: &'a HostKeysPage, tokens: &'static Tokens) -> Element<'a, 
     .spacing(8)
     .height(Length::Fill);
     if let Some(stored) = page.asking.and_then(|item| page.entry(item)) {
-        body = body.push(question(stored));
+        body = body.push(question(stored, tokens));
     }
     body.push(buttons(page)).into()
 }
@@ -150,7 +154,7 @@ pub fn shown_time(stored: &str) -> String {
 
 /// The question before a removal: what goes, and that the next connection asks again - or, for
 /// a revoked key, that it is judged as any other again.
-fn question<'a>(stored: &Stored) -> Element<'a, Message> {
+fn question<'a>(stored: &Stored, tokens: &'static Tokens) -> Element<'a, Message> {
     let text = match stored {
         Stored::Key(_) => t!("settings.host_keys.confirm_key", server = stored.server()),
         Stored::Certificate(_) => t!(
@@ -175,7 +179,7 @@ fn question<'a>(stored: &Stored) -> Element<'a, Message> {
                 Some(page_message(HostKeysMsg::KeepIt)),
             ),
         ],
-        [Element::from(fit::prose(text).color(theme::DANGER))],
+        [Element::from(fit::prose(text).color(tokens.status.danger))],
     )
 }
 

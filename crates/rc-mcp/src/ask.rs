@@ -32,7 +32,9 @@
 //! `panel_changed`.
 //!
 //! The question about `workspaces_apply` names the workspace and where its panels go, not only
-//! its id (`workspace_shown.rs`, RC-110-21).
+//! its id (`workspace_shown.rs`, RC-110-21); one about a new host or a copy onto a server names
+//! the server, and its grant for the session holds for that server only (`remote_ask.rs`,
+//! RC-110-59).
 
 use std::time::Duration;
 
@@ -49,6 +51,7 @@ use crate::{
     freeze::{Frozen, as_frozen, freeze, shown_without_a_window},
     gate_settings::GateSettings,
     mask,
+    remote_ask::{self, Remote},
     server::McpContext,
     workspace_shown,
 };
@@ -70,7 +73,8 @@ pub(crate) enum Gate {
     Answer(CallToolResult),
 }
 
-/// The gate's step for a call its policy asks about.
+/// The gate's step for a call its policy asks about; `remote` the server it writes to or the new
+/// host it saves, where it does (`remote_ask.rs`).
 pub(crate) async fn ask(
     context: &McpContext,
     settings: &GateSettings,
@@ -78,6 +82,7 @@ pub(crate) async fn ask(
     tool: &str,
     class: CommandClass,
     arguments: Option<&Map<String, Value>>,
+    remote: Option<&Remote>,
 ) -> Result<Gate, rmcp::ErrorData> {
     let engine = &context.engine;
     // `workspaces_apply` is asked about with its workspace's places written out (RC-110-21).
@@ -91,7 +96,9 @@ pub(crate) async fn ask(
     {
         return Ok(Gate::Answer(refusal));
     }
-    let offer = session_offer(settings, class, tool, arguments);
+    // A grant for one server is none for another (RC-110-59).
+    let offer = session_offer(settings, class, tool, arguments)
+        .map(|(offered, target)| (offered, target.or_else(|| remote.map(Remote::grant))));
     if let Some((_, target)) = &offer
         && engine.mcp_allowed_for_session(session, tool, target.as_deref())
     {
@@ -113,10 +120,15 @@ pub(crate) async fn ask(
         let asked = frozen
             .as_ref()
             .map_or(arguments, |frozen| Some(&frozen.shown));
+        let run = frozen
+            .as_ref()
+            .map_or(arguments, |frozen| Some(&frozen.arguments));
+        let mut arguments_shown = shown(asked, engine);
+        arguments_shown.extend(remote_ask::shown(remote, tool, run, engine));
         let ask = McpAsk {
             tool: tool.to_owned(),
             class,
-            arguments: shown(asked, engine),
+            arguments: arguments_shown,
             panel: asked
                 .and_then(|arguments| arguments.get("panel"))
                 .and_then(|panel| serde_json::from_value::<PanelId>(panel.clone()).ok()),
@@ -165,12 +177,12 @@ pub(crate) async fn ask(
             ),
             // The window went away in between: as headless.
             McpVerdict::NoWindow => {
-                return headless(context, settings, session, tool, class, arguments).await;
+                return headless(context, settings, session, tool, class, arguments, remote).await;
             }
         };
         return Ok(Gate::Answer(refused));
     }
-    headless(context, settings, session, tool, class, arguments).await
+    headless(context, settings, session, tool, class, arguments, remote).await
 }
 
 /// The call frozen to what a question shows of it (`freeze.rs`), and what the freeze wrote out
@@ -275,6 +287,7 @@ async fn headless(
     tool: &str,
     class: CommandClass,
     arguments: Option<&Map<String, Value>>,
+    remote: Option<&Remote>,
 ) -> Result<Gate, rmcp::ErrorData> {
     if !settings.headless_codes {
         return Ok(Gate::Answer(error_result(
@@ -304,13 +317,17 @@ async fn headless(
         Ok(frozen) => frozen,
         Err(refusal) => return Ok(Gate::Answer(refusal)),
     };
-    let (subject, named) = match &frozen {
+    let (subject, mut named) = match &frozen {
         Some(frozen) => (
             subject_of(Some(&frozen.arguments)),
             shown(Some(&shown_without_a_window(frozen)), engine),
         ),
         None => (subject_of(arguments), shown(arguments, engine)),
     };
+    let run = frozen
+        .as_ref()
+        .map_or(arguments, |frozen| Some(&frozen.arguments));
+    named.extend(remote_ask::shown(remote, tool, run, engine));
     let code = confirmations.ask_for(session, tool, subject.as_deref(), frozen);
     Ok(Gate::Answer(json_result(&question(
         tool,
@@ -370,7 +387,7 @@ fn too_long_to_show(tool: &str, arguments: Option<&Map<String, Value>>) -> Optio
 }
 
 /// The arguments as the person reads them: masked like an answer, the code left out, clipped.
-fn shown(arguments: Option<&Map<String, Value>>, engine: &Engine) -> Vec<McpArgument> {
+pub(crate) fn shown(arguments: Option<&Map<String, Value>>, engine: &Engine) -> Vec<McpArgument> {
     masked(arguments, engine)
         .into_iter()
         .take(MAX_ARGUMENTS)

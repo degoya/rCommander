@@ -9,8 +9,11 @@
 //! colour theme's (RC-100-50, `themes.rs`): a built-in one (`builtin.rs`) or the person's own,
 //! the terminal's colours with them (`terminal.rs`); Fluent (the sets of `light.rs` and `dark.rs`)
 //! until the themes are read. On macOS `appearance.macos_look` (RC-100-49, on) draws with the
-//! Mac's accent and fonts ([`mac_look`]) and starts with the Mac theme.
+//! Mac's accent and fonts ([`mac_look`]) and starts with the Mac theme. While Windows' high
+//! contrast is on, every look is the High contrast theme in the system's colours, and Windows'
+//! text size scales the interface (`access.rs`, RC-110-79).
 
+pub mod access;
 pub mod builtin;
 mod chrome;
 pub mod colour_rules;
@@ -27,6 +30,7 @@ mod light;
 mod mac;
 pub mod mnemonic;
 pub mod page_tabs;
+pub mod status;
 pub mod symbols;
 mod syntax;
 mod system;
@@ -50,8 +54,8 @@ pub use terminal::terminal_palette;
 use iced::{
     Background, Border, Color, Font, Shadow, Theme,
     font::Weight,
-    theme::Palette,
-    widget::{button, container},
+    theme::{Palette, palette::Extended},
+    widget::{button, container, progress_bar, slider, text_input},
 };
 
 /// The colours of one appearance.
@@ -94,6 +98,9 @@ pub struct Tokens {
     pub syntax: Syntax,
     /// The terminal's colours (RC-100-50).
     pub terminal: terminal::Terminal,
+    /// Danger, warning, success and the fields' border, fitted to this look's backgrounds
+    /// (RC-110-77, `status.rs`).
+    pub status: status::Status,
 }
 
 const fn hex(rgb: u32, alpha: f32) -> Color {
@@ -120,9 +127,10 @@ pub fn system_accent() -> [Color; 2] {
 }
 
 /// Takes the setting `appearance.macos_look` for this run, sets the system's font families on
-/// Linux (`system_fonts.rs`) and reads the system's accent colour;
-/// the start calls it before the window opens, so drawing never touches the registry. Later
-/// calls change nothing.
+/// Linux (`system_fonts.rs`) and reads the system's accent colour and its accessibility settings
+/// (`access.rs`); the start calls it before the window opens, so drawing never touches the
+/// registry and the first window opens at the system's text size. Later calls change nothing but
+/// the accessibility settings, which `access::changes` follows from then on.
 pub fn init(mac_look: bool) {
     MAC_LOOK.store(mac_look, Ordering::Relaxed);
     #[cfg(target_os = "macos")]
@@ -133,6 +141,7 @@ pub fn init(mac_look: bool) {
     #[cfg(all(unix, not(target_os = "macos")))]
     system_fonts::apply();
     tokens(false);
+    access::apply(access::read());
 }
 
 /// Whether this run draws the Mac's look: on macOS while `appearance.macos_look` is on; the
@@ -142,8 +151,13 @@ pub fn mac_look() -> bool {
 }
 
 /// The tokens of the light or the dark look: its colour theme's ([`themes::current`]), the
-/// editor's preview while it edits one of that mode, Fluent's before the themes are read.
+/// editor's preview while it edits one of that mode, Fluent's before the themes are read; while
+/// Windows' high contrast is on, the High contrast theme in its colours for both
+/// ([`access::contrast_look`], RC-110-79).
 pub fn tokens(dark: bool) -> &'static Tokens {
+    if let Some(contrast) = access::contrast_look() {
+        return contrast;
+    }
     themes::current(dark).unwrap_or_else(|| fixed(dark))
 }
 
@@ -186,29 +200,71 @@ impl ThemeChoice {
     }
 }
 
-/// An error, or a warning that something is lost for good: text, never a button's fill.
-pub const DANGER: Color = hex(0xC42B1C, 1.0);
-/// The palette's tone of success: something added (the diff, the git marks).
-pub const SUCCESS: Color = hex(0x0F7B0F, 1.0);
-/// The palette's tone of a warning: something changed (the diff, the git marks).
-pub const WARNING: Color = hex(0x9D5D00, 1.0);
-
-/// The iced theme the built-in widgets draw with, from the same tokens.
+/// The iced theme the built-in widgets draw with, from the same tokens: the look's status
+/// colours (`status.rs`), and its field border as the strong background shade, the border iced
+/// draws around every text field, text editor, pick list and check box without focus - 3:1
+/// against the window and the card where iced's own fell to 1.6:1 (RC-110-77).
 pub fn iced_theme(tokens: &Tokens) -> Theme {
+    let status = tokens.status;
     let palette = Palette {
         background: tokens.window,
         text: tokens.text,
         primary: tokens.accent,
-        success: SUCCESS,
-        warning: WARNING,
-        danger: DANGER,
+        success: status.success,
+        warning: status.warning,
+        danger: status.danger,
     };
     let name = if tokens.dark {
         "Fluent Dark"
     } else {
         "Fluent Light"
     };
-    Theme::custom(name, palette)
+    Theme::custom_with_fn(name, palette, move |palette| {
+        let mut extended = Extended::generate(palette);
+        extended.background.strong.color = status.field;
+        extended
+    })
+}
+
+/// iced's own strong background shade of `theme`, before the field border took it
+/// ([`iced_theme`]): the track of a progress bar and the empty part of a slider's rail, where the
+/// field border would stand too close to the dark look's light accent (RC-110-77).
+fn track(theme: &Theme) -> Background {
+    Background::Color(Extended::generate(theme.palette()).background.strong.color)
+}
+
+/// A progress bar: the accent on iced's own track.
+pub fn progress(theme: &Theme) -> progress_bar::Style {
+    progress_bar::Style {
+        background: track(theme),
+        ..progress_bar::primary(theme)
+    }
+}
+
+/// A slider (the viewer's scroll bar): iced's own, the empty part of its rail on iced's own
+/// track.
+pub fn scroll_slider(theme: &Theme, status: slider::Status) -> slider::Style {
+    let mut style = slider::default(theme, status);
+    style.rail.backgrounds.1 = track(theme);
+    style
+}
+
+/// A text field: iced's own, its placeholder moved towards the text until it reads at 4.5:1 on
+/// the field - iced's own fell to 2.95:1 (RC-110-78). A placeholder is an example or a hint; the
+/// field's name stands in its label beside or over it (`layout::captioned`), which stays while
+/// the field is typed in. A disabled field keeps iced's look.
+pub fn text_field(theme: &Theme, state: text_input::Status) -> text_input::Style {
+    let mut style = text_input::default(theme, state);
+    if state != text_input::Status::Disabled {
+        let palette = theme.extended_palette();
+        style.placeholder = status::readable(
+            style.placeholder,
+            palette.is_dark,
+            &[palette.background.base.color],
+            colours::MIN_CONTRAST,
+        );
+    }
+    style
 }
 
 /// The interface font: Segoe UI Variable on Windows 11, the system's sans-serif elsewhere (and
@@ -298,6 +354,8 @@ pub fn divider(tokens: &Tokens) -> container::Style {
 }
 
 /// A list row: the cursor row is filled (accent-tinted in the active panel), a marked row tinted.
+/// The inactive panel's cursor carries a 1-px outline in the lists' quieter text as well: its
+/// fill alone is 1.1:1 on the list (RC-110-77).
 pub fn row(tokens: &Tokens, cursor: bool, active: bool, selected: bool) -> container::Style {
     let fill = match (cursor, active, selected) {
         (true, true, _) => Some(tokens.cursor_fill),
@@ -305,9 +363,14 @@ pub fn row(tokens: &Tokens, cursor: bool, active: bool, selected: bool) -> conta
         (false, _, true) => Some(tokens.selected_fill),
         _ => None,
     };
+    let border = Border::default().rounded(4.0);
     container::Style {
         background: fill.map(Background::Color),
-        border: Border::default().rounded(4.0),
+        border: if cursor && !active {
+            border.width(1.0).color(tokens.list_text_secondary)
+        } else {
+            border
+        },
         text_color: Some(if selected {
             tokens.marked
         } else if cursor {

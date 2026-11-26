@@ -12,6 +12,8 @@ mod classify;
 mod column_sets;
 mod compare;
 pub(crate) mod connections;
+mod connections_args;
+mod connections_page;
 mod connections_save;
 mod credentials;
 mod database;
@@ -31,6 +33,7 @@ mod inventory;
 mod login_scripts;
 mod multi_rename;
 mod ops;
+pub(crate) mod paging;
 mod panel_filter;
 mod panel_lists;
 mod panels;
@@ -111,3 +114,4 @@ impl RcMcpServer {
 #[cfg(test)]
 pub(crate) use classify::class_of;
 pub(crate) use classify::effective_class;
+pub(crate) use connections_save::{SAVE_TOOL, new_host};

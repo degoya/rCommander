@@ -1,0 +1,10 @@
+{
+  "name": "CSV-Viewer",
+  "description": "Zeigt CSV und TSV mit jeder Spalte in eigener Farbe oder die Datensätze als Baum.",
+  "codes": {
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.encoding": "Kodierung",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.header": "Erste Zeile ist eine Kopfzeile",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.setting.separator": "Trennzeichen",
+    "01a15984-4cfe-79a8-a86c-38186923b56a.too_many_nodes": "Im Baum sind zu viele Bereiche geöffnet; schließen Sie den Viewer und öffnen Sie die Datei erneut."
+  }
+}

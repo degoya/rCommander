@@ -6,13 +6,18 @@
 //! refuses a secret change over MCP besides (`gui_only`). Making a connection run a login script
 //! runs it on a server, so a call that names `login_script_id` is an exec call
 //! (`Command::effective_class`, RC-080-42), as `login_scripts_assign` is.
+//!
+//! A host and port no stored connection has yet asks a person first (RC-110-59, [`new_host`]):
+//! a saved connection is where a copy can later send files.
 
+use rc_db::Db;
 use rc_engine::{
     Command, Connection, ConnectionDraft, ConnectionId, ConnectionKind, ConnectionPatch, FolderId,
     LoginScriptId, Outcome, SaveConnectionRequest, SaveFields,
 };
 use rmcp::{handler::server::wrapper::Parameters, schemars, tool, tool_router};
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::{Map, Value};
 
 use super::{
     connections::{AuthArg, KindArg, ViewArg},
@@ -24,6 +29,8 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(transform = crate::confirm::argument)]
 pub(crate) struct SaveParams {
     /// The connection to change, from connections_list; omitted, a new one is added.
     #[serde(default)]
@@ -174,10 +181,49 @@ impl SaveParams {
     }
 }
 
+/// The tool whose call for a new host asks.
+pub(crate) const SAVE_TOOL: &str = "connections_save";
+
+/// The host and port a `connections_save` call would save, as `host:port`, when no stored
+/// connection has them yet: a new connection's, or a stored one's moved to another host or port.
+/// `None` for a known one, and for a call the tool refuses itself (arguments that do not read,
+/// no host, a port out of range, a connection that is not there). A database that cannot be read
+/// counts as a new host: the call asks.
+pub(crate) async fn new_host(db: &Db, arguments: Option<&Map<String, Value>>) -> Option<String> {
+    let mut arguments = arguments.cloned().unwrap_or_default();
+    arguments.remove(crate::confirm::CODE_ARGUMENT);
+    let params: SaveParams = serde_json::from_value(Value::Object(arguments)).ok()?;
+    let valid = |port: i64| u16::try_from(port).ok().filter(|port| *port != 0);
+    let (host, port) = match params.id {
+        None => {
+            let kind = params.kind.map_or_else(ConnectionKind::default, Into::into);
+            let port = match params.port {
+                Some(given) => valid(given)?,
+                None => kind.default_port(),
+            };
+            (params.host?, port)
+        }
+        Some(id) => {
+            let stored = db.connection(ConnectionId(id)).await.ok()?;
+            let port = match params.port {
+                Some(given) => valid(given)?,
+                None => stored.port,
+            };
+            (params.host.unwrap_or(stored.host), port)
+        }
+    };
+    let host = host.trim();
+    if host.is_empty() {
+        return None;
+    }
+    let known = db.has_connection_to(host, port).await.unwrap_or(false);
+    (!known).then(|| crate::remote_ask::address(host, port))
+}
+
 #[tool_router(router = connections_save_router, vis = "pub(crate)")]
 impl RcMcpServer {
     #[tool(
-        description = "Add or change a connection in one step: its fields, the login script it runs and whether the drive bar lists it, all saved together or not at all. With id it changes that connection (omitted fields stay; an empty string clears username, key_path, start_directory, notes, theme_light or theme_dark); without id it adds one (name and host needed; folder_id or the root). login_script_id: a script from login_scripts_list, null for none, omitted keeps it; naming it is exec and asks first. favourite: true or false for the drive bar, omitted keeps it. Takes no secrets (secret_not_accepted): the person enters them in rCommander. The host, port, kind and username of a connection with a stored secret are changed only in the window (endpoint_change_needs_gui); a script that sends a stored secret is assigned only there (gui_only). Answers the saved connection. Errors: invalid_params, connection_not_found, folder_not_found, name_empty, name_taken, host_empty, host_invalid, port_invalid, auth_unsupported, username_empty, view_unsupported, control_character, text_too_long (a name, host or user over 255 characters), path_too_long (a key path or start directory over 4096 characters), login_script_not_found, theme_unknown, theme_wrong_mode (theme_light, theme_dark: a theme id of that mode from theme_list), endpoint_change_needs_gui (also for a new jump_id), jump_cycle, jump_chain_too_long, jump_needs_ssh, gui_only."
+        description = "Add or change a connection in one step: its fields, the login script it runs and whether the drive bar lists it, all saved together or not at all. With id it changes that connection (omitted fields stay; an empty string clears username, key_path, start_directory, notes, theme_light or theme_dark); without id it adds one (name and host needed; folder_id or the root). A host and port no stored connection has yet asks the person first, as a write outside the panels does. login_script_id: a script from login_scripts_list, null for none, omitted keeps it; naming it is exec and asks first. favourite: true or false for the drive bar, omitted keeps it. Takes no secrets (secret_not_accepted): the person enters them in rCommander. The host, port, kind and username of a connection with a stored secret are changed only in the window (endpoint_change_needs_gui, also for a new jump_id); a script that sends a stored secret is assigned only there (gui_only). Answers the saved connection. Errors: invalid_params, connection_not_found, folder_not_found, name_empty, name_taken, host_empty, host_invalid, port_invalid, auth_unsupported, username_empty, view_unsupported, control_character, text_too_long (a name, host or user over 255 characters), path_too_long (a key path or start directory over 4096 characters), login_script_not_found, theme_unknown, theme_wrong_mode (a theme id of the other mode), endpoint_change_needs_gui, jump_cycle, jump_chain_too_long, jump_needs_ssh, gui_only."
     )]
     pub(crate) async fn connections_save(
         &self,

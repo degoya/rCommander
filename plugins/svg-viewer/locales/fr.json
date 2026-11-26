@@ -1,0 +1,10 @@
+{
+  "name": "Visionneuse SVG",
+  "description": "Affiche les images SVG et SVGZ, et leur source en couleurs comme du XML.",
+  "codes": {
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_large": "Le SVG dépasse 64 Mio, ou les dépasse une fois décompressé.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.bad_gzip": "Le SVG compressé (.svgz) est endommagé et ne peut pas être décompressé.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.not_svg": "L'image ne peut pas être dessinée : le fichier n'est pas un SVG lisible, ou il n'a pas de taille.",
+    "01a15a31-bee0-72a5-bbbf-292cb2295623.too_complex": "L'image répète ses éléments (<use>) trop souvent pour être dessinée."
+  }
+}

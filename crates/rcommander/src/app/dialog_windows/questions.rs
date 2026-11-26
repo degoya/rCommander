@@ -22,9 +22,9 @@
 //! the app's windows has the keyboard; a modeless dialog's window (a Lister, find files, the
 //! queue) works on beside it as beside a modal dialog. Escape, F10 and the title bar's X answer
 //! as Escape does on the card: Deny, Cancel, Keep, skip. Each question keeps its safety: the MCP
-//! call's window opens on Deny and only a click allows (RC-010-13, RC-080-12); a host key and a
-//! certificate are answered only by the person (`GuiOnly`); the passwords stay secret types the
-//! window's books never see.
+//! call's window opens on Deny and no key answers in its first second (RC-010-13, RC-080-12,
+//! RC-110-80); a host key and a certificate are answered only by the person (`GuiOnly`); the
+//! passwords stay secret types the window's books never see.
 
 use iced::{Element, Size};
 
@@ -252,7 +252,10 @@ impl App {
         tokens: &'static Tokens,
     ) -> Vec<Element<'_, Message>> {
         let (body, warning) = match question {
-            Question::Mcp => (mcp_confirm::body(&self.mcp_questions, tokens), false),
+            Question::Mcp => (
+                mcp_confirm::body(&self.mcp_questions, self.mcp_armed(), tokens),
+                false,
+            ),
             Question::HostKey => match self.host_key_body(tokens) {
                 Some((body, warning)) => (Some(body), warning),
                 None => (None, false),

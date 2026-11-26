@@ -131,7 +131,7 @@ if lines and not any(line.endswith("profile release") for line in lines):
 plugins = [n for n in names if n.startswith(f"{stem}/plugins/") and n.endswith(".rcplug")]
 if len(plugins) != expected:
     problems.append(f"{len(plugins)} plugins, expected {expected}")
-for name in ("README.md", "LICENSE", "NOTICE"):
+for name in ("README.md", "LICENSE", "NOTICE", "THIRD-PARTY-LICENSES"):
     if f"{stem}/{name}" not in names:
         problems.append(f"no {name}")
 if problems:

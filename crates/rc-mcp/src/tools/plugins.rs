@@ -15,6 +15,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ListParams {
     /// Only the plugin with this id (a UUIDv7), with the summary of its calls and the latest of
     /// them.

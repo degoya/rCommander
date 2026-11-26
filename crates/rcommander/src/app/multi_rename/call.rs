@@ -23,6 +23,12 @@ use tokio::io::AsyncWriteExt;
 use super::MrMsg;
 use crate::i18n::error_text;
 
+/// The message of an I/O error on `path` by its code (RC-110-86): the window never shows the
+/// system's own words.
+fn io_text(error: std::io::Error, path: &Path) -> String {
+    error_text(rc_vfs::VfsError::from_io(error, path).code())
+}
+
 /// How long typing pauses before the preview is made.
 pub const DEBOUNCE: Duration = Duration::from_millis(150);
 
@@ -197,14 +203,14 @@ pub async fn read_names(path: &Path, remove: bool) -> Result<Vec<String>, String
     let read = async {
         let size = tokio::fs::metadata(path)
             .await
-            .map_err(|error| error.to_string())?
+            .map_err(|error| io_text(error, path))?
             .len();
         if !usize::try_from(size).is_ok_and(|size| size <= MAX_NAMES_BYTES) {
             return Err(error_text("rename_names_too_large"));
         }
         let bytes = tokio::fs::read(path)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| io_text(error, path))?;
         rc_engine::names_from_bytes(&bytes).map_err(|error| error_text(error.code()))
     };
     let names = read.await;
@@ -224,14 +230,14 @@ async fn edit_names(engine: &Engine, path: PathBuf, names: &[String]) -> Result<
         .create_new(true)
         .open(&path)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| io_text(error, &path))?;
     let written = async {
         file.write_all(&bytes).await?;
         file.flush().await
     };
     if let Err(error) = written.await {
         remove_names_file(&path).await;
-        return Err(error.to_string());
+        return Err(io_text(error, &path));
     }
     let open = Command::OpenExternal {
         panel: None,

@@ -37,9 +37,12 @@ pub(super) fn page<'a>(
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let mut source = row![
-        field(t!("connections.import.own_config"), &dialog.path)
-            .on_input(|path| msg(ImportMsg::Path(path)))
-            .on_submit(msg(ImportMsg::Read)),
+        layout::captioned_beside(
+            t!("field.file"),
+            field(t!("connections.import.own_config"), &dialog.path)
+                .on_input(|path| msg(ImportMsg::Path(path)))
+                .on_submit(msg(ImportMsg::Read)),
+        ),
         browse::button(PathField::SshConfig, &dialog.path, true),
         layout::secondary_icon_button(
             Icon::ViewFile,
@@ -81,7 +84,7 @@ pub(super) fn page<'a>(
     ]
     .spacing(10);
     if let Some(error) = &dialog.page.error {
-        body = body.push(fit::prose(error.as_str()).color(theme::DANGER));
+        body = body.push(fit::prose(error.as_str()).color(tokens.status.danger));
     }
     let list: Element<'a, Message> = match (&dialog.report, dialog.page.phase) {
         (_, Phase::Reading) => hint(t!("connections.import.reading"), tokens).into(),
@@ -216,22 +219,25 @@ fn key_line<'a>(at: usize, row: &'a KeyRow, tokens: &'static Tokens) -> Element<
             tokens,
         )
         .into(),
-        Err(code) => fit::prose(error_text(code)).color(theme::DANGER).into(),
+        Err(code) => fit::prose(error_text(code))
+            .color(tokens.status.danger)
+            .into(),
     };
     let mut line = row![said].spacing(8).align_y(Alignment::Center);
     if row.wants_passphrase() {
         let typed = row.passphrase.expose_secret();
         let again = (!typed.is_empty()).then(|| msg(ImportMsg::TakeAgain(at)));
         line = line
-            .push(
-                field(t!("connections.import.passphrase"), typed)
+            .push(layout::captioned_beside(
+                t!("connections.import.passphrase"),
+                field("", typed)
                     .secure(true)
                     .width(220)
                     .on_input(move |value| {
                         msg(ImportMsg::Passphrase(at, SecretString::from(value)))
                     })
                     .on_submit_maybe(again.clone()),
-            )
+            ))
             .push(layout::secondary_icon_button(
                 Icon::Key,
                 t!("connections.import.take_again"),

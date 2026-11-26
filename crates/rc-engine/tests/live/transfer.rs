@@ -17,7 +17,7 @@ const LONG: Duration = Duration::from_secs(240);
 const WHEN: u64 = 1_600_000_000;
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_big_file_goes_up_as_rcpart_and_comes_back_byte_for_byte_with_its_time() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -80,7 +80,7 @@ async fn a_big_file_goes_up_as_rcpart_and_comes_back_byte_for_byte_with_its_time
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_cancelled_upload_leaves_no_file_under_the_real_name() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -115,7 +115,7 @@ async fn a_cancelled_upload_leaves_no_file_under_the_real_name() {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_move_removes_the_source_only_after_the_copy() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -151,7 +151,7 @@ async fn a_move_removes_the_source_only_after_the_copy() {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_quick_connection_that_is_not_saved_takes_a_copy_both_ways() {
     let live = live_or_skip!();
     let dir = workdir();

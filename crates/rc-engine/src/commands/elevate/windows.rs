@@ -17,19 +17,10 @@ use std::{ffi::OsStr, mem::size_of, os::windows::ffi::OsStrExt, ptr::null};
 
 use windows_sys::Win32::UI::Shell::{SHELLEXECUTEINFOW, ShellExecuteExW};
 
-use super::{ShellStart, ShellStarted};
-use crate::user_commands::Show;
+use super::{ShellStart, ShellStarted, refused, show_command};
 
 /// `SEE_MASK_NOASYNC`: the call returns only once the start is done (or refused).
 const SEE_MASK_NOASYNC: u32 = 0x0000_0100;
-
-/// `SW_SHOWNORMAL`, `SW_SHOWMINNOACTIVE`, `SW_SHOWMAXIMIZED`.
-const SW_SHOWNORMAL: i32 = 1;
-const SW_SHOWMINNOACTIVE: i32 = 7;
-const SW_SHOWMAXIMIZED: i32 = 3;
-
-/// `ERROR_CANCELLED`: the person said no to Windows' question.
-const ERROR_CANCELLED: i32 = 1223;
 
 /// `text` as a NUL-terminated UTF-16 buffer.
 fn wide(text: &OsStr) -> Vec<u16> {
@@ -43,11 +34,6 @@ pub(super) fn shell_execute(start: &ShellStart) -> Result<ShellStarted, u32> {
     let file = wide(start.program.as_os_str());
     let params = wide(OsStr::new(&start.params));
     let folder = start.folder.as_ref().map(|folder| wide(folder.as_os_str()));
-    let show = match start.show {
-        Show::Normal => SW_SHOWNORMAL,
-        Show::Minimized => SW_SHOWMINNOACTIVE,
-        Show::Maximized => SW_SHOWMAXIMIZED,
-    };
     let mut info = SHELLEXECUTEINFOW {
         cbSize: u32::try_from(size_of::<SHELLEXECUTEINFOW>())
             .expect("the struct's size fits in a u32"),
@@ -56,7 +42,7 @@ pub(super) fn shell_execute(start: &ShellStart) -> Result<ShellStarted, u32> {
         lpFile: file.as_ptr(),
         lpParameters: params.as_ptr(),
         lpDirectory: folder.as_ref().map_or(null(), |folder| folder.as_ptr()),
-        nShow: show,
+        nShow: show_command(start.show),
         ..SHELLEXECUTEINFOW::default()
     };
     // SAFETY: `info` is a SHELLEXECUTEINFOW with its own size in `cbSize`; every pointer in it is
@@ -67,10 +53,5 @@ pub(super) fn shell_execute(start: &ShellStart) -> Result<ShellStarted, u32> {
     if done != 0 {
         return Ok(ShellStarted::Started);
     }
-    let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
-    if code == ERROR_CANCELLED {
-        Ok(ShellStarted::Cancelled)
-    } else {
-        Err(u32::try_from(code).unwrap_or(0))
-    }
+    refused(std::io::Error::last_os_error().raw_os_error().unwrap_or(0))
 }

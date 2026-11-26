@@ -5,9 +5,9 @@
 //! in the SSH terminal (RC-060-03), keepalive and reconnect (RC-060-01), a folder of 100 000
 //! entries (RC-060-02), servers that hang, drop or die mid-work (RC-080-04).
 //!
-//! Every test is `#[ignore]` and needs the servers: `scripts/live/sftp/run.sh` starts them, runs
-//! `cargo nextest run --cargo-profile release-test -p rc-engine --test live_sftp --run-ignored
-//! only` and removes them.
+//! Every test is `#[ignore]` and needs the servers: `scripts/live-servers/sftp/run.sh` starts
+//! them, runs `cargo nextest run --cargo-profile release-test -p rc-engine --test live_sftp
+//! --run-ignored only` and removes them.
 
 mod live;
 

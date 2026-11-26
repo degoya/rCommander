@@ -23,6 +23,7 @@ use super::{
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DuplicatesParams {
     /// Duplicates have the same name too (without case where the file system ignores it).
     #[serde(default)]
@@ -108,6 +109,7 @@ fn view(outcome: Outcome) -> View {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SelectDuplicatesParams {
     /// `left` or `right`; the active panel when omitted.
     #[serde(default)]
@@ -125,7 +127,7 @@ pub(crate) struct SelectDuplicatesParams {
 
 /// One rule of the dialog, by `by`.
 #[derive(Deserialize, schemars::JsonSchema)]
-#[serde(tag = "by", rename_all = "snake_case")]
+#[serde(tag = "by", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum RuleArg {
     /// Files whose name the Total Commander mask matches (*.jpg;*.png) are selected, or with
     /// remove deselected.
@@ -235,6 +237,7 @@ impl From<KeepArg> for Keep {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DiskUsageParams {
     /// The folder: absolute, or relative to the panel's folder. The panel's folder when omitted.
     #[serde(default)]
@@ -247,6 +250,7 @@ pub(crate) struct DiskUsageParams {
     pub depth: Option<u32>,
     /// Subfolders per level and largest files reported: 20 when omitted, at most 1000.
     #[serde(default)]
+    #[schemars(range(min = 1, max = 1000))]
     pub limit: Option<usize>,
 }
 

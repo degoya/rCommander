@@ -20,6 +20,7 @@ pub fn lines<'a>(key: &'static str, text: &str) -> Element<'a, Message> {
     shown.push(String::new());
     let fields = shown.iter().enumerate().map(|(at, line)| {
         let all = shown.clone();
+        // field-label: the setting's label in its row (`settings::view::setting_row`)
         text_input("", line)
             .on_input(move |typed| wrap(SettingsMessage::Edit(key, joined(&all, at, &typed))))
             .width(Length::Fill)

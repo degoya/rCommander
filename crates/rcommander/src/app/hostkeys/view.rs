@@ -99,7 +99,8 @@ fn unknown<'a>(shown: &'a Shown, tokens: &'static Tokens) -> Column<'a, Message>
     // A known host offering a new key type: an impostor would do just that (RC-080-12).
     if !question.stored_types.is_empty() {
         let types = question.stored_types.join(", ");
-        body = body.push(prose(t!("hostkeys.other_types", types = types)).color(theme::DANGER));
+        body =
+            body.push(prose(t!("hostkeys.other_types", types = types)).color(tokens.status.danger));
     }
     body.push(facts)
 }

@@ -45,10 +45,13 @@ pub(crate) const READ_TOOLS: &[&str] = &[
     "user_commands_run",
 ];
 
-/// `arguments` as the parameters `T`; `None` when they do not read, and the tool then refuses
-/// the call as it always did, before anything runs.
+/// `arguments` as the parameters `T`, without the gate's code argument the types deny
+/// (RC-110-57); `None` when they do not read, and the tool then refuses the call as it always
+/// did, before anything runs.
 fn typed<T: DeserializeOwned>(arguments: Option<&Map<String, Value>>) -> Option<T> {
-    serde_json::from_value(Value::Object(arguments.cloned().unwrap_or_default())).ok()
+    let mut arguments = arguments.cloned().unwrap_or_default();
+    arguments.remove(crate::confirm::CODE_ARGUMENT);
+    serde_json::from_value(Value::Object(arguments)).ok()
 }
 
 /// The command a call of `tool` dispatches, as far as its class goes (the sources a call leaves

@@ -18,9 +18,11 @@ serde.workspace = true
 thiserror.workspace = true
 # The name keys on macOS (RC-080-70): APFS and HFS+ take a composed and a decomposed umlaut as
 # one name, so the keys are NFC. Already in the tree (through `stringprep`), at its version.
-unicode-normalization = { version = "0.1.26", default-features = false, features = ["std"] }
+unicode-normalization.workspace = true
 
 [dev-dependencies]
+# The rendering's properties over any name and range (RC-110-70).
+proptest.workspace = true
 serde_json.workspace = true
 
 [lints]

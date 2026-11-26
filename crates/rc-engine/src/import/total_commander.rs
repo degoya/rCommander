@@ -88,6 +88,9 @@ pub enum TcSkip {
     /// Own commands and the Start menu are the person's to import, in the window; never over MCP
     /// (RC-100-86).
     NeedsGui,
+    /// A folder on another machine's share named in a file an agent imports: never opened, as
+    /// opening it signs in to that server with the person's credentials (RC-110-58).
+    NetworkPath,
 }
 
 impl TcSkip {
@@ -112,6 +115,7 @@ impl TcSkip {
         Self::ChangeDir,
         Self::CommandInvalid,
         Self::NeedsGui,
+        Self::NetworkPath,
     ];
 
     /// The stable code; the window's text is `tc_import.skip.<code>`.
@@ -137,6 +141,7 @@ impl TcSkip {
             Self::ChangeDir => "change_dir",
             Self::CommandInvalid => "command_invalid",
             Self::NeedsGui => "needs_gui",
+            Self::NetworkPath => "network_path",
         }
     }
 }

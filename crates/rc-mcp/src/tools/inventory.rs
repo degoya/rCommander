@@ -12,6 +12,7 @@ use serde::Deserialize;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RefreshParams {
     /// The source's id, as inventory_sources lists it.
     pub source: i64,

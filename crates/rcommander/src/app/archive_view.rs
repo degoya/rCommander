@@ -11,7 +11,7 @@ use rc_engine::{
 };
 
 use super::{App, path_bar::breadcrumb};
-use crate::i18n::t;
+use crate::i18n::{counted::Counted, t};
 
 /// The segments of the path bar for `path`, each with what a click navigates to. Inside an
 /// archive: the folders outside it (reached by `..` steps, which leave the archive at its root),
@@ -101,20 +101,15 @@ pub(super) fn test_summary(job: &JobSnapshot) -> Option<String> {
         JobState::Cancelled => t!("archive.test.cancelled"),
         _ => t!("archive.test.failed"),
     };
-    let first = if first.is_empty() {
-        String::new()
-    } else {
-        t!("archive.test.first", names = first.join(", "))
-    };
-    Some(t!(
-        "archive.test.result",
-        name = name,
-        state = state,
-        passed = passed,
-        damaged = damaged.len(),
-        encrypted = encrypted.len(),
-        first = first,
-    ))
+    let mut text = vec![Counted::now().archive_test(
+        &name,
+        state,
+        [passed, damaged.len() as u64, encrypted.len() as u64],
+    )];
+    if !first.is_empty() {
+        text.push(t!("archive.test.first", names = first.join(", ")));
+    }
+    Some(text.join(" "))
 }
 
 impl App {

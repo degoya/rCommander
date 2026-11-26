@@ -14,7 +14,7 @@ use super::{
 use crate::{
     app::Message,
     format,
-    i18n::t,
+    i18n::{counted::Counted, t},
     theme::{
         self, Tokens,
         fit::{self, line, prose},
@@ -74,7 +74,7 @@ pub fn body<'a>(dialog: &'a PropsDialog, tokens: &'static Tokens) -> Element<'a,
     match &dialog.phase {
         Phase::Running => body = body.push(note(t!("props.running"), tokens)),
         Phase::Failed(error) => {
-            body = body.push(prose(error.as_str()).color(theme::DANGER));
+            body = body.push(prose(error.as_str()).color(tokens.status.danger));
         }
         Phase::Done(done) if !done.is_empty() => {
             body = body.push(prose(done.as_str()).color(tokens.accent));
@@ -90,11 +90,7 @@ fn facts<'a>(report: &'a PropertiesReport, tokens: &'static Tokens) -> Element<'
     if let (Some(total), true) = (&report.total, report.items.len() > 1) {
         rows = rows.push(fact(
             t!("props.selection"),
-            t!(
-                "props.files_and_folders",
-                files = format::count(total.files),
-                dirs = format::count(total.dirs)
-            ),
+            Counted::now().files_and_folders(total.files, total.dirs),
             tokens,
         ));
         rows = rows.push(fact(t!("props.size"), size_text(total.bytes), tokens));
@@ -117,11 +113,7 @@ fn facts<'a>(report: &'a PropertiesReport, tokens: &'static Tokens) -> Element<'
             .push(fact(t!("props.size"), size_text(usage.bytes), tokens))
             .push(fact(
                 t!("props.contains"),
-                t!(
-                    "props.files_and_folders",
-                    files = format::count(usage.files),
-                    dirs = format::count(usage.dirs)
-                ),
+                Counted::now().files_and_folders(usage.files, usage.dirs),
                 tokens,
             )),
         (EntryKind::Dir, None) => rows.push(fact(
@@ -275,11 +267,7 @@ fn usage_rows<'a>(usage: &DirUsage, tokens: &'static Tokens) -> Element<'a, Mess
         fact(t!("props.size"), size_text(usage.bytes), tokens),
         fact(
             t!("props.contains"),
-            t!(
-                "props.files_and_folders",
-                files = format::count(usage.files),
-                dirs = format::count(usage.dirs)
-            ),
+            Counted::now().files_and_folders(usage.files, usage.dirs),
             tokens
         ),
     ]
@@ -346,6 +334,7 @@ fn link_fields<'a>(link: &'a LinkForm, tokens: &'static Tokens) -> Element<'a, M
     );
     let place_label = t!("props.link_place");
     let place = text_input(&Label::parse(place_label).text, &link.link)
+        .style(theme::text_field)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
         .padding([6, 8])
@@ -374,11 +363,15 @@ fn comment_field(dialog: &PropsDialog) -> Element<'_, Message> {
         .map_or_else(String::new, |item| item.entry.name.clone());
     column![
         line(name),
-        text_input(t!("props.comment_placeholder"), &dialog.comment)
-            .font(theme::UI_FONT)
-            .size(theme::TEXT_SIZE)
-            .padding([6, 8])
-            .on_input(|text| Message::Properties(PropsMsg::Comment(text))),
+        layout::captioned(
+            t!("props.comment"),
+            text_input(t!("props.comment_placeholder"), &dialog.comment)
+                .style(theme::text_field)
+                .font(theme::UI_FONT)
+                .size(theme::TEXT_SIZE)
+                .padding([6, 8])
+                .on_input(|text| Message::Properties(PropsMsg::Comment(text))),
+        ),
     ]
     .spacing(8)
     .into()

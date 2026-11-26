@@ -17,6 +17,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ListParams {
     /// Only certificates whose host, subject, issuer or fingerprint contains this, ignoring case.
     #[serde(default)]

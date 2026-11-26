@@ -243,6 +243,10 @@ impl Reconnect for Hooks {
                 }),
             })
     }
+
+    async fn host_url(&self, backend: &BackendId) -> Option<String> {
+        self.engine()?.server_url(backend).await
+    }
 }
 
 #[cfg(test)]

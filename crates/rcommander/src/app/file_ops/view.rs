@@ -20,7 +20,7 @@ use super::{
 use crate::{
     app::{App, Message},
     format,
-    i18n::{error_text, t},
+    i18n::{counted::Counted, error_text, t},
     theme::{self, Tokens, fit, focus, icon::Icon, layout},
 };
 
@@ -93,6 +93,7 @@ impl App {
         if rename.panel != side || rename.index != index {
             return None;
         }
+        // field-label: the file's own row - an in-place rename, as Explorer's
         let field = text_input("", &rename.text)
             .id(RENAME_ID)
             .on_input(|text| wrap(FileOpsMsg::RenameInput(text)))
@@ -145,6 +146,7 @@ pub(super) fn dialog_card<'a>(dialog: &'a Dialog, tokens: &'static Tokens) -> Ca
     let mut body = column![].spacing(10);
     if dialog.has_field() {
         body = body.push(
+            // field-label: the title over it names what the field takes (a target, a name)
             text_input("", &dialog.text)
                 .id(FIELD_ID)
                 .on_input(|text| wrap(FileOpsMsg::Input(text)))
@@ -156,7 +158,8 @@ pub(super) fn dialog_card<'a>(dialog: &'a Dialog, tokens: &'static Tokens) -> Ca
     }
     match dialog.kind {
         FileDialog::DeletePermanent => {
-            body = body.push(fit::prose(t!("ops.delete_permanent_warning")).color(theme::DANGER));
+            body = body
+                .push(fit::prose(t!("ops.delete_permanent_warning")).color(tokens.status.danger));
         }
         FileDialog::Mkdir => {
             body = body.push(fit::prose(t!("ops.mkdir_hint")).color(tokens.text_secondary));
@@ -221,7 +224,7 @@ pub(super) fn dialog_card<'a>(dialog: &'a Dialog, tokens: &'static Tokens) -> Ca
         );
     }
     if let Some(code) = dialog.error {
-        body = body.push(fit::prose(error_text(code)).color(theme::DANGER));
+        body = body.push(fit::prose(error_text(code)).color(tokens.status.danger));
     }
     // TC's order: OK (Enter), F2 Queue, Cancel.
     let mut secondary = Vec::new();
@@ -299,12 +302,12 @@ pub(super) fn progress_card<'a>(
         .as_ref()
         .map(|path| path.path.display().to_string())
         .unwrap_or_default();
-    let counts = t!(
-        "ops.progress_counts",
-        files_done = format::count(totals.files_done),
-        files = format::count(totals.files_total),
-        bytes_done = format::size(totals.bytes_done),
-        bytes = format::size(totals.bytes_total),
+    let counts = Counted::now().progress_counts(
+        (totals.files_done, totals.files_total),
+        (
+            format::size(totals.bytes_done),
+            format::size(totals.bytes_total),
+        ),
     );
     let file_bytes = t!(
         "ops.progress_file_bytes",
@@ -388,7 +391,9 @@ fn labelled_bar<'a>(
             fit::line(figures).color(tokens.text_secondary),
         ]
         .spacing(12),
-        progress_bar(0.0..=1.0, share).girth(8),
+        progress_bar(0.0..=1.0, share)
+            .girth(8)
+            .style(theme::progress),
     ]
     .spacing(6)
     .into()

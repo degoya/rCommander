@@ -22,7 +22,7 @@ mod duplicates;
 pub mod everything;
 mod filters;
 mod mask;
-pub(crate) mod pages;
+pub mod pages;
 mod select_duplicates;
 mod walk;
 

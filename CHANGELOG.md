@@ -5,6 +5,286 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-26
+
+### Added
+
+- **A CycloneDX SBOM with every release** (RC-110-73, audit 2026-11-25 Licences #7): the
+  Release workflow writes `rcommander-<version>.cdx.json` and
+  `rcommander-<version>-plugins.cdx.tar.gz` (one SBOM per bundled plugin) from `Cargo.lock` with
+  cargo-cyclonedx 0.5.10 (pinned in `scripts/lib/tool-versions.sh`, installed `--locked`, in a
+  read-only job), attaches them to the GitHub release and lists them in `SHA256SUMS`;
+  `scripts/release-assets.sh sbom`.
+- **Legal notices in the app and the README** (RC-110-75, audit 2026-11-25 Legal #1, #2, #6-#8,
+  Licences #10): the About tab names the copyright holder, says rCommander comes without any
+  warranty and may be passed on under GPL-3.0-or-later, and its *Show licence* button opens
+  rCommander's own licence text, which now leads the Licences tab's texts while the filter is
+  empty or names it. The update check's help says GitHub sees the IP address and the version;
+  the MCP switch's help says an agent passes what it reads to its AI client's provider. The
+  README gained Privacy and Trademarks sections and the warranty disclaimer.
+- **Windows' accessibility settings followed** (RC-110-79, audit 2026-11-25 Accessibility #2, #8):
+  while Windows' high contrast is on, the whole window draws the built-in High contrast theme in
+  the contrast theme's own colours (window, text, highlight, link and grey text), switched on and
+  off while the app runs; Windows' text size (Settings, Accessibility, 100 to 225 %) scales the
+  whole interface, also at run time; with a screen reader running (Narrator, NVDA, JAWS) the
+  Windows menu is the menu bar unless `appearance.menu_bar_style` was ever set - it is the one
+  part of the window a screen reader reads. `docs/accessibility.md` brought up to date (menu,
+  the keyboard's reach from `reach.json`, the colour-only marking as a reasoned deviation, the
+  limits). Linux and macOS unchanged.
+- **The live suites run every week on GitHub** (RC-110-69, audit 2026-11-25 Tests #2): the
+  workflow `.github/workflows/live.yml` starts the test servers as containers - OpenSSH for SFTP,
+  the SSH terminal and `rcommander mcp`, vsftpd, pure-ftpd and ProFTPD for FTP and FTPS - and runs
+  the `#[ignore]`d live tests against them, every Monday on the public `main` and by hand on any
+  branch (`gh workflow run live.yml --ref ci/<branch> [-f suite=sftp|ftp]`). The servers' container
+  definitions and each suite's `run.sh` moved from the unexported `scripts/live/` to the public
+  `scripts/live-servers/`; `scripts/live-tests.sh` runs both locally as before. A job that changes
+  `rc-remote`, the engine's `remote` module or a protocol dependency names a live run as
+  acceptance (`AGENTS.md`, the `wave` skill).
+- **Fuzzing every week, and four new fuzz targets** (RC-110-68, audit 2026-11-25 Tests #1, #7):
+  `.github/workflows/fuzz.yml` runs `scripts/fuzz.sh` on GitHub every Sunday and by hand, every
+  target 5 minutes on the pinned nightly; the corpus lives on in the cache `fuzz-corpus-*` and as
+  an artifact, a finding fails the run and uploads its reproducer. New targets: `mcp_request`
+  (rmcp's stdio framing, then the argument check before the gate), `ssh_config` (the connection
+  import), `update_manifest` (the signed envelope, and fuzzed payloads behind a valid signature)
+  and `rename_pattern` (masks, case, search and replace and counter, planned and scheduled);
+  `fuzz.sh` writes their seeds. `rc_mcp::check_arguments` and
+  `rc_engine::import::ssh_config::parse_str` are `doc(hidden)` public for the targets.
+- **Property tests, clock-free watcher tests, Windows logic tested everywhere** (RC-110-70,
+  audit 2026-11-25 Tests #4, #5, #8-#10): `proptest` checks the multi-rename rendering
+  (`rc-rename`), the vault's value envelope and a sealed export (`rc-vault`) and the path
+  normalisation (`rc-vfs`: WSL shares, the `\\?\` prefix, network shares, archive entry names)
+  for any input. The file watcher's tests wait for the loop to settle instead of sleeping one to
+  three seconds; the loop takes the engine's events before its own signals. The drive letters,
+  the shell start's window and cancel handling and the locale format's decoding left their
+  Win32 modules for portable, tested code. `docs/development.md` holds the place for the
+  coverage table and the mutation tests of the vault, the update signature and the MCP write
+  guard; every wave runs the Windows CI (`wave` skill).
+
+### Fixed
+
+- **Archive names Windows cannot hold** (RC-110-92): on Windows an archive entry named
+  `a/C:/x.txt` or `b.txt:Zone.Identifier` could be joined to the target as a drive or a data
+  stream - a zip slip past the cleaning of leading drives, and a way to overwrite a file's
+  Mark-of-the-Web. Every part of an entry name is now made a name Windows can hold, as 7-Zip
+  unpacks it there: `<>:"|?*` and control characters become `_`, a device name (`CON`, `NUL`,
+  `COM1` ...) gets a `_` in front, a trailing dot or space becomes `_`. The archive view, the
+  MCP `archives_list`, unpacking and F5 out of the archive all use the new names (`a\C_\x.txt`,
+  `b.txt_Zone.Identifier`). Linux and macOS keep the names as stored.
+- **Large folders sort and list at their old speed again** (RC-110-93): since the Explorer-like
+  name order (RC-110-84) every name comparison ran up to three passes, and since the local listing
+  arrives in parts (RC-110-66) a complete folder was held twice until its listing ended. Two ASCII
+  names are now compared in one pass of their bytes and equal names at once, in the same order;
+  the last part of a listing hands its entries to the panel instead of a copy.
+- **Umlauts and accents sort at their letter** (RC-110-84, audit 2026-11-25 Text #3): names were
+  compared by their lowercased code points, so `Äpfel`, `Éclair` and `Ölbild` landed after `Zebra`.
+  Windows' word sort now reads a letter first by its base (its canonical decomposition, NFD,
+  without the accents, `ß` as `ss`), as Explorer and Total Commander do; accents decide only
+  between names otherwise equal, the one without first, and a decomposed name sorts as the
+  composed one. Numbers stay by value; the Linux order is unchanged. No allocation per
+  comparison (`rc-engine/src/sort/fold.rs`); `unicode-normalization`, already in the tree, is a
+  workspace dependency now.
+- **Hidden characters in names, server clipboard, archive bombs** (RC-110-62): the file list,
+  the status lines and the dialogs show control, zero-width, direction and other format
+  characters (Unicode Cf) spelled out, as the MCP questions do, so `photo<U+202E>gpj.exe` no
+  longer shows as the picture `photoexe.jpg`; a joiner inside an emoji or a Persian word stays.
+  `terminal.osc52_remote` is off by default, so a program on an SSH server no longer fills the
+  clipboard until the person allows it (a value stored earlier stays). The archive bomb limit is
+  64 GiB unpacked instead of 1 TiB, and an unpacking that would not fit the target drive's free
+  space fails at once with `not_enough_space` (bytes needed and free) before writing anything.
+
+- **Visible labels instead of placeholders** (RC-110-78, audit 2026-11-25 Accessibility #6): text
+  fields named only by a pale placeholder (2.95:1) that vanished with the first letter now carry
+  a caption beside or over them - the master-password prompt, the port-forward editor, the
+  workspace name and, found on the way, the database export and import passwords, the login-script
+  editor, the comment (Ctrl+Z), the SSH command, the import pages (ssh config, Total Commander,
+  Remote Desktop Manager, key passphrases), the inline names of connections and themes, the
+  filters and searches over the lists, the plugin package, the multi-rename preset name and the
+  colour rules. Every placeholder left is an example or a hint, drawn at 4.5:1
+  (`theme::text_field`); the captions come from `theme::layout::captioned` and
+  `captioned_beside`. The repo lint `field_labels` finds a field without a label it can see.
+- **Bundled viewers translated** (RC-110-85, audit 2026-11-25 Text #4): 13 of the 25 bundled
+  plugins - CSV, JSON, XML, YAML, log, diff, web code, SVG, shell, PowerShell, batch, config and
+  Dockerfile viewers - shipped only `en.json`, so their names, descriptions, setting labels and
+  error texts stayed English in German, French and Spanish. Each ships `de.json`, `fr.json` and
+  `es.json` now, at a new patch version with its `CHANGES.md` entry; the repository lint
+  `plugin_catalogues` requires all four catalogues with English's keys and placeholders of every
+  bundled plugin.
+- **MCP protection lists completed** (RC-110-58): an agent's Total Commander import skips every
+  hotlist entry and tab on another machine's share (`network_path`) and never asks whether it
+  exists, so the preview no longer makes Windows sign in to that server; the read guard refuses
+  browsers' signed-in sessions (`cookies.sqlite` with its `-wal`, Chromium's `Cookies` and
+  `Local State`, Firefox's `webappsstore.sqlite`); the write guard protects macOS's
+  `Library/LaunchAgents` and `Library/LaunchDaemons` and Windows' `%LOCALAPPDATA%\Programs`;
+  `ftp.ask_plaintext` is a protected setting that only the window switches.
+- **Mark-of-the-Web kept** (RC-110-56, audit 2026-11-25 Security #1): copies, moves and unpacking
+  dropped the `Zone.Identifier` stream, so a downloaded `.exe`, `.lnk` or `.docm` taken out of a
+  zip, or copied from a server, ran without SmartScreen or Office's protected view (the class of
+  7-Zip CVE-2025-0411). A file written onto a local disk now gets its source's stream, its
+  archive's zone (at least the internet's, URLs kept) or, from SFTP/FTP, the internet's zone
+  with the server as `HostUrl`; Enter on a file in an archive marks the temporary copy the same
+  way. `rc_ops::zone` holds the rule (portable, tested) and the stream access (Windows only);
+  the remote edit's `mark_from_internet` moved there. A zone that cannot be written (FAT) is
+  listed once as `zone_not_kept` and never fails the copy.
+- **All folder sizes in batches** (RC-110-63): Alt+Shift+Enter put every counted folder into the
+  panel on its own - one copy of the counted sizes under the engine's lock and one event per
+  folder, each event counting the whole folder again for the status line; over thousands of
+  small folders the window's event buffer overflowed and the panels were read anew. The results
+  now go in at most every 100 ms with one copy and one event (a long count does not hold back
+  the ones before it), and the status line adds only the sizes that changed. `scripts/perf.sh
+  --cases` measures it over `RC_PERF_DIR_FOLDERS` (10 000) folders.
+- **The window no longer waits for dead shares and WSL** (RC-110-64): a start folder on a share
+  that does not answer is given up after 2 s - the panel opens at home and the status line says
+  so - instead of the system's network timeout; the stored tabs' folders are looked for all at
+  once, beside the start folders, under the same 2 s limit, no longer up to 2 s each; the
+  terminal picker's WSL list is read
+  after the window opens. The bundled plugins unchanged since the last start (size, modification
+  time, same trust, still installed) are no longer read and verified again
+  (`plugins/bundled-seen.json`).
+- **Contrast of status colours, fields, the inactive cursor and the tabs** (RC-110-77): error,
+  warning and success colours are now per look (`Tokens::status`, `theme/status.rs`): WinUI's dark
+  ones (`#FF99A4`, `#FCE100`, `#6CCB5F`) in the dark look, where the light ones read at 2.6:1, and
+  in every look fitted to 4.5:1 on its window, surface, header and lists - built-in and own themes
+  alike. Text fields, text editors, pick lists and checkboxes carry a border at 3:1 (`#8A8A8A`
+  light, `#9A9A9A` dark, fitted the same way; iced's own was 1.6:1); the inactive panel's cursor
+  row has a 1-px outline in the lists' quieter text (its fill alone was 1.1:1); a folder tab's
+  label has 5 px above and below, 24 px high at least.
+- **Plural forms** (RC-110-82): a text with a count read "1 jobs selected", "1 files failed",
+  "1 Aufträge geladen", "1 tâches chargées". `t!("key", count = n)` now reads `key.one` or
+  `key.other` by the language's plural rule (French: 0 and 1 singular); 76 counted texts are
+  pairs in all four catalogues, and the `catalogues` and `i18n_keys` lints check the pairs.
+- **Numbers, sizes and dates by language** (RC-110-83): counts are grouped and sizes take the
+  decimal mark of the interface's language (`1,234` and `1.5 KiB` in English, `1.234` and
+  `1,5 KiB` in German and Spanish, `1 234` with a narrow space and `1,5 Kio` in French) instead
+  of a narrow space and a point everywhere; the disk usage's "stopped at 1,000,000 folders" takes
+  its number from the limit. The Updates page shows the offer's size and the download's progress
+  as sizes (`23 MiB`, no longer whole "MB" that read 0 under 1 MiB, and "KB" ungrouped), the
+  release day and the last check in the locale's date order and local time; the certificate
+  dialog's validity dates likewise, no longer fixed ISO in UTC.
+- **Texts with several numbers read right at 1** (RC-110-91, audit 2026-11-25 Text #1): the
+  panels' status line, the properties' and quick view's file and folder counts, the disk usage
+  total, the folder deletion in the connection manager, a job's progress, the inventory report,
+  a checksum check, the host key import, a loaded selection, the archive test, the synchronisation
+  summary and six more read "1 files", "1 dossiers endommagés" with a 1. Each number is now a part
+  of its own (`i18n::counted`, `t!(in lang; ...)`), a pair chosen by that number; the frame puts
+  the parts in its language's order. The repo lint `counted_texts` keeps a number a word agrees
+  with out of any text but a pair; a test reads the ten texts of the audit at 0, 1 and 2 in all
+  four languages.
+### Changed
+
+- Dependencies brought up to date within their compatible versions before 0.26.0: anyhow 1.0.105, clap 4.6.10, hyper 1.13.0, jiff 1.0.3, sha2 0.11.2, toml 1.2.3, zip 9.8.2, zlib-rs 0.6.9, zstd 0.14.5 with zstd 1.6.0, and 17 more.
+
+- **The English source reworded, whole sentences, coded errors** (RC-110-86, audit 2026-11-25
+  Text #6, #10, #11, #13, #15): Germanisms gone - *User commands* (was "Own commands"), *Delete
+  permanently* (was "for good"), keys *stored in* the vault, the data folder *next to* the
+  program, "already" before its verb; *Unselect* in the keyboard reference as in the menus; the
+  window title's "made with ♥ by" translated. Status lines join whole sentences instead of
+  fragments with a leading space (flat badge, search, disk usage, synchronisation, archive test).
+  The MCP server's start, the multi-rename tool's names file and the drag-out folder show an
+  error code's message instead of the system's English words; three new codes
+  (`mcp_token_unavailable`, `mcp_port_in_use`, `mcp_start_failed`). British spelling with -ize
+  written down in `docs/development.md`.
+- **One glossary, French typography** (RC-110-87, audit 2026-11-25 Text #5, #7, #8, #12):
+  `docs/glossary.md` names each thing per language. German follows Total Commander: *Verzeichnis*
+  for a directory (*Ordner* only for the connection manager's and the hotlist's groups), *Fenster*
+  for a panel, *Design* and *Arbeitsbereich* for the loanwords Theme and Workspace, quotes „…“.
+  French puts U+00A0 before `:` and inside « … », U+202F before `?`, `!` and `;` - in the app's
+  and the bundled plugins' catalogues, checked by the repo lint `typography`. Spanish says
+  *comando* throughout and reads its vault sentences anew.
+
+- **MCP question answered with the keyboard** (RC-110-80, audit 2026-11-25 Accessibility #7):
+  Allow and Allow for this session were click-only, so a keyboard user could only deny. A second
+  after a question comes on top they join the focus ring - Tab from Deny reaches Allow, Enter or
+  Space presses it. In that first second no key but Escape answers: the Allow buttons are no stops
+  and Enter or Space on Deny, which still has the ring, does nothing, so a key typed as the
+  question appears neither allows nor denies; the next question waits its own second.
+- **Thumbnails of large photos, the caches and a held cursor key** (RC-110-67, audit 2026-11-25
+  Performance #6, #7, #10): a JPEG's tile comes from the thumbnail the camera embedded when it is
+  large enough and has the photo's proportions, else from the photo decoded at 1/2, 1/4 or 1/8
+  of its size (`jpeg-decoder`, new dependency: the image crate's decoder cannot scale) - a 24 MP
+  photo takes about 1 MiB instead of 69 MiB for a 96-pixel tile; other formats as before. The
+  icon and tile caches let their oldest key go in O(log n) instead of searching every key on the
+  window's thread. Cursor steps that piled up behind a slow job reach the engine as one step,
+  so a held arrow key no longer runs on after a slow listing.
+- **Copies from disk to disk through the operating system** (RC-110-65, audit 2026-11-25
+  Performance #3): a file of 1 MiB or more copied or moved between two places on this machine's
+  disks goes through `CopyFileExW` on Windows - within one SMB share the server copies it itself,
+  the client's network stays nearly idle - and `copy_file_range` on Linux (a reflink on Btrfs and
+  XFS), instead of 256 KiB buffers through the client. Progress, pause, cancel, the overwrite
+  rules, times, attributes and the Mark-of-the-Web stay as they were; a job that verifies, a
+  continued part and macOS keep the stream, and a system copy that fails falls back to it. New
+  `Vfs::copy_file` with `CopyWatch` (`rc-vfs`); `TimeoutFs` stops a system copy whose bytes stop
+  moving for its request limit.
+- **Acceptance list per release delta** (RC-110-89): `scripts/testlist.sh --since <tag>`
+  (`latest`: the newest release tag) lists only the jobs with a commit or a status change since
+  the tag, the release's and the wave's default; `--before <tag>` lists the rest. `--smoke` writes
+  the bulk smoke list for that backlog: the open acceptance boxes by area, a few steps and one
+  `Smoke passed` box per area, whose tick `--apply` carries to every box of the area.
+- **Local folders listed in parts** (RC-110-66, audit 2026-11-25 Performance #4, #9): only SFTP
+  and FTP sent a listing as it arrived; a local folder - also on an SMB share or `\\wsl$` - came
+  as one block, and the panel showed nothing until its last entry was read. The local backend
+  now reads on a blocking thread and sends parts of 4096 entries, or fewer once 100 ms passed,
+  so a large folder shows its first rows while the rest arrives; a panel that moves on stops the
+  reading before the next entry (`rc-vfs` `local/batches.rs`). A symbolic link onto a drive
+  letter mapped to a share (`DRIVE_REMOTE`) is no longer followed to describe it, as a link onto
+  a share was not: a disconnected network drive held the listing once per such link
+  (`local/link_target.rs`). `scripts/perf.sh` measures the first rows beside the whole listing.
+- **MCP asks before data goes to a server** (RC-110-59): where writing is allowed, saving a
+  connection to a host and port no saved connection has (`connections_save`) and a copy, move,
+  pack, unpack or synchronisation into a folder on a server or portable device now ask the person
+  first (headless: a confirmation code); the question names the server and the number of
+  entries, and "allow for this session" holds for that server only. A copy between local folders
+  or from a server to this machine runs as before.
+- **MCP tool list** (RC-110-60): `tools/list` leaves out the tools whose class the MCP policy
+  denies (a call stays `policy_denied`); every tool carries `readOnlyHint`, `destructiveHint` and,
+  for executing tools, `openWorldHint` from its class; `filters_save` and `filters_rename` are
+  write, `filters_delete` destructive with a confirmation code; no description is longer than
+  1500 characters (the details of `ops_copy`, `connections_list` and `import_total_commander`
+  are in the server's instructions). The tool contract - every tool's name, class and input
+  schema - is the snapshot `crates/rc-mcp/tests/tools.json`, held by `tests/tool_contract.rs`; a
+  change on purpose rewrites it with
+  `RC_MCP_WRITE_TOOLS=1 scripts/cargo.sh nextest run -p rc-mcp --test tool_contract` and is named
+  here.
+- **Roadmap and job files cleaned up** (RC-110-88): `ROADMAP.md` and `docs/roadmap.md` state
+  where rCommander stands since the public releases, with every milestone in the status table
+  and a word on milestone versus version; the Windows beta job (RC-080-06) is closed as overtaken
+  by the release chain.
+- **Third-party licence texts in every package** (RC-110-72): `scripts/licenses.sh` also writes
+  `THIRD-PARTY-LICENSES`, the licence texts of all 672 shipped crates - the program's on every
+  platform and, new, the 40 more the bundled plugins compile in on wasm32 - each text once,
+  headed by the crates it covers, read from the crates' own archives (56 without a licence file
+  take a sibling crate's or a standard text through `overrides.json`); `--check` in the
+  preflight. Every package carries it (zip, tar.gz, deb, rpm, macOS, Homebrew), the deb and rpm
+  also a DEP-5 `/usr/share/doc/rcommander/copyright` made from it, and the About page's Licences
+  tab shows the texts of the crates its filter matches. `NOTICE` adds the iced_term fork, iced's
+  Iced-Icons font, PDFium's Foxit fonts and Adobe's CMaps of the PDF viewer, Cantarell and Lato
+  with the OFL; `LICENSE-MIT` beside the MIT code (`plugins/`, `sdk/`, `rc-plugin-text`).
+- **Contracts documented** (RC-110-90): the plugin contract's comments say the formats of
+  `modified` (RFC 3339, UTC) and the `attributes` bits and mark `entry` and `entry-kind` as
+  reserved for the file-system and packer worlds - comments only, still `rcommander:plugin@0.6.0`,
+  the SDK templates' copies with it; `docs/plugins.md` records one package for every world, also
+  at 1.0. A new update manifest schema gets a file name of its own while every release keeps
+  publishing schema 1 at `rcommander-update-<channel>.json` (`docs/security/updates.md`, a test
+  pins the names). `docs/security/mcp.md` points at symbols instead of line numbers.
+### Changed
+
+- **MCP: strict arguments** (RC-110-57): every tool refuses an argument it does not take instead
+  of dropping it - `ops_move {"source": [...]}` moved the panel's selection - and every input
+  schema says `additionalProperties: false`. The arguments are checked against the schema before
+  the policy and the question: a key the tool does not take, a missing or mistyped argument, a
+  value off its list or a `limit` above its maximum (1000; `dirs_compare` 5000) is the tool error
+  `{"code": "invalid_params"}` naming the argument, never its value, and nobody is asked about a
+  call that would not parse. A fault only the tool's own parse finds answers the same code
+  instead of rmcp's plain text. A `limit` of 0 or above the maximum is no longer cut silently.
+  The code argument `confirmation` stays accepted by every tool. A repository lint
+  (`strict_params`) refuses a new parameter type without `deny_unknown_fields`.
+- **MCP: lists in pages** (RC-110-61): `list_dir`, `archives_list` and `connections_list` answer
+  at most `limit` items (1000 when omitted, at most 1000) with `total`, `truncated` and a
+  `next_cursor` to pass back as `cursor`; the listing is kept between its pages (the file
+  search's page store), so the pages of one folder repeat or skip nothing. A cursor of another
+  call or folder is `invalid_params`. A panel's state names at most the first 1000 selected
+  names, with `selected_count` and `selection_truncated`. Tool answers are compact JSON instead
+  of indented.
+
 ## [0.25.1] - 2026-11-22
 
 ### Changed

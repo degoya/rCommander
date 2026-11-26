@@ -1,11 +1,11 @@
 //! The terminals copy and paste as the settings `terminal.copy_*`, `terminal.paste_ctrl_v`,
-//! `terminal.osc52_copy` and `terminal.shift_selects` say (RC-040-07).
+//! `terminal.osc52_copy`, `terminal.osc52_remote` and `terminal.shift_selects` say (RC-040-07).
 
 use rc_db::Db;
 use rc_engine::{
     Command, EngineEvent,
     settings::{
-        COPY_CTRL_C_KEY, COPY_ON_SELECT_KEY, OSC52_COPY_KEY, PASTE_CTRL_V_KEY,
+        COPY_CTRL_C_KEY, COPY_ON_SELECT_KEY, OSC52_COPY_KEY, OSC52_REMOTE_KEY, PASTE_CTRL_V_KEY,
         PASTE_RIGHT_CLICK_KEY,
     },
 };
@@ -26,7 +26,13 @@ async fn the_settings_read_as_windows_terminal_until_changed() {
     let db = Db::open_in_memory().await.expect("db");
     assert!(engine.attach_db(db.clone()));
     assert_eq!(load(db.clone()).await, CopySettings::default());
+    assert!(
+        !CopySettings::default().osc52_remote,
+        "a server's copy is off until chosen (RC-110-62)"
+    );
+    // A value stored before the default changed stays as it is.
     for (key, value) in [
+        (OSC52_REMOTE_KEY, true),
         (COPY_CTRL_C_KEY, false),
         (COPY_ON_SELECT_KEY, true),
         (PASTE_CTRL_V_KEY, false),
@@ -87,19 +93,20 @@ fn a_program_copy_needs_the_setting_room_a_shown_terminal_and_for_ssh_its_own_se
     let limit = rc_term::osc::MAX_CLIPBOARD;
     assert!(copy_allowed(copy, 5, true, false));
     assert!(
-        copy_allowed(copy, limit, true, true),
-        "on for SSH by default"
+        !copy_allowed(copy, 5, true, true),
+        "off for SSH by default (RC-110-62)"
     );
     assert!(!copy_allowed(copy, limit + 1, true, false));
     assert!(!copy_allowed(copy, 5, false, false), "a hidden terminal's");
-    let no_remote = CopySettings {
-        osc52_remote: false,
+    let remote = CopySettings {
+        osc52_remote: true,
         ..copy
     };
-    assert!(!copy_allowed(no_remote, 5, true, true));
+    assert!(copy_allowed(remote, limit, true, true), "SSH once chosen");
+    assert!(!copy_allowed(remote, limit + 1, true, true));
     assert!(
-        copy_allowed(no_remote, 5, true, false),
-        "a local terminal's still"
+        copy_allowed(copy, 5, true, false),
+        "a local terminal's either way"
     );
     let off = CopySettings {
         osc52: false,

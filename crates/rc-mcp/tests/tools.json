@@ -1,0 +1,8832 @@
+{
+  "app_about": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "archives_add": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "ConflictArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "rename",
+              "type": "string"
+            },
+            {
+              "const": "overwrite",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_older",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_larger",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_smaller",
+              "type": "string"
+            },
+            {
+              "const": "rename_existing",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            },
+            {
+              "const": "resume",
+              "type": "string"
+            }
+          ]
+        },
+        "ErrorArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delete_sources": {
+          "default": false,
+          "type": "boolean"
+        },
+        "keep_paths": {
+          "default": true,
+          "type": "boolean"
+        },
+        "level": {
+          "default": null,
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "on_conflict": {
+          "$ref": "#/$defs/ConflictArg"
+        },
+        "on_error": {
+          "$ref": "#/$defs/ErrorArg"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recurse": {
+          "default": true,
+          "type": "boolean"
+        },
+        "solid": {
+          "default": true,
+          "type": "boolean"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "store_links": {
+          "default": false,
+          "type": "boolean"
+        },
+        "target": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "archives_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entries": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "archives_extract": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "ConflictArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "rename",
+              "type": "string"
+            },
+            {
+              "const": "overwrite",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_older",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_larger",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_smaller",
+              "type": "string"
+            },
+            {
+              "const": "rename_existing",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            },
+            {
+              "const": "resume",
+              "type": "string"
+            }
+          ]
+        },
+        "ErrorArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "archives": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keep_paths": {
+          "default": true,
+          "type": "boolean"
+        },
+        "mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "on_conflict": {
+          "$ref": "#/$defs/ConflictArg"
+        },
+        "on_error": {
+          "$ref": "#/$defs/ErrorArg"
+        },
+        "own_folder": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "archives_list": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dir": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "archives_pack": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "ErrorArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            }
+          ]
+        },
+        "FormatArg": {
+          "enum": [
+            "zip",
+            "7z",
+            "tar",
+            "tar_gz",
+            "tar_xz",
+            "tar_bz2",
+            "tar_zst"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delete_sources": {
+          "default": false,
+          "type": "boolean"
+        },
+        "each_own_archive": {
+          "default": false,
+          "type": "boolean"
+        },
+        "format": {
+          "$ref": "#/$defs/FormatArg"
+        },
+        "keep_paths": {
+          "default": true,
+          "type": "boolean"
+        },
+        "level": {
+          "default": null,
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "on_error": {
+          "$ref": "#/$defs/ErrorArg"
+        },
+        "overwrite": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recurse": {
+          "default": true,
+          "type": "boolean"
+        },
+        "solid": {
+          "default": true,
+          "type": "boolean"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "store_links": {
+          "default": false,
+          "type": "boolean"
+        },
+        "target": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "archives_test": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    }
+  },
+  "button_bars_get": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "button_bars_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "button_bars_run": {
+    "class": "exec",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "bar": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "button": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "bar",
+        "button"
+      ],
+      "type": "object"
+    }
+  },
+  "certificates_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "filter": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "column_sets_create": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "spec": {}
+      },
+      "required": [
+        "name",
+        "spec"
+      ],
+      "type": "object"
+    }
+  },
+  "column_sets_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "column_sets_get": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "column_sets_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "column_sets_move": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "position": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "position"
+      ],
+      "type": "object"
+    }
+  },
+  "column_sets_rename": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "column_sets_update": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "spec": {}
+      },
+      "required": [
+        "id",
+        "spec"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_connect": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_create": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "AuthArg": {
+          "enum": [
+            "password",
+            "key",
+            "agent",
+            "interactive",
+            "anonymous"
+          ],
+          "type": "string"
+        },
+        "FtpEncodingArg": {
+          "enum": [
+            "latin1",
+            "utf8"
+          ],
+          "type": "string"
+        },
+        "FtpModeArg": {
+          "enum": [
+            "passive",
+            "active"
+          ],
+          "type": "string"
+        },
+        "KindArg": {
+          "enum": [
+            "ssh",
+            "ftp",
+            "ftps",
+            "ftps_implicit"
+          ],
+          "type": "string"
+        },
+        "ViewArg": {
+          "enum": [
+            "files",
+            "terminal"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auth_method": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default_view": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ViewArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "folder_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "ftp_data_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FtpModeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ftp_encoding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FtpEncodingArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "type": "string"
+        },
+        "jump_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "key_path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KindArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "start_directory": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_dark": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_light": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "username": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "host"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_disconnect": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_folder_create": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parent_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_folder_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "recursive": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_folder_move": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "parent_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sort_order": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_folder_rename": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_get": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_import_ssh_config": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "folder_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hosts": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "connections_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "connections_move": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "folder_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "sort_order": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_save": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "AuthArg": {
+          "enum": [
+            "password",
+            "key",
+            "agent",
+            "interactive",
+            "anonymous"
+          ],
+          "type": "string"
+        },
+        "FtpEncodingArg": {
+          "enum": [
+            "latin1",
+            "utf8"
+          ],
+          "type": "string"
+        },
+        "FtpModeArg": {
+          "enum": [
+            "passive",
+            "active"
+          ],
+          "type": "string"
+        },
+        "KindArg": {
+          "enum": [
+            "ssh",
+            "ftp",
+            "ftps",
+            "ftps_implicit"
+          ],
+          "type": "string"
+        },
+        "ViewArg": {
+          "enum": [
+            "files",
+            "terminal"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auth_method": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_view": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ViewArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "favourite": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "folder_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "ftp_data_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FtpModeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ftp_encoding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FtpEncodingArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "jump_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "key_path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KindArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "login_script_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "start_directory": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_dark": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_light": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "username": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "connections_session_prefs": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_set_favourite": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "favourite": {
+          "type": "boolean"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "favourite"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_set_folder_favourite": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "favourite": {
+          "type": "boolean"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "favourite"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_set_session_prefs": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "MethodArg": {
+          "enum": [
+            "agent",
+            "key",
+            "password"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "agent_fingerprint": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "auth_order": {
+          "items": {
+            "$ref": "#/$defs/MethodArg"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "idle_close_secs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "keepalive_secs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "totp_prompt": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_test": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "connections_update": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "AuthArg": {
+          "enum": [
+            "password",
+            "key",
+            "agent",
+            "interactive",
+            "anonymous"
+          ],
+          "type": "string"
+        },
+        "FtpEncodingArg": {
+          "enum": [
+            "latin1",
+            "utf8"
+          ],
+          "type": "string"
+        },
+        "FtpModeArg": {
+          "enum": [
+            "passive",
+            "active"
+          ],
+          "type": "string"
+        },
+        "KindArg": {
+          "enum": [
+            "ssh",
+            "ftp",
+            "ftps",
+            "ftps_implicit"
+          ],
+          "type": "string"
+        },
+        "ViewArg": {
+          "enum": [
+            "files",
+            "terminal"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auth_method": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default_view": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ViewArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ftp_data_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FtpModeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ftp_encoding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FtpEncodingArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "jump_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "key_path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KindArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "start_directory": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_dark": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_light": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "username": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "credential_sources_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "connection_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "credential_sources_search": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "credentials_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "credentials_move": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "folder_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "credentials_save": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "folder_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "username": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "db_backup": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "diagnostics_clear_error_log": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "diagnostics_error_log": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "LevelArg": {
+          "enum": [
+            "warn",
+            "error"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "contains": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LevelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint32",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "diagnostics_get_retention": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "diagnostics_set_retention": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_age_days": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_rows": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "table": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "table"
+      ],
+      "type": "object"
+    }
+  },
+  "dirs_compare": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "ModeArg": {
+          "enum": [
+            "both",
+            "left_to_right",
+            "right_to_left",
+            "mirror_to_right",
+            "mirror_to_left"
+          ],
+          "type": "string"
+        },
+        "ShowArg": {
+          "enum": [
+            "differences",
+            "all",
+            "equal",
+            "left_only",
+            "right_only"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "by_content": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignore_date": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignore_dst_hour": {
+          "default": false,
+          "type": "boolean"
+        },
+        "left": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint",
+          "maximum": 5000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "masks": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "right": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "show": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ShowArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subdirs": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "time_tolerance_secs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "dirs_sync_apply": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "ActionArg": {
+          "enum": [
+            "none",
+            "copy_to_right",
+            "copy_to_left",
+            "delete_right",
+            "delete_left"
+          ],
+          "type": "string"
+        },
+        "ErrorArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            }
+          ]
+        },
+        "ModeArg": {
+          "enum": [
+            "both",
+            "left_to_right",
+            "right_to_left",
+            "mirror_to_right",
+            "mirror_to_left"
+          ],
+          "type": "string"
+        },
+        "RowActionArg": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/ActionArg"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "action"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/RowActionArg"
+          },
+          "type": "array"
+        },
+        "allow_deletes": {
+          "default": false,
+          "type": "boolean"
+        },
+        "by_content": {
+          "default": false,
+          "type": "boolean"
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ignore_date": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignore_dst_hour": {
+          "default": false,
+          "type": "boolean"
+        },
+        "left": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "masks": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "on_error": {
+          "$ref": "#/$defs/ErrorArg"
+        },
+        "overwrite": {
+          "default": false,
+          "type": "boolean"
+        },
+        "permanent": {
+          "default": false,
+          "type": "boolean"
+        },
+        "proposed": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "right": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subdirs": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "time_tolerance_secs": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "verify": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "drives_connections": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "drives_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "refresh": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "drives_unmap_network": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "drive": {
+          "type": "string"
+        },
+        "force": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "drive"
+      ],
+      "type": "object"
+    }
+  },
+  "file_open": {
+    "class": "exec",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "files_checksum": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "AlgorithmArg": {
+          "enum": [
+            "crc32",
+            "md5",
+            "sha1",
+            "sha256",
+            "sha512",
+            "blake3"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "$ref": "#/$defs/AlgorithmArg"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "paths",
+        "algorithm"
+      ],
+      "type": "object"
+    }
+  },
+  "files_checksum_create": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "AlgorithmArg": {
+          "enum": [
+            "crc32",
+            "md5",
+            "sha1",
+            "sha256",
+            "sha512",
+            "blake3"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "$ref": "#/$defs/AlgorithmArg"
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dir": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "per_file": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "names",
+        "algorithm"
+      ],
+      "type": "object"
+    }
+  },
+  "files_checksum_verify": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "files_combine": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "target_dir": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "files_compare": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "CompareModeArg": {
+          "enum": [
+            "text",
+            "structure"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "ignore_case": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignore_line_endings": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignore_whitespace": {
+          "default": false,
+          "type": "boolean"
+        },
+        "left": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompareModeArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "right": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unified_limit": {
+          "default": null,
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "files_compare_apply": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "DirectionArg": {
+          "oneOf": [
+            {
+              "const": "left_to_right",
+              "type": "string"
+            },
+            {
+              "const": "right_to_left",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "direction": {
+          "$ref": "#/$defs/DirectionArg"
+        },
+        "expect_left_modified_unix": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "expect_left_size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expect_right_modified_unix": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "expect_right_size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ignore_case": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignore_line_endings": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ignore_whitespace": {
+          "default": false,
+          "type": "boolean"
+        },
+        "left": {
+          "type": "string"
+        },
+        "right": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "left",
+        "right",
+        "blocks",
+        "direction",
+        "expect_left_size",
+        "expect_right_size"
+      ],
+      "type": "object"
+    }
+  },
+  "files_create_link": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "LinkKindArg": {
+          "enum": [
+            "shortcut",
+            "symlink",
+            "hardlink",
+            "junction"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkKindArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "link": {
+          "type": "string"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "link"
+      ],
+      "type": "object"
+    }
+  },
+  "files_dir_size": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "files_disk_usage": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "files_find_duplicates": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "ContentParams": {
+          "additionalProperties": false,
+          "properties": {
+            "case_sensitive": {
+              "default": false,
+              "type": "boolean"
+            },
+            "encodings": {
+              "items": {
+                "$ref": "#/$defs/EncodingArg"
+              },
+              "type": "array"
+            },
+            "not_containing": {
+              "default": false,
+              "type": "boolean"
+            },
+            "regex": {
+              "default": false,
+              "type": "boolean"
+            },
+            "skip_binary": {
+              "default": false,
+              "type": "boolean"
+            },
+            "text": {
+              "type": "string"
+            },
+            "whole_words": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        },
+        "EncodingArg": {
+          "enum": [
+            "auto",
+            "utf8",
+            "utf16_le",
+            "utf16_be",
+            "windows1252"
+          ],
+          "type": "string"
+        },
+        "KindArg": {
+          "enum": [
+            "any",
+            "files",
+            "dirs"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "archive": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "archives": {
+          "default": false,
+          "type": "boolean"
+        },
+        "case_sensitive": {
+          "default": false,
+          "type": "boolean"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cursor": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "follow_symlinks": {
+          "default": false,
+          "type": "boolean"
+        },
+        "hidden": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KindArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_age_secs": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_depth": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_size": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "min_size": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mode_bits": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "modified_after": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "modified_before": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        },
+        "name_regex": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "readonly": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "same_contents": {
+          "default": false,
+          "type": "boolean"
+        },
+        "same_name": {
+          "default": false,
+          "type": "boolean"
+        },
+        "same_size": {
+          "default": false,
+          "type": "boolean"
+        },
+        "skip_hidden": {
+          "default": false,
+          "type": "boolean"
+        },
+        "system": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "files_properties": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "files_read_hex": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "length": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "files_read_text": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "EncodingArg": {
+          "enum": [
+            "utf8",
+            "utf16_le",
+            "utf16_be",
+            "latin1",
+            "windows1252",
+            "cp437"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "encoding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EncodingArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_bytes": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "files_search": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "ContentParams": {
+          "additionalProperties": false,
+          "properties": {
+            "case_sensitive": {
+              "default": false,
+              "type": "boolean"
+            },
+            "encodings": {
+              "items": {
+                "$ref": "#/$defs/EncodingArg"
+              },
+              "type": "array"
+            },
+            "not_containing": {
+              "default": false,
+              "type": "boolean"
+            },
+            "regex": {
+              "default": false,
+              "type": "boolean"
+            },
+            "skip_binary": {
+              "default": false,
+              "type": "boolean"
+            },
+            "text": {
+              "type": "string"
+            },
+            "whole_words": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        },
+        "EncodingArg": {
+          "enum": [
+            "auto",
+            "utf8",
+            "utf16_le",
+            "utf16_be",
+            "windows1252"
+          ],
+          "type": "string"
+        },
+        "KindArg": {
+          "enum": [
+            "any",
+            "files",
+            "dirs"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "archive": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "archives": {
+          "default": false,
+          "type": "boolean"
+        },
+        "case_sensitive": {
+          "default": false,
+          "type": "boolean"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cursor": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "follow_symlinks": {
+          "default": false,
+          "type": "boolean"
+        },
+        "hidden": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KindArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_age_secs": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_depth": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_size": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "min_size": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mode_bits": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "modified_after": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "modified_before": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        },
+        "name_regex": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "readonly": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_hidden": {
+          "default": false,
+          "type": "boolean"
+        },
+        "system": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "files_set_attributes": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "ApplyToArg": {
+          "enum": [
+            "files",
+            "dirs",
+            "both"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "apply_to": {
+          "$ref": "#/$defs/ApplyToArg"
+        },
+        "archive": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hidden": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "mode": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modified": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "readonly": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "recursive": {
+          "default": false,
+          "type": "boolean"
+        },
+        "system": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    }
+  },
+  "files_set_comment": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "comment": {
+          "type": "string"
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "comment"
+      ],
+      "type": "object"
+    }
+  },
+  "files_split": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "part_size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "target_dir": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "part_size"
+      ],
+      "type": "object"
+    }
+  },
+  "files_stat": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "filters_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "filters_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "filters_rename": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "new_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "new_name"
+      ],
+      "type": "object"
+    }
+  },
+  "filters_save": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mask": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "mask"
+      ],
+      "type": "object"
+    }
+  },
+  "forwards_delete": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "forwards_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "connection_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "forwards_stop": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "forwards_stop_all": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "connection_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "get_panel_state": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "history_back": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "history_forward": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "history_jump": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "type": "object"
+    }
+  },
+  "history_list": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "history_open_frequent": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "type": "object"
+    }
+  },
+  "hostkeys_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "filter": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "hostkeys_revoked": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "filter": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "hotlist_add": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "hotlist_add_folder": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parent_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "hotlist_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "hotlist_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "hotlist_move": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "parent_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "position": {
+          "default": null,
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "hotlist_open": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "hotlist_update": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "clear_target": {
+          "default": false,
+          "type": "boolean"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "import_remote_desktop_manager": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "only": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "import_total_commander": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "commands": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "connections": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "dry_run": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ftp_ini": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hotlist": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "look": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "only": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "replace_tabs": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "tabs": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "wincmd_ini": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "inventory_refresh": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "preview": {
+          "default": false,
+          "type": "boolean"
+        },
+        "source": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    }
+  },
+  "inventory_sources": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "keymap_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "list_dir": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "login_scripts_assign": {
+    "class": "exec",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connection_id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "script_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "connection_id"
+      ],
+      "type": "object"
+    }
+  },
+  "login_scripts_create": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "SourceArg": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "connection_password",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "kind": {
+                  "const": "stored",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "StepArg": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "step": {
+                  "const": "wait_for",
+                  "type": "string"
+                },
+                "timeout_ms": {
+                  "default": null,
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "step",
+                "pattern"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "newline": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "step": {
+                  "const": "send_text",
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "text"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "newline": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "source": {
+                  "$ref": "#/$defs/SourceArg"
+                },
+                "step": {
+                  "const": "send_secret",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "source"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "step": {
+                  "const": "send_line",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "newline": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "step": {
+                  "const": "send_totp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "step": {
+                  "const": "sleep",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "ms"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "step_timeout_ms": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/StepArg"
+          },
+          "type": "array"
+        },
+        "total_timeout_ms": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "login_scripts_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "login_scripts_get": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "login_scripts_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "login_scripts_update": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "SourceArg": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "connection_password",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "kind": {
+                  "const": "stored",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "StepArg": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "step": {
+                  "const": "wait_for",
+                  "type": "string"
+                },
+                "timeout_ms": {
+                  "default": null,
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "step",
+                "pattern"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "newline": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "step": {
+                  "const": "send_text",
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "text"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "newline": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "source": {
+                  "$ref": "#/$defs/SourceArg"
+                },
+                "step": {
+                  "const": "send_secret",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "source"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "step": {
+                  "const": "send_line",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "newline": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "step": {
+                  "const": "send_totp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "step": {
+                  "const": "sleep",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "ms"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "step_timeout_ms": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/StepArg"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "total_timeout_ms": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "multi_rename_apply": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "CaseArg": {
+          "oneOf": [
+            {
+              "enum": [
+                "lower",
+                "upper"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "unchanged",
+              "type": "string"
+            },
+            {
+              "const": "first_upper",
+              "type": "string"
+            },
+            {
+              "const": "words_upper",
+              "type": "string"
+            },
+            {
+              "const": "title",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        },
+        "SearchArg": {
+          "additionalProperties": false,
+          "properties": {
+            "case_sensitive": {
+              "default": false,
+              "type": "boolean"
+            },
+            "find": {
+              "default": "",
+              "type": "string"
+            },
+            "first_only": {
+              "default": false,
+              "type": "boolean"
+            },
+            "include_extension": {
+              "default": false,
+              "type": "boolean"
+            },
+            "regex": {
+              "default": false,
+              "type": "boolean"
+            },
+            "replace": {
+              "default": "",
+              "type": "string"
+            },
+            "substitute": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/CaseArg"
+        },
+        "changed_at": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clipboard": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "counter_start": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "counter_step": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "counter_width": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "date_format": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dir": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extension_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "names": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "new_names": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "opened_at": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "search": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SearchArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_format": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "multi_rename_preset_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "multi_rename_preset_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "multi_rename_preset_rename": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "new_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "new_name"
+      ],
+      "type": "object"
+    }
+  },
+  "multi_rename_preset_save": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "CaseArg": {
+          "oneOf": [
+            {
+              "enum": [
+                "lower",
+                "upper"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "unchanged",
+              "type": "string"
+            },
+            {
+              "const": "first_upper",
+              "type": "string"
+            },
+            {
+              "const": "words_upper",
+              "type": "string"
+            },
+            {
+              "const": "title",
+              "type": "string"
+            }
+          ]
+        },
+        "SearchArg": {
+          "additionalProperties": false,
+          "properties": {
+            "case_sensitive": {
+              "default": false,
+              "type": "boolean"
+            },
+            "find": {
+              "default": "",
+              "type": "string"
+            },
+            "first_only": {
+              "default": false,
+              "type": "boolean"
+            },
+            "include_extension": {
+              "default": false,
+              "type": "boolean"
+            },
+            "regex": {
+              "default": false,
+              "type": "boolean"
+            },
+            "replace": {
+              "default": "",
+              "type": "string"
+            },
+            "substitute": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/CaseArg"
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "counter_start": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "counter_step": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "counter_width": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "extension_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "name_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "search": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SearchArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "multi_rename_preview": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "CaseArg": {
+          "oneOf": [
+            {
+              "enum": [
+                "lower",
+                "upper"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "unchanged",
+              "type": "string"
+            },
+            {
+              "const": "first_upper",
+              "type": "string"
+            },
+            {
+              "const": "words_upper",
+              "type": "string"
+            },
+            {
+              "const": "title",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        },
+        "SearchArg": {
+          "additionalProperties": false,
+          "properties": {
+            "case_sensitive": {
+              "default": false,
+              "type": "boolean"
+            },
+            "find": {
+              "default": "",
+              "type": "string"
+            },
+            "first_only": {
+              "default": false,
+              "type": "boolean"
+            },
+            "include_extension": {
+              "default": false,
+              "type": "boolean"
+            },
+            "regex": {
+              "default": false,
+              "type": "boolean"
+            },
+            "replace": {
+              "default": "",
+              "type": "string"
+            },
+            "substitute": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/CaseArg"
+        },
+        "changed_at": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clipboard": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "counter_start": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "counter_step": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "counter_width": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "date_format": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dir": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extension_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "names": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "new_names": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "opened_at": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "search": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SearchArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "time_format": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "multi_rename_undo": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "navigate": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "ops_cancel": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    }
+  },
+  "ops_copy": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "ConflictArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "rename",
+              "type": "string"
+            },
+            {
+              "const": "overwrite",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_older",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_larger",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_smaller",
+              "type": "string"
+            },
+            {
+              "const": "rename_existing",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            },
+            {
+              "const": "resume",
+              "type": "string"
+            }
+          ]
+        },
+        "ErrorArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keep_attributes": {
+          "default": true,
+          "type": "boolean"
+        },
+        "on_conflict": {
+          "$ref": "#/$defs/ConflictArg"
+        },
+        "on_error": {
+          "$ref": "#/$defs/ErrorArg"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rename_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verify": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "ops_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$defs": {
+        "ErrorArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "on_error": {
+          "$ref": "#/$defs/ErrorArg"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "permanent": {
+          "default": false,
+          "type": "boolean"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "ops_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "ops_mkdir": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "ops_move": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "ConflictArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "rename",
+              "type": "string"
+            },
+            {
+              "const": "overwrite",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_older",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_larger",
+              "type": "string"
+            },
+            {
+              "const": "overwrite_smaller",
+              "type": "string"
+            },
+            {
+              "const": "rename_existing",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            },
+            {
+              "const": "resume",
+              "type": "string"
+            }
+          ]
+        },
+        "ErrorArg": {
+          "oneOf": [
+            {
+              "const": "skip",
+              "type": "string"
+            },
+            {
+              "const": "cancel",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keep_attributes": {
+          "default": true,
+          "type": "boolean"
+        },
+        "on_conflict": {
+          "$ref": "#/$defs/ConflictArg"
+        },
+        "on_error": {
+          "$ref": "#/$defs/ErrorArg"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rename_mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verify": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "ops_pause": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    }
+  },
+  "ops_resume": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_branch_view": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selection": {
+          "default": false,
+          "type": "boolean"
+        },
+        "show": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_change_drive": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "drive": {
+          "type": "string"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "drive"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_deselect_by_mask": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_feed_paths": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "default": [],
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "root": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_file_filter": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "FilterKind": {
+          "oneOf": [
+            {
+              "const": "all",
+              "type": "string"
+            },
+            {
+              "const": "programs",
+              "type": "string"
+            },
+            {
+              "const": "mask",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/FilterKind"
+        },
+        "mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_filter": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pattern": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_git_status": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_load_list": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_save_selection": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_select": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        },
+        "SelectAction": {
+          "oneOf": [
+            {
+              "const": "all",
+              "type": "string"
+            },
+            {
+              "const": "none",
+              "type": "string"
+            },
+            {
+              "const": "invert",
+              "type": "string"
+            },
+            {
+              "const": "select_extension",
+              "type": "string"
+            },
+            {
+              "const": "deselect_extension",
+              "type": "string"
+            },
+            {
+              "const": "restore",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/SelectAction"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_select_by_mask": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mask": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_select_differences": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "by_content": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_select_duplicates": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "DateArg": {
+          "enum": [
+            "all_older",
+            "all_newer",
+            "oldest",
+            "newest"
+          ],
+          "type": "string"
+        },
+        "KeepArg": {
+          "enum": [
+            "newest",
+            "oldest",
+            "largest",
+            "smallest",
+            "first",
+            "last"
+          ],
+          "type": "string"
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        },
+        "RuleArg": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "by": {
+                  "const": "mask",
+                  "type": "string"
+                },
+                "mask": {
+                  "type": "string"
+                },
+                "remove": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "by",
+                "mask"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "by": {
+                  "const": "date",
+                  "type": "string"
+                },
+                "pick": {
+                  "$ref": "#/$defs/DateArg"
+                }
+              },
+              "required": [
+                "by",
+                "pick"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "by": {
+                  "const": "size",
+                  "type": "string"
+                },
+                "pick": {
+                  "$ref": "#/$defs/SizeArg"
+                }
+              },
+              "required": [
+                "by",
+                "pick"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "by": {
+                  "const": "folders",
+                  "type": "string"
+                },
+                "folders": {
+                  "default": [],
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "parent_only": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "pattern": {
+                  "default": null,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "remove": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "subfolders": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "by"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "SizeArg": {
+          "enum": [
+            "all_larger",
+            "all_smaller",
+            "largest",
+            "smallest"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "keep": {
+          "items": {
+            "$ref": "#/$defs/KeepArg"
+          },
+          "type": "array"
+        },
+        "leave_one": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rule": {
+          "$ref": "#/$defs/RuleArg"
+        }
+      },
+      "required": [
+        "rule"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_selection_from_file": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_selection_from_text": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_selection_to_file": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_set_view": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "ModeArg": {
+          "oneOf": [
+            {
+              "enum": [
+                "full",
+                "brief"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "custom",
+              "type": "string"
+            },
+            {
+              "const": "comments",
+              "type": "string"
+            },
+            {
+              "const": "thumbnails",
+              "type": "string"
+            }
+          ]
+        },
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ModeArg"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "set": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_show_hidden": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "show": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_show_tree": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "show": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_sort": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        },
+        "SortKeyArg": {
+          "enum": [
+            "name",
+            "ext",
+            "size",
+            "date",
+            "created",
+            "accessed",
+            "comment"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "descending": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "key": {
+          "$ref": "#/$defs/SortKeyArg"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "panel_swap": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "with_tabs": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_toggle_ignore_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "panel_transfer": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "$ref": "#/$defs/PanelArg"
+        }
+      },
+      "required": [
+        "to"
+      ],
+      "type": "object"
+    }
+  },
+  "plugins_list": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "queue_assign": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "list": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job",
+        "list"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_assign_many": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "jobs": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "list": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "jobs",
+        "list"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_clear": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "all_lists": {
+          "default": false,
+          "type": "boolean"
+        },
+        "list": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "queue_clear_finished": {
+    "class": "write",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "queue_create": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "jobs": {
+          "default": [],
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_delete": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "list": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "list"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_delete_saved": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "saved": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "saved"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_discard": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "jobs": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "jobs"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "queue_lists": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "queue_load": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "saved": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "saved"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_move": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "StepArg": {
+          "oneOf": [
+            {
+              "const": "up",
+              "type": "string"
+            },
+            {
+              "const": "down",
+              "type": "string"
+            },
+            {
+              "const": "front",
+              "type": "string"
+            },
+            {
+              "const": "back",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "step": {
+          "$ref": "#/$defs/StepArg"
+        }
+      },
+      "required": [
+        "job",
+        "step"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_move_many": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "StepArg": {
+          "oneOf": [
+            {
+              "const": "up",
+              "type": "string"
+            },
+            {
+              "const": "down",
+              "type": "string"
+            },
+            {
+              "const": "front",
+              "type": "string"
+            },
+            {
+              "const": "back",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "jobs": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "step": {
+          "$ref": "#/$defs/StepArg"
+        }
+      },
+      "required": [
+        "jobs",
+        "step"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_pause": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "list": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "list"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_pause_all": {
+    "class": "write",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "queue_remove": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_rename": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "list": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "list",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_resume_all": {
+    "class": "write",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "queue_save": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "list": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "restore_on_start": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "list"
+      ],
+      "type": "object"
+    }
+  },
+  "queue_start": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "list": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "list"
+      ],
+      "type": "object"
+    }
+  },
+  "remote_edits_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "set_cursor": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "default": null,
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "settings_get": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "settings_set": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "show_files": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "ssh_agent_identities": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "ssh_exec": {
+    "class": "exec",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connection_id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "default": null,
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stdin": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timeout_secs": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "connection_id",
+        "command"
+      ],
+      "type": "object"
+    }
+  },
+  "start_menu_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "start_menu_run": {
+    "class": "exec",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "switch_active_panel": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_close": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tab": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_close_all": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "include_locked": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_copy_to_other": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tab": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_list": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_lock": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "locked": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tab": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_move": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tab": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "to": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tab",
+        "to"
+      ],
+      "type": "object"
+    }
+  },
+  "tab_open": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "default": false,
+          "type": "boolean"
+        },
+        "other_panel": {
+          "default": false,
+          "type": "boolean"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_rename": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tab": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "title": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "tab_select": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tab": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tab"
+      ],
+      "type": "object"
+    }
+  },
+  "terminal_close": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "terminal"
+      ],
+      "type": "object"
+    }
+  },
+  "terminal_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "terminal_open": {
+    "class": "exec",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cols": {
+          "default": null,
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connection_id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "cwd": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "distro": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "default": null,
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "shell": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "terminal_read_screen": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "scrollback": {
+          "default": null,
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "terminal": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "terminal"
+      ],
+      "type": "object"
+    }
+  },
+  "terminal_send_input": {
+    "class": "exec",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminal",
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  "terminal_show": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "terminal": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "terminal"
+      ],
+      "type": "object"
+    }
+  },
+  "theme_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "theme_select": {
+    "class": "write",
+    "input_schema": {
+      "$defs": {
+        "Mode": {
+          "enum": [
+            "light",
+            "dark"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        }
+      },
+      "required": [
+        "mode",
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "toggle_selection": {
+    "class": "read",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "type": "object"
+    }
+  },
+  "update_check": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "update_status": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "user_commands_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "user_commands_run": {
+    "class": "exec",
+    "input_schema": {
+      "$defs": {
+        "PanelArg": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelArg"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "vault_lock": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "vault_status": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "workspaces_apply": {
+    "class": "exec",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "workspaces_capture": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "workspaces_create": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "spec": {},
+        "theme_dark": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_light": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "spec"
+      ],
+      "type": "object"
+    }
+  },
+  "workspaces_delete": {
+    "class": "destructive",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "workspaces_get": {
+    "class": "read",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "workspaces_list": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "workspaces_move": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "position": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "position"
+      ],
+      "type": "object"
+    }
+  },
+  "workspaces_rename": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "workspaces_update": {
+    "class": "write",
+    "input_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confirmation": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spec": {
+          "default": null
+        },
+        "theme_dark": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "theme_light": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "wsl_list_distros": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "wsl_refresh": {
+    "class": "read",
+    "input_schema": {
+      "properties": {},
+      "type": "object"
+    }
+  }
+}

@@ -147,6 +147,7 @@ impl App {
     /// of its own.
     pub(in crate::app) fn ask_body(&self) -> Option<Element<'_, Message>> {
         let ask = self.user_commands.ask.as_ref()?;
+        // field-label: the question over it (`user_commands.ask.text`)
         let field = text_input("", &ask.text)
             .id(ASK_FIELD)
             .font(theme::UI_FONT)

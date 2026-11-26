@@ -63,6 +63,9 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+# The panels' name order: a letter's accents from its canonical decomposition (`sort/fold.rs`,
+# RC-110-84).
+unicode-normalization.workspace = true
 # The host and port of an inventory's HTTPS address, for its certificate trust (RC-100-40).
 url.workspace = true
 zeroize.workspace = true
@@ -111,6 +114,8 @@ rc-plugin-host = { path = "../rc-plugin-host", features = ["test-support", "test
 rc-remote = { path = "../rc-remote", features = ["testkit"] }
 # The tests' wrapping backends (`rc_vfs::testing`, RC-080-24).
 rc-vfs = { path = "../rc-vfs", features = ["memory"] }
+# The property test that the ASCII path of the name order agrees with its passes (RC-110-93).
+proptest.workspace = true
 # The settings test that a bad stored value is logged.
 tracing-subscriber.workspace = true
 

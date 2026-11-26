@@ -10,7 +10,7 @@ use crate::live::{MASTER, connect_trusting, connection, engine, trust_open_quest
 use crate::live_or_skip;
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn test_connect_and_disconnect_a_saved_connection() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -51,7 +51,7 @@ async fn test_connect_and_disconnect_a_saved_connection() {
 
 /// The `keys` server alone: its log counts login attempts, and it gets a new key mid-test.
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn an_unknown_key_sends_no_password_and_a_changed_key_is_replaced_only_on_purpose() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -139,7 +139,7 @@ async fn an_unknown_key_sends_no_password_and_a_changed_key_is_replaced_only_on_
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_locked_vault_asks_for_the_master_password_and_nothing_else() {
     let live = live_or_skip!();
     let dir = workdir();

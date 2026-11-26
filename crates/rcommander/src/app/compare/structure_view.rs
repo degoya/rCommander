@@ -76,7 +76,7 @@ pub(super) fn pane<'a>(pane: &'a StructurePane, tokens: &'static Tokens) -> Elem
     let mut parts = Column::new().spacing(6).height(Length::Fill);
     parts = parts.push(line(summary(pane)).color(tokens.accent));
     for notice in &pane.notices {
-        parts = parts.push(fit::prose(notice.as_str()).color(theme::DANGER));
+        parts = parts.push(fit::prose(notice.as_str()).color(tokens.status.danger));
     }
     let summary = &pane.comparison.summary;
     let filters = ChangeKind::ALL.iter().map(|kind| {

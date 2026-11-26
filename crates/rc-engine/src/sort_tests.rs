@@ -343,3 +343,110 @@ fn comments_sort_after_the_folders_and_an_entry_without_one_comes_first() {
         "without the comments the key sorts by name"
     );
 }
+
+/// RC-110-84: a letter with an accent sorts at its base letter, as in Explorer and Total
+/// Commander - `\u{C4}pfel`, `\u{C9}clair` and `\u{D6}lbild` among the A, E and O, not after
+/// `Zebra`; between names equal without accents the one without them comes first.
+#[test]
+fn accented_letters_sort_at_their_base_letter() {
+    let mut names = [
+        "Zebra",
+        "\u{D6}lbild",
+        "Apfelbaum",
+        "A\u{308}pfel",
+        "Orange",
+        "\u{C9}clair",
+        "Apfel",
+        "Eclair",
+    ];
+    names.sort_by(|a, b| natural_cmp(a, b));
+    assert_eq!(
+        names,
+        [
+            "Apfel",
+            "A\u{308}pfel",
+            "Apfelbaum",
+            "Eclair",
+            "\u{C9}clair",
+            "\u{D6}lbild",
+            "Orange",
+            "Zebra",
+        ],
+        "a decomposed umlaut sorts as the composed one"
+    );
+    assert_eq!(natural_cmp("\u{C4}pfel", "Apfel"), Ordering::Greater);
+    assert_eq!(natural_cmp("\u{C4}pfel", "Apfelbaum"), Ordering::Less);
+    assert_eq!(
+        natural_cmp("\u{E4}", "b"),
+        Ordering::Less,
+        "small letters too"
+    );
+    assert_eq!(
+        natural_cmp("\u{C4}10", "A9"),
+        Ordering::Greater,
+        "numbers still by value"
+    );
+    assert_eq!(
+        natural_cmp("\u{AC01}", "\u{AC00}\u{B098}"),
+        Ordering::Greater,
+        "a Hangul syllable is no letter with accents: it keeps its order"
+    );
+    let linux = Names {
+        linux: true,
+        numbers: true,
+    };
+    assert_eq!(
+        compare_names("\u{C4}pfel", "Zebra", linux),
+        Ordering::Greater,
+        "the Linux order stays the byte order"
+    );
+}
+
+/// RC-110-84: the sharp s sorts as `ss`, after `ss` itself.
+#[test]
+fn sharp_s_sorts_as_double_s() {
+    let mut names = ["Strast", "Stra\u{DF}e", "Strasse", "Straf"];
+    names.sort_by(|a, b| natural_cmp(a, b));
+    assert_eq!(names, ["Straf", "Strasse", "Stra\u{DF}e", "Strast"]);
+    assert_eq!(natural_cmp("Stra\u{DF}e", "Strasz"), Ordering::Less);
+    assert_eq!(
+        natural_cmp("STRA\u{1E9E}E", "stra\u{DF}e"),
+        Ordering::Equal,
+        "the capital sharp s is the small one but for case"
+    );
+}
+
+/// RC-110-84: names equal but for their accents and case sort the same whatever order they
+/// arrive in - the order stays total.
+#[test]
+fn names_with_and_without_accents_sort_stably() {
+    let names = [
+        "\u{C9}clair",
+        "Eclair",
+        "\u{E9}clair",
+        "eclair",
+        "E\u{301}clair",
+    ];
+    let expected = [
+        "Eclair",
+        "eclair",
+        "E\u{301}clair",
+        "\u{C9}clair",
+        "\u{E9}clair",
+    ];
+    for turn in 0..names.len() {
+        for reversed in [false, true] {
+            let mut arrived: Vec<&str> = names.iter().copied().cycle().skip(turn).take(5).collect();
+            if reversed {
+                arrived.reverse();
+            }
+            let mut entries: Vec<Entry> = arrived
+                .into_iter()
+                .map(|name| entry(name, false, 0, 0))
+                .collect();
+            sort_entries(&mut entries, SortOrder::default(), Names::WINDOWS);
+            let sorted: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
+            assert_eq!(sorted, expected, "turn {turn}, reversed {reversed}");
+        }
+    }
+}

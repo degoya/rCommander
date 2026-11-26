@@ -6,7 +6,7 @@ plugin_type = "viewer"
 api_version = "0.6.0"
 id = "01a15939-9062-79b4-85e8-46e1ed70ad4f"
 name = "XML viewer"
-version = "0.1.4"
+version = "0.1.5"
 
 [match]
 # Not `svg` (an image) or `html` (not XML, a case of its own).

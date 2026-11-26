@@ -30,6 +30,7 @@ use crate::{
 const ROWS_MAX: usize = 5000;
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FilesCompareParams {
     /// The left file: absolute, or relative to the left panel's directory. Omit left and right
     /// to compare the two selected files of the active panel, or else the files under both
@@ -113,6 +114,7 @@ impl From<ShowArg> for RowFilter {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DirsCompareParams {
     /// The left directory: absolute, or relative to the left panel's; the left panel's when
     /// omitted.
@@ -150,10 +152,12 @@ pub(crate) struct DirsCompareParams {
     pub show: Option<ShowArg>,
     /// At most this many rows (default 1000, up to 5000).
     #[serde(default)]
+    #[schemars(range(min = 1, max = 5000))]
     pub limit: Option<usize>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SelectDifferencesParams {
     /// Files of the same size are also compared byte by byte (keys and credential files only
     /// by size and time).

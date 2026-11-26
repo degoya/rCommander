@@ -4,7 +4,7 @@
 //! backups and staged restores, `mcp-instance.json`, everything in the backup folder
 //! [`rc_db::BACKUP_DIR`]), SSH and GnuPG keys, private keys and key stores, and credential files
 //! (other clients' password stores, Total Commander's `wcx_ftp.ini` and Remote Desktop Manager's
-//! `*.rdm` exports among them).
+//! `*.rdm` exports among them) and browsers' signed-in sessions (RC-110-58).
 //! Every tool that answers with a file's contents or with data derived from them (a viewer
 //! window, checksums, split parts) asks about each file first and refuses with `sensitive_path`;
 //! the engine asks about every file a command finds by itself (a content search, a folder's
@@ -60,6 +60,14 @@ const CREDENTIAL_NAMES: &[&str] = &[
     "logins.json",
     "key4.db",
     "login data",
+    // Browsers' signed-in sessions: cookies (Firefox: cookies.sqlite with its write-ahead log;
+    // Chromium: Cookies, in clear on Linux), Chromium's key to them (Local State) and Firefox's
+    // site storage (RC-110-58).
+    "cookies",
+    "cookies.sqlite",
+    "cookies.sqlite-wal",
+    "local state",
+    "webappsstore.sqlite",
 ];
 
 /// Folders whose whole contents are credentials: Google Cloud's and Azure's command lines, the

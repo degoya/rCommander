@@ -274,7 +274,7 @@ fn provider() -> Box<dyn IconProvider> {
 
 /// A row's icon cell; a hidden or system entry's icon faded with a `!` over it, as Total
 /// Commander marks them (owner, 2026-10-19).
-pub fn view<'a>(icon: Handle, hidden: bool) -> Element<'a, Message> {
+pub fn view<'a>(icon: Handle, hidden: bool, tokens: &crate::theme::Tokens) -> Element<'a, Message> {
     let image = Image::<Handle>::new(icon)
         .width(ICON_SIZE)
         .height(ICON_SIZE)
@@ -285,7 +285,7 @@ pub fn view<'a>(icon: Handle, hidden: bool) -> Element<'a, Message> {
     let mark = text("!")
         .size(ICON_SIZE * 0.8)
         .font(crate::theme::UI_FONT_STRONG)
-        .color(crate::theme::DANGER);
+        .color(tokens.status.danger);
     stack![
         image.opacity(HIDDEN_OPACITY),
         container(mark)

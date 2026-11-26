@@ -84,6 +84,7 @@ impl From<AlgorithmArg> for Algorithm {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ChecksumParams {
     /// The files: absolute, or relative to the panel's directory.
     pub paths: Vec<String>,
@@ -95,6 +96,7 @@ pub(crate) struct ChecksumParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct CreateParams {
     /// Entries of the folder: files, and folders whose files are all included.
@@ -116,6 +118,7 @@ pub(crate) struct CreateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct VerifyParams {
     /// The checksum file (.md5, .sha, .sha1, .sha256, .sha512, .blake3, .b3, .sfv or any name;
     /// the format is read from the content): absolute, or relative to the panel's directory.
@@ -125,6 +128,7 @@ pub(crate) struct VerifyParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct SplitParams {
     /// The file to split: absolute, or relative to the panel's directory.
@@ -140,6 +144,7 @@ pub(crate) struct SplitParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct CombineParams {
     /// The first part (name.001) or the name.crc file: absolute, or relative to the panel's

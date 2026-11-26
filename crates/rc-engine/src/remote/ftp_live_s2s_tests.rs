@@ -3,7 +3,7 @@
 //! both ways, each file streaming through rCommander with no local copy. The second FTP session
 //! is the server's slow instance (`RC_LIVE_FTP_SLOW_PORT`); the SFTP server is an OpenSSH
 //! container in the FTP server's network namespace (`RC_LIVE_FTP_SFTP_PORT`, `_SFTP_USER`,
-//! `_SFTP_PASSWORD`), which `scripts/live/ftp/run.sh` starts beside it.
+//! `_SFTP_PASSWORD`), which `scripts/live-servers/ftp/run.sh` starts beside it.
 
 use std::path::Path;
 
@@ -81,7 +81,7 @@ async fn sftp(live: &Live, port: u16) -> String {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_s2s_between_two_sessions_and_through_sftp_byte_for_byte() {
     let live = live_on(None, None, true).await;
     live.open(PanelId::Right).await.expect("the panel opens");

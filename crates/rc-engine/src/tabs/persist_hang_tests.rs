@@ -120,3 +120,42 @@ async fn a_tab_on_a_share_that_does_not_answer_holds_the_start_only_briefly() {
     assert_eq!(tabs, 1, "the silent share's tab is dropped");
     assert_eq!(engine.panel(PanelId::Left).path, local);
 }
+
+#[tokio::test]
+async fn tabs_on_a_share_that_does_not_answer_are_looked_for_at_once() {
+    let root = tempfile::tempdir().expect("temp dir");
+    std::fs::create_dir_all(root.path().join("a")).expect("dir");
+    let db = Db::open_in_memory().await.expect("db");
+    let local = VfsPath::local(root.path().join("a"));
+    let share = |name: &str| VfsPath {
+        backend: SHARE,
+        path: format!("/srv/share/{name}").into(),
+    };
+    // Three tabs on the silent share: looked for one after the other, they would hold the start
+    // three times as long.
+    db.save_tabs(&[
+        row(0, false, &share("one")),
+        row(1, false, &share("two")),
+        row(2, false, &share("three")),
+        row(3, true, &local),
+    ])
+    .await
+    .expect("stored");
+    let engine = test_support::headless(root.path()).await;
+    assert!(engine.attach_db(db));
+    let silent: Arc<dyn Vfs> = Arc::new(Silent);
+    engine.inner.remotes.open().insert(SHARE, silent);
+
+    let started = Instant::now();
+    tokio::time::timeout(DETAIL_TIMEOUT * 3, engine.restore_tabs())
+        .await
+        .expect("the start does not hang")
+        .expect("restored");
+    assert!(
+        started.elapsed() < DETAIL_TIMEOUT * 2,
+        "one deadline for all tabs, not one each: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(engine.state().tabs.set(PanelId::Left).tabs().len(), 1);
+    assert_eq!(engine.panel(PanelId::Left).path, local);
+}

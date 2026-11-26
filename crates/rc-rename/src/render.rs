@@ -234,3 +234,7 @@ fn date(part: DatePart, time: DateTime) -> String {
 #[cfg(test)]
 #[path = "render_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "render_props_tests.rs"]
+mod props_tests;

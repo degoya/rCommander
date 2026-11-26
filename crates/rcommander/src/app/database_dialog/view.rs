@@ -115,6 +115,7 @@ pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<
         )
     };
     let mut field = text_input(t!("db.placeholder"), &dialog.path)
+        .style(theme::text_field)
         .id(PATH_FIELD)
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
@@ -162,7 +163,7 @@ pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<
         DialogMode::Export => exchange_view::export(body, dialog, tokens),
         DialogMode::Import => exchange_view::import(body, dialog, tokens),
     };
-    body = body.push(exchange_view::problem(dialog));
+    body = body.push(exchange_view::problem(dialog, tokens));
     match &dialog.phase {
         Phase::Editing => {}
         Phase::Running => {
@@ -176,7 +177,7 @@ pub fn body<'a>(dialog: &'a DatabaseDialog, tokens: &'static Tokens) -> Element<
         }
         Phase::Done(result) => body = body.push(prose(result.as_str()).color(tokens.accent)),
         Phase::Failed(error) => {
-            body = body.push(prose(error.as_str()).color(theme::DANGER));
+            body = body.push(prose(error.as_str()).color(tokens.status.danger));
         }
     }
     let finished = matches!(dialog.phase, Phase::Done(_));

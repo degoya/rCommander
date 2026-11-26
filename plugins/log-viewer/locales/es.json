@@ -1,0 +1,8 @@
+{
+  "name": "Visor de registros",
+  "description": "Muestra archivos de registro en color: niveles, marcas de tiempo, direcciones, rutas y trazas de pila.",
+  "codes": {
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.encoding": "Codificación",
+    "01a159b7-2a8f-7014-9357-344c5730dbd4.setting.level_colour": "Color del nivel"
+  }
+}

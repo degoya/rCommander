@@ -22,6 +22,7 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SearchParams {
     /// Start folders: absolute, or relative to the panel's folder. Omitted: the panel's folder.
     #[serde(default)]
@@ -93,6 +94,7 @@ pub(crate) struct SearchParams {
     pub archives: bool,
     /// Hits per page (groups for files_find_duplicates): 100 when omitted, at most 1000.
     #[serde(default)]
+    #[schemars(range(min = 1, max = 1000))]
     pub limit: Option<usize>,
     /// The next_cursor of the previous page, with otherwise the same parameters.
     #[serde(default)]
@@ -100,6 +102,7 @@ pub(crate) struct SearchParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ContentParams {
     /// The text, or a regular expression when regex is set.
     pub text: String,

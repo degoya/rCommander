@@ -4,6 +4,9 @@
 //! page and at most [`MAX_PAGED`] at once, the one used longest ago going first - limits for
 //! safety, no settings. A cursor whose walk went is still good: that page walks from the start
 //! and skips the pages before, as every page did before.
+//!
+//! The MCP server keeps the listings of `list_dir` and `archives_list` between their pages in the
+//! same way (`rc-mcp`'s `paging.rs`, RC-110-61), so the store is public.
 
 use std::{
     collections::VecDeque,
@@ -11,18 +14,18 @@ use std::{
 };
 
 /// How long a search waits for its next page.
-pub(crate) const PAGE_TTL: Duration = Duration::from_secs(5 * 60);
+pub const PAGE_TTL: Duration = Duration::from_secs(5 * 60);
 
 /// Searches kept at once.
-pub(crate) const MAX_PAGED: usize = 8;
+pub const MAX_PAGED: usize = 8;
 
 /// What a kept search is for: the search, whether it runs under the read guard of an MCP call,
 /// and the hits handed out before its next page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PageKey {
-    pub(crate) fingerprint: u64,
-    pub(crate) guarded: bool,
-    pub(crate) offset: usize,
+pub struct PageKey {
+    pub fingerprint: u64,
+    pub guarded: bool,
+    pub offset: usize,
 }
 
 struct Kept<T> {
@@ -34,7 +37,7 @@ struct Kept<T> {
 
 /// The kept searches, the one used longest ago first. Time is a parameter so the edge can be
 /// tested.
-pub(crate) struct Pages<T> {
+pub struct Pages<T> {
     next_id: u64,
     kept: VecDeque<Kept<T>>,
 }
@@ -52,7 +55,7 @@ impl<T> Pages<T> {
     /// The search `id` for the page `key` asks for, taken out: no other page goes on with it
     /// until it is kept again. `None` when it went, or belongs to another search, another
     /// guard or another page.
-    pub(crate) fn take(&mut self, id: u64, key: PageKey, now: Instant) -> Option<T> {
+    pub fn take(&mut self, id: u64, key: PageKey, now: Instant) -> Option<T> {
         self.prune(now);
         let at = self
             .kept
@@ -62,7 +65,7 @@ impl<T> Pages<T> {
     }
 
     /// Keeps `walk` for the page `key` names; answers the id its cursor carries.
-    pub(crate) fn keep(&mut self, key: PageKey, walk: T, now: Instant) -> u64 {
+    pub fn keep(&mut self, key: PageKey, walk: T, now: Instant) -> u64 {
         self.prune(now);
         while self.kept.len() >= MAX_PAGED {
             self.kept.pop_front();

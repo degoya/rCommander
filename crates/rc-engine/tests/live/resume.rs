@@ -39,7 +39,7 @@ fn came_down_whole(live: &Live, role: &str, down: &Path) {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_dropped_connection_is_retried_and_the_download_goes_on_from_its_part() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -68,7 +68,7 @@ async fn a_dropped_connection_is_retried_and_the_download_goes_on_from_its_part(
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn a_hanging_network_is_noticed_and_the_download_goes_on_once_it_is_back() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -112,7 +112,7 @@ async fn a_hanging_network_is_noticed_and_the_download_goes_on_once_it_is_back()
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn spent_retries_leave_a_resumable_job_that_resume_finishes() {
     let live = live_or_skip!();
     let dir = workdir();
@@ -154,7 +154,7 @@ async fn spent_retries_leave_a_resumable_job_that_resume_finishes() {
 /// The first run is a runtime of its own that is shut down mid-download, its engine never
 /// dropped: as close to a quit (or a crash) as one process gets.
 #[test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 fn a_kept_job_comes_back_paused_after_a_restart_and_resumes() {
     let live = live_or_skip!();
     let dir = workdir();

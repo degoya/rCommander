@@ -133,6 +133,7 @@ pub mod user_commands;
 pub mod viewer;
 mod watch;
 pub mod workspaces;
+mod zone;
 
 use std::{
     collections::BTreeMap,

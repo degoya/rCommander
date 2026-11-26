@@ -274,6 +274,20 @@ async fn the_style_is_read_from_the_database() {
     );
 }
 
+/// A screen reader makes the Win32 menu the bar of a person who never chose one; a stored choice,
+/// even the drawn bar, stays (RC-110-79).
+#[test]
+fn a_screen_reader_chooses_the_native_bar_only_when_nothing_is_stored() {
+    assert_eq!(Style::of_setting(Some("drawn"), false, true), Style::Native);
+    assert_eq!(Style::of_setting(Some("drawn"), true, true), Style::Drawn);
+    assert_eq!(Style::of_setting(Some("native"), true, true), Style::Native);
+    assert_eq!(Style::of_setting(Some("drawn"), false, false), Style::Drawn);
+    assert_eq!(
+        Style::of_setting(Some("native"), true, false),
+        Style::Native
+    );
+}
+
 /// The popup menus are told the look the first time and at each change, also with the bar hidden.
 #[test]
 fn the_popup_menus_follow_each_change_of_look() {

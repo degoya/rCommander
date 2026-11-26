@@ -12,19 +12,24 @@
 //! - an entry whose stored name was unsafe (zip slip `..`, absolute, drive, UNC) is skipped and
 //!   listed (`unsafe_entry`), never written under its cleaned name;
 //! - every target path is built from checked names (`target_path.rs`) and stays below the target;
-//!   a name Windows cannot hold (`a:b`, `con`, a trailing dot) is skipped the same way;
+//!   a name Windows cannot hold (`a:b`, `con`, a trailing dot) is skipped the same way - on
+//!   Windows the archive backend lists it renamed already (`a_b`, `_con`, `name_`, as 7-Zip
+//!   unpacks it, RC-110-92), so there it is unpacked under that name;
 //! - links stored in the archive are not created (`link_not_extracted`);
 //! - a folder on the way that is a link or junction in the target is refused, so a link already
 //!   there cannot lead the files elsewhere, and an existing target file that is a link is not
 //!   written through;
 //! - set-user-id and the like are dropped, and so is everyone's write and what the umask takes
-//!   away (RC-080-70): only the permission bits a file of this process would get are kept.
+//!   away (RC-080-70): only the permission bits a file of this process would get are kept;
+//! - the files together must fit the target drive's free space, checked before the first is
+//!   written (`room.rs`, `not_enough_space`, RC-110-62).
 //!
 //! An encrypted archive asks for its password ([`crate::Question::Password`]); a wrong one asks
 //! again, a skipped one fails its encrypted entries with `password_required`. A job that may not
 //! ask (an `on_error` preset, every MCP job) fails them at once. The password lives in this job
 //! only and is dropped (zeroized) with it.
 
+mod room;
 mod target_path;
 
 use std::{
@@ -163,6 +168,7 @@ impl Runner {
     ) -> Result<(), Stop> {
         self.rename_ok = false;
         self.staged = crate::staging::is_staged(&target.backend);
+        self.zone.onto(&target.backend);
         let outer = Arc::clone(&self.src);
         let dst = Arc::clone(&self.dst);
         if attempt!(
@@ -189,6 +195,16 @@ impl Runner {
                 }
             });
             plans.extend(opened);
+        }
+        let needed = room::needed(&plans);
+        if attempt!(
+            self,
+            target,
+            room::check(dst.as_ref(), &target.path, needed).await
+        )
+        .is_none()
+        {
+            return Ok(());
         }
         self.job
             .update(|snapshot| snapshot.state = JobState::Running);

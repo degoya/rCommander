@@ -19,12 +19,14 @@ use crate::{
 };
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct IdParams {
     /// The workspace's id, as workspaces_list names it.
     pub id: i64,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct ConfirmedIdParams {
     /// The workspace's id, as workspaces_list names it.
@@ -32,6 +34,7 @@ pub(crate) struct ConfirmedIdParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct CreateParams {
     /// The name, unique without regard to case, at most 64 characters.
@@ -48,6 +51,7 @@ pub(crate) struct CreateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct CaptureParams {
     /// A stored workspace whose panels become what the panels show now; omitted, a new one.
@@ -59,6 +63,7 @@ pub(crate) struct CaptureParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct UpdateParams {
     pub id: i64,
@@ -78,6 +83,7 @@ pub(crate) struct UpdateParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct RenameParams {
     pub id: i64,
@@ -85,6 +91,7 @@ pub(crate) struct RenameParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct MoveParams {
     pub id: i64,

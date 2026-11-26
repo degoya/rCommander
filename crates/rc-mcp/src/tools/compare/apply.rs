@@ -35,6 +35,7 @@ impl From<ActionArg> for SyncAction {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RowActionArg {
     /// The row's path below both roots, as dirs_compare lists it.
     pub path: String,
@@ -42,6 +43,7 @@ pub(crate) struct RowActionArg {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 #[schemars(transform = crate::confirm::argument)]
 pub(crate) struct DirsSyncApplyParams {
     /// The left directory: absolute, or relative to the left panel's; the left panel's when

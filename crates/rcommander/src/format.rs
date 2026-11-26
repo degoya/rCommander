@@ -1,6 +1,7 @@
-//! How numbers, sizes and dates read in the panels: counts grouped by a narrow space, sizes in
-//! bytes, KiB, MiB and up, dates in the order and clock of the system's locale, Unix rights as
-//! `ls -l` prints them; a size typed into a field read back as bytes.
+//! How numbers, sizes and dates read in the panels: counts grouped and sizes in bytes, KiB, MiB
+//! and up with the marks of the interface's language (RC-110-83), dates in the order and clock
+//! of the system's locale, Unix rights as `ls -l` prints them; a size typed into a field read
+//! back as bytes.
 
 use std::{sync::OnceLock, time::SystemTime};
 
@@ -11,15 +12,35 @@ use jiff::{
 };
 use rc_engine::{Entry, EntryKind};
 
-use crate::i18n::t;
+use crate::{
+    i18n::t,
+    locale::{self, Lang},
+};
 
-/// `1234567` reads `1 234 567`, with U+202F NARROW NO-BREAK SPACE between the groups.
+/// The decimal mark and the group separator of `lang`: `1,234.5` in English, `1.234,5` in
+/// German and Spanish, `1 234,5` in French with U+202F NARROW NO-BREAK SPACE between the groups.
+fn marks(lang: Lang) -> (char, char) {
+    match lang {
+        Lang::En => ('.', ','),
+        Lang::De | Lang::Es => (',', '.'),
+        Lang::Fr => (',', '\u{202f}'),
+    }
+}
+
+/// `1234567` grouped by three as the interface's language writes it: `1,234,567` in English,
+/// `1.234.567` in German and Spanish, `1 234 567` in French.
 pub fn count(number: u64) -> String {
+    count_in(locale::current(), number)
+}
+
+/// [`count`] in `lang`.
+pub(crate) fn count_in(lang: Lang, number: u64) -> String {
+    let (_, group) = marks(lang);
     let digits = number.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 * 3);
     for (i, digit) in digits.chars().enumerate() {
         if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push('\u{202f}');
+            out.push(group);
         }
         out.push(digit);
     }
@@ -32,36 +53,65 @@ pub fn percent(share: f32) -> String {
 }
 
 /// A size in the largest binary unit that keeps it at 1 or more: `512 B`, `1.5 KiB`, `23 MiB`;
-/// one decimal below 10.
+/// one decimal below 10, with the decimal mark of the interface's language (`1,5 KiB` in
+/// German). The whole part stays ungrouped: below 1024 in every unit but the last.
 pub fn size(bytes: u64) -> String {
+    let (unit, value) = scaled(locale::current(), bytes);
+    match unit {
+        0 => t!("size.bytes", value = value),
+        1 => t!("size.kib", value = value),
+        2 => t!("size.mib", value = value),
+        3 => t!("size.gib", value = value),
+        _ => t!("size.tib", value = value),
+    }
+}
+
+/// The unit of a size (0 bytes, 1 KiB, up to 4 TiB) and its number as `lang` writes it.
+fn scaled(lang: Lang, bytes: u64) -> (usize, String) {
     if bytes < 1024 {
-        return t!("size.bytes", value = bytes);
+        return (0, bytes.to_string());
     }
     let mut value = bytes as f64 / 1024.0;
-    let mut unit = 0;
-    while value >= 1024.0 && unit < 3 {
+    let mut unit = 1;
+    while value >= 1024.0 && unit < 4 {
         value /= 1024.0;
         unit += 1;
     }
-    let value = if value < 10.0 {
-        format!("{value:.1}")
+    let text = if value < 10.0 {
+        format!("{value:.1}").replace('.', &marks(lang).0.to_string())
     } else {
         format!("{value:.0}")
     };
-    match unit {
-        0 => t!("size.kib", value = value),
-        1 => t!("size.mib", value = value),
-        2 => t!("size.gib", value = value),
-        _ => t!("size.tib", value = value),
-    }
+    (unit, text)
 }
 
 /// The modification time in local time, as the system's locale writes it; nothing when the file
 /// system did not say.
 pub fn date(modified: Option<SystemTime>) -> String {
+    date_in(modified, pattern())
+}
+
+/// An instant in local time, as [`date`] writes it: the update page's last check, a
+/// certificate's validity (RC-110-83).
+pub fn instant(at: Timestamp) -> String {
+    stamp_in(at, pattern())
+}
+
+/// The day of an instant in local time, as [`date`] writes it without the time: the day an
+/// update was released.
+pub fn day(at: Timestamp) -> String {
+    stamp_in(at, day_pattern(pattern()))
+}
+
+/// The system locale's date pattern, read once.
+fn pattern() -> &'static str {
     static PATTERN: OnceLock<&'static str> = OnceLock::new();
-    let pattern = PATTERN.get_or_init(|| date_pattern(locale_tag().as_deref()));
-    date_in(modified, pattern)
+    PATTERN.get_or_init(|| date_pattern(locale_tag().as_deref()))
+}
+
+/// The day of a [`date_pattern`]: the pattern up to its time, which follows the first space.
+fn day_pattern(pattern: &str) -> &str {
+    pattern.split_once(' ').map_or(pattern, |(day, _)| day)
 }
 
 /// `modified` in local time, written with the `strftime` `pattern`; nothing for a time beyond
@@ -69,10 +119,14 @@ pub fn date(modified: Option<SystemTime>) -> String {
 pub fn date_in(modified: Option<SystemTime>, pattern: &str) -> String {
     modified
         .and_then(|time| Timestamp::try_from(time).ok())
-        .and_then(|time| {
-            jiff::fmt::strtime::format(pattern, TimeZone::system().to_datetime(time)).ok()
-        })
+        .map(|time| stamp_in(time, pattern))
         .unwrap_or_default()
+}
+
+/// `at` in local time, written with the `strftime` `pattern`; nothing for a pattern that does
+/// not write.
+fn stamp_in(at: Timestamp, pattern: &str) -> String {
+    jiff::fmt::strtime::format(pattern, TimeZone::system().to_datetime(at)).unwrap_or_default()
 }
 
 /// A local date and time as an instant: the earlier of two when the clock went back, none when

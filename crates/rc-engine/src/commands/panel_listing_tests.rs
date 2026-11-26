@@ -315,3 +315,66 @@ async fn a_quick_listing_is_shown_complete_at_once() {
     assert!(!shown.loading);
     assert_eq!(shown.entry_count, 1);
 }
+
+fn names_of(entries: &[Entry]) -> Vec<&str> {
+    entries.iter().map(|entry| entry.name.as_str()).collect()
+}
+
+/// RC-110-93: what arrived is merged in while more is to come, and the last flush hands the
+/// entries over - the listing is held once by then, not once in the panel and once here.
+#[tokio::test]
+async fn the_last_flush_hands_the_entries_over_and_keeps_no_copy() {
+    let (_sender, receiver) = mpsc::channel(1);
+    let lister: Lister = tokio::spawn(async { Ok(()) });
+    let (order, names) = (SortOrder::default(), Names::WINDOWS);
+    let mut arriving = Arriving {
+        run: next_run(),
+        dir: on_server("/big"),
+        found: vec![entry("b", EntryKind::File), entry("d", EntryKind::File)],
+        sorted_as: (order, names),
+        fresh: vec![entry("c", EntryKind::File), entry("a", EntryKind::File)],
+        receiver,
+        lister,
+        show_hidden: false,
+    };
+    let shown = arriving.sorted(order, names, false);
+    assert_eq!(names_of(&shown), ["a", "b", "c", "d"]);
+    assert_eq!(
+        names_of(&arriving.found),
+        ["a", "b", "c", "d"],
+        "kept to merge into"
+    );
+    arriving.fresh.push(entry("e", EntryKind::File));
+    let last = arriving.sorted(order, names, true);
+    assert_eq!(names_of(&last), ["a", "b", "c", "d", "e"]);
+    assert!(
+        arriving.found.is_empty() && arriving.fresh.is_empty(),
+        "nothing held twice"
+    );
+}
+
+/// RC-110-93: the batches are kept in the order they came, hidden entries left out unless shown.
+#[test]
+fn batches_are_kept_in_order_without_the_hidden_entries() {
+    let dir = on_server("/big");
+    let hidden = Entry {
+        hidden: true,
+        ..entry(".h", EntryKind::File)
+    };
+    let mut found = Vec::new();
+    keep(
+        &mut found,
+        vec![entry("b", EntryKind::File), hidden.clone()],
+        false,
+        &dir,
+    );
+    keep(
+        &mut found,
+        vec![hidden.clone(), entry("a", EntryKind::File)],
+        false,
+        &dir,
+    );
+    assert_eq!(names_of(&found), ["b", "a"]);
+    keep(&mut found, vec![hidden], true, &dir);
+    assert_eq!(names_of(&found), ["b", "a", ".h"]);
+}

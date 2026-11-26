@@ -25,7 +25,8 @@ use tokio::io::AsyncWrite;
 
 use crate::recover::LockOrRecover as _;
 use crate::{
-    Capabilities, Entry, ReadStream, Result, SetAttributes, Vfs, VfsError, WriteMode, WriteStream,
+    Capabilities, Entry, ReadStream, Result, SeekStream, SetAttributes, Vfs, VfsError, WriteMode,
+    WriteStream,
 };
 use tree::Tree;
 
@@ -107,6 +108,17 @@ impl Vfs for MemoryFs {
             .unwrap_or(usize::MAX)
             .min(data.len());
         Ok(Box::new(io::Cursor::new(data[from..].to_vec())))
+    }
+
+    /// A copy of the file in memory, which seeks as a local file does: zip and 7z archives on
+    /// this backend read as on a disk.
+    async fn open_read_seekable(&self, path: &Path) -> Result<SeekStream> {
+        let tree = self.tree();
+        let node = tree.node(path)?;
+        let data = node.data.clone().ok_or_else(|| VfsError::IsADirectory {
+            path: path.to_path_buf(),
+        })?;
+        Ok(Box::new(io::Cursor::new(data)))
     }
 
     async fn open_write(&self, path: &Path, mode: WriteMode) -> Result<WriteStream> {

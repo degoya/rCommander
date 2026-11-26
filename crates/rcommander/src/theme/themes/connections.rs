@@ -101,9 +101,13 @@ pub fn distro_of(path: &VfsPath) -> Option<String> {
     }
 }
 
-/// The look of the theme `pick` names from what the window knows, else the window's.
+/// The look of the theme `pick` names from what the window knows, else the window's; the
+/// window's while Windows' high contrast is on (RC-110-79).
 fn assigned_look(dark: bool, pick: impl FnOnce(&Assigned) -> Option<&str>) -> &'static Tokens {
     let window = crate::theme::tokens(dark);
+    if crate::theme::access::contrast_look().is_some() {
+        return window;
+    }
     let id = ASSIGNED
         .read_or_recover("connections.assigned")
         .as_ref()

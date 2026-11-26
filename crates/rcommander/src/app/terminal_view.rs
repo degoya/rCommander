@@ -168,7 +168,7 @@ fn divider(tokens: &'static Tokens) -> Element<'static, Message> {
 pub(super) fn paste_question(pasted: &str) -> String {
     if pasted.contains(['\n', '\r']) {
         let lines = pasted.lines().count().max(1);
-        t!("terminal.paste_question", lines = lines)
+        t!("terminal.paste_question", count = lines)
     } else {
         t!("terminal.paste_control").to_owned()
     }

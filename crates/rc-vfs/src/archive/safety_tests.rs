@@ -352,6 +352,10 @@ fn the_defaults_are_safe_but_not_in_the_way() {
             .check_entry(4_294_967_295, Some(4_168_000), path)
             .is_err()
     );
+    // RC-110-62: 64 GiB unpacked at most, no longer 1 TiB; a stream past it stops.
+    assert_eq!(limits.max_unpacked_size, 64 << 30);
+    assert!(limits.check_stream(60 << 30, 1 << 30, path).is_ok());
+    assert!(limits.check_stream((64 << 30) + 1, 1 << 30, path).is_err());
 }
 
 /// RC-080-13: a `.zst` whose frame asks for a 2 GiB window - opened, listed and read as a panel
@@ -384,4 +388,50 @@ async fn a_zstd_window_bomb_fails_instead_of_filling_memory() {
     .await
     .expect("never hangs");
     assert_ne!(outcome, "ok", "the bomb is refused");
+}
+
+/// The cleaning over any name (RC-110-70).
+mod props {
+    use proptest::prelude::*;
+
+    use super::{UnsafeName, clean_name};
+    use crate::drive_letter;
+
+    proptest! {
+        /// No name yields a part that is empty, `.`, `..` or holds a separator; the parts,
+        /// joined again, clean to themselves.
+        #[test]
+        fn the_parts_are_plain_names(name in any::<String>()) {
+            let clean = clean_name(&name);
+            for part in &clean.parts {
+                prop_assert!(!part.is_empty() && part != "." && part != "..", "{:?}", name);
+                prop_assert!(!part.contains(['/', '\\']), "{:?}", name);
+            }
+            let joined = clean.parts.join("/");
+            if drive_letter(&joined).is_none() {
+                let again = clean_name(&joined);
+                prop_assert_eq!(again.parts, clean.parts);
+                prop_assert_eq!(again.issue, None);
+            }
+        }
+
+        /// A relative name keeps its parts but `.` and `..`, and is unsafe exactly when one of
+        /// them climbs.
+        #[test]
+        fn a_relative_name_is_unsafe_only_when_it_climbs(
+            components in prop::collection::vec("[a-z.]{1,3}", 1..8),
+            backslash in any::<bool>(),
+        ) {
+            let name = components.join(if backslash { "\\" } else { "/" });
+            let clean = clean_name(&name);
+            let kept: Vec<String> = components
+                .iter()
+                .filter(|part| *part != "." && *part != "..")
+                .cloned()
+                .collect();
+            prop_assert_eq!(clean.parts, kept);
+            let climbs = components.iter().any(|part| part == "..");
+            prop_assert_eq!(clean.issue, climbs.then_some(UnsafeName::ParentDir));
+        }
+    }
 }

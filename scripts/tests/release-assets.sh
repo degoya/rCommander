@@ -2,7 +2,10 @@
 #
 # The two helpers release.yml calls (RC-100-32): `scripts/release-assets.sh sums <dir>` writes
 # SHA256SUMS over every file but SHA256SUMS*, sorted, which `sha256sum --check` accepts, and
-# refuses an empty or missing directory; `scripts/release-publish.sh update-manifest <dir> <tag>`
+# refuses an empty or missing directory; `sbom <dir> <version>` (RC-110-73) in a scratch tree with a
+# stand-in cargo: the application's SBOM under the release's name, the plugins' (those with a
+# manifest) in one reproducible archive, the lock file checked, nothing left in the tree, a
+# failing or missing SBOM refused; `scripts/release-publish.sh update-manifest <dir> <tag>`
 # without the key warns and builds nothing - and fails in degoya/rCommander, as `require-key` does
 # before anything is built (RC-110-32) -, with it calls `rc-pack update manifest build` and
 # `verify` for the tag's channel and download base, hands the key over in a file only the user can
@@ -45,6 +48,79 @@ run_status "$ASSETS" sums "$SCRATCH/missing"
 expect_status "a missing directory: usage error" 2
 run_status "$ASSETS" split "$dir" "$SCRATCH/plugins"
 expect_status "no other subcommand" 2
+
+# --- sbom (RC-110-73) ----------------------------------------------------------------------------------
+# A scratch tree with the script, the application, a library crate and three plugin folders, one
+# without a manifest; `cargo` is a stand-in that records its calls and writes an SBOM beside every
+# member's Cargo.toml, as cargo-cyclonedx does.
+sbom_tree="$SCRATCH/sbom-tree"
+mkdir -p "$sbom_tree/scripts" "$sbom_tree/crates/rcommander" "$sbom_tree/crates/rc-db" \
+    "$sbom_tree/plugins/b-viewer" "$sbom_tree/plugins/a-viewer" "$sbom_tree/plugins/no-manifest" "$SCRATCH/sbom-bin"
+cp "$ASSETS" "$sbom_tree/scripts/release-assets.sh"
+for member in crates/rcommander crates/rc-db plugins/b-viewer plugins/a-viewer plugins/no-manifest; do
+    touch "$sbom_tree/$member/Cargo.toml"
+done
+touch "$sbom_tree/plugins/b-viewer/manifest.toml" "$sbom_tree/plugins/a-viewer/manifest.toml"
+cat > "$SCRATCH/sbom-bin/cargo" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_CARGO_CALLS"
+[[ "$1" == cyclonedx ]] || exit 0
+[[ -z "${FAKE_CYCLONEDX_FAIL:-}" ]] || exit 3
+for toml in crates/*/Cargo.toml plugins/*/Cargo.toml; do
+    member="$(basename "$(dirname "$toml")")"
+    [[ "$member" != "${FAKE_CYCLONEDX_SKIP:-}" ]] || continue
+    printf '{"bomFormat":"CycloneDX","specVersion":"1.5","name":"%s","epoch":"%s"}\n' \
+        "$member" "$SOURCE_DATE_EPOCH" > "$(dirname "$toml")/$member.cdx.json"
+done
+EOF
+chmod +x "$SCRATCH/sbom-bin/cargo"
+export FAKE_CARGO_CALLS="$SCRATCH/cargo-calls"
+leftovers() { find "$sbom_tree/crates" "$sbom_tree/plugins" -name '*.cdx.json' | wc -l; }
+sbom_run() { PATH="$SCRATCH/sbom-bin:$PATH" SOURCE_DATE_EPOCH=1700000000 run_status "$sbom_tree/scripts/release-assets.sh" sbom "$@"; }
+
+out="$SCRATCH/sbom-out"
+mkdir -p "$out"
+sbom_run "$out" 9.9.9
+expect_status "sbom" 0
+expect_output "naming what it wrote" "rcommander-9.9.9.cdx.json and rcommander-9.9.9-plugins.cdx.tar.gz (2 plugin(s))"
+expect "cargo checks the lock file, then cargo-cyclonedx writes JSON 1.5 for every target" \
+    "metadata --locked --format-version 1|cyclonedx --format json --target all --spec-version 1.5" \
+    "$(paste -sd '|' "$FAKE_CARGO_CALLS")"
+expect "the application's SBOM under the release's name, at SOURCE_DATE_EPOCH" \
+    '{"bomFormat":"CycloneDX","specVersion":"1.5","name":"rcommander","epoch":"1700000000"}' \
+    "$(cat "$out/rcommander-9.9.9.cdx.json")"
+expect "the archive holds the plugins with a manifest, sorted, and nothing else" \
+    "a-viewer.cdx.json b-viewer.cdx.json" \
+    "$(tar --list --gzip --file "$out/rcommander-9.9.9-plugins.cdx.tar.gz" | paste -sd ' ')"
+expect "owned by 0 at SOURCE_DATE_EPOCH" "0/0 2023-11-14" \
+    "$(TZ=UTC tar --list --verbose --numeric-owner --gzip --file "$out/rcommander-9.9.9-plugins.cdx.tar.gz" \
+        | awk 'NR == 1 { print $2, $4 }')"
+expect "no SBOM left beside a member's Cargo.toml" 0 "$(leftovers)"
+first="$(sha256sum < "$out/rcommander-9.9.9-plugins.cdx.tar.gz")"
+sbom_run "$out" 9.9.9
+expect "a second run writes the same archive" "$first" "$(sha256sum < "$out/rcommander-9.9.9-plugins.cdx.tar.gz")"
+run_status "$ASSETS" sums "$out"
+expect "and SHA256SUMS lists both" "rcommander-9.9.9-plugins.cdx.tar.gz rcommander-9.9.9.cdx.json" \
+    "$(awk '{ printf "%s%s", sep, $2; sep = " " }' "$out/SHA256SUMS")"
+
+touch "$sbom_tree/crates/rc-db/stale.cdx.json"
+FAKE_CYCLONEDX_FAIL=1 sbom_run "$SCRATCH/empty" 9.9.9
+expect_status "cargo-cyclonedx failing: a failure" 1
+expect "a stale SBOM removed before, nothing left after" 0 "$(leftovers)"
+FAKE_CYCLONEDX_SKIP=rcommander sbom_run "$SCRATCH/empty" 9.9.9
+expect_status "no application SBOM: a failure" 1
+expect_output "naming it" "cargo-cyclonedx wrote no $sbom_tree/crates/rcommander/rcommander.cdx.json"
+FAKE_CYCLONEDX_SKIP=b-viewer sbom_run "$SCRATCH/empty" 9.9.9
+expect_status "a plugin without its SBOM: a failure" 1
+expect "and nothing written" "" "$(find "$SCRATCH/empty" -type f)"
+expect "nor left in the tree" 0 "$(leftovers)"
+sbom_run "$SCRATCH/empty" 9.9
+expect_status "no version: usage error" 2
+sbom_run "$SCRATCH/missing" 9.9.9
+expect_status "a missing directory: usage error" 2
+sbom_run "$out"
+expect_status "without a version: usage error" 2
 
 # --- update-manifest -----------------------------------------------------------------------------------
 mkdir -p "$SCRATCH/bin"

@@ -67,3 +67,37 @@ fn answers_after_a_clear_are_dropped() {
     assert_eq!(cache.len(), 0);
     assert_eq!(cache.want(ext("txt")), Some(ext("txt")));
 }
+
+#[test]
+fn the_eviction_takes_the_oldest_from_the_order_and_keeps_it_whole() {
+    let mut cache = IconCache::<u32>::new(100);
+    for number in 0..10_000 {
+        let name = format!("e{number}");
+        cache.want(ext(&name));
+        cache.fill(&ext(&name), Some(number));
+        if number % 7 == 0 {
+            // A key shown again moves to the end of the order.
+            cache.want(ext("e0"));
+        }
+    }
+    cache.want(ext("e0"));
+    assert_eq!(cache.len(), 100);
+    let order = cache.oldest_first();
+    assert_eq!(order.len(), 100, "one entry in the order per key");
+    assert_eq!(
+        order.last(),
+        Some(&&ext("e0")),
+        "the one shown last is the newest"
+    );
+    assert_eq!(cache.get(&ext("e0")), Some(&0), "kept by being shown");
+    assert_eq!(order.first(), Some(&&ext("e9901")), "the oldest left");
+    assert_eq!(cache.get(&ext("e9900")), None, "the oldest before it went");
+    cache.forget(&ext("e9999"));
+    assert_eq!(
+        cache.oldest_first().len(),
+        100,
+        "a loaded key is not forgotten"
+    );
+    cache.clear();
+    assert!(cache.oldest_first().is_empty());
+}

@@ -187,7 +187,7 @@ fn tab_button<'a>(
     // release, a press that moves far enough drags it (`reorder.rs`, RC-010-24).
     let drag = |message| wrap(TabsMessage::Drag(message));
     // focus-ring: pointer only (a tab of the tab bar, which Ctrl+Tab moves through)
-    let mut label = mouse_area(container(small(title, font)).padding([4.0, overflow::PADDING]))
+    let mut label = mouse_area(container(small(title, font)).padding([5.0, overflow::PADDING]))
         .on_press(drag(DragMsg::Press(panel, tab.id)))
         // A click quicker than the pointer's subscription still ends here.
         .on_release(drag(DragMsg::Released))
@@ -222,7 +222,7 @@ fn more_button<'a>(
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let face = button(small(MORE, font))
-        .padding([4.0, overflow::PADDING])
+        .padding([5.0, overflow::PADDING])
         .style(move |_, status| theme::tab(tokens, false, status))
         .on_press(wrap(TabsMessage::List(panel)));
     fit::tip(face, t!("tabs.more").to_owned(), tokens)

@@ -4,9 +4,9 @@
 # that takes a version as a literal (`tool: nextest@0.9.146`) cannot source it, so this test
 # holds the literals to it: every `tool: <name>@<version>` of the workflows and the composite
 # actions names a pinned tool at its pin, taiki-e/install-action is one commit everywhere, komac
-# and nfpm are named by no workflow (scripts/release-channels.sh reads their pins), and the
-# table of docs/development.md - where the tree has it; the public export leaves docs/ out -
-# names the same versions.
+# and nfpm are named by no workflow (scripts/release-channels.sh reads their pins), release.yml
+# installs cargo-cyclonedx from its pin (RC-110-73), and the table of docs/development.md - where
+# the tree has it; the public export leaves docs/ out - names the same versions.
 #
 # Pure bash: it runs at once. check.sh --preflight runs it.
 #
@@ -52,6 +52,9 @@ expect "no workflow names komac's or nfpm's version: scripts/release-channels.sh
 expect_true "release-channels.sh downloads komac and nfpm at the pins" \
     'grep -qF "v\${RC_KOMAC_VERSION}/" scripts/release-channels.sh && grep -qF "\${RC_KOMAC_SHA256}" scripts/release-channels.sh && grep -qF "v\${RC_NFPM_VERSION}/" scripts/release-channels.sh && grep -qF "\${RC_NFPM_SHA256}" scripts/release-channels.sh'
 
+expect_true "release.yml installs cargo-cyclonedx --locked at its pin, named by no literal (RC-110-73)" \
+    'grep -qF '"'"'cargo install cargo-cyclonedx --version "${RC_CARGO_CYCLONEDX_VERSION}" --locked'"'"' .github/workflows/release.yml && ! grep -qE "cargo-cyclonedx[@ ]+(--version )?[0-9]" .github/workflows/release.yml'
+
 # The documentation's table: `| <tool> | <version> | <how to install> |`.
 DOC="docs/development.md"
 if [[ -f "$DOC" ]]; then
@@ -67,6 +70,7 @@ if [[ -f "$DOC" ]]; then
     documented "Rust nightly" "$RC_FUZZ_NIGHTLY"
     documented cargo-fuzz "$RC_CARGO_FUZZ_VERSION"
     documented cargo-llvm-cov "$RC_LLVM_COV_VERSION"
+    documented cargo-cyclonedx "$RC_CARGO_CYCLONEDX_VERSION"
     expect_true "and the install commands name the same versions" \
         'grep -qF "cargo-xwin --version $RC_CARGO_XWIN_VERSION " "$DOC" && grep -qF "cargo-nextest --version $RC_NEXTEST_VERSION " "$DOC" && grep -qF "wasm-tools --version $RC_WASM_TOOLS_VERSION " "$DOC" && grep -qF "cargo-fuzz --version $RC_CARGO_FUZZ_VERSION " "$DOC" && grep -qF "cargo-llvm-cov --version $RC_LLVM_COV_VERSION " "$DOC" && grep -qF "rustup toolchain install $RC_FUZZ_NIGHTLY " "$DOC"'
     expect_true "gitleaks and nfpm at their CI pins" \

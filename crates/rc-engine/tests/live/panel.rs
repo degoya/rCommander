@@ -25,7 +25,7 @@ fn job(outcome: Result<Outcome, rc_engine::EngineError>) -> rc_engine::JobId {
 }
 
 #[tokio::test]
-#[ignore = "needs the servers of scripts/live/sftp/run.sh"]
+#[ignore = "needs the servers of scripts/live-servers/sftp/run.sh"]
 async fn the_panel_shows_the_home_navigates_makes_deletes_and_reads() {
     let live = live_or_skip!();
     let dir = workdir();

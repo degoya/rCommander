@@ -126,6 +126,7 @@ fn files(dialog: &SelectDuplicates) -> Element<'_, Message> {
         .font(theme::UI_FONT)
     };
     let mask = text_input("*.*", &dialog.mask)
+        .style(theme::text_field)
         .on_input(|mask| wrap(SelMsg::Mask(mask)))
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)
@@ -219,6 +220,7 @@ fn folders<'a>(dialog: &'a SelectDuplicates, tokens: &'static Tokens) -> Element
     .height(Length::Fill)
     .style(move |_| theme::panel(tokens, true));
     let pattern = text_input("*", &dialog.pattern)
+        .style(theme::text_field)
         .on_input(|pattern| wrap(SelMsg::Pattern(pattern)))
         .font(theme::UI_FONT)
         .size(theme::TEXT_SIZE)

@@ -8,7 +8,7 @@ use super::{CommandClass, CommandSpec};
 pub(super) const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "filters.delete",
-        class: CommandClass::Read,
+        class: CommandClass::Destructive,
         summary: "Delete a saved file filter by its name",
     },
     CommandSpec {
@@ -18,12 +18,12 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         id: "filters.rename",
-        class: CommandClass::Read,
+        class: CommandClass::Write,
         summary: "Give a saved file filter another name",
     },
     CommandSpec {
         id: "filters.save",
-        class: CommandClass::Read,
+        class: CommandClass::Write,
         summary: "Save a file filter's mask under a name, replacing one of the same name",
     },
     CommandSpec {

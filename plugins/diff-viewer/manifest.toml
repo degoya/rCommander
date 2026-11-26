@@ -7,7 +7,7 @@ plugin_type = "viewer"
 api_version = "0.6.0"
 id = "01a159b4-eea6-71f6-b02e-d3d5e24e15d2"
 name = "Diff viewer"
-version = "0.1.4"
+version = "0.1.5"
 
 [match]
 extensions = ["diff", "patch", "rej"]

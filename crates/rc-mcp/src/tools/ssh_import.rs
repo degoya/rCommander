@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ImportSshConfigParams {
     /// Omit it for the user's `~/.ssh/config`. Otherwise only that file, a file in
     /// `~/.ssh/config.d/`, or the same of a WSL distribution's home

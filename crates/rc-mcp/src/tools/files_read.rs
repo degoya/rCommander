@@ -41,6 +41,7 @@ impl From<EncodingArg> for TextEncoding {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ReadTextParams {
     /// The file: absolute, relative to the panel's directory, or on a server as
     /// sftp://<connection name>/<path> or ftp://<connection name>/<path>.
@@ -60,6 +61,7 @@ pub(crate) struct ReadTextParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ReadHexParams {
     /// The file: absolute, relative to the panel's directory, or on a server as
     /// sftp://<connection name>/<path> or ftp://<connection name>/<path>.

@@ -27,6 +27,7 @@ pub(crate) enum FilterKind {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct FileFilterParams {
     pub kind: FilterKind,
     /// With kind mask: a mask line as Num+ takes it, `*.txt;*.md|read*` (masks after `|` are left
@@ -39,6 +40,7 @@ pub(crate) struct FileFilterParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SaveFilterParams {
     /// At most 64 characters; a filter of the same name (ignoring case) is replaced.
     pub name: String,
@@ -47,17 +49,21 @@ pub(crate) struct SaveFilterParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RenameFilterParams {
     pub name: String,
     pub new_name: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(transform = crate::confirm::argument)]
 pub(crate) struct FilterNameParams {
     pub name: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct IgnoreListParams {
     /// true switches the ignore list on, false off; omitted switches.
     #[serde(default)]
@@ -65,6 +71,7 @@ pub(crate) struct IgnoreListParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ListFileParams {
     /// A text file on this machine: absolute, or relative to the panel's folder.
     pub path: String,
@@ -74,6 +81,7 @@ pub(crate) struct ListFileParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SelectionTextParams {
     /// Names, one per line (a name in double quotes may hold spaces; in a flat view the path
     /// below its folder, or an absolute path below the panel's folder); at most 16 MiB.
@@ -84,6 +92,7 @@ pub(crate) struct SelectionTextParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TabRenameParams {
     /// A tab id from tab_list; the panel's shown tab when omitted.
     #[serde(default)]
@@ -97,6 +106,7 @@ pub(crate) struct TabRenameParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TabCloseAllParams {
     /// Close the locked tabs too.
     #[serde(default)]
@@ -107,6 +117,7 @@ pub(crate) struct TabCloseAllParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct OpenFrequentParams {
     /// An index into history_list's frequent.
     pub index: usize,
@@ -177,7 +188,7 @@ impl RcMcpServer {
     }
 
     #[tool(
-        description = "Delete a saved file filter by its name. Answers the saved filters. Errors: saved_filter_not_found."
+        description = "Delete a saved file filter by its name. Destructive: the first call answers with a question and a confirmation code, as connections_delete does. Answers the saved filters. Errors: saved_filter_not_found."
     )]
     pub(crate) async fn filters_delete(
         &self,

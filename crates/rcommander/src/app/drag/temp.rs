@@ -10,7 +10,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::recover::LogPanic as _;
+use crate::{i18n::error_text, recover::LogPanic as _};
 
 /// The start of a session folder's name in the system's temporary folder.
 pub const PREFIX: &str = "rcommander-drag-";
@@ -72,15 +72,19 @@ pub async fn remove_off_thread(folder: PathBuf) {
         .log_panic("app.drag_temp_remove");
 }
 
-/// [`make_session`] in the system's temporary folder, on the blocking pool.
+/// [`make_session`] in the system's temporary folder, on the blocking pool; a failure as the
+/// message of its error code (RC-110-86), never the system's own words.
 pub async fn make_session_off_thread() -> Result<PathBuf, String> {
     let root = std::env::temp_dir();
+    let folder = root.clone();
     match tokio::task::spawn_blocking(move || make_session(&root))
         .await
         .log_panic("app.drag_temp_make")
     {
-        Ok(made) => made.map_err(|error| error.to_string()),
-        Err(error) => Err(error.to_string()),
+        Ok(made) => {
+            made.map_err(|error| error_text(rc_vfs::VfsError::from_io(error, folder).code()))
+        }
+        Err(_) => Err(error_text("io")),
     }
 }
 

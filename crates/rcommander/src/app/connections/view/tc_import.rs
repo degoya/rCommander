@@ -40,13 +40,19 @@ pub(super) fn page<'a>(
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
     let source = row![
-        field(t!("tc_import.wincmd_auto"), &dialog.wincmd)
-            .on_input(|path| msg(TcImportMsg::Wincmd(path)))
-            .on_submit(msg(TcImportMsg::Read)),
+        layout::captioned_beside(
+            t!("tc_import.wincmd_file"),
+            field(t!("tc_import.found_auto"), &dialog.wincmd)
+                .on_input(|path| msg(TcImportMsg::Wincmd(path)))
+                .on_submit(msg(TcImportMsg::Read)),
+        ),
         browse::button(PathField::Wincmd, &dialog.wincmd, true),
-        field(t!("tc_import.ftp_auto"), &dialog.ftp)
-            .on_input(|path| msg(TcImportMsg::Ftp(path)))
-            .on_submit(msg(TcImportMsg::Read)),
+        layout::captioned_beside(
+            t!("tc_import.ftp_file"),
+            field(t!("tc_import.found_auto"), &dialog.ftp)
+                .on_input(|path| msg(TcImportMsg::Ftp(path)))
+                .on_submit(msg(TcImportMsg::Read)),
+        ),
         browse::button(PathField::WcxFtp, &dialog.ftp, true),
         layout::secondary_icon_button(
             Icon::ViewFile,
@@ -58,7 +64,7 @@ pub(super) fn page<'a>(
     .align_y(Alignment::Center);
     let mut body = column![hint(t!("tc_import.help"), tokens), source].spacing(10);
     if let Some(error) = &dialog.page.error {
-        body = body.push(fit::prose(error.as_str()).color(theme::DANGER));
+        body = body.push(fit::prose(error.as_str()).color(tokens.status.danger));
     }
     let list: Element<'a, Message> = match (&dialog.report, dialog.page.phase) {
         (_, Phase::Reading) => hint(t!("tc_import.reading"), tokens).into(),

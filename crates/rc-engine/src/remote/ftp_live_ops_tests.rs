@@ -52,7 +52,7 @@ async fn exists(live: &Live, path: &str) -> bool {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_upload_writes_rcpart_and_cancel_leaves_nothing() {
     let Some(live) = slow().await else { return };
     let home = live.env.home.clone();
@@ -79,7 +79,7 @@ async fn live_ftp_ops_upload_writes_rcpart_and_cancel_leaves_nothing() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_move_removes_the_source_only_when_complete() {
     let Some(live) = slow().await else { return };
     let home = live.env.home.clone();
@@ -107,7 +107,7 @@ async fn live_ftp_ops_move_removes_the_source_only_when_complete() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_keeps_timestamps_where_the_server_can_set_them() {
     let live = live_on(None, None, true).await;
     live.open(PanelId::Right).await.expect("the panel opens");
@@ -160,7 +160,7 @@ async fn live_ftp_ops_keeps_timestamps_where_the_server_can_set_them() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_disconnect_then_the_next_step_logs_in_again() {
     let live = live_on(None, None, true).await;
     live.open(PanelId::Right).await.expect("the panel opens");
@@ -188,7 +188,7 @@ async fn live_ftp_ops_disconnect_then_the_next_step_logs_in_again() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_a_third_download_waits_for_the_transfer_limit() {
     let live = live_on(None, None, true).await;
     live.open(PanelId::Right).await.expect("the panel opens");
@@ -262,7 +262,7 @@ async fn download_through_a_drop(port: u16) {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_resume_after_a_dropped_connection() {
     let Some(port) = port_var("RC_LIVE_FTP_SLOW_PORT") else {
         println!("no slow instance on this server: not testable here");
@@ -272,7 +272,7 @@ async fn live_ftp_ops_resume_after_a_dropped_connection() {
 }
 
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_a_server_without_rest_starts_over() {
     let Some(port) = port_var("RC_LIVE_FTP_NOREST_PORT") else {
         println!("no instance without REST on this server: not testable here");
@@ -284,7 +284,7 @@ async fn live_ftp_ops_a_server_without_rest_starts_over() {
 /// The server drops the panel's idle connection (a restart, a firewall's idle cut): the next
 /// step on the panel works, on a new login.
 #[tokio::test]
-#[ignore = "live: scripts/live/ftp/run.sh"]
+#[ignore = "live: scripts/live-servers/ftp/run.sh"]
 async fn live_ftp_ops_a_dropped_idle_connection_is_replaced() {
     let live = live_on(None, None, true).await;
     live.open(PanelId::Right).await.expect("the panel opens");

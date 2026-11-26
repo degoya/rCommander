@@ -28,7 +28,7 @@ use crate::{
             tree_edit::TreeMsg,
         },
     },
-    i18n::t,
+    i18n::{counted::Counted, t},
     theme::{self, Tokens, focus, icon::Icon, layout},
 };
 
@@ -43,9 +43,12 @@ pub(super) fn side<'a>(
     manager: &'a ConnectionManager,
     tokens: &'static Tokens,
 ) -> Element<'a, Message> {
-    let filter = field(t!("connections.filter"), &manager.tree.filter)
-        .id(FILTER_FIELD)
-        .on_input(|text| wrap(ConnMsg::Filter(text)));
+    let filter = layout::captioned_beside(
+        t!("field.filter"),
+        field(t!("connections.filter"), &manager.tree.filter)
+            .id(FILTER_FIELD)
+            .on_input(|text| wrap(ConnMsg::Filter(text))),
+    );
     let active = manager.focus == Focus::Tree;
     // The list's width decides whether the hosts fit beside the names.
     let list = responsive(move |size| {
@@ -323,10 +326,13 @@ fn row_view<'a>(
 fn name_field<'a>(text: &str, depth: usize) -> Element<'a, Message> {
     row![
         Space::new().width(INDENT * depth as f32 + 20.0),
-        field(t!("connections.name"), text)
-            .id(NAME_FIELD)
-            .on_input(|text| wrap(ConnMsg::NameInput(text)))
-            .on_submit(wrap(ConnMsg::NameSubmit)),
+        layout::captioned_beside(
+            t!("connections.name"),
+            field("", text)
+                .id(NAME_FIELD)
+                .on_input(|text| wrap(ConnMsg::NameInput(text)))
+                .on_submit(wrap(ConnMsg::NameSubmit)),
+        ),
     ]
     .into()
 }
@@ -341,17 +347,14 @@ fn delete_question<'a>(
 ) -> Element<'a, Message> {
     let name = manager.tree.name_of(item);
     let question = match item {
-        TreeItem::Folder(_) => t!(
-            "connections.delete_folder",
-            name = name,
-            folders = folders.saturating_sub(1),
-            connections = connections
-        ),
+        TreeItem::Folder(_) => {
+            Counted::now().delete_folder(&name, folders.saturating_sub(1), connections)
+        }
         TreeItem::Connection(_) => t!("connections.delete_connection", name = name),
         TreeItem::Credential(_) => t!(
             "connections.delete_credential",
             name = name,
-            connections = connections
+            count = connections
         ),
     };
     container(

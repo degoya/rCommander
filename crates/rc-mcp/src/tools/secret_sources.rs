@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::{RcMcpServer, answer::ToolResult};
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SourcesParams {
     /// Also this connection's references: which secret comes from which source and entry.
     #[serde(default)]
@@ -22,6 +23,7 @@ pub(crate) struct SourcesParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SearchParams {
     /// The source as credential_sources_list names it (`plugin:<id>` or `wincred`).
     pub source: String,

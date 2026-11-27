@@ -4,7 +4,9 @@
 # %LOCALAPPDATA%\rcommander-dev\ and starts it there through WSL interop, detached. Windows does
 # not run an .exe from the WSL file system reliably (and SmartScreen and file locks behave
 # differently there), hence the copy. Where WSL mounts C: read-only, it builds, prints the
-# PowerShell command of scripts/run-windows.ps1 (the copy and start on the Windows side) and exits 1.
+# PowerShell command of scripts/run-windows.ps1 (the copy and start on the Windows side) and exits
+# 3; every word of that command is single-quoted for PowerShell (lib/powershell.sh), so it is
+# pasted into a PowerShell session as it is and each argument reaches rcommander.exe unchanged.
 #
 # Usage:
 #   scripts/run-windows.sh                  # debug build
@@ -21,6 +23,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/jobs.sh"
 # shellcheck source=lib/lock.sh
 source "$ROOT/scripts/lib/lock.sh"
+# shellcheck source=lib/powershell.sh
+source "$ROOT/scripts/lib/powershell.sh"
 rc_take_lock "$@"
 cd "$ROOT"
 
@@ -66,8 +70,9 @@ destination="$(wslpath -u "$localappdata")/rcommander-dev"
 if ! mkdir -p "$destination" 2> /dev/null || [[ ! -w "$destination" ]]; then
     # WSL mounts C: read-only: Windows copies and starts it (scripts/run-windows.ps1).
     echo "!! $destination is read-only from WSL; built, not started. Start it from PowerShell:" >&2
-    echo "powershell -NoProfile -ExecutionPolicy Bypass -File \"$(wslpath -w "$ROOT/scripts/run-windows.ps1")\" -Binary \"$(wslpath -w "$binary")\"${*:+ $*}" >&2
-    exit 1
+    rc_run_windows_ps1_command "$(wslpath -w "$ROOT/scripts/run-windows.ps1")" \
+        "$(wslpath -w "$binary")" "$@" >&2
+    exit 3
 fi
 install -m 755 "$binary" "$destination/rcommander.exe"
 windows_exe="$(wslpath -w "$destination/rcommander.exe")"

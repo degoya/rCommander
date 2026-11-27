@@ -331,3 +331,18 @@ fn a_recorded_package_whose_version_is_gone_is_installed_again() {
     assert_eq!(again, [(PLUGIN_ID.to_owned(), "1.0.0".to_owned())]);
     assert!(version_dir(data.path()).join(BUNDLED_MARKER).is_file());
 }
+
+/// RC-110-55: the shipped packages by id and version, read whatever key signed them; a file that
+/// is no package and one of another extension are passed over.
+#[test]
+fn the_shipped_versions_are_named_by_their_manifests() {
+    let bundled = shipped(OLD_KEY_ID, OLD);
+    std::fs::write(bundled.path().join("broken.rcplug"), b"not a zip").expect("write");
+    let other = viewer_package(PLUGIN_ID, "2.0.0", NEW_KEY_ID, &signing_key(NEW), true);
+    std::fs::write(bundled.path().join("csv.zip"), other).expect("write");
+    assert_eq!(
+        super::bundled_versions(bundled.path()),
+        BTreeSet::from([(PLUGIN_ID.to_owned(), "1.0.0".to_owned())])
+    );
+    assert!(super::bundled_versions(&bundled.path().join("missing")).is_empty());
+}

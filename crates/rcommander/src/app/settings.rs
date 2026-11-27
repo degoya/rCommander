@@ -38,6 +38,7 @@ mod mcp_page;
 mod page;
 mod plugins;
 mod plugins_calls;
+mod plugins_old;
 mod plugins_view;
 mod save;
 mod saving;
@@ -438,12 +439,14 @@ impl App {
             return None;
         }
         // The Host keys page's own keys: its rows and the question before a removal; the Themes
-        // tab's context menu (RC-110-09).
+        // tab's context menu (RC-110-09); the Plugins page's question before removing its old
+        // versions (RC-110-55).
         if let Message::Key(chord) = message
             && let Some(effects) = self
                 .host_keys_key(chord)
                 .or_else(|| self.shortcuts_key(chord))
                 .or_else(|| self.themes_key(chord))
+                .or_else(|| self.plugins_key(chord))
         {
             return Some(effects);
         }

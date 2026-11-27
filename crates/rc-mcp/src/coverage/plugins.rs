@@ -25,6 +25,10 @@ pub(super) const ROWS: &[(&str, Coverage)] = &[
         Coverage::Omitted("GUI only: human decision"),
     ),
     (
+        "plugins.remove_old",
+        Coverage::Omitted("GUI only: human decision"),
+    ),
+    (
         "plugins.resume",
         Coverage::Omitted("GUI only: human decision"),
     ),

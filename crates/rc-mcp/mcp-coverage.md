@@ -173,6 +173,7 @@ asks by.
 | `plugins.list` | read | `plugins_list` | The installed plugins: versions, kind, switch, suspension, permissions and signing key; one plugin with its latest calls |
 | `plugins.preview` | gui_only | omitted: GUI only: human decision | What a .rcplug package is before it is installed: name, version, author, claimed files, permissions, key standing |
 | `plugins.remove` | gui_only | omitted: GUI only: human decision | Remove one installed version of a plugin; refused while an open viewer uses it |
+| `plugins.remove_old` | gui_only | omitted: GUI only: human decision | List the old installed plugin versions (not running or not verifying), or remove the confirmed ones still old; one an open viewer uses stays |
 | `plugins.resume` | gui_only | omitted: GUI only: human decision | Let a plugin suspended after repeated failures run again |
 | `plugins.rollback` | gui_only | omitted: GUI only: human decision | Run the previous installed version of a plugin instead of the current one |
 | `files.find_dialog` | read | omitted: opens a dialog in the window; files_search runs the search and panel_feed_paths shows its hits in a panel | Open the find-files dialog in the window, starting in a panel's folder |
@@ -338,4 +339,4 @@ asks by.
 | `view.toggle_button_bar` | read | omitted: agents switch a bar with settings_set | Show or hide the button bar above the panels (Total Commander's cm_VisButtonBar) |
 | `view.toggle_vertical_button_bar` | read | omitted: agents switch a bar with settings_set | Show or hide the vertical button bar between the panels (Total Commander's cm_VisButtonBar2) |
 
-327 commands: 216 covered, 111 omitted.
+328 commands: 216 covered, 112 omitted.

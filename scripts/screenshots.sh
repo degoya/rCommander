@@ -5,6 +5,9 @@
 # `--screenshots <scenes.json> --out <dir> --demo-root <dir>`, waits for the run's
 # screenshots.json, and fetches the pictures to artifacts/screenshots/<version>/. The window runs
 # on a throwaway profile and a demo tree; it never sees the person's database or files.
+# Where WSL mounts C: read-only (RC-110-52), the run reads the scenes from and writes its pictures
+# to artifacts/screenshots/<version>-raw/ through \\wsl.localhost, run-windows.sh prints the
+# PowerShell command that starts it, and this waits for whoever pastes it.
 #
 # Usage:
 #   scripts/screenshots.sh [--release] [--deliver] [--timeout <seconds>]
@@ -65,6 +68,16 @@ main_checkout() {
 artifacts_dir() { echo "$ROOT/artifacts/screenshots/$1"; }
 website_dir() { echo "${RC_WEBSITE_DIR:-$(main_checkout)/../rcommander-website}/public/screenshots"; }
 wiki_dir() { echo "${RC_WIKI_DIR:-$(main_checkout)/../rcommander.wiki}/images/screenshots"; }
+
+# Where a run reads its scenes and writes its pictures (<work>/scenes.json, <work>/out/) when C: is
+# read-only from WSL: beside the version's artifacts.
+raw_dir() { echo "$ROOT/artifacts/screenshots/$1-raw"; }
+
+# Prepares <work> for a run: an empty out/ and the scenes beside it; fails where it cannot write.
+stage() {
+    local work="$1"
+    rm -rf "$work/out" && mkdir -p "$work/out" && cp "$SCENES" "$work/scenes.json"
+}
 
 # The PNGs a manifest lists, one name a line, after checking it: a run that failed, a name that
 # is no plain <scene>.png or a picture missing in <out> fails. A scene the run skipped on this
@@ -149,16 +162,22 @@ main() {
         exit 1
     fi
     work="$(wslpath -u "$localappdata")/rcommander-dev/screenshots"
-    rm -rf "$work/out"
-    mkdir -p "$work/out"
-    cp "$SCENES" "$work/scenes.json"
+    if ! stage "$work" 2> /dev/null; then
+        # C: is read-only from WSL (RC-110-52): the run reads the scenes from this checkout and
+        # writes its pictures into it, through \\wsl.localhost.
+        work="$(raw_dir "$version")"
+        stage "$work"
+    fi
     windows_work="$(wslpath -w "$work")"
     demo_root="${RC_SHOTS_DEMO_ROOT:-C:\\rCommander-Demo}"
 
-    local build=()
+    local build=() status=0
     [[ "$RELEASE" -eq 1 ]] && build=(--release)
     "$ROOT/scripts/run-windows.sh" "${build[@]}" -- --screenshots "$windows_work\\scenes.json" \
-        --out "$windows_work\\out" --demo-root "$demo_root"
+        --out "$windows_work\\out" --demo-root "$demo_root" || status=$?
+    # 3: built, not started, the PowerShell command printed (a read-only C:) - the person who runs
+    # it is waited for.
+    [[ "$status" -eq 0 || "$status" -eq 3 ]] || exit "$status"
 
     echo "==> waiting up to ${TIMEOUT}s for $windows_work\\out\\$MANIFEST"
     start="$SECONDS"

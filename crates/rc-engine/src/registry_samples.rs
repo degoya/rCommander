@@ -378,6 +378,7 @@ pub(super) fn one_of_each() -> Vec<Command> {
     .chain(super::samples_forwards::remote_edits())
     .chain(super::samples_panel_lists::panel_lists())
     .chain(super::samples_duplicates::duplicates())
+    .chain(super::samples_plugins::plugins())
     .chain(crate::tabs::one_of_each())
     .chain(crate::workspaces::one_of_each())
     .chain(crate::user_commands::one_of_each())

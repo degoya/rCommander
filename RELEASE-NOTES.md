@@ -11,6 +11,10 @@ refactoring). A version without anything a user notices says only: Maintenance r
 changes only, no change in behaviour.
 -->
 
+## 0.27.0
+
+- Settings › Plugins: “Remove old versions…” removes every plugin version that is not running or does not verify at once, after listing what goes. The running version, one under test and an update waiting for the next start stay.
+
 ## 0.26.1
 
 - Maintenance release: internal changes only, no change in behaviour.

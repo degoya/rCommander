@@ -59,6 +59,7 @@ async fn the_list_reaches_mcp_and_nothing_else_does() {
             id: ID.to_owned(),
             version: "1.0.0".to_owned(),
         },
+        Command::RemoveOldPlugins { versions: None },
     ] {
         let refused = engine.dispatch_mcp(command).await.expect_err("GUI only");
         assert_eq!(refused.code(), "gui_only");

@@ -36,6 +36,11 @@ pub(super) const COMMANDS: &[CommandSpec] = &[
         summary: "Remove one installed version of a plugin; refused while an open viewer uses it",
     },
     CommandSpec {
+        id: "plugins.remove_old",
+        class: CommandClass::GuiOnly,
+        summary: "List the old installed plugin versions (not running or not verifying), or remove the confirmed ones still old; one an open viewer uses stays",
+    },
+    CommandSpec {
         id: "plugins.resume",
         class: CommandClass::GuiOnly,
         summary: "Let a plugin suspended after repeated failures run again",
@@ -79,6 +84,12 @@ macro_rules! commands {
             "plugins.remove" => RemovePlugin {
                 id: String,
                 version: String,
+            },
+            /// Without `versions`, what "Remove old versions..." would remove (RC-110-55); with
+            /// the versions the person confirmed from that list, removes those still old.
+            "plugins.remove_old" => RemoveOldPlugins {
+                #[serde(default)]
+                versions: Option<Vec<PluginVersionRef>>,
             },
             "plugins.resume" => ResumePlugin {
                 id: String,

@@ -7,7 +7,8 @@
 //! after every change, so the viewer adapter (RC-100-13), which lists the plugins with nothing but
 //! the data folder, verifies against the same keys, withdrawals, switches and versions; every
 //! change is announced as `EngineEvent::PluginsChanged`. The
-//! `plugins.*` commands are in `plugin_admin/commands.rs`; all but `plugins.list` are `GuiOnly`:
+//! `plugins.*` commands are in `plugin_admin/commands.rs`, `plugins.remove_old` in
+//! `plugin_admin/remove_old.rs` (RC-110-55); all but `plugins.list` are `GuiOnly`:
 //! installing, switching on or rolling back decides which foreign code runs.
 
 mod cache;
@@ -15,6 +16,7 @@ mod commands;
 mod error;
 mod info;
 mod listing;
+mod remove_old;
 
 use std::{
     collections::HashMap,
@@ -31,7 +33,10 @@ use serde_json::Value;
 pub use error::PluginAdminError;
 pub(crate) use listing::setting_key;
 // What a preview and a listing carry, for the window.
-pub use info::{PluginInfo, PluginSettingInfo, PluginsOutcome, VersionInfo};
+pub use info::{
+    OldReason, OldVersion, PluginInfo, PluginSettingInfo, PluginVersionRef, PluginsOutcome,
+    VersionInfo,
+};
 pub use rc_plugin_host::{
     KeyStatus, PackagePreview, Permissions, installed::bundled_dir as bundled_plugins_dir,
 };

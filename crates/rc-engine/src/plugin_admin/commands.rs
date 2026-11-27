@@ -1,5 +1,6 @@
 //! The `plugins.*` commands: list, preview, install, enable, disable, roll back, resume, remove -
-//! and a plugin's own settings, which only the window sets (no command).
+//! and a plugin's own settings, which only the window sets (no command). Removing the old versions
+//! at once is `remove_old.rs`.
 //!
 //! Copied in its flow from rDownloader's plugin manager (`install.rs`, `preview.rs`,
 //! `versions.rs`, RD-140-02, RD-170-12) at commit 26c8592a6: a first install runs at once, an
@@ -242,42 +243,10 @@ impl Engine {
         id: &str,
         version: &str,
     ) -> Result<Outcome, EngineError> {
-        let desk = self.plugin_desk()?;
+        self.plugin_desk()?;
         let state = self.plugin_state().await?;
-        let installer = PluginInstaller::new(
-            installed::plugins_root(desk.data_dir()),
-            state
-                .verifier()
-                .map_err(|error| PluginAdminError::from_host(&error))?,
-        );
-        let (owned_id, owned_version) = (id.to_owned(), version.to_owned());
-        let removed = tokio::task::spawn_blocking(move || {
-            installer.remove_version(&owned_id, &owned_version)
-        })
-        .await
-        .log_panic("engine.plugin_remove")
-        .map_err(PluginAdminError::from)?
-        .map_err(|error| PluginAdminError::from_host(&error))?;
-        if !removed {
+        if !self.remove_version_quietly(&state, id, version).await? {
             return Err(PluginAdminError::NotFound { id: id.to_owned() }.into());
-        }
-        let db = self.db()?;
-        let left = self.plugin_infos(&state, Some(id)).await?;
-        match (db.plugin(id).await?, left.is_empty()) {
-            (Some(_), true) => {
-                db.remove_plugin(id).await?;
-            }
-            (Some(row), false) => {
-                let keep = |chosen: Option<String>| chosen.filter(|chosen| chosen != version);
-                db.set_plugin_versions(
-                    id,
-                    keep(row.active_version).as_deref(),
-                    keep(row.staged_version).as_deref(),
-                    keep(row.pending_version).as_deref(),
-                )
-                .await?;
-            }
-            (None, _) => {}
         }
         self.sync_plugin_state().await?;
         self.publish(EngineEvent::PluginsChanged);

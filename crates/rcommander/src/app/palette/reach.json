@@ -121,6 +121,7 @@
   { "command": "plugins.rollback", "via": "window:settings", "how": "Roll back at a plugin on the settings' Plugins page" },
   { "command": "plugins.resume", "via": "window:settings", "how": "Resume at a suspended plugin on the settings' Plugins page" },
   { "command": "plugins.remove", "via": "window:settings", "how": "Remove at a version of a plugin on the settings' Plugins page" },
+  { "command": "plugins.remove_old", "via": "window:settings", "how": "Remove old versions... on the settings' Plugins page, after its question" },
   { "command": "terminal.close", "via": "window:tab_list", "how": "Delete on a session in the list of the terminal's sessions (Ctrl+Shift+A in a terminal); a session also closes when its shell ends" },
   { "command": "terminal.list", "shown": "the shell choice of a new terminal (Ctrl+Shift+Ö)" },
   { "command": "terminal.read_screen", "shown": "the terminal itself; MCP reads it as text" },

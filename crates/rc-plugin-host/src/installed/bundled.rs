@@ -23,7 +23,11 @@
 
 mod seen;
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    io::Cursor,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context as _, Result, bail};
 
@@ -34,7 +38,7 @@ use super::{
 };
 use crate::{
     PluginInstaller, PluginVerifier, VerifiedPackage,
-    package::{MAX_PACKAGE_BYTES, PACKAGE_EXTENSION},
+    package::{MAX_PACKAGE_BYTES, PACKAGE_EXTENSION, read_archive},
 };
 use seen::{FileStamp, Seen};
 
@@ -221,6 +225,32 @@ fn sync_stamped(
         tracing::warn!(%error, "the record of the bundled plugins could not be written");
     }
     Ok(installed)
+}
+
+/// The `(id, version)` of every package in `bundled`, as its manifest names it: what the start's
+/// [`sync_bundled`] installs again when it is missing, so "Remove old versions..." leaves it
+/// (RC-110-55). Read, not verified - a claim can only keep a version, never remove one; a file
+/// that does not read is passed over.
+#[must_use]
+pub fn bundled_versions(bundled: &Path) -> BTreeSet<(String, String)> {
+    let Ok(entries) = std::fs::read_dir(bundled) else {
+        return BTreeSet::new();
+    };
+    entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension == PACKAGE_EXTENSION)
+        })
+        .filter_map(|path| {
+            let bytes = read_bounded_file(&path, MAX_PACKAGE_BYTES).ok()?;
+            let (manifest, ..) = read_archive(Cursor::new(bytes)).ok()?;
+            let manifest = crate::parse_manifest(&manifest).ok()?;
+            Some((manifest.id, manifest.version))
+        })
+        .collect()
 }
 
 /// Why an installed bundled version gives way to the bundled package of its id and version.

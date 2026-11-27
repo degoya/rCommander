@@ -241,3 +241,7 @@ mod samples_duplicates;
 #[cfg(test)]
 #[path = "registry_samples_panel_lists.rs"]
 mod samples_panel_lists;
+
+#[cfg(test)]
+#[path = "registry_samples_plugins.rs"]
+mod samples_plugins;

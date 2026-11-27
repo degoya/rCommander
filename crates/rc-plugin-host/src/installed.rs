@@ -38,7 +38,7 @@ use crate::{
 };
 use disk::{BUNDLED_MARKER, read_bounded_file, read_package_parts, version_directories};
 
-pub use bundled::{BUNDLED_DIR, bundled_dir, sync_bundled};
+pub use bundled::{BUNDLED_DIR, bundled_dir, bundled_versions, sync_bundled};
 pub use keys::InstalledKeys;
 pub use state::{PLUGINS_DIR, PluginState, STATE_FILE, plugins_root};
 pub use sweep::{StartSweep, sweep_at_start};

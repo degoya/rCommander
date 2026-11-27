@@ -55,6 +55,8 @@ use crate::{RemoteEditId, UploadChoice};
 use crate::search::DuplicateSelection;
 // The button bars (RC-100-87).
 use crate::button_bars::{BarKind, BarPlace, BarSpec, ButtonBarId};
+// The old plugin versions removed at once (RC-110-55).
+use crate::PluginVersionRef;
 
 /// Builds [`Command`] and [`Command::id`]: hands the variants gathered so far to the next group's
 /// list, and with the last group writes the enum.

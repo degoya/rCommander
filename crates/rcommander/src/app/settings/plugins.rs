@@ -6,16 +6,24 @@
 //! rows on its tab "Settings" (RC-100-20, `tabs.rs`); a package's preview turns to "Installed".
 //!
 //! Every action is a registry command run as a [`PluginsCall`] - `plugins.list`, `.preview`,
-//! `.install`, `.enable`, `.disable`, `.rollback`, `.resume`, `.remove` - except a plugin's own
-//! setting, which only the window sets (`Engine::set_plugin_setting`). An unknown signing key is
-//! trusted only by installing from the preview that showed its fingerprint.
+//! `.install`, `.enable`, `.disable`, `.rollback`, `.resume`, `.remove`, `.remove_old` ("Remove
+//! old versions...", `plugins_old.rs`) - except a plugin's own setting, which only the window
+//! sets (`Engine::set_plugin_setting`). An unknown signing key is trusted only by installing from
+//! the preview that showed its fingerprint.
 
 use std::collections::BTreeMap;
 
 use rc_db::{PluginExecution, PluginExecutionSummary};
-use rc_engine::{Command, Engine, KeyStatus, Outcome, PackagePreview, PluginInfo, PluginsOutcome};
+use rc_engine::{
+    Command, Engine, KeyStatus, OldVersion, Outcome, PackagePreview, PluginInfo, PluginVersionRef,
+    PluginsOutcome,
+};
 
-use super::{Page, SettingsMessage, Tab, wrap};
+use super::{
+    Page, SettingsMessage, Tab,
+    plugins_old::{self, OldMsg, OldVersions},
+    wrap,
+};
 use crate::{
     app::{App, Effect, Message},
     i18n::{error_text, t},
@@ -68,6 +76,8 @@ pub struct PluginsPage {
     pub busy: bool,
     /// The secret sources among them and whether each answers (RC-100-36).
     pub sources: Vec<rc_engine::secret_sources::SecretSourceInfo>,
+    /// The old versions "Remove old versions..." takes, and its question (RC-110-55).
+    pub old: OldVersions,
 }
 
 impl PluginsPage {
@@ -108,6 +118,8 @@ pub enum PluginsMsg {
     SaveSettings,
     /// Open or close the latest calls.
     ToggleCalls,
+    /// "Remove old versions..." and its question (RC-110-55).
+    Old(OldMsg),
     Answered(Box<PluginsAnswer>),
 }
 
@@ -130,13 +142,17 @@ pub enum PluginsCall {
         id: String,
         values: Vec<(String, String)>,
     },
+    /// The old versions the question showed, removed (RC-110-55).
+    RemoveOld(Vec<PluginVersionRef>),
 }
 
-/// The listing: plugins, the selected one's calls, the secret sources' states.
+/// The listing: plugins, the selected one's calls, the secret sources' states, and the old
+/// versions with those of them an open viewer holds.
 type Listed = (
     Vec<PluginInfo>,
     Calls,
     Vec<rc_engine::secret_sources::SecretSourceInfo>,
+    (Vec<OldVersion>, Vec<OldVersion>),
 );
 
 /// What became of a [`PluginsCall`].
@@ -146,6 +162,8 @@ pub enum PluginsAnswer {
     Previewed(Result<Box<Preview>, &'static str>),
     /// The note, or the refusal's code.
     Changed(Result<&'static str, &'static str>),
+    /// The old versions removed: the note with their number, or the refusal's code.
+    RemovedOld(Result<String, &'static str>),
 }
 
 impl PluginsCall {
@@ -185,6 +203,9 @@ impl PluginsCall {
                     }
                 }
                 PluginsAnswer::Changed(saved)
+            }
+            Self::RemoveOld(versions) => {
+                PluginsAnswer::RemovedOld(plugins_old::remove(&engine, versions).await)
             }
         };
         page_message(PluginsMsg::Answered(Box::new(answer)))
@@ -235,7 +256,8 @@ async fn list(engine: &Engine, selected: Option<String>) -> Result<Listed, &'sta
         },
         _ => Vec::new(),
     };
-    Ok((plugins, calls, sources))
+    let old = plugins_old::listed(engine).await;
+    Ok((plugins, calls, sources, old))
 }
 
 fn call(call: PluginsCall) -> Vec<Effect> {
@@ -350,6 +372,9 @@ impl App {
                 page.drafts.insert(name, value);
             }
             PluginsMsg::ToggleCalls => page.calls_open = !page.calls_open,
+            PluginsMsg::Old(message) => {
+                return plugins_old::update(page, &mut dialog.note, message);
+            }
             PluginsMsg::SaveSettings if !page.busy => {
                 let Some(id) = page.selected_plugin().map(|plugin| plugin.id.clone()) else {
                     return Vec::new();
@@ -365,8 +390,12 @@ impl App {
             | PluginsMsg::Remove
             | PluginsMsg::SaveSettings => {}
             PluginsMsg::Answered(answer) => match *answer {
-                PluginsAnswer::Listed(Ok((plugins, calls, sources))) => {
+                PluginsAnswer::Listed(Ok((plugins, calls, sources, (versions, held)))) => {
                     page.sources = sources;
+                    // A question with nothing left to remove closes.
+                    page.old.asking &= !versions.is_empty();
+                    page.old.versions = versions;
+                    page.old.held = held;
                     page.selected = page
                         .selected
                         .take()
@@ -386,9 +415,16 @@ impl App {
                     let selected = page.selected.clone();
                     return call(PluginsCall::List { selected });
                 }
+                PluginsAnswer::RemovedOld(Ok(note)) => {
+                    page.busy = false;
+                    dialog.note = Some((note, false));
+                    let selected = page.selected.clone();
+                    return call(PluginsCall::List { selected });
+                }
                 PluginsAnswer::Listed(Err(code))
                 | PluginsAnswer::Previewed(Err(code))
-                | PluginsAnswer::Changed(Err(code)) => {
+                | PluginsAnswer::Changed(Err(code))
+                | PluginsAnswer::RemovedOld(Err(code)) => {
                     page.busy = false;
                     dialog.note = Some((error_text(code), true));
                 }

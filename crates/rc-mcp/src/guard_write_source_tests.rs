@@ -5,7 +5,7 @@
 use std::{fs, path::PathBuf};
 
 use rc_db::{DB_FILE, Db};
-use rc_engine::{Command, JobOptions, TransferRequest, VfsPath};
+use rc_engine::{BackendId, Command, JobOptions, TransferRequest, VfsPath};
 use serde_json::json;
 
 use super::{WriteGuard, judge_holding, program_dirs_of};
@@ -201,6 +201,16 @@ async fn an_entry_of_a_protected_place_and_a_folder_holding_one_are_not_taken() 
     assert!(guard.refuse_copy(&above, &out).await.is_none());
     let plain = VfsPath::local(at("plain/sub"));
     assert!(guard.refuse_move(&plain, &out).await.is_none());
+
+    // A folder on a server is judged by its own name, never by the local folder of the same
+    // path (RC-110-70: judging every place as local survived).
+    let server = VfsPath {
+        backend: BackendId::Sftp { connection_id: 1 },
+        path: at("home/bob"),
+    };
+    assert!(guard.refuse_taking(&server).await.is_none());
+    assert!(guard.refuse_copy(&server, &out).await.is_none());
+    assert!(guard.refuse_move(&server, &out).await.is_none());
 }
 
 /// A source reached through a link is judged where it really is.

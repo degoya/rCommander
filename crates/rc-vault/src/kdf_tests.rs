@@ -117,6 +117,11 @@ fn a_dropped_key_is_zeroed_and_never_printed() {
 #[test]
 fn the_floor_refuses_parameters_cheap_to_guess_against() {
     let floor = KdfParams::MIN;
+    // OWASP's floor for argon2id itself, not only a value the checks compare against (RC-110-70).
+    assert_eq!(
+        (floor.m_cost_kib, floor.t_cost, floor.p_cost),
+        (19_456, 2, 1)
+    );
     assert_eq!(
         KdfParams::DEFAULT.within(floor, KdfParams::MAX).ok(),
         Some(KdfParams::DEFAULT)

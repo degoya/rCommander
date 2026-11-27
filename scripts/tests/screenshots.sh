@@ -4,7 +4,9 @@
 # number), where the pictures go (the artifacts of the version, the website and the wiki beside
 # the main checkout or as RC_WEBSITE_DIR and RC_WIKI_DIR say), the manifest it reads (a failed
 # run, a name that leaves the folder, a missing picture refuse it), the copy into the artifacts
-# and the delivery, which copies nothing while one checkout is missing; and that every scene of
+# and the delivery, which copies nothing while one checkout is missing; the staging of a run's
+# folder (an empty out/ and the scenes; refused where it cannot write, as on a read-only C:, and
+# then beside the artifacts, RC-110-52); and that every scene of
 # scripts/screenshots/scenes.json has its alt text and no alt text is left over.
 #
 # Pure bash and python3: it runs in a second. check.sh --preflight runs it.
@@ -91,6 +93,22 @@ expect_status "skipped scenes that are no list are refused" 1
 printf '{"ok":true,"shots":[]}' > "$SCRATCH/empty.json"
 run_status listed_shots "$SCRATCH/empty.json" "$OUT"
 expect_status "a run without pictures is refused" 1
+
+expect "a read-only C: runs beside the artifacts" "$ROOT/artifacts/screenshots/1.2.3-raw" "$(raw_dir 1.2.3)"
+WORK="$SCRATCH/work"
+mkdir -p "$WORK/out"
+printf 'old' > "$WORK/out/screenshots.json"
+run_status stage "$WORK"
+expect_status "a writable folder is staged" 0
+expect_true "with an empty out" '[[ -d "$WORK/out" && -z "$(ls -A "$WORK/out")" ]]'
+expect_true "and the scenes beside it" 'cmp -s "$ROOT/scripts/screenshots/scenes.json" "$WORK/scenes.json"'
+if [[ "$(id -u)" -ne 0 ]]; then
+    mkdir -p "$SCRATCH/readonly"
+    chmod 555 "$SCRATCH/readonly"
+    run_status stage "$SCRATCH/readonly/screenshots"
+    chmod 755 "$SCRATCH/readonly"
+    expect_true "a folder that cannot be written is no stage" '[[ "$status" -ne 0 ]]'
+fi
 
 SITE="$SCRATCH/site"
 WIKI="$SCRATCH/wiki"

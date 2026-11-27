@@ -45,8 +45,9 @@ pub use crate::mcp_questions::{
     McpVerdict, readable as mcp_readable, with_mcp_judged, with_mcp_pins,
 };
 pub use crate::plugin_admin::{
-    KeyStatus, PackagePreview, Permissions, PluginAdminError, PluginInfo, PluginSettingInfo,
-    PluginStart, PluginsOutcome, VersionInfo, bundled_plugins_dir,
+    KeyStatus, OldReason, OldVersion, PackagePreview, Permissions, PluginAdminError, PluginInfo,
+    PluginSettingInfo, PluginStart, PluginVersionRef, PluginsOutcome, VersionInfo,
+    bundled_plugins_dir,
 };
 pub use crate::properties::{DirSize, ItemProperties, NameFormat, PathUsage, PropertiesReport};
 pub use crate::read_guard::{RDM_EXPORT_PASSWORDS, ReadJudge, SSH_PRIVATE_FILE, TC_FTP_PASSWORDS};

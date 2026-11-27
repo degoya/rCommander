@@ -5,6 +5,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-27
+
+### Added
+
+- **"Remove old versions..." on the Plugins page** (RC-110-55): one button removes every old
+  plugin version at once - each one that does not run (older or newer, the one Roll back
+  returns to included) and each one that does not verify, such as builds under a key this
+  build no longer trusts. It is pressed only when there are any, asks first with the list
+  (plugin, version, reason) and ends with the count in the status line. The running, staged and
+  pending versions, a version an open viewer holds (named and left) and a bundled version the
+  shipped packages still hold stay. Engine command `plugins.remove_old`
+  (`GuiOnly`: without versions the list, with the confirmed ones their removal, only of those
+  still old); `rc_plugin_host::installed::bundled_versions`; MCP
+  `omitted(GUI only: human decision)`.
+
+### Changed
+
+- Dependencies: `blake3` 1.8.8, `cc` 1.12.0, `find-msvc-tools` 0.1.16 and `rmcp` 3.12.0;
+  `constant_time_eq` 0.4 left the tree.
+- **Mutation tests on the security areas** (RC-110-70): `cargo-mutants` ran once over
+  `rc-vault`, `rc-update`'s signature check and the MCP write guard; each of the eight surviving
+  mutants is now caught by a test - the verifier's content and the KDF floor's values, a vault
+  created by another process, the redacted master password, the replay check's edges (the
+  expiry instant and the full clock skew are still accepted), the listed trust keys, and a
+  folder on a server that is never judged by the local folder of the same path. Results in
+  `docs/development.md`.
+
+### Fixed
+
+- **`run-windows.ps1` passes every argument through** (RC-110-52): no advanced parameter
+  binding any more, so `--out` is no longer taken for `-OutVariable`/`-OutBuffer`, and the
+  arguments reach `rcommander.exe` quoted for the Windows command line (values with spaces
+  included). The command `run-windows.sh` prints for a read-only C: quotes every word for
+  PowerShell and is pasted as it is; it exits 3 then. `screenshots.sh` on a read-only C: stages
+  its run in `artifacts/screenshots/<version>-raw/` (read and written through `\\wsl.localhost`)
+  and waits for whoever runs the printed command.
+
 ## [0.26.1] - 2026-11-26
 
 ### Changed

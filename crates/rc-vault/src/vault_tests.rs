@@ -98,6 +98,22 @@ async fn a_wrong_password_is_wrong_password_and_stays_locked() {
     }
 }
 
+/// The verifier must open to its own plaintext: a row whose verifier opens under the key but
+/// says something else is not this vault's (RC-110-70).
+#[tokio::test]
+async fn a_verifier_with_other_plaintext_is_a_wrong_password() {
+    let clock = ManualClock::new();
+    let db = Db::open_in_memory().await.expect("db");
+    let (mut meta, key) = new_key(&password("pw"), CHEAP).await.expect("key");
+    meta.verifier = aead::seal(&key, VERIFIER_AAD, b"another verifier").expect("seal");
+    assert!(db.insert_vault_meta(&meta).await.expect("insert"));
+    let vault = Vault::open_with(db, options(&clock)).await.expect("vault");
+    assert!(matches!(
+        vault.unlock(&password("pw")).await,
+        Err(VaultError::WrongPassword)
+    ));
+}
+
 #[tokio::test]
 async fn reopening_the_database_finds_the_vault_locked() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -403,6 +419,7 @@ async fn debug_output_never_shows_a_secret() {
         format!("{:?}", VaultError::WrongPassword),
         format!("{}", VaultError::WrongPassword),
     ];
+    assert_eq!(printed[0], "MasterPassword([REDACTED])");
     for line in printed {
         assert!(!line.contains("hunter2"), "{line}");
         assert!(!line.contains("correct horse"), "{line}");

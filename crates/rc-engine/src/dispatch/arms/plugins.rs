@@ -20,6 +20,9 @@ macro_rules! arms {
             Command::RemovePlugin { id, version } => {
                 $self.remove_plugin_version(&id, &version).await
             }
+            Command::RemoveOldPlugins { versions } => {
+                $self.remove_old_plugin_versions(versions.as_deref()).await
+            }
             Command::ResumePlugin { id } => $self.resume_plugin(&id).await,
             Command::RollbackPlugin { id } => $self.rollback_plugin(&id).await,
         } }

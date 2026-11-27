@@ -632,14 +632,14 @@ dependencies = [
 
 [[package]]
 name = "blake3"
-version = "1.8.7"
+version = "1.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d9e454fc11f76977dc803893aff6304ed33d6a26efae8696573bea74baa27ae"
+checksum = "64c0e36294adc8db531500e3f2b8ec75c4af9177271e9c6d33f93609d56e57cd"
 dependencies = [
  "arrayvec",
  "cc",
  "cfg-if",
- "constant_time_eq 0.4.2",
+ "constant_time_eq",
  "cpufeatures 0.3.1",
 ]
 
@@ -866,9 +866,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.3"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f0e023adb368345ce0ca6cdfc0f24a06554468d0e8503e14a0841de79bfa69"
+checksum = "95e45cf2980b2d467be49a9ed942c9179b701063a7ca3d037de7ee9bd67f8d66"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -929,7 +929,6 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
- "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -1096,12 +1095,6 @@ name = "const-oid"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be95d4a884358a21a199689323c29e9256b4a1b315e22f183d155422041d3a9a"
-
-[[package]]
-name = "constant_time_eq"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "constant_time_eq"
@@ -2112,9 +2105,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+checksum = "3e44f110d1777dc6559a51e7d45083945ded4f1bf3305494350f693b6d20b9c8"
 
 [[package]]
 name = "flate2"
@@ -5513,7 +5506,7 @@ dependencies = [
 
 [[package]]
 name = "rc-cert"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "base64 0.23.1",
  "sha1",
@@ -5523,7 +5516,7 @@ dependencies = [
 
 [[package]]
 name = "rc-checksum"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5545,7 +5538,7 @@ dependencies = [
 
 [[package]]
 name = "rc-db"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "blake3",
  "directories",
@@ -5563,7 +5556,7 @@ dependencies = [
 
 [[package]]
 name = "rc-engine"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5614,7 +5607,7 @@ dependencies = [
 
 [[package]]
 name = "rc-mcp"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -5643,7 +5636,7 @@ dependencies = [
 
 [[package]]
 name = "rc-ops"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -5673,7 +5666,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-api"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "rc-plugin-types",
  "serde",
@@ -5736,7 +5729,7 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-host"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5901,11 +5894,11 @@ dependencies = [
 
 [[package]]
 name = "rc-plugin-text"
-version = "0.26.1"
+version = "0.27.0"
 
 [[package]]
 name = "rc-plugin-types"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5937,14 +5930,14 @@ dependencies = [
 
 [[package]]
 name = "rc-process"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "rc-recover"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "tokio",
  "tracing",
@@ -5953,7 +5946,7 @@ dependencies = [
 
 [[package]]
 name = "rc-remote"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5987,7 +5980,7 @@ dependencies = [
 
 [[package]]
 name = "rc-rename"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "jiff",
  "proptest",
@@ -6001,7 +5994,7 @@ dependencies = [
 
 [[package]]
 name = "rc-tc-host"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "rc-process",
  "serde",
@@ -6013,7 +6006,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "alacritty_terminal",
  "base64 0.23.1",
@@ -6037,7 +6030,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term-widget"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "alacritty_terminal",
  "iced",
@@ -6049,7 +6042,7 @@ dependencies = [
 
 [[package]]
 name = "rc-update"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6079,7 +6072,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vault"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -6100,7 +6093,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vfs"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "async-trait",
  "bzip2",
@@ -6144,7 +6137,7 @@ dependencies = [
 
 [[package]]
 name = "rcommander"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -6431,19 +6424,19 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "3.11.0"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "391f153431ab68664d946513ea0cb3edbca78eaf99c5a983036cacab6220d85b"
+checksum = "fc4fa9a7558c480e1817c0f02e9a73782001ac1f47fb9d26cc073915963282ea"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
  "bytes",
- "chrono",
  "futures",
  "http",
  "http-body",
  "http-body-util",
  "indexmap",
+ "jiff",
  "libc",
  "pastey",
  "percent-encoding",
@@ -6469,9 +6462,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "3.11.0"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3598e3f36f4af2b5219b133baf7d97a2197039225adc3d4acf3dd8805b5a2aef"
+checksum = "43c1bf063ba32333267a8bc282ec33ae0edf56bf74890118cb0c7bf910a7a1c0"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -6825,7 +6818,6 @@ version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e"
 dependencies = [
- "chrono",
  "dyn-clone",
  "ref-cast",
  "schemars_derive",
@@ -10180,7 +10172,7 @@ checksum = "2d8dbe089cf6b0448b78f5fc50139ab5aaa40d08ac07cdc1baf2c13add35fcce"
 dependencies = [
  "aes",
  "bzip2",
- "constant_time_eq 0.6.2",
+ "constant_time_eq",
  "crc32fast",
  "deflate64",
  "flate2",

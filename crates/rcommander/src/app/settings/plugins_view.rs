@@ -1,5 +1,6 @@
 //! Drawing the Plugins page's tab "Installed" (RC-100-20): "Install..." with the package's path,
-//! the preview of a package, the table of installed plugins - one stop of the focus ring - and
+//! the preview of a package, the table of installed plugins - one stop of the focus ring -,
+//! "Remove old versions..." with its question (`plugins_old.rs`, RC-110-55) and
 //! the selected plugin's details with its buttons, versions, own settings and latest calls. The
 //! page's schema rows are its other tab, "Settings" (`tabs.rs`).
 
@@ -55,6 +56,10 @@ pub fn view<'a>(page: &'a PluginsPage, tokens: &'static Tokens) -> Column<'a, Me
         body = body.push(preview_card(preview, idle, tokens));
     }
     body = body.push(table(page, tokens));
+    body = body.push(super::plugins_old::button(page));
+    if page.old.asking {
+        body = body.push(super::plugins_old::question(&page.old, tokens));
+    }
     if let Some(plugin) = page.selected.as_deref().and_then(|id| page.plugin(id)) {
         body = body.push(details(page, plugin, tokens));
     }

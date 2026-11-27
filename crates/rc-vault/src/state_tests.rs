@@ -20,6 +20,19 @@ fn no_vault_is_absent_and_has_no_key() {
     assert_eq!(machine.status(now).state, VaultStateKind::Absent);
 }
 
+/// Another process created the vault: an absent one becomes locked, an unlocked one stays so
+/// (RC-110-70).
+#[test]
+fn a_vault_made_elsewhere_is_locked_unless_already_unlocked() {
+    let mut machine = Machine::new(false, 15);
+    machine.exists();
+    assert_eq!(machine.state(), VaultState::Locked);
+    let now = Instant::now();
+    machine.unlocked(key(), now);
+    machine.exists();
+    assert!(matches!(machine.state(), VaultState::Unlocked { .. }));
+}
+
 #[test]
 fn unlock_use_and_lock() {
     let clock = ManualClock::new();

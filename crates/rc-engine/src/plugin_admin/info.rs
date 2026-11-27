@@ -120,4 +120,46 @@ pub enum PluginsOutcome {
     Changed { plugin: PluginInfo },
     /// `plugins.remove`: the version removed.
     Removed { id: String, version: String },
+    /// `plugins.remove_old` without versions (RC-110-55): what it would remove, and the old
+    /// versions an open viewer holds, which it leaves.
+    OldVersions {
+        versions: Vec<OldVersion>,
+        held: Vec<OldVersion>,
+    },
+    /// `plugins.remove_old` with the versions the person confirmed: those removed, and those an
+    /// open viewer held, left.
+    OldRemoved {
+        removed: Vec<OldVersion>,
+        skipped: Vec<OldVersion>,
+    },
+}
+
+/// One old version `plugins.remove_old` names (RC-110-55).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OldVersion {
+    pub id: String,
+    /// The plugin's name; what its manifest claims when the version does not verify.
+    pub name: String,
+    pub version: String,
+    pub reason: OldReason,
+    /// Why it does not verify, for [`OldReason::Refused`]: a stable code.
+    #[serde(default)]
+    pub refused: Option<String>,
+}
+
+/// Why a version is old.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OldReason {
+    /// It verifies, but another version runs.
+    Inactive,
+    /// It does not verify.
+    Refused,
+}
+
+/// A version of a plugin, as `plugins.remove_old` takes the confirmed ones.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginVersionRef {
+    pub id: String,
+    pub version: String,
 }

@@ -33,3 +33,12 @@ fn fingerprints_are_stable_hex_sha256() {
 fn a_public_key_of_the_wrong_length_is_refused() {
     assert!(decode_public_key("aGVsbG8=").is_err());
 }
+
+/// The trusted ids are listed sorted, each once (RC-110-70: a mutant returning none survived).
+#[test]
+fn key_ids_lists_every_trusted_key_sorted() {
+    let store = TrustStore::new();
+    store.trust("release".to_owned(), key(1)).expect("trust");
+    store.trust("backup".to_owned(), key(2)).expect("trust");
+    assert_eq!(store.key_ids().expect("ids"), ["backup", "release"]);
+}
